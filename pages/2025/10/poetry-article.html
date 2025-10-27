@@ -676,16 +676,18 @@
         }
 
         .mindmap-tooltip {
-            position: absolute;
+            position: fixed;
             background: rgba(19, 36, 64, 0.95);
             color: white;
             padding: 0.75rem 1rem;
             border-radius: 6px;
             font-size: 0.85rem;
             pointer-events: none;
-            z-index: 1000;
+            z-index: 1500;
             max-width: 250px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--color-teal);
+            line-height: 1.4;
         }
 
         svg.mindmap-connections {
@@ -2217,6 +2219,12 @@
             const nodeElements = {};
             const lineElements = {};
             let selectedNode = null;
+            
+            // Rotation state
+            let rotationAngle = 0;
+            let isRotating = false;
+            let lastMouseX = 0;
+            let lastMouseY = 0;
 
             // Create central node
             const centralNode = document.createElement('div');
@@ -2225,7 +2233,7 @@
                 <div style="font-size: 1.3rem; margin-bottom: 0.5rem;">📚</div>
                 <div class="mindmap-node-title">Poetry Through History</div>
                 <div class="mindmap-node-era">11 Traditions • 5 Eras</div>
-                <div style="font-size: 0.75rem; margin-top: 0.5rem; color: rgba(255,255,255,0.7);">Click nodes to explore connections</div>
+                <div style="font-size: 0.75rem; margin-top: 0.5rem; color: rgba(255,255,255,0.7);">Drag to rotate • Click nodes to explore</div>
             `;
             centralNode.style.left = '50%';
             centralNode.style.top = '50%';
@@ -2248,6 +2256,7 @@
                 node.id = `node-${tradition.id}`;
                 node.dataset.era = tradition.era;
                 node.dataset.id = tradition.id;
+                node.dataset.index = index;
                 
                 node.innerHTML = `
                     <div class="mindmap-node-title">${tradition.name}</div>
@@ -2262,9 +2271,16 @@
                 const centerY = containerHeight / 2;
                 const radius = Math.min(containerWidth, containerHeight) / 2 - 100;
                 
-                const angle = (index / traditions.length) * Math.PI * 2 - Math.PI / 2;
-                const nodeX = centerX + Math.cos(angle) * radius;
-                const nodeY = centerY + Math.sin(angle) * radius;
+                const baseAngle = (index / traditions.length) * Math.PI * 2 - Math.PI / 2;
+                
+                // Store base angle for later use in rotation
+                node.dataset.baseAngle = baseAngle;
+                node.dataset.centerX = centerX;
+                node.dataset.centerY = centerY;
+                node.dataset.radius = radius;
+                
+                const nodeX = centerX + Math.cos(baseAngle) * radius;
+                const nodeY = centerY + Math.sin(baseAngle) * radius;
                 
                 node.style.left = nodeX + 'px';
                 node.style.top = nodeY + 'px';
@@ -2275,7 +2291,7 @@
                 node.style.zIndex = '50';
                 
                 canvas.appendChild(node);
-                nodeElements[tradition.id] = { element: node, x: nodeX, y: nodeY, tradition };
+                nodeElements[tradition.id] = { element: node, x: nodeX, y: nodeY, tradition, baseAngle, centerX, centerY, radius };
                 
                 // Animate node entrance
                 anime({
@@ -2287,10 +2303,8 @@
                     easing: 'easeOutElastic(1, .6)'
                 });
 
-                // Draw line from central node
+                // Draw line from central node (will be updated with rotation)
                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                const svgRect = svg.getBoundingClientRect();
-                const canvasRect = canvas.getBoundingClientRect();
                 
                 line.setAttribute('x1', centerX);
                 line.setAttribute('y1', centerY);
@@ -2300,14 +2314,24 @@
                 line.setAttribute('stroke-width', '2');
                 line.setAttribute('stroke-dasharray', '5,5');
                 line.style.opacity = '0.3';
+                line.dataset.traditionId = tradition.id;
+                line.dataset.centerLine = 'true';
                 svg.appendChild(line);
                 lineElements[`center-${tradition.id}`] = line;
 
                 // Click handler for interactive exploration
                 node.addEventListener('click', function(e) {
                     e.stopPropagation();
-                    selectedNode = selectedNode === tradition.id ? null : tradition.id;
-                    updateMindMapSelection(tradition, selectedNode === tradition.id);
+                    
+                    // If this node is already selected, deselect it
+                    if (selectedNode === tradition.id) {
+                        selectedNode = null;
+                        updateMindMapSelection(tradition, false);
+                    } else {
+                        // Otherwise select this node
+                        selectedNode = tradition.id;
+                        updateMindMapSelection(tradition, true);
+                    }
                 });
 
                 // Hover interactions
@@ -2329,21 +2353,37 @@
                         duration: 300
                     });
 
-                    // Show enhanced tooltip
-                    const tooltip = document.createElement('div');
-                    tooltip.className = 'mindmap-tooltip';
-                    tooltip.innerHTML = `
-                        <strong>${tradition.era} Era</strong><br>
-                        <em>${tradition.period}</em><br>
-                        ${tradition.description}
-                    `;
-                    document.body.appendChild(tooltip);
-
-                    const moveTooltip = (e) => {
+                    // Create and show enhanced tooltip
+                    let tooltip = null;
+                    
+                    const createTooltip = (e) => {
+                        if (tooltip) tooltip.remove();
+                        
+                        tooltip = document.createElement('div');
+                        tooltip.className = 'mindmap-tooltip';
+                        tooltip.setAttribute('data-tooltip', 'true');
+                        tooltip.innerHTML = `
+                            <strong>${tradition.era} Era</strong><br>
+                            <em style="font-size: 0.8rem; opacity: 0.9;">${tradition.period}</em><br>
+                            <div style="margin-top: 0.4rem; font-size: 0.8rem;">${tradition.description}</div>
+                        `;
+                        
+                        // Position tooltip near cursor with buffer
                         tooltip.style.left = (e.clientX + 15) + 'px';
                         tooltip.style.top = (e.clientY + 15) + 'px';
+                        
+                        document.body.appendChild(tooltip);
                     };
 
+                    const moveTooltip = (e) => {
+                        if (tooltip) {
+                            tooltip.style.left = (e.clientX + 15) + 'px';
+                            tooltip.style.top = (e.clientY + 15) + 'px';
+                        }
+                    };
+
+                    // Create tooltip on first entry
+                    document.addEventListener('mousemove', createTooltip, { once: true });
                     document.addEventListener('mousemove', moveTooltip);
 
                     node.addEventListener('mouseleave', function() {
@@ -2361,28 +2401,167 @@
                             duration: 300
                         });
 
-                        tooltip.remove();
+                        // Remove tooltip
+                        if (tooltip) {
+                            tooltip.remove();
+                            tooltip = null;
+                        }
+                        
                         document.removeEventListener('mousemove', moveTooltip);
-                    });
+                    }, { once: true });
                 });
+            });
+
+            // Function to update node positions based on rotation angle
+            function updateNodePositions() {
+                Object.keys(nodeElements).forEach(traditionId => {
+                    const nodeData = nodeElements[traditionId];
+                    const element = nodeData.element;
+                    const baseAngle = parseFloat(element.dataset.baseAngle);
+                    const centerX = parseFloat(element.dataset.centerX);
+                    const centerY = parseFloat(element.dataset.centerY);
+                    const radius = parseFloat(element.dataset.radius);
+                    
+                    // Apply rotation to base angle
+                    const rotatedAngle = baseAngle + rotationAngle;
+                    
+                    // Calculate new position
+                    const newX = centerX + Math.cos(rotatedAngle) * radius;
+                    const newY = centerY + Math.sin(rotatedAngle) * radius;
+                    
+                    // Update node position
+                    element.style.left = newX + 'px';
+                    element.style.top = newY + 'px';
+                    
+                    // Update node data for connection lines
+                    nodeData.x = newX;
+                    nodeData.y = newY;
+                    
+                    // Update center lines
+                    const line = lineElements[`center-${traditionId}`];
+                    if (line) {
+                        line.setAttribute('x2', newX);
+                        line.setAttribute('y2', newY);
+                    }
+                });
+                
+                // Update any active connection lines
+                Array.from(svg.querySelectorAll('line.connection-line')).forEach(line => {
+                    const x1 = parseFloat(line.getAttribute('x1'));
+                    const y1 = parseFloat(line.getAttribute('y1'));
+                    const x2 = parseFloat(line.getAttribute('x2'));
+                    const y2 = parseFloat(line.getAttribute('y2'));
+                    
+                    // These values are already in screen space, so they're maintained
+                    // But we need to recalculate based on rotated node positions
+                });
+            }
+
+            // Mouse rotation handlers
+            canvas.addEventListener('mousedown', function(e) {
+                if (e.target === canvas) {
+                    isRotating = true;
+                    lastMouseX = e.clientX;
+                    lastMouseY = e.clientY;
+                    canvas.style.cursor = 'grabbing';
+                }
+            });
+
+            document.addEventListener('mousemove', function(e) {
+                if (isRotating) {
+                    const deltaX = e.clientX - lastMouseX;
+                    const deltaY = e.clientY - lastMouseY;
+                    
+                    // Calculate rotation based on mouse movement
+                    // Rotate based on horizontal movement
+                    const rotationDelta = deltaX * 0.005; // Sensitivity factor
+                    rotationAngle += rotationDelta;
+                    
+                    // Keep angle in 0-360 range for consistency
+                    rotationAngle = rotationAngle % (Math.PI * 2);
+                    
+                    updateNodePositions();
+                    
+                    lastMouseX = e.clientX;
+                    lastMouseY = e.clientY;
+                }
+            });
+
+            document.addEventListener('mouseup', function(e) {
+                if (isRotating) {
+                    isRotating = false;
+                    canvas.style.cursor = 'grab';
+                }
+            });
+
+            // Wheel rotation (alternative rotation method)
+            canvas.addEventListener('wheel', function(e) {
+                e.preventDefault();
+                
+                // Rotate based on wheel delta
+                const rotationDelta = e.deltaY > 0 ? 0.1 : -0.1;
+                rotationAngle += rotationDelta;
+                rotationAngle = rotationAngle % (Math.PI * 2);
+                
+                updateNodePositions();
+            }, { passive: false });
+
+            // Update canvas cursor
+            canvas.addEventListener('mouseenter', function() {
+                if (!isRotating) {
+                    canvas.style.cursor = 'grab';
+                }
+            });
+
+            canvas.addEventListener('mouseleave', function() {
+                if (!isRotating) {
+                    canvas.style.cursor = 'default';
+                }
             });
 
             // Function to update connections when node is selected
             function updateMindMapSelection(tradition, isSelected) {
-                if (isSelected && tradition.connectedTo) {
+                // Always clean up any existing modals and overlays first
+                const existingOverlay = document.querySelector('[data-mindmap-overlay]');
+                const existingPopup = document.querySelector('[data-mindmap-popup]');
+                if (existingOverlay) existingOverlay.remove();
+                if (existingPopup) existingPopup.remove();
+                
+                // Remove all connection lines
+                Array.from(svg.querySelectorAll('line.connection-line')).forEach(line => line.remove());
+                
+                // Reset all node scales
+                anime({
+                    targets: '.mindmap-node:not(.central)',
+                    scale: 1,
+                    duration: 300
+                });
+                
+                if (isSelected && tradition.connectedTo && tradition.connectedTo.length > 0) {
+                    // Get current rotated position of selected node
+                    const selectedNodeData = nodeElements[tradition.id];
+                    const centerX = parseFloat(selectedNodeData.element.dataset.centerX);
+                    const centerY = parseFloat(selectedNodeData.element.dataset.centerY);
+                    
                     // Draw connections to related traditions
                     tradition.connectedTo.forEach(connectedId => {
                         if (nodeElements[connectedId]) {
                             const connectedNode = nodeElements[connectedId];
-                            const relatedTradition = nodeElements[tradition.id];
+                            const connectedElement = connectedNode.element;
+                            
+                            // Get current rotated positions
+                            const x1 = parseFloat(selectedNodeData.element.style.left);
+                            const y1 = parseFloat(selectedNodeData.element.style.top);
+                            const x2 = parseFloat(connectedElement.style.left);
+                            const y2 = parseFloat(connectedElement.style.top);
 
                             // Draw animated line between nodes
                             const connectionLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
                             connectionLine.setAttribute('class', 'connection-line');
-                            connectionLine.setAttribute('x1', relatedTradition.x);
-                            connectionLine.setAttribute('y1', relatedTradition.y);
-                            connectionLine.setAttribute('x2', connectedNode.x);
-                            connectionLine.setAttribute('y2', connectedNode.y);
+                            connectionLine.setAttribute('x1', x1);
+                            connectionLine.setAttribute('y1', y1);
+                            connectionLine.setAttribute('x2', x2);
+                            connectionLine.setAttribute('y2', y2);
                             connectionLine.style.opacity = '0';
                             svg.appendChild(connectionLine);
 
@@ -2397,7 +2576,7 @@
 
                             // Scale connected node
                             anime({
-                                targets: connectedNode.element,
+                                targets: connectedElement,
                                 scale: 1.08,
                                 boxShadow: `0 6px 18px ${eraColors[connectedNode.tradition.era]}50`,
                                 duration: 400
@@ -2407,6 +2586,7 @@
 
                     // Show detailed info popup
                     const infoPopup = document.createElement('div');
+                    infoPopup.setAttribute('data-mindmap-popup', 'true');
                     infoPopup.style.cssText = `
                         position: fixed;
                         top: 50%;
@@ -2442,6 +2622,7 @@
 
                     // Add overlay
                     const overlay = document.createElement('div');
+                    overlay.setAttribute('data-mindmap-overlay', 'true');
                     overlay.style.cssText = `
                         position: fixed;
                         top: 0;
@@ -2463,16 +2644,6 @@
                     
                     // Update the close button to properly close both overlay and popup
                     infoPopup.querySelector('button').onclick = closeModal;
-                } else {
-                    // Remove all connection lines
-                    Array.from(svg.querySelectorAll('line.connection-line')).forEach(line => line.remove());
-                    
-                    // Reset all node scales
-                    anime({
-                        targets: '.mindmap-node:not(.central)',
-                        scale: 1,
-                        duration: 300
-                    });
                 }
             }
 
@@ -2488,9 +2659,10 @@
             svg.style.left = '0';
             svg.style.pointerEvents = 'none';
 
-            // Click anywhere to deselect
-            canvas.addEventListener('click', function() {
-                if (selectedNode) {
+            // Click anywhere on canvas (except nodes) to deselect
+            canvas.addEventListener('click', function(e) {
+                // Only deselect if clicking on canvas background, not on a node
+                if (e.target === canvas && selectedNode) {
                     selectedNode = null;
                     Array.from(svg.querySelectorAll('line.connection-line')).forEach(line => line.remove());
                     anime({
@@ -2498,6 +2670,12 @@
                         scale: 1,
                         duration: 300
                     });
+                    
+                    // Remove any open modals
+                    const existingOverlay = document.querySelector('[data-mindmap-overlay]');
+                    const existingPopup = document.querySelector('[data-mindmap-popup]');
+                    if (existingOverlay) existingOverlay.remove();
+                    if (existingPopup) existingPopup.remove();
                 }
             });
         }
