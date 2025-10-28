@@ -277,6 +277,36 @@ function initKeyboardNavigation() {
 }
 
 /* ============================================
+   Parallax Depth Cards
+   ============================================ */
+
+function initParallaxCards() {
+    const parallaxCards = document.querySelectorAll('.parallax-card');
+    
+    parallaxCards.forEach(card => {
+        const cardWrap = card.querySelector('.card-wrap');
+        
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const rotateX = (y - centerY) / 10;
+            const rotateY = (centerX - x) / 10;
+            
+            cardWrap.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+        });
+        
+        card.addEventListener('mouseleave', () => {
+            cardWrap.style.transform = 'rotateX(0deg) rotateY(0deg)';
+        });
+    });
+}
+
+/* ============================================
    Initialization on DOM Ready
    ============================================ */
 
@@ -298,6 +328,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize keyboard navigation
     initKeyboardNavigation();
+
+    // Initialize parallax cards
+    initParallaxCards();
     
     // Initial navbar update
     updateNavOnScroll();
