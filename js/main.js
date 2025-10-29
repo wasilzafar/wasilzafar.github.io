@@ -287,24 +287,29 @@ function initParallaxCards() {
         const cardWrap = card.querySelector('.card-wrap');
         
         card.addEventListener('mousemove', (e) => {
+            if (!cardWrap) return;
+            
             const rect = card.getBoundingClientRect();
             const centerX = rect.width / 2;
             const centerY = rect.height / 2;
             
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
             
-            const rotateX = (y - centerY) / 10;
-            const rotateY = (centerX - x) / 10;
+            const rotateX = ((mouseY - centerY) / centerY) * 15;
+            const rotateY = ((centerX - mouseX) / centerX) * 15;
             
             cardWrap.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
         });
         
         card.addEventListener('mouseleave', () => {
+            if (!cardWrap) return;
             cardWrap.style.transform = 'rotateX(0deg) rotateY(0deg)';
         });
     });
 }
+
+
 
 /* ============================================
    Initialization on DOM Ready
