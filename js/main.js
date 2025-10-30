@@ -229,26 +229,112 @@ function initLazyLoading() {
 }
 
 /* ============================================
-   Scroll Animations
+   Scroll Animations - Advanced
    ============================================ */
 
 function initScrollAnimations() {
     if ('IntersectionObserver' in window) {
-        const scrollElements = document.querySelectorAll('.animate-on-scroll, .skill-card, .interest-card');
+        const scrollElements = document.querySelectorAll(
+            '.animate-on-scroll, .skill-card, .interest-card, .scroll-animate-left, .scroll-animate-right, .scroll-animate-up'
+        );
+        
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
         
         const elementObserver = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
-                    entry.target.classList.add('animated');
+                    // Add 'active' class to trigger animation
+                    entry.target.classList.add('active');
                     elementObserver.unobserve(entry.target);
                 }
             });
-        }, {
-            threshold: 0.1
-        });
+        }, observerOptions);
         
         scrollElements.forEach(el => elementObserver.observe(el));
     }
+}
+
+/* ============================================
+   About Section Enhanced Scroll Detection
+   ============================================ */
+
+function initAboutScrollAnimations() {
+    const aboutSection = document.querySelector('.about-scroll-section');
+    if (!aboutSection) return;
+
+    const aboutTextHighlights = aboutSection.querySelectorAll('.about-text-highlight, .about-meta');
+    const aboutSubtitle = aboutSection.querySelector('.about-subtitle');
+    
+    window.addEventListener('scroll', function() {
+        const windowHeight = window.innerHeight;
+        const scrollY = window.scrollY;
+        
+        // Text highlight effect based on viewport position
+        aboutTextHighlights.forEach((textEl) => {
+            const rect = textEl.getBoundingClientRect();
+            const elementCenterY = rect.top + (rect.height / 2);
+            
+            // Highlight when element crosses middle of viewport
+            if (elementCenterY <= windowHeight / 2) {
+                textEl.classList.add('highlight-active');
+            } else {
+                textEl.classList.remove('highlight-active');
+            }
+        });
+        
+        // Underline animation for subtitle
+        if (aboutSubtitle) {
+            const subtitleRect = aboutSubtitle.getBoundingClientRect();
+            const subtitleCenterY = subtitleRect.top + (subtitleRect.height / 2);
+            
+            if (subtitleCenterY <= windowHeight / 1.5) {
+                aboutSubtitle.classList.add('animate-underline');
+            }
+        }
+        
+        // Image shadow enhancement on scroll
+        const aboutImage = aboutSection.querySelector('.about-image-wrapper');
+        if (aboutImage) {
+            const imageRect = aboutImage.getBoundingClientRect();
+            const distanceFromCenter = Math.abs(imageRect.top - windowHeight / 2);
+            const proximityRatio = Math.max(0, 1 - (distanceFromCenter / windowHeight));
+            
+            const shadowBlur = 20 + (proximityRatio * 20);
+            const shadowOpacity = 0.2 + (proximityRatio * 0.15);
+            
+            aboutImage.style.filter = `drop-shadow(0 ${10 + proximityRatio * 10}px ${shadowBlur}px rgba(59, 152, 151, ${shadowOpacity}))`;
+        }
+    });
+}
+
+/* ============================================
+   Parallax Text Animation (Flying In Effect)
+   ============================================ */
+
+function initParallaxTextAnimation() {
+    const aboutContent = document.querySelector('.about-content');
+    if (!aboutContent) return;
+    
+    const textElements = aboutContent.querySelectorAll('p');
+    
+    window.addEventListener('scroll', function() {
+        textElements.forEach((para, index) => {
+            const rect = para.getBoundingClientRect();
+            const isInViewport = rect.top <= window.innerHeight && rect.bottom >= 0;
+            
+            if (isInViewport) {
+                const scrollProgress = 1 - (rect.top / window.innerHeight);
+                const maxOffset = 30;
+                const offset = Math.min(maxOffset, scrollProgress * maxOffset * 2);
+                
+                para.style.transform = `translateX(${offset}px)`;
+                para.style.opacity = Math.min(1, scrollProgress * 1.5);
+            }
+        });
+    });
 }
 
 /* ============================================
@@ -330,6 +416,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize scroll animations
     initScrollAnimations();
+    
+    // Initialize About section enhanced scroll animations
+    initAboutScrollAnimations();
+    
+    // Initialize parallax text animation
+    initParallaxTextAnimation();
     
     // Initialize keyboard navigation
     initKeyboardNavigation();
