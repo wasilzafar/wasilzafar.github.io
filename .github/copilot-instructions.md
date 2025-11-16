@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**wasilzafar.github.io** is a GitHub Pages-hosted portfolio and blog website showcasing professional background, skills, and technical interests. It's a **static HTML/CSS/JavaScript** project with no build system or package manager—files are served directly from the repository.
+**wasilzafar.com** is a GitHub Pages-hosted portfolio and blog website showcasing professional background, skills, and technical interests. It's a **static HTML/CSS/JavaScript** project with no build system or package manager—files are served directly from the repository.
 
 ## Architecture
 
