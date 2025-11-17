@@ -81,7 +81,7 @@ All styles in `/css/main.css` using **CSS custom properties** (variables):
 
 ### JavaScript Organization
 
-`/js/main.js` is 446 lines of consolidated code. Key sections:
+`/js/main.js` is 500+ lines of consolidated code. Key sections:
 
 1. **Leaflet Map Initialization** (`initLeafletMaps()`)
    - Three map instances with markers, layers, and WMS services
@@ -91,15 +91,61 @@ All styles in `/css/main.css` using **CSS custom properties** (variables):
    - `.fade-in`, `.scroll-animate-left`, `.scroll-animate-right` classes
    - Intersection Observer for visible element triggers
 
-3. **Navigation & Smooth Scrolling**
+3. **Analytics Event Tracking** (`initAnalyticsTracking()`)
+   - Tracks "Read Article" CTA clicks on category pages
+   - Pushes structured events to Google Tag Manager data layer
+   - Semantic naming convention: `cta_[action]_[category]_[index]`
+   - Event structure: `engagement_cta_click` with article_slug, category, tracking_id, timestamp, source_page
+
+4. **Navigation & Smooth Scrolling**
    - Anchor link handling
    - Active nav link highlighting
 
-4. **Analytics & Tag Manager**
+5. **Consent Mode v2 & Tag Manager**
    - GTM initialization (GTM-PBS8M2JR)
-   - Google Ads hooks (currently commented)
+   - Google Consent Mode v2 default state set before GTM loads
+   - EEA region defaults to 'denied', non-EEA to 'granted'
+   - Cookie consent banner integration via `/js/cookie-consent.js`
 
 **Always Defer Initialization**: Scripts run on `DOMContentLoaded` or when elements are detected. Don't require manual initialization.
+
+### Analytics Tracking Convention
+
+**Semantic Naming for Extensibility**:
+```
+Format: cta_[action]_[category]_[index]
+Example: cta_read_article_psychology_001
+```
+
+**Data Attributes on Category Page Article Cards**:
+```html
+<a href="article-link.html" 
+   class="btn btn-primary cta-read-article"
+   data-article-slug="psychology-experiments-cognitive-biases"
+   data-category="psychology"
+   data-tracking-id="cta_read_article_psychology_001">
+   Read Article
+</a>
+```
+
+**GTM Event Structure Pushed to Data Layer**:
+```javascript
+{
+  event: 'engagement_cta_click',
+  engagement_type: 'article_cta',
+  action: 'read_article',
+  category: 'psychology',
+  article_slug: 'psychology-experiments-cognitive-biases',
+  element_id: 'cta_read_article_psychology_001',
+  timestamp: '2025-11-17T14:30:00Z',
+  source_page: '/pages/categories/psychology.html'
+}
+```
+
+**Future Extensibility**:
+- New CTA types: `cta_subscribe_[category]_001`, `cta_share_[category]_001`, `cta_download_[category]_001`
+- All follow same pattern for consistent GTM tracking
+- Add new action types by extending `initAnalyticsTracking()` in `main.js`
 
 ### Navigation & Links
 
