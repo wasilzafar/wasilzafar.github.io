@@ -1,4 +1,4 @@
-// GDPR Cookie Consent Banner JavaScript
+// GDPR Cookie Consent Banner JavaScript with Google Consent Mode v2 Integration
 (function() {
     'use strict';
     
@@ -47,17 +47,32 @@
             this.setCookie('cookieConsent', value, 365);
         },
         
-        // Initialize Google Analytics based on consent
-        initAnalytics: function(enabled) {
-            if (enabled && typeof gtag !== 'undefined') {
-                gtag('consent', 'update', {
-                    'analytics_storage': 'granted'
-                });
-            } else if (typeof gtag !== 'undefined') {
-                gtag('consent', 'update', {
-                    'analytics_storage': 'denied'
-                });
+        // Update Google Consent Mode v2 based on preferences
+        updateGoogleConsentMode: function(preferences) {
+            if (typeof gtag === 'undefined') return;
+            
+            // Build consent update object
+            const consentUpdate = {
+                'ad_storage': preferences.marketing ? 'granted' : 'denied',
+                'ad_user_data': preferences.marketing ? 'granted' : 'denied',
+                'ad_personalization': preferences.marketing ? 'granted' : 'denied',
+                'analytics_storage': preferences.analytics ? 'granted' : 'denied'
+            };
+            
+            // Update Google Consent Mode
+            gtag('consent', 'update', consentUpdate);
+            
+            // If ads storage is denied, optionally redact ads data
+            if (!preferences.marketing) {
+                gtag('set', 'ads_data_redaction', true);
             }
+        },
+        
+        // Get user's region (simple implementation - can be enhanced with geolocation API)
+        getUserRegion: function() {
+            // This is a placeholder - in production, use a geolocation service
+            // or check the user's Accept-Language header
+            return 'auto'; // Let Google determine region
         }
     };
     
@@ -76,8 +91,9 @@
         // Check if user has already given consent
         if (CookieConsent.hasConsent()) {
             const preferences = CookieConsent.getPreferences();
-            if (preferences && preferences.analytics) {
-                CookieConsent.initAnalytics(true);
+            if (preferences) {
+                // Update Google Consent Mode with saved preferences
+                CookieConsent.updateGoogleConsentMode(preferences);
             }
             return;
         }
@@ -102,11 +118,20 @@
             const preferences = {
                 essential: true,
                 analytics: true,
-                marketing: false,
+                marketing: true,
                 timestamp: new Date().toISOString()
             };
             CookieConsent.savePreferences(preferences);
-            CookieConsent.initAnalytics(true);
+            CookieConsent.updateGoogleConsentMode(preferences);
+            
+            // Fire consent granted event for GTM
+            if (typeof dataLayer !== 'undefined') {
+                dataLayer.push({
+                    'event': 'consent_granted',
+                    'consent_type': 'all'
+                });
+            }
+            
             banner.style.display = 'none';
         });
         
@@ -119,7 +144,16 @@
                 timestamp: new Date().toISOString()
             };
             CookieConsent.savePreferences(preferences);
-            CookieConsent.initAnalytics(false);
+            CookieConsent.updateGoogleConsentMode(preferences);
+            
+            // Fire consent denied event for GTM
+            if (typeof dataLayer !== 'undefined') {
+                dataLayer.push({
+                    'event': 'consent_denied',
+                    'consent_type': 'non-essential'
+                });
+            }
+            
             banner.style.display = 'none';
         });
         
@@ -136,7 +170,17 @@
             };
             
             CookieConsent.savePreferences(preferences);
-            CookieConsent.initAnalytics(preferences.analytics);
+            CookieConsent.updateGoogleConsentMode(preferences);
+            
+            // Fire custom consent event for GTM
+            if (typeof dataLayer !== 'undefined') {
+                dataLayer.push({
+                    'event': 'consent_custom',
+                    'analytics_consent': preferences.analytics,
+                    'marketing_consent': preferences.marketing
+                });
+            }
+            
             banner.style.display = 'none';
         });
     }
