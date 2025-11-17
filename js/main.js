@@ -443,3 +443,63 @@ window.addEventListener('scroll', function() {
     }
     scrollTimeout = window.requestAnimationFrame(updateNavOnScroll);
 });
+
+/* ============================================
+   Google Analytics Event Tracking via GTM
+   ============================================
+   Naming Convention:
+   - CTA (Call-to-Action) Elements: cta-[action]-[context]
+   - data-tracking-id: cta_[action]_[category]_[index]
+   - data-article-slug: [article-slug-from-filename]
+   - data-category: [blog-category-name]
+   
+   Example: cta_read_article_psychology_001
+   - cta: Element type (Call-to-Action)
+   - read_article: Action performed
+   - psychology: Category context
+   - 001: Sequential index for extensibility
+   
+   Event Structure for GTM:
+   {
+     event: 'engagement_cta_click',
+     engagement_type: 'article_cta',
+     action: 'read_article',
+     category: 'psychology',
+     article_slug: 'psychology-experiments-cognitive-biases',
+     element_id: 'cta_read_article_psychology_001'
+   }
+============================================ */
+
+function initAnalyticsTracking() {
+    // Track all CTA "Read Article" button clicks
+    const readArticleButtons = document.querySelectorAll('.cta-read-article');
+    
+    readArticleButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            const trackingData = {
+                event: 'engagement_cta_click',
+                engagement_type: 'article_cta',
+                action: 'read_article',
+                category: this.getAttribute('data-category') || 'uncategorized',
+                article_slug: this.getAttribute('data-article-slug') || 'unknown',
+                element_id: this.getAttribute('data-tracking-id') || 'unknown',
+                timestamp: new Date().toISOString(),
+                source_page: window.location.pathname
+            };
+            
+            // Push to Google Tag Manager data layer
+            if (window.dataLayer) {
+                window.dataLayer.push(trackingData);
+            }
+            
+            // Console logging for development/debugging
+            console.log('[Analytics] CTA Click:', trackingData);
+        });
+    });
+}
+
+// Initialize tracking when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    initAnalyticsTracking();
+});
+
