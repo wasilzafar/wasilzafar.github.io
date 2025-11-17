@@ -471,7 +471,7 @@ window.addEventListener('scroll', function() {
 ============================================ */
 
 function initAnalyticsTracking() {
-    // Track all CTA "Read Article" button clicks
+    // ===== 1. Track all CTA "Read Article" button clicks (Category Pages) =====
     const readArticleButtons = document.querySelectorAll('.cta-read-article');
     
     readArticleButtons.forEach(button => {
@@ -493,7 +493,121 @@ function initAnalyticsTracking() {
             }
             
             // Console logging for development/debugging
-            console.log('[Analytics] CTA Click:', trackingData);
+            console.log('[Analytics] CTA Click (Read Article):', trackingData);
+        });
+    });
+
+    // ===== 2. Track Navigation Links (Homepage & All Pages) =====
+    const navLinks = document.querySelectorAll('.cta-nav-link');
+    
+    navLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            const trackingData = {
+                event: 'engagement_cta_click',
+                engagement_type: 'navigation',
+                action: 'navigate_section',
+                section: this.getAttribute('data-section') || 'unknown',
+                element_id: this.getAttribute('data-tracking-id') || 'unknown',
+                timestamp: new Date().toISOString(),
+                source_page: window.location.pathname
+            };
+            
+            if (window.dataLayer) {
+                window.dataLayer.push(trackingData);
+            }
+            
+            console.log('[Analytics] Navigation Click:', trackingData);
+        });
+    });
+
+    // ===== 3. Track Hero CTAs (Homepage) =====
+    const heroCtaButtons = document.querySelectorAll('.cta-hero-cta');
+    
+    heroCtaButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            const trackingData = {
+                event: 'engagement_cta_click',
+                engagement_type: 'hero_cta',
+                action: this.getAttribute('data-cta-action') || 'unknown',
+                element_id: this.getAttribute('data-tracking-id') || 'unknown',
+                timestamp: new Date().toISOString(),
+                source_page: window.location.pathname
+            };
+            
+            if (window.dataLayer) {
+                window.dataLayer.push(trackingData);
+            }
+            
+            console.log('[Analytics] Hero CTA Click:', trackingData);
+        });
+    });
+
+    // ===== 4. Track Interest Category Cards (Homepage) =====
+    const interestCards = document.querySelectorAll('.cta-interest-card');
+    
+    interestCards.forEach(card => {
+        card.addEventListener('click', function(e) {
+            const trackingData = {
+                event: 'engagement_cta_click',
+                engagement_type: 'interest_cta',
+                action: 'explore_interest',
+                interest: this.getAttribute('data-interest') || 'unknown',
+                element_id: this.getAttribute('data-tracking-id') || 'unknown',
+                timestamp: new Date().toISOString(),
+                source_page: window.location.pathname
+            };
+            
+            if (window.dataLayer) {
+                window.dataLayer.push(trackingData);
+            }
+            
+            console.log('[Analytics] Interest Card Click:', trackingData);
+        });
+    });
+
+    // ===== 5. Track Social Media Links =====
+    const socialLinks = document.querySelectorAll('.cta-social-link');
+    
+    socialLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            const trackingData = {
+                event: 'engagement_cta_click',
+                engagement_type: 'social_link',
+                action: 'visit_social',
+                social_platform: this.getAttribute('data-social') || 'unknown',
+                element_id: this.getAttribute('data-tracking-id') || 'unknown',
+                timestamp: new Date().toISOString(),
+                source_page: window.location.pathname
+            };
+            
+            if (window.dataLayer) {
+                window.dataLayer.push(trackingData);
+            }
+            
+            console.log('[Analytics] Social Link Click:', trackingData);
+        });
+    });
+
+    // ===== 6. Track Footer Links =====
+    const footerLinks = document.querySelectorAll('.cta-footer-link');
+    
+    footerLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            const trackingData = {
+                event: 'engagement_cta_click',
+                engagement_type: 'footer_link',
+                action: 'visit_page',
+                page: this.getAttribute('data-footer-link') || 'unknown',
+                element_id: this.getAttribute('data-tracking-id') || 'unknown',
+                timestamp: new Date().toISOString(),
+                source_page: window.location.pathname
+            };
+            
+            if (window.dataLayer) {
+                window.dataLayer.push(trackingData);
+            }
+            
+            console.log('[Analytics] Footer Link Click:', trackingData);
         });
     });
 }
