@@ -10,7 +10,7 @@ Want to know more? Visit [Wasil Zafar](https://www.linkedin.com/in/wasilzafar/) 
 
 ## Blog Infrastructure Documentation
 
-This section outlines the standardized blog post structure and guidelines for maintaining consistency across the wasilzafar.github.io blog. All new articles should follow these conventions.
+This section outlines the standardized blog post structure and guidelines for maintaining consistency across the wasilzafar.com blog. All new articles should follow these conventions.
 
 ### File Structure
 
@@ -305,7 +305,7 @@ Planned improvements to blog infrastructure:
 ## GDPR Cookie Banner Documentation
 
 ### Overview
-A fully GDPR-compliant cookie consent banner has been implemented across all pages of wasilzafar.github.io. The banner is designed to match the existing site theme with teal accent colors and follows best practices for cookie consent.
+A fully GDPR-compliant cookie consent banner has been implemented across all pages of wasilzafar.com. The banner is designed to match the existing site theme with teal accent colors and follows best practices for cookie consent.
 
 ### Features
 
