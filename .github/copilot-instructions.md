@@ -79,6 +79,107 @@ All styles in `/css/main.css` using **CSS custom properties** (variables):
 
 **No Inline Styles**: All styling goes in `main.css`. Avoid `style=""` attributes except for dynamic positioning (background-image, etc.).
 
+### Code Snippet Independence (Critical for Technical Articles)
+
+**All code snippets in blog articles MUST be copy-paste executable** in notebooks/terminals without dependencies on previous code blocks. This pattern is established in all data science blog posts (`python-data-science-*.html`).
+
+**Mandatory Pattern for Every Code Block**:
+```html
+<pre><code class="language-python">import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Create sample data
+data = np.array([1, 2, 3, 4, 5])
+
+# Perform operation
+result = data * 2
+print("Result:", result)
+
+# Show visualization (if applicable)
+plt.show()
+</code></pre>
+```
+
+**Requirements**:
+1. **Always include imports** at the start of each code block
+   - Python: `import numpy as np`, `import pandas as pd`, `import matplotlib.pyplot as plt`
+   - JavaScript: Full context including variable declarations
+   - Shell: Complete commands with necessary context
+
+2. **Include data initialization** within each block
+   - Don't reference variables from previous code blocks
+   - Create arrays, DataFrames, objects fresh in each snippet
+   - Use small, representative sample data
+
+3. **Split combined examples** into separate code blocks
+   - Don't combine 3+ methods in one `<pre><code>` block
+   - Each code block should demonstrate one focused concept
+   - Better to have 3 short independent blocks than 1 long dependent block
+
+4. **Add output statements** to show results
+   - Include `print()` statements for key results
+   - Add `plt.show()` for matplotlib visualizations
+   - Show expected output in comments when helpful
+
+**Examples**:
+
+✅ **GOOD - Independent snippet**:
+```python
+import numpy as np
+
+# Create array
+arr = np.array([1, 2, 3, 4, 5])
+
+# Calculate mean
+mean = arr.mean()
+print("Mean:", mean)  # 3.0
+```
+
+❌ **BAD - Depends on previous code**:
+```python
+# Calculate standard deviation (assumes arr exists from previous block)
+std = arr.std()
+print("Std:", std)
+```
+
+✅ **GOOD - Split examples**:
+```python
+import pandas as pd
+
+# Example 1: Read CSV
+df = pd.read_csv('data.csv')
+print(df.head())
+```
+
+```python
+import pandas as pd
+
+# Example 2: Read Excel  
+df = pd.read_excel('data.xlsx')
+print(df.head())
+```
+
+❌ **BAD - Combined examples**:
+```python
+# Read from different sources (assumes pandas imported elsewhere)
+df1 = pd.read_csv('data.csv')
+df2 = pd.read_excel('data.xlsx')
+df3 = pd.read_json('data.json')
+```
+
+**When to Apply**:
+- **Always** for Python/data science tutorials
+- **Always** for code-heavy technical articles
+- **Always** for any article with 5+ code blocks
+- Optional for single illustrative examples in non-technical content
+
+**Reference Examples**:
+- See `/pages/2025/12/python-data-science-numpy-foundations.html` (~55 independent blocks)
+- See `/pages/2025/12/python-data-science-pandas-analysis.html` (~25 independent blocks)
+- See `/pages/2025/12/python-data-science-visualization.html` (~30 independent blocks)
+- See `/pages/2025/12/python-data-science-machine-learning.html` (~12 independent blocks)
+
 ### JavaScript Organization
 
 `/js/main.js` is 500+ lines of consolidated code. Key sections:
@@ -218,6 +319,7 @@ Example: cta_read_article_psychology_001
 - Test on mobile (Bootstrap's responsive classes should handle it)
 - Validate HTML (no missing closing tags, proper nesting)
 - Check reading time accuracy (1,200 words ≈ 6 min; 2,000 words ≈ 10 min)
+- **Verify code snippet independence**: Every code block should run standalone in a notebook/terminal
 
 **SEO Checklist** (critical for blog):
 - Meta description: 155-160 characters, includes keyword
@@ -225,6 +327,14 @@ Example: cta_read_article_psychology_001
 - og:title, og:description, article:published_time set
 - H1 (article title) is unique, includes keyword naturally
 - Internal links to related content
+
+**Code Quality Checklist** (for technical articles):
+- ✅ Every code block includes necessary imports
+- ✅ Data/variables created within each block (no external dependencies)
+- ✅ Combined examples split into separate focused blocks
+- ✅ Output statements included (print, plt.show(), etc.)
+- ✅ Code blocks are in proper order (logical flow maintained)
+- ✅ Syntax highlighting set correctly (language-python, language-javascript, etc.)
 
 ## Common Tasks
 
@@ -273,5 +383,5 @@ Example: cta_read_article_psychology_001
 
 ---
 
-**Last Updated**: November 9, 2025  
+**Last Updated**: December 30, 2025  
 **Maintained By**: Wasil Zafar
