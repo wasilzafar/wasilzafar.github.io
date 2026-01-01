@@ -1577,6 +1577,7 @@ print('Gradient after zero_grad() + backward:', layer.weight.grad)
 </code></pre>
 
                         <h3>Learning Rate Scheduling</h3>
+                        <h3>Learning Rate Scheduling: Decay Over Time</h3>
                         <pre><code class="language-python">import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -1586,8 +1587,17 @@ from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau, CosineAnnealingL
 model = nn.Sequential(nn.Linear(10, 5))
 optimizer = optim.Adam(model.parameters(), lr=0.1)
 
-# StepLR: reduce LR by gamma every step_size epochs
+# ===== STEPLR: Reduce LR by factor every N epochs =====
+# Parameters:
+#   - step_size: reduce LR every N epochs
+#   - gamma: multiply LR by this factor (e.g., 0.1 = divide by 10)
+# Schedule: lr(t) = lr_0 * gamma^floor(t / step_size)
 scheduler_step = StepLR(optimizer, step_size=30, gamma=0.1)
+# This means: Every 30 epochs, multiply LR by 0.1
+# Epoch 0-29: lr = 0.1
+# Epoch 30-59: lr = 0.01
+# Epoch 60+: lr = 0.001
+
 print('Initial LR:', optimizer.param_groups[0]['lr'])  # 0.1
 
 for epoch in range(5):
@@ -1595,27 +1605,58 @@ for epoch in range(5):
     pass
     
     # Step scheduler at end of epoch
+    # Call AFTER training, updates optimizer's learning rate
     scheduler_step.step()
     print(f'Epoch {epoch+1}, LR: {optimizer.param_groups[0]["lr"]:.6f}')
 
-# ReduceLROnPlateau: reduce LR when metric plateaus
-# Useful when you monitor validation loss
+# ===== REDUCELRONPLATEAU: Reduce when metric stops improving =====
+# Monitors validation metric, reduces LR when it plateaus
+# Parameters:
+#   - mode: 'min' for loss (lower is better), 'max' for accuracy
+#   - factor: multiply LR by this (0.5 = halve learning rate)
+#   - patience: wait this many epochs of no improvement before reducing
+#   - min_lr: don't go below this learning rate
 optimizer2 = optim.Adam(model.parameters(), lr=0.1)
-scheduler_plateau = ReduceLROnPlateau(optimizer2, mode='min', factor=0.5, patience=5)
+scheduler_plateau = ReduceLROnPlateau(
+    optimizer2, 
+    mode='min',           # Monitor loss (lower is better)
+    factor=0.5,           # Halve learning rate when triggered
+    patience=5,           # Wait 5 epochs of no improvement
+    min_lr=0.00001        # Don't reduce below 1e-5
+)
 
 # During training, call with validation loss
 for epoch in range(10):
     val_loss = 0.5 - epoch * 0.03  # Simulated decreasing loss
+    # step() takes the metric value (validation loss)
+    # Automatically reduces LR if no improvement for 'patience' epochs
     scheduler_plateau.step(val_loss)
     print(f'Epoch {epoch+1}, Val Loss: {val_loss:.4f}, LR: {optimizer2.param_groups[0]["lr"]:.6f}')
 
-# CosineAnnealingLR: smooth cosine decay
+# ===== COSINEANNEALINGLR: Smooth cosine decay =====
+# Gradually decreases LR using cosine function
+# Nice smooth schedule, often works better than step decay
+# Parameters:
+#   - T_max: number of epochs for one cosine cycle
+#   - eta_min: minimum learning rate (end value)
+# Formula: lr(t) = eta_min + (lr_0 - eta_min) * (1 + cos(πt/T_max)) / 2
 optimizer3 = optim.Adam(model.parameters(), lr=0.1)
-scheduler_cosine = CosineAnnealingLR(optimizer3, T_max=10, eta_min=0.001)
+scheduler_cosine = CosineAnnealingLR(
+    optimizer3, 
+    T_max=10,           # Complete one cosine cycle in 10 epochs
+    eta_min=0.001       # Minimum LR at end
+)
 
 for epoch in range(10):
     scheduler_cosine.step()
-    print(f'Epoch {epoch+1}, LR: {optimizer3.param_groups[0]["lr"]:.6f}')</code></pre>
+    print(f'Epoch {epoch+1}, LR: {optimizer3.param_groups[0]["lr"]:.6f}')
+
+# LEARNING RATE SCHEDULING GUIDE:
+print('\nWhen to use each schedule:')
+print('StepLR: Simple, predictable schedule. Use when you know training length.')
+print('ReduceLROnPlateau: Adaptive, responds to actual training progress.')
+print('CosineAnnealingLR: Smooth, empirically works well for many tasks.')
+</code></pre>
 
                         <div class="highlight-box">
                             <i class="fas fa-lightbulb"></i>

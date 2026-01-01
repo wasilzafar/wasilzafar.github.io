@@ -1888,75 +1888,155 @@ print('LR at step 2000:', lr_schedule(2000).numpy())
                 <h4>Basic Pipeline: Batch and Prefetch</h4>
 
 <pre><code class="language-python">import tensorflow as tf
+import numpy as np
 
-# Create dataset from in-memory tensor
+# CREATE DATASET from in-memory tensor
+# tf.data.Dataset is the standard way to feed data to keras.fit()
 data = tf.random.uniform([1000, 16])  # 1000 samples, 16 features
+
+# Convert to Dataset object
 dataset = tf.data.Dataset.from_tensor_slices(data)
 
-# Batch into groups of 32
+# BATCH: Group samples into mini-batches
+# Parameters:
+#   - batch_size: samples per gradient update (32, 64, 128 typical)
+#   - Larger batch → faster computation but less frequent updates
+#   - Smaller batch → slower but noisier gradients (can be good for regularization)
 dataset = dataset.batch(32)
 
-# Prefetch: load next batch while training current batch
+# PREFETCH: Load next batch while training current batch
+# Parameters:
+#   - buffer_size: how many batches to prefetch
+#   - tf.data.AUTOTUNE: Let TensorFlow pick optimal value automatically
+# Effect: Overlaps I/O (loading) and computation (training) → huge speedup
 dataset = dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
 
-# Iterate through batches
-for batch in dataset.take(3):  # Show first 3 batches
-    print('Batch shape:', batch.shape)
+# ITERATE through batches
+# dataset.take(3) grabs first 3 batches without loading entire dataset
+for batch in dataset.take(3):
+    print('Batch shape:', batch.shape)  # [32, 16] for first 2, [8, 16] for last
+    # Total samples: 1000
+    # 1000 / 32 = 31.25 batches
+    # Batch 1: 32 samples
+    # Batch 2: 32 samples
+    # ...
+    # Batch 31: 8 samples (remainder)
 </code></pre>
 
-                <p><code>AUTOTUNE</code> automatically tunes prefetch buffer size based on system resources. This simple pattern dramatically improves training speed by overlapping I/O and computation.</p>
-
-                <h4>Shuffling for Better Generalization</h4>
+                <h4>Complete Pipeline: Shuffle → Batch → Prefetch</h4>
 
 <pre><code class="language-python">import tensorflow as tf
 import numpy as np
 
 # Create sample dataset with features and labels
-X = np.random.randn(500, 10).astype('float32')
-y = np.random.randint(0, 2, (500,)).astype('int32')
+X = np.random.randn(500, 10).astype('float32')  # 500 samples, 10 features
+y = np.random.randint(0, 2, (500,)).astype('int32')  # Binary labels
 
-# Build pipeline: shuffle → batch → prefetch
+# BUILD PIPELINE in correct order
 dataset = tf.data.Dataset.from_tensor_slices((X, y))
-dataset = dataset.shuffle(buffer_size=500)  # Shuffle all samples
+
+# STEP 1: SHUFFLE - randomize order for better generalization
+# Parameters:
+#   - buffer_size: how many samples to shuffle together
+#   - Use buffer_size >= dataset size for perfect shuffling
+#   - Larger buffer = better randomization but more memory
+#   - Must come BEFORE batching to avoid sorting by class
+# Why? Prevents bias where model learns ordering instead of features
+dataset = dataset.shuffle(buffer_size=500)
+
+# STEP 2: BATCH - group into mini-batches
+# Group 32 consecutive samples together
+# After shuffling, batch will have mixed samples (not sorted)
+dataset = dataset.batch(32)
+
+# STEP 3: PREFETCH - load next batch during training
+# Overlaps I/O and computation for speed
+dataset = dataset.prefetch(tf.data.AUTOTUNE)
+
+# VERIFY pipeline
+for features, labels in dataset.take(1):
+    print('Features shape:', features.shape)  # (32, 10)
+    print('Labels shape:', labels.shape)      # (32,)
+    print('First batch labels:', labels.numpy())  # Mixed 0s and 1s (correct!)
+
+# PIPELINE SUMMARY:
+# Dataset has 500 samples
+# After shuffle + batch(32) + prefetch: 16 batches
+# - Batches 1-15: 32 samples each
+# - Batch 16: 4 samples (remainder)
+</code></pre>
+
+                <h4>Advanced: Preprocessing with map()</h4>
+
+                <p>Apply preprocessing functions with <code>map()</code> for data augmentation and normalization on-the-fly:</p>
+
+<pre><code class="language-python">import tensorflow as tf
+import numpy as np
+
+# Create image-like dataset (100 images, 28x28 pixels, grayscale)
+X = np.random.randint(0, 256, [100, 28, 28], dtype='uint8')
+y = np.random.randint(0, 10, [100], dtype='int32')
+
+dataset = tf.data.Dataset.from_tensor_slices((X, y))
+
+# PREPROCESSING FUNCTION
+# This function is applied to each element in the dataset
+def preprocess_image(x, y):
+    # Convert to float and normalize to [0, 1]
+    x = tf.cast(x, tf.float32)     # Convert uint8 → float32
+    x = x / 255.0                   # Normalize: [0, 256] → [0, 1]
+    
+    # Data augmentation: add random rotation-like transform
+    # In practice, use tf.image.rot90, tf.image.flip_left_right, etc.
+    noise = tf.random.normal([28, 28], stddev=0.05)
+    x = x + noise
+    
+    return x, y
+
+# APPLY TRANSFORMATION with map()
+# Parameters:
+#   - function: preprocessing function to apply to each element
+#   - num_parallel_calls: how many samples to process in parallel
+#     tf.data.AUTOTUNE: Let TensorFlow decide
+# Effect: Parallelizes preprocessing across CPU cores
+dataset = dataset.map(preprocess_image, num_parallel_calls=tf.data.AUTOTUNE)
 dataset = dataset.batch(32)
 dataset = dataset.prefetch(tf.data.AUTOTUNE)
 
-# Verify data shape
-for features, labels in dataset.take(1):
-    print('Features shape:', features.shape)
-    print('Labels shape:', labels.shape)
+# COMPLETE PIPELINE for training:
+# Original data (100, 28, 28) → preprocess → batch(32) → prefetch
+# For model.fit(dataset, epochs=10)
+for batch_x, batch_y in dataset.take(1):
+    print('Batch shape after preprocessing:', batch_x.shape)  # (32, 28, 28)
+    print('Pixel range [0, 1]:', batch_x.min().numpy(), '-', batch_x.max().numpy())
 </code></pre>
 
-                <p>Shuffle buffer size should be ≥ dataset size for perfect shuffling. For large datasets, use a smaller buffer (e.g., 1000) to shuffle locally while maintaining memory efficiency.</p>
-
-                <h4>Advanced: Map Transformations</h4>
-
-                <p>Apply preprocessing functions with <code>map()</code>:</p>
+                <h4>Pipeline Performance Tips</h4>
 
 <pre><code class="language-python">import tensorflow as tf
 
-# Sample dataset
-dataset = tf.data.Dataset.from_tensor_slices(tf.range(100))
+# GOOD: Correct order for best performance
+dataset = tf.data.Dataset.from_tensor_slices(range(1000))
+dataset = dataset.shuffle(1000)          # Randomize
+dataset = dataset.batch(32)              # Group
+dataset = dataset.prefetch(tf.data.AUTOTUNE)  # Prefetch
 
-# Preprocessing function
-def preprocess(x):
-    # Normalize and add noise
-    x = tf.cast(x, tf.float32)
-    x = x / 100.0  # Scale to [0, 1]
-    x = x + tf.random.normal([], stddev=0.01)  # Add noise
-    return x
+# BAD: Prefetch before batch (batches aren't prefetched!)
+dataset_bad = tf.data.Dataset.from_tensor_slices(range(1000))
+dataset_bad = dataset_bad.prefetch(tf.data.AUTOTUNE)  # Wrong place!
+dataset_bad = dataset_bad.batch(32)      # Should be before prefetch
 
-# Apply transformation
-dataset = dataset.map(preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-dataset = dataset.batch(10)
-dataset = dataset.prefetch(tf.data.AUTOTUNE)
+# OPTIMIZATION: Cache preprocessed data if it fits in memory
+# .cache() stores all data in memory after preprocessing
+dataset_cached = tf.data.Dataset.from_tensor_slices(range(100))
+dataset_cached = dataset_cached.map(lambda x: x ** 2)  # Expensive operation
+dataset_cached = dataset_cached.cache()  # Store in memory after this point
+dataset_cached = dataset_cached.batch(32)
+dataset_cached = dataset_cached.prefetch(tf.data.AUTOTUNE)
+# Second epoch will use cached data (much faster!)
 
-# Check transformed data
-for batch in dataset.take(1):
-    print('Transformed batch:', batch.numpy()[:5])
+print('Dataset pipeline optimized for speed')
 </code></pre>
-
-                <p><code>num_parallel_calls=AUTOTUNE</code> parallelizes preprocessing across CPU cores—critical for complex transformations like image augmentation.</p>
 
                 <div class="highlight-box">
                     <h4><i class="fas fa-database me-2"></i>tf.data Best Practices</h4>
