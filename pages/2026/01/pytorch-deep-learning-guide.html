@@ -2173,57 +2173,246 @@ print('Mixed precision training complete - typically 2-3x faster!')</code></pre>
                     <div id="transfer-learning" class="blog-content mt-5">
                         <h2><i class="fas fa-exchange-alt me-2 text-teal"></i>Transfer Learning with Pretrained Models</h2>
                         
-                        <p>Transfer learning uses models pretrained on large datasets (ImageNet) as feature extractors. This dramatically reduces training time and data requirements.</p>
+                        <p><strong>Transfer learning</strong> leverages models pretrained on massive datasets (ImageNet: 1+ million images) to jump-start learning on your task. The core insight: early layers learn universal patterns (edges, shapes), middle layers learn textures, deep layers learn object parts. You reuse these learned representations, only training a small new head for your specific classes. This reduces data requirements by 10-100× and speeds up training dramatically.</p>
 
-                        <h3>Using Pretrained ResNet</h3>
-                        <pre><code class="language-python">import torch
+                        <h3>Understanding Pretrained Models</h3>
+
+<pre><code class="language-python">import torch
+import torchvision.models as models
+
+# POPULAR PRETRAINED MODELS (all trained on ImageNet):
+print('Pretrained models available in torchvision:')
+print('  ResNet (18, 34, 50, 101, 152): Residual networks, deep')
+print('  VGG (11, 13, 16, 19): Simple, large models')
+print('  Inception: Complex architecture, high accuracy')
+print('  EfficientNet: Better accuracy-efficiency trade-off')
+print('  MobileNet: Lightweight, mobile deployment')
+print('  DenseNet: Dense connections, feature reuse')
+
+# Load pretrained ResNet-50 (trained on ImageNet)
+# First time: downloads weights automatically (~100 MB)
+resnet50 = models.resnet50(pretrained=True)
+print(f'\nResNet-50 architecture: {resnet50}')
+
+# ARCHITECTURE STRUCTURE:
+# ResNet-50 last layer: 2048 features → 1000 ImageNet classes
+print(f'\nFinal layer: {resnet50.fc}')
+print('  Input: 2048 features from average pooling')
+print('  Output: 1000 classes (ImageNet)')
+print('  We will replace this for our task!')
+
+# Count parameters
+total_params = sum(p.numel() for p in resnet50.parameters())
+print(f'\nTotal parameters: {total_params:,}')
+print('Most parameters in convolutional base (learning ImageNet features)')
+print('Only 2048→1000 weights in final layer need retraining')
+</code></pre>
+
+                        <h3>Using Pretrained Features: Feature Extraction</h3>
+
+<pre><code class="language-python">import torch
 import torch.nn as nn
 import torchvision.models as models
 
-# Load pretrained ResNet-18 (trained on ImageNet)
-model = models.resnet18(pretrained=True)
-print('Pretrained ResNet-18 loaded')
+# TRANSFER LEARNING STRATEGY:
+# 1. Load pretrained model
+# 2. FREEZE backbone (don't update pretrained weights)
+# 3. REMOVE final layer (trained on 1000 ImageNet classes)
+# 4. ADD custom head for your task (your number of classes)
+# 5. TRAIN ONLY the new head
 
-# Freeze all layers (don't update pretrained weights)
+# Load pretrained ResNet-18
+model = models.resnet18(pretrained=True)
+
+print('Original model:')
+print(f'  Final layer: {model.fc}')
+print(f'  Input features: {model.fc.in_features}')
+
+# STEP 1: Freeze entire model
+# requires_grad=False → gradients not computed, weights not updated
 for param in model.parameters():
     param.requires_grad = False
 
-# Replace final layer for new task (e.g., 10 classes instead of 1000)
-num_features = model.fc.in_features  # 512 for ResNet-18
-model.fc = nn.Linear(num_features, 10)  # Only this layer will be trained
+print('\nAfter freezing backbone:')
+trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+frozen = sum(p.numel() for p in model.parameters() if not p.requires_grad)
+print(f'  Trainable: {trainable:,} params')
+print(f'  Frozen: {frozen:,} params')
 
-print('Modified for 10-class classification')
-print(f'Trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}')
+# STEP 2: Replace final layer for your task
+# Input to ResNet-18 fc layer: 512 features
+# Output: 10 classes (your dataset)
+num_classes = 10
+num_features = model.fc.in_features  # 512
 
-# Now train only the final layer on your dataset</code></pre>
+model.fc = nn.Sequential(
+    nn.Linear(num_features, 256),  # Hidden layer
+    nn.ReLU(),
+    nn.Dropout(0.5),
+    nn.Linear(256, num_classes)    # Output layer
+)
 
-                        <h3>Fine-Tuning Pretrained Model</h3>
-                        <pre><code class="language-python">import torch
+print(f'\nAfter replacing final layer:')
+print(f'  New classifier: {model.fc}')
+
+# STEP 3: Unfreeze only the new head
+for param in model.fc.parameters():
+    param.requires_grad = True
+
+trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+frozen = sum(p.numel() for p in model.parameters() if not p.requires_grad)
+print(f'\nAfter unfreezing new head:')
+print(f'  Trainable: {trainable:,} params (new head only)')
+print(f'  Frozen: {frozen:,} params (pretrained backbone)')
+print(f'  Ratio: {(frozen/trainable):.0f}x more frozen params')
+
+# STEP 4: Setup optimizer (only for trainable params!)
+# Only the new head gets updated
+optimizer = torch.optim.Adam(model.fc.parameters(), lr=0.001)
+criterion = nn.CrossEntropyLoss()
+
+print('\nOptimizer: Adam(lr=0.001) for new head only')
+print('Training: fit new layer on your data for 5-10 epochs')
+print('Result: 100-1000x faster than training from scratch!')
+</code></pre>
+
+                        <h3>Fine-Tuning: Adapting Pretrained Features</h3>
+
+<pre><code class="language-python">import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.models as models
 
-# Load pretrained model
-model = models.resnet18(pretrained=True)
+# TWO-STAGE TRANSFER LEARNING:
+# Stage 1: Train new head with frozen backbone (fast, coarse adjustment)
+# Stage 2: Fine-tune backbone with lower LR (slow, fine-grained adjustment)
 
-# Replace final layer
+# Load pretrained model with custom head
+model = models.resnet18(pretrained=True)
 model.fc = nn.Linear(model.fc.in_features, 10)
 
-# Two-stage training:
-# Stage 1: Train only final layer (frozen backbone)
+# Freeze backbone for stage 1
 for param in model.parameters():
     param.requires_grad = False
-model.fc.requires_grad_(True)  # Unfreeze only final layer
+model.fc.requires_grad_(True)
 
+# STAGE 1: Train new head (5-10 epochs, learning_rate = 1e-3)
 optimizer = optim.Adam(model.fc.parameters(), lr=0.001)
-# Train for a few epochs...
+print('STAGE 1: Training new head with frozen backbone')
+print('  Learning rate: 0.001')
+print('  Duration: 5-10 epochs (fast)')
+print('  Purpose: Coarse adaptation to your data')
 
-# Stage 2: Fine-tune entire model with lower learning rate
+# Simulate training
+for epoch in range(3):
+    print(f'  Epoch {epoch+1}/3: Training new head...')
+    # model.fit(train_data, ...)
+
+print('\nSTAGE 1 complete. New head learned. Backbone unchanged.')
+
+# STAGE 2: Fine-tune entire model (10-20 epochs, learning_rate = 1e-5)
+print('\nSTAGE 2: Fine-tuning entire model')
+
+# Unfreeze entire model
 for param in model.parameters():
     param.requires_grad = True
 
-optimizer = optim.Adam(model.parameters(), lr=0.0001)  # Lower LR!
-# Continue training...</code></pre>
+# Use MUCH LOWER learning rate
+# Why? Small updates to preserve learned features
+# Rule: fine-tuning LR ≈ initial LR / 10-100
+optimizer = optim.Adam(model.parameters(), lr=0.00001)  # 1e-5
+
+print('  Learning rate: 0.00001 (100x lower than stage 1!)')
+print('  Duration: 10-20 epochs')
+print('  Purpose: Subtle adaptation of backbone layers')
+print('')
+print('Learning rate comparison:')
+print('  Training from scratch: 0.001')
+print('  Stage 1 (head only): 0.001')
+print('  Stage 2 (fine-tune): 0.00001 (0.001 ÷ 100)')
+
+# Simulate training
+for epoch in range(5):
+    print(f'  Epoch {epoch+1}/5: Fine-tuning entire model...')
+    # model.fit(train_data, ...)
+
+print('\nFine-tuning complete!')
+print('\nWhen to use which strategy:')
+print('  Small dataset (<5k images), different domain → Stage 1 only')
+print('  Medium dataset (5k-50k), similar domain → Stage 1 + Stage 2')
+print('  Large dataset (100k+), same domain → Fine-tune with higher LR')
+print('  Very different domain → May need additional preprocessing/augmentation')
+</code></pre>
+
+                        <h3>Selective Layer Freezing</h3>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import torchvision.models as models
+
+# ADVANCED: Fine-tune only SOME backbone layers
+# Strategy: freeze early layers (general features), tune later layers (domain-specific)
+
+model = models.resnet18(pretrained=True)
+model.fc = nn.Linear(model.fc.in_features, 10)
+
+# ResNet structure (simplified):
+# model.conv1 → layer1 → layer2 → layer3 → layer4 → avgpool → fc
+#
+# Early layers: learn edges, colors, simple textures (ImageNet-like)
+# Middle layers: learn shapes, corners, textures
+# Late layers: learn objects, specific patterns (domain-specific)
+
+# Strategy: Freeze early, tune late
+print('Selective layer freezing:')
+
+# Option 1: Freeze early layers, tune middle + late
+for param in model.conv1.parameters():
+    param.requires_grad = False
+for param in model.layer1.parameters():
+    param.requires_grad = False
+# layer2, layer3, layer4, fc will be trained
+
+trainable_layers = []
+for name, param in model.named_parameters():
+    if param.requires_grad:
+        trainable_layers.append(name)
+
+print(f'\nFrozen: conv1, layer1')
+print(f'Trainable: {trainable_layers}')
+
+# Option 2: Freeze everything except last layer of each block
+for param in model.layer1[:-1].parameters():
+    param.requires_grad = False
+for param in model.layer2[:-1].parameters():
+    param.requires_grad = False
+for param in model.layer3[:-1].parameters():
+    param.requires_grad = False
+
+print('\nAlternative: Freeze all but last sub-layer in each block')
+print('  Tradeoff: Fewer parameters to train, but more adaptation')
+
+# GUIDELINES:
+print('\nSelective freezing guidelines:')
+print('  Small data, similar domain: Freeze conv1, layer1, layer2')
+print('  Medium data: Freeze conv1, layer1 only')
+print('  Large data, different domain: Freeze conv1 only')
+print('  Very large data: Train everything (no freezing)')
+</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-exchange-alt me-2"></i>
+                            <strong>Transfer Learning Best Practices</strong>
+                            <ul>
+                                <li><strong>Two-stage training:</strong> Stage 1 train new head (high LR), Stage 2 fine-tune backbone (low LR)</li>
+                                <li><strong>Learning rate selection:</strong> Stage 1 ≈ 1e-3 (normal), Stage 2 ≈ 1e-5 (100× lower) to preserve features</li>
+                                <li><strong>Freezing strategy:</strong> Start fully frozen, gradually unfreeze from output backwards if needed</li>
+                                <li><strong>Model selection:</strong> MobileNet for speed, ResNet/EfficientNet for accuracy, match image size to model training</li>
+                                <li><strong>When helpful:</strong> <5k training images, similar domain (objects, faces, etc.), limited compute</li>
+                                <li><strong>When unnecessary:</strong> >100k training images, unique domain, unlimited compute resources</li>
+                                <li><strong>Batch normalization:</strong> Keep eval mode during fine-tuning if freezing early layers (prevents distribution shift)</li>
+                            </ul>
+                        </div>
                     </div>
 
                     <div id="cnn" class="blog-content mt-5">
@@ -2937,64 +3126,273 @@ print('Training complete!')
                     <div id="embeddings" class="blog-content mt-5">
                         <h2><i class="fas fa-language me-2 text-teal"></i>Embeddings for NLP</h2>
                         
-                        <p>Embeddings convert discrete tokens (words, characters) into continuous vector representations that capture semantic meaning.</p>
+                        <p><strong>Embeddings convert discrete tokens</strong> (word IDs: 42, 156, 89) into continuous dense vectors that capture semantic relationships. Word "love" (ID 42) and "like" (ID 156) get similar vectors because they mean similar things. This is crucial for NLP—neural networks don't understand integers, but they understand vectors with proximity meaning.</p>
 
-                        <h3>Creating Word Embeddings</h3>
-                        <pre><code class="language-python">import torch
+                        <h3>Embedding Fundamentals: Tokens to Vectors</h3>
+
+<pre><code class="language-python">import torch
 import torch.nn as nn
+import numpy as np
 
-# Create embedding layer
-vocab_size = 10000  # Size of vocabulary
-embedding_dim = 300  # Dimension of embedding vectors
+# EMBEDDING INTUITION:
+# Raw text: "I love deep learning"
+# After tokenization: [42, 156, 89, 234]
+# These are just integers—no semantic meaning!
+#
+# Embedding: token ID → learnable dense vector
+# Word 42 ("love") → [0.2, -0.5, 0.1, ..., 0.7] (128-d vector)
+# Word 156 ("like") → [0.19, -0.52, 0.11, ..., 0.68] (similar to "love"!)
+# Word 89 ("deep") → [0.8, 0.3, -0.2, ..., -0.1] (different from love/like)
+
+# EMBEDDING LAYER:
+# A lookup table: vocabulary_size × embedding_dim
+# Initialize with random values, learn during training
+
+vocab_size = 10000        # 10,000 different words
+embedding_dim = 128       # Each word → 128-dimensional vector
 
 embedding = nn.Embedding(vocab_size, embedding_dim)
-print(f'Embedding matrix shape: {embedding.weight.shape}')  # torch.Size([10000, 300])
+print(f'Embedding weight matrix shape: {embedding.weight.shape}')
+print('  Shape: (vocab_size=10000, embedding_dim=128)')
+print(f'  Total parameters: {10000 * 128:,} (all learnable!)')
 
-# Convert word IDs to embeddings
-word_ids = torch.LongTensor([5, 42, 123, 7])  # Word IDs from vocabulary
-word_vectors = embedding(word_ids)
-print(f'Word vectors shape: {word_vectors.shape}')  # torch.Size([4, 300])
+# LOOKUP OPERATION:
+# Give it a token ID, get back its vector
+word_id = torch.tensor([42])  # Word with ID 42
+word_vector = embedding(word_id)
+print(f'\nToken ID 42 → vector shape: {word_vector.shape}')
+print(f'Vector values (first 5): {word_vector[0, :5]}')
 
-# Batch of sentences
-sentences = torch.LongTensor([[5, 42, 123, 7, 0],    # Sentence 1 (0 = padding)
-                              [15, 88, 3, 0, 0]])      # Sentence 2
-sentence_vectors = embedding(sentences)
-print(f'Sentence embeddings shape: {sentence_vectors.shape}')  # torch.Size([2, 5, 300])</code></pre>
+# BATCH LOOKUP:
+# Tokenized sentence: "I love deep learning"
+# Token IDs: [123, 42, 89, 234]
+sentence_ids = torch.tensor([[123, 42, 89, 234, 0, 0]])  # 0 = padding for fixed length
+sentence_vectors = embedding(sentence_ids)
+print(f'\nSentence embeddings shape: {sentence_vectors.shape}')
+print('  (batch_size=1, sequence_length=6, embedding_dim=128)')
+print('  Now each token is a 128-d vector!')
 
-                        <h3>Using Pretrained Embeddings (GloVe)</h3>
-                        <pre><code class="language-python">import torch
+# THE LEARNING PROCESS:
+print('\nHow embeddings are learned:')
+print('1. Initialize: random vectors for each word')
+print('2. Train on downstream task (e.g., sentiment classification)')
+print('3. Backprop updates embedding vectors via gradient descent')
+print('4. Similar words naturally learn similar vectors')
+print('5. After training: embeddings capture semantic relationships')
+print('   Example: vector("king") - vector("man") + vector("woman") ≈ vector("queen")')
+</code></pre>
+
+                        <h3>Embedding Layer Parameters</h3>
+
+<pre><code class="language-python">import torch
 import torch.nn as nn
 
-# Load pretrained GloVe embeddings (example - you'd load from file)
+# CREATING EMBEDDING LAYER:
+embedding = nn.Embedding(
+    num_embeddings=10000,    # Vocabulary size: 10,000 different words
+    embedding_dim=128,       # Output vector dimension
+    padding_idx=0,           # Token ID 0 = padding (always zero vector)
+    max_norm=None,           # Optional: clip vectors to max length
+    norm_type=2.0,           # L2 norm (distance metric)
+    scale_grad_by_freq=False # Scale gradients by token frequency
+)
+
+print('Embedding layer created:')
+print(f'  vocab_size=10000: can embed 10,000 different words')
+print(f'  embedding_dim=128: each word → 128-d vector')
+print(f'  padding_idx=0: token 0 stays [0, 0, ..., 0]')
+print(f'  Parameters: 10,000 × 128 = {10000*128:,}')
+
+# PADDING IN PRACTICE:
+print('\nPadding example:')
+sentence = torch.tensor([[5, 42, 89, 0, 0]])  # Sentence of length 5 with 2 padding tokens
+embeddings = embedding(sentence)
+print(f'Input: {sentence}')
+print(f'Output shape: {embeddings.shape}')
+print(f'Padding token (0) embedding: {embedding(torch.tensor([0]))}')
+print('  All zeros! Padding has no semantic meaning')
+
+# CONTROLLING EMBEDDING SIZE:
+print('\nEmbedding dimension selection:')
+print('  Small datasets, few words: 32-64 dimensions')
+print('  Medium datasets, 1-10k words: 64-256 dimensions')
+print('  Large datasets, 100k+ words: 256-768 dimensions')
+print('  Rule of thumb: embedding_dim ≈ sqrt(vocab_size)')
+vocab = 10000
+suggested_dim = int(vocab ** 0.5)
+print(f'  For vocab_size={vocab}: suggested dim ≈ {suggested_dim}')
+
+# MAX_NORM: Clip embeddings to max length
+embedding_clipped = nn.Embedding(
+    num_embeddings=10000,
+    embedding_dim=128,
+    max_norm=1.0  # All vectors have length ≤ 1.0
+)
+print('\nmax_norm=1.0: keeps all embedding vectors on a unit sphere')
+print('  Benefits: Prevents embeddings from growing unbounded')
+print('  Use for: High-dimensional embeddings, similarity-sensitive tasks')
+</code></pre>
+
+                        <h3>Pretrained Embeddings: Word2Vec, GloVe, FastText</h3>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import numpy as np
+
+# PRETRAINED EMBEDDINGS CONCEPT:
+# Instead of training embeddings from scratch, use knowledge from large corpora
+# Word2Vec, GloVe, FastText trained on billions of words
+# Pre-learned semantic relationships: vector("king") - vector("man") ≈ vector("queen")
+
+# PRETRAINED OPTIONS:
+print('Popular pretrained embeddings:')
+print('  Word2Vec (Google, 2013): 300-d, trained on Google News')
+print('  GloVe (Stanford, 2014): 50, 100, 200, 300-d, trained on Wikipedia+Gigaword')
+print('  FastText (Facebook, 2016): 300-d, handles misspellings (char n-grams)')
+print('  BERT, GPT (modern): 768-4096-d, context-dependent, expensive')
+
+# SIMULATING PRETRAINED EMBEDDINGS:
 vocab_size = 10000
 embedding_dim = 300
 
 # Create embedding layer
 embedding = nn.Embedding(vocab_size, embedding_dim)
 
-# Load pretrained weights (replace with actual GloVe weights)
-# pretrained_weights = torch.load('glove.6B.300d.pt')
-# embedding.weight.data.copy_(pretrained_weights)
+# LOADING PRETRAINED WEIGHTS (example):
+# In practice, download from official source
+# For demo: create synthetic pretrained weights
+pretrained_weights = torch.randn(vocab_size, embedding_dim) / np.sqrt(embedding_dim)
+embedding.weight.data.copy_(pretrained_weights)
+print(f'\nPretrained weights loaded: {embedding.weight.shape}')
 
-# Freeze embeddings (don't update during training)
+# FREEZING vs FINE-TUNING:
+print('\nOptions for using pretrained embeddings:')
+
+# Option 1: FROZEN (keep as-is)
 embedding.weight.requires_grad = False
-print('Pretrained embeddings loaded and frozen')
+print('1. Frozen: embedding.weight.requires_grad = False')
+print('   Pros: Preserves semantic relationships, few parameters')
+print('   Cons: Can\'t adapt to your domain')
+print('   Use when: Limited data, domain similar to pretraining')
 
-# For fine-tuning, keep trainable:
-# embedding.weight.requires_grad = True</code></pre>
+# Option 2: FINE-TUNING (allow updates)
+embedding.weight.requires_grad = True
+print('2. Fine-tuning: embedding.weight.requires_grad = True')
+print('   Pros: Adapts to your domain-specific vocabulary')
+print('   Cons: More parameters, risk of overfitting')
+print('   Use when: Sufficient data, domain-specific terms matter')
 
-                        <h3>Embedding with Padding</h3>
-                        <pre><code class="language-python">import torch
+# COMPARISON: Training from scratch vs pretrained
+print('\nTraining from scratch vs Pretrained:')
+print('From scratch:')
+print('  - 10,000 × 300 = 3M parameters to learn')
+print('  - Need hundreds of thousands of sentences')
+print('  - Time: weeks on GPU')
+print('Pretrained (frozen):')
+print('  - 0 parameters in embedding layer')
+print('  - Need only thousands of sentences')
+print('  - Time: hours on GPU')
+print('Pretrained (fine-tuned):')
+print('  - 3M parameters to update (small gradients)')
+print('  - Need tens of thousands of sentences')
+print('  - Time: days on GPU')
+</code></pre>
+
+                        <h3>Practical Embedding Example with LSTM</h3>
+
+<pre><code class="language-python">import torch
 import torch.nn as nn
 
-# Create embedding with padding_idx
-embedding = nn.Embedding(vocab_size=10000, embedding_dim=300, padding_idx=0)
+class SentimentClassifier(nn.Module):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, num_classes):
+        super(SentimentClassifier, self).__init__()
+        
+        # EMBEDDING LAYER
+        self.embedding = nn.Embedding(
+            num_embeddings=vocab_size,
+            embedding_dim=embedding_dim,
+            padding_idx=0  # Don't learn padding token
+        )
+        
+        # LSTM LAYER
+        self.lstm = nn.LSTM(
+            input_size=embedding_dim,   # Input from embeddings
+            hidden_size=hidden_dim,
+            batch_first=True,
+            bidirectional=True
+        )
+        
+        # OUTPUT CLASSIFIER
+        self.fc = nn.Linear(hidden_dim * 2, num_classes)
+        self.dropout = nn.Dropout(0.3)
+    
+    def forward(self, token_ids):
+        # token_ids: (batch_size, seq_len) - integer IDs
+        # Example: [[5, 42, 156, 0], [89, 234, 0, 0]]
+        
+        # Step 1: Convert token IDs to embedding vectors
+        # (batch, seq_len) → (batch, seq_len, embedding_dim)
+        embedded = self.embedding(token_ids)
+        
+        # Step 2: Process sequence with LSTM
+        # Returns hidden state containing sequence context
+        lstm_out, (hidden, _) = self.lstm(embedded)
+        
+        # Step 3: Use final hidden state for classification
+        # Concatenate forward and backward (bidirectional)
+        context = self.dropout(hidden[-1])
+        
+        # Step 4: Classify
+        logits = self.fc(context)
+        return logits
 
-# Padding token (ID=0) will always have zero vector
-print(f'Padding embedding: {embedding(torch.LongTensor([0]))}')  # All zeros
+# CREATE MODEL:
+vocab_size = 10000
+embedding_dim = 100      # 100-dimensional word vectors
+hidden_dim = 256         # LSTM hidden state
+num_classes = 2          # Positive/Negative sentiment
 
-# Regular tokens have learned embeddings
-print(f'Word embedding shape: {embedding(torch.LongTensor([42])).shape}')  # (1, 300)</code></pre>
+model = SentimentClassifier(vocab_size, embedding_dim, hidden_dim, num_classes)
+
+# Parameter breakdown:
+embedding_params = vocab_size * embedding_dim
+lstm_params = 4 * embedding_dim * hidden_dim * 2  # Simplified (bidirectional)
+fc_params = hidden_dim * 2 * num_classes
+
+print(f'Model parameter breakdown:')
+print(f'  Embedding: {vocab_size} × {embedding_dim} = {embedding_params:,}')
+print(f'  LSTM: ~{lstm_params:,} (bidirectional)')
+print(f'  FC: {hidden_dim*2} × {num_classes} = {fc_params:,}')
+print(f'  Total: {sum(p.numel() for p in model.parameters()):,}')
+
+# INFERENCE EXAMPLE:
+batch_size = 4
+seq_len = 20
+token_ids = torch.randint(0, vocab_size, (batch_size, seq_len))
+
+output = model(token_ids)
+probs = torch.softmax(output, dim=1)
+
+print(f'\nInference:')
+print(f'  Input shape: {token_ids.shape} (batch of 4, max 20 tokens)')
+print(f'  Output shape: {output.shape} (batch of 4, 2 classes)')
+print(f'  Probabilities:\n{probs}')
+print(f'  Predictions: {torch.argmax(probs, dim=1)}')
+</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Embedding Best Practices</strong>
+                            <ul>
+                                <li><strong>Dimension selection:</strong> Start with 64-128 for small datasets, 256-512 for large; follow rule of thumb ≈ sqrt(vocab_size)</li>
+                                <li><strong>Pretrained vs random:</strong> Pretrained significantly better for <10k training sentences; beneficial even with more data</li>
+                                <li><strong>Padding handling:</strong> Always set padding_idx=0 to prevent padding tokens from affecting predictions</li>
+                                <li><strong>Freezing strategy:</strong> Freeze if domain-independent task, fine-tune if domain-specific terminology matters</li>
+                                <li><strong>Large vocabularies:</strong> Consider subword models (BPE, WordPiece) to reduce vocabulary size while preserving morphology</li>
+                                <li><strong>Out-of-vocabulary:</strong> Use &lt;UNK&gt; token for unknown words; some frameworks (FastText) handle this better</li>
+                                <li><strong>Similarity metrics:</strong> Use cosine similarity for comparing embeddings; embeddings learn to place similar words close together</li>
+                            </ul>
+                        </div>
                     </div>
 
                     <div id="advanced" class="blog-content mt-5">
