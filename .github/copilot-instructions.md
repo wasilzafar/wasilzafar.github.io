@@ -210,6 +210,334 @@ df3 = pd.read_json('data.json')
 
 **Always Defer Initialization**: Scripts run on `DOMContentLoaded` or when elements are detected. Don't require manual initialization.
 
+### Scroll-to-Top Button (Standard Feature)
+
+**All long-form blog articles include a Scroll-to-Top button** for improved user experience. This is a fixed circular button that appears after scrolling down 300px.
+
+**Implementation Pattern** (3 parts):
+
+**1. CSS Styles** (add before `</style>` closing tag):
+```css
+/* Scroll-to-Top Button */
+.scroll-to-top {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 50px;
+    height: 50px;
+    background: var(--color-teal);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(59, 151, 151, 0.3);
+    z-index: 999;
+}
+
+.scroll-to-top.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.scroll-to-top:hover {
+    background: var(--color-crimson);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(191, 9, 47, 0.4);
+}
+
+.scroll-to-top:active {
+    transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+    .scroll-to-top {
+        bottom: 1rem;
+        right: 1rem;
+        width: 45px;
+        height: 45px;
+        font-size: 1rem;
+    }
+}
+```
+
+**2. HTML Button** (add after footer, before scripts):
+```html
+<!-- Scroll-to-Top Button -->
+<button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+    <i class="fas fa-arrow-up"></i>
+</button>
+```
+
+**3. JavaScript** (add before `</body>` closing tag):
+```html
+<!-- Scroll-to-Top Script -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+        
+        // Show/hide button on scroll
+        window.addEventListener('scroll', function() {
+            if (window.scrollY > 300) {
+                scrollToTopBtn.classList.add('show');
+            } else {
+                scrollToTopBtn.classList.remove('show');
+            }
+        });
+        
+        // Smooth scroll to top on click
+        scrollToTopBtn.addEventListener('click', function() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    });
+</script>
+```
+
+**When to Include**:
+- ✅ All blog articles with >1000 words
+- ✅ Long-form technical tutorials (e.g., data science series)
+- ✅ Glossary pages with extensive content
+- ❌ Homepage (already at top, short content)
+- ❌ Category landing pages (moderate length)
+- ❌ Contact/location pages (single-screen content)
+
+**Reference Examples**:
+- See `/pages/2025/12/python-data-science-*.html` (all data science tutorials)
+- See `/pages/2025/11/business-sales-marketing-systems-glossary.html` (glossary with category indicator)
+
+**Advanced Variant** (for glossaries with multiple sections):
+- Add category indicator showing current section
+- Button scrolls to Table of Contents instead of top
+- See business-sales-marketing-systems-glossary.html for implementation
+
+### PrismJS Code Snippets with Copy and Theme Switcher (Standard Feature)
+
+**All blog articles with code snippets MUST include PrismJS with toolbar, copy button, and theme switcher** for optimal developer experience. The theme switcher allows readers to choose their preferred syntax highlighting theme, and the selection persists across all pages via localStorage.
+
+**Implementation Pattern** (3 parts required):
+
+**1. HEAD Section - Multiple Theme CSS Files**:
+```html
+<!-- Prism.js Syntax Highlighting -->
+<!-- Multiple themes for dynamic switching -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+```
+
+**2. STYLE Section - Toolbar and Dropdown Styling**:
+```css
+/* Toolbar styling */
+div.code-toolbar > .toolbar {
+    opacity: 1;
+    display: flex;
+    gap: 0.5rem;
+}
+
+div.code-toolbar > .toolbar > .toolbar-item > button {
+    background: var(--color-teal);
+    color: white;
+    border: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+div.code-toolbar > .toolbar > .toolbar-item > button:hover {
+    background: var(--color-blue);
+    transform: translateY(-1px);
+}
+
+div.code-toolbar > .toolbar > .toolbar-item > button:focus {
+    outline: 2px solid var(--color-teal);
+    outline-offset: 2px;
+}
+
+/* Theme switcher dropdown */
+div.code-toolbar > .toolbar > .toolbar-item > select {
+    background: var(--color-navy);
+    color: white;
+    border: 1px solid var(--color-teal);
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    outline: none;
+}
+
+div.code-toolbar > .toolbar > .toolbar-item > select:hover {
+    background: var(--color-blue);
+    border-color: var(--color-crimson);
+}
+
+div.code-toolbar > .toolbar > .toolbar-item > select:focus {
+    outline: 2px solid var(--color-teal);
+    outline-offset: 2px;
+}
+
+/* Style select options */
+div.code-toolbar > .toolbar > .toolbar-item > select option {
+    background: var(--color-navy);
+    color: white;
+}
+```
+
+**3. Before `</body>` - Prism Scripts and Theme Switcher JavaScript**:
+```html
+<!-- Prism.js for Syntax Highlighting -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+<!-- Add other language components as needed -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+<!-- Prism Theme Switcher -->
+<script>
+    // Available themes with display names
+    const themes = {
+        'prism-theme': 'Tomorrow Night',
+        'prism-default': 'Default',
+        'prism-dark': 'Dark',
+        'prism-twilight': 'Twilight',
+        'prism-okaidia': 'Okaidia',
+        'prism-solarizedlight': 'Solarized Light'
+    };
+
+    // Load saved theme from localStorage or use default
+    const savedTheme = localStorage.getItem('prism-theme') || 'prism-theme';
+
+    // Function to switch theme
+    function switchTheme(themeId) {
+        // Disable all themes
+        Object.keys(themes).forEach(id => {
+            const link = document.getElementById(id);
+            if (link) {
+                link.disabled = true;
+            }
+        });
+        
+        // Enable selected theme
+        const selectedLink = document.getElementById(themeId);
+        if (selectedLink) {
+            selectedLink.disabled = false;
+            localStorage.setItem('prism-theme', themeId);
+        }
+
+        // Update all dropdowns on the page to match selected theme
+        document.querySelectorAll('div.code-toolbar select').forEach(dropdown => {
+            dropdown.value = themeId;
+        });
+
+        // Re-apply syntax highlighting with new theme
+        setTimeout(() => {
+            Prism.highlightAll();
+        }, 10);
+    }
+
+    // Apply saved theme on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        switchTheme(savedTheme);
+    });
+
+    // Add theme switcher to Prism toolbar
+    Prism.plugins.toolbar.registerButton('theme-switcher', function(env) {
+        const select = document.createElement('select');
+        select.setAttribute('aria-label', 'Select code theme');
+        select.className = 'prism-theme-selector';
+        
+        // Populate dropdown with themes
+        Object.keys(themes).forEach(themeId => {
+            const option = document.createElement('option');
+            option.value = themeId;
+            option.textContent = themes[themeId];
+            if (themeId === savedTheme) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+        
+        // Handle theme change
+        select.addEventListener('change', function(e) {
+            switchTheme(e.target.value);
+        });
+        
+        return select;
+    });
+</script>
+```
+
+**Available Themes**:
+1. **Tomorrow Night** (default) - Dark theme with muted colors
+2. **Default** - Light theme with standard syntax colors
+3. **Dark** - Pure dark theme with high contrast
+4. **Twilight** - Dark theme with purple/blue tones
+5. **Okaidia** - Dark theme inspired by Monokai
+6. **Solarized Light** - Light theme with the Solarized color palette
+
+**Code Block HTML Pattern**:
+```html
+<pre><code class="language-python">import numpy as np
+import pandas as pd
+
+# Your code here
+data = np.array([1, 2, 3, 4, 5])
+print(data.mean())
+</code></pre>
+```
+
+**Language Support** (add language components as needed):
+- `prism-python.min.js` - Python syntax
+- `prism-bash.min.js` - Bash/Shell scripts
+- `prism-javascript.min.js` - JavaScript
+- `prism-json.min.js` - JSON
+- `prism-java.min.js` - Java
+- `prism-sql.min.js` - SQL
+- See full list: https://prismjs.com/#supported-languages
+
+**When to Include**:
+- ✅ All blog articles with code snippets (5+ code blocks)
+- ✅ Technical tutorials and data science articles
+- ✅ Any article demonstrating programming concepts
+- ❌ Articles with only inline code (use `<code>` tags with existing CSS)
+
+**Key Features**:
+- **Copy Button**: One-click copy to clipboard for all code blocks
+- **Theme Persistence**: User's theme selection saved in localStorage across all pages
+- **Toolbar Positioning**: Dropdown appears alongside copy button in top-right of code blocks
+- **Accessibility**: Proper ARIA labels and keyboard navigation support
+
+**Reference Examples**:
+- See `/pages/2025/12/python-data-science-machine-learning.html`
+- See `/pages/2025/12/python-data-science-numpy-foundations.html`
+- See `/pages/2025/12/python-data-science-pandas-analysis.html`
+- See `/pages/2025/12/python-data-science-visualization.html`
+- See `/pages/2025/12/python-setup-notebooks-guide.html`
+- See `/pages/2025/12/data-and-science-evolution.html`
+
+**Implementation Notes**:
+- Theme CSS files MUST have unique IDs matching the themes object keys
+- Default theme (`prism-theme`) is enabled by default, others have `disabled` attribute
+- Theme switcher uses `Prism.plugins.toolbar.registerButton()` API
+- localStorage key is `'prism-theme'` for consistency across all pages
+- Dropdown styling matches site color scheme (navy, teal, blue, crimson)
+- **CRITICAL**: Do NOT set `background` property on `pre[class*="language-"]` - this overrides theme backgrounds. Only set `border-radius`, `margin`, and `box-shadow`
+- Theme switcher syncs all dropdowns on page and re-applies highlighting with `Prism.highlightAll()`
+
 ### Analytics Tracking Convention
 
 **Semantic Naming for Extensibility**:
@@ -340,6 +668,12 @@ Example: cta_read_article_psychology_001
 
 ### Task: Add new blog article
 → Copy `.template-blog-post.html`, fill placeholders, update category page with article card
+
+### Task: Add Scroll-to-Top button to existing article
+→ Add CSS (before `</style>`), HTML button (after footer), and JavaScript (before `</body>`). See "Scroll-to-Top Button" section for complete code snippets.
+
+### Task: Add PrismJS with theme switcher to article with code snippets
+→ Add (1) Multiple theme CSS files in HEAD, (2) Toolbar/dropdown styling in STYLE section, (3) Prism scripts and theme switcher JavaScript before `</body>`. See "PrismJS Code Snippets with Copy and Theme Switcher" section for complete implementation.
 
 ### Task: Create new category page
 → Copy existing category (e.g., psychology.html), update icon, description, back link path
