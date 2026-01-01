@@ -1978,41 +1978,64 @@ for batch in dataset.take(1):
 
                 <h4>High-Level Training with model.fit()</h4>
 
+                <p>The simplest and most common way to train models. Keras handles all the complexity (batching, gradient computation, weight updates, metric tracking):</p>
+
 <pre><code class="language-python">import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 import numpy as np
 
-# Create synthetic dataset
-X_train = np.random.randn(200, 16).astype('float32')
-y_train = np.random.randn(200, 1).astype('float32')
+# Create synthetic dataset (200 samples, 16 features)
+X_train = np.random.randn(200, 16).astype('float32')  # Training data
+y_train = np.random.randn(200, 1).astype('float32')   # Training labels
 
-# Build and compile model
+# Build neural network
 model = keras.Sequential([
     layers.Dense(32, activation='relu', input_shape=(16,)),
     layers.Dense(16, activation='relu'),
-    layers.Dense(1)
+    layers.Dense(1)  # Output layer (regression)
 ])
+
+# Compile: configure optimizer, loss, metrics
 model.compile(optimizer='adam', loss='mse', metrics=['mae'])
 
-# Train with fit()
+# TRAIN with model.fit()
+# Parameters:
+#   - X_train, y_train: training data and labels
+#   - epochs: number of passes through entire dataset
+#   - batch_size: samples per gradient update
+#   - validation_split: fraction of data for validation (e.g., 0.2 = 20%)
+#   - verbose: 0 (silent), 1 (progress bar), 2 (one line per epoch)
 history = model.fit(
     X_train, y_train,
-    epochs=5,
-    batch_size=32,
-    validation_split=0.2,  # Use 20% for validation
-    verbose=1
+    epochs=5,                    # 5 complete passes through training data
+    batch_size=32,               # Update weights every 32 samples
+    validation_split=0.2,        # Reserve 20% for validation
+    verbose=1                    # Show progress bar
 )
 
-print('Final training loss:', history.history['loss'][-1])
-print('Final validation loss:', history.history['val_loss'][-1])
+# HISTORY: contains loss/metrics at each epoch
+print('Training losses:', history.history['loss'])        # Per-epoch training loss
+print('Validation losses:', history.history['val_loss'])  # Per-epoch validation loss
+print('Training MAE:', history.history['mae'])
+print('Validation MAE:', history.history['val_mae'])
+
+# What happens under the hood in model.fit():
+# For each epoch:
+#   1. Shuffle training data
+#   2. Split into batches
+#   3. For each batch:
+#      - Forward pass: predictions = model(batch_X)
+#      - Compute loss: loss = loss_function(predictions, batch_y)
+#      - Backward pass: compute gradients via GradientTape
+#      - Update: weights -= optimizer(learning_rate * gradients)
+#   4. Evaluate on validation set
+#   5. Print metrics
 </code></pre>
 
-                <p><code>validation_split</code> automatically reserves a portion of data for validation. <code>history</code> object contains loss/metric values at each epoch—useful for plotting training curves.</p>
+                <h4>Custom Training Loop with Fine-Grained Control</h4>
 
-                <h4>Custom Training Loop</h4>
-
-                <p>Full control over training process for advanced use cases:</p>
+                <p>When you need custom training logic (GANs, reinforcement learning, multi-task learning), write the loop manually using GradientTape:</p>
 
 <pre><code class="language-python">import tensorflow as tf
 from tensorflow import keras
@@ -2030,40 +2053,106 @@ model = keras.Sequential([
 ])
 
 # Optimizer
-optimizer = keras.optimizers.Adam()
+optimizer = keras.optimizers.Adam(learning_rate=0.001)
 
-# Training loop
+# Loss function
+loss_fn = keras.losses.MeanSquaredError()
+
+# Hyperparameters
 epochs = 5
 batch_size = 32
 
+# CUSTOM TRAINING LOOP: Full control over each step
 for epoch in range(epochs):
     print(f'\nEpoch {epoch+1}/{epochs}')
     epoch_loss = 0
     num_batches = 0
     
-    # Iterate through batches
+    # Iterate through batches manually
     for i in range(0, len(X), batch_size):
         x_batch = X[i:i+batch_size]
         y_batch = y[i:i+batch_size]
         
-        # Forward pass and loss computation
+        # STEP 1: Forward pass with GradientTape recording
+        # Everything inside 'with' block is recorded for gradient computation
         with tf.GradientTape() as tape:
+            # Forward: make predictions
             predictions = model(x_batch, training=True)
-            loss_value = tf.reduce_mean(tf.square(y_batch - predictions))
+            # Compute loss
+            loss_value = loss_fn(y_batch, predictions)
+            # Can add custom losses here, weighted combinations, etc.
         
-        # Backward pass: compute gradients
+        # STEP 2: Backward pass: compute gradients
+        # Tells us how each weight affects the loss
         grads = tape.gradient(loss_value, model.trainable_variables)
         
-        # Update weights
+        # STEP 3: Update weights
+        # apply_gradients: W = W - learning_rate * gradient
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
         
         epoch_loss += loss_value.numpy()
         num_batches += 1
     
     print(f'Average loss: {epoch_loss/num_batches:.4f}')
+
+print('Training complete!')
+
+# ADVANTAGES of custom loops:
+# 1. Full control over gradients (e.g., gradient clipping, manipulation)
+# 2. Support custom loss combinations
+# 3. Implement GAN training (separate generator/discriminator updates)
+# 4. Multi-task learning with weighted losses
+# 5. Research-specific training procedures
+
+# DISADVANTAGES:
+# 1. More boilerplate code
+# 2. Harder to debug
+# 3. Easy to make mistakes (forgot training flag, gradient accumulation, etc.)
+# 4. Slower than optimized model.fit()
 </code></pre>
 
-                <p>Custom loops give you control over gradient computation, weight updates, and training logic—essential for adversarial training, meta-learning, or multi-task optimization.</p>
+                <h4>Comparison: model.fit() vs Custom Loop</h4>
+
+<pre><code class="language-python">import tensorflow as tf
+from tensorflow.keras import layers
+
+# MODEL.FIT() - Recommended for most cases
+# Pros:
+#   - Concise, readable code
+#   - Automatic metric tracking and callbacks
+#   - Optimized for speed
+#   - Less room for bugs
+# Cons:
+#   - Less flexibility for advanced scenarios
+
+# Build model
+model = tf.keras.Sequential([layers.Dense(10, activation='relu')])
+model.compile(optimizer='adam', loss='mse')
+# history = model.fit(X, y, epochs=10, batch_size=32)
+
+# CUSTOM LOOP - For research/advanced use
+# Pros:
+#   - Full control over training
+#   - Support complex scenarios (GANs, multi-task, etc.)
+#   - Custom gradient manipulation
+# Cons:
+#   - More code to write and debug
+#   - Easier to make mistakes
+#   - Slower if not carefully optimized
+
+# When to use each:
+print('Use model.fit() if:')
+print('  - Standard supervised learning (classification, regression)')
+print('  - You want simple, clean code')
+print('  - You are a beginner')
+print('')
+print('Use custom loop if:')
+print('  - Adversarial training (GANs, adversarial examples)')
+print('  - Multi-task learning (different losses per task)')
+print('  - Reinforcement learning (state-value functions, policy gradients)')
+print('  - Meta-learning (learn-to-learn)')
+print('  - Custom gradient computation needed')
+</code></pre>
 
                 <div class="highlight-box">
                     <h4><i class="fas fa-code-branch me-2"></i>When to Use Custom Loops</h4>
