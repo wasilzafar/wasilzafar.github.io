@@ -2229,137 +2229,708 @@ optimizer = optim.Adam(model.parameters(), lr=0.0001)  # Lower LR!
                     <div id="cnn" class="blog-content mt-5">
                         <h2><i class="fas fa-images me-2 text-teal"></i>Convolutional Neural Networks (CNNs)</h2>
                         
-                        <p>CNNs are the architecture of choice for computer vision. They use convolutional layers to automatically learn spatial hierarchies of features.</p>
+                        <p><strong>CNNs are the gold standard for computer vision tasks.</strong> They learn spatial hierarchies of features through convolutional layers that apply small filters (kernels) across images. The key insight: sharing parameters across spatial locations reduces the number of learnable weights dramatically compared to fully connected layers.</p>
 
-                        <h3>Simple CNN for Image Classification</h3>
-                        <pre><code class="language-python">import torch
+                        <h3>Understanding Convolution: Filters and Feature Maps</h3>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
+
+# CONVOLUTION INTUITION:
+# A filter (3x3) slides across an image, computing dot products
+# Each position outputs a scalar → creates a feature map
+
+# Example: 3x3 Sobel filter for vertical edge detection
+edge_filter = torch.tensor([
+    [-1., 0., 1.],
+    [-2., 0., 2.],
+    [-1., 0., 1.]
+], dtype=torch.float32)
+
+print('Vertical edge detection filter (Sobel):')
+print(edge_filter)
+print('')
+
+# CONV2D PARAMETERS EXPLAINED:
+print('nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)')
+print('')
+
+# Example: process RGB images (3 channels) with 32 filters
+conv_layer = nn.Conv2d(
+    in_channels=3,      # RGB image: 3 channels (red, green, blue)
+    out_channels=32,    # Learn 32 different filters
+    kernel_size=3,      # Each filter is 3x3
+    stride=1,           # Move filter by 1 pixel at a time
+    padding=1,          # Pad input with zeros (preserves spatial dimensions)
+    bias=True           # Add bias term to each filter output
+)
+
+print(f'Conv2d layer parameters:')
+print(f'  - in_channels: {conv_layer.in_channels} (RGB has 3 channels)')
+print(f'  - out_channels: {conv_layer.out_channels} (32 learned filters)')
+print(f'  - kernel_size: {conv_layer.kernel_size} (3x3 filter)')
+print(f'  - weight shape: {conv_layer.weight.shape}')
+print(f'    (32 filters × 3×3×3 = 32 different 3×3×3 weight matrices)')
+
+# TOTAL PARAMETERS:
+# Each of 32 filters: 3×3×3 = 27 weights
+# Plus bias: 32
+# Total: 32 × 27 + 32 = 896 parameters
+params = (3 * 3 * 3 * 32) + 32
+print(f'  - Total parameters: {params}')
+
+# TEST FORWARD PASS:
+x = torch.randn(4, 3, 32, 32)  # Batch of 4 RGB images (32x32 each)
+output = conv_layer(x)
+print(f'\nInput shape: {x.shape} (batch, channels, height, width)')
+print(f'Output shape: {output.shape} (batch, 32 filters, 32, 32)')
+print('  Height/width stay same because padding="same"')
+
+# OUTPUT SIZE FORMULA:
+# output_size = (input_size - kernel_size + 2*padding) / stride + 1
+def output_spatial_size(input_size, kernel_size, stride, padding):
+    return (input_size - kernel_size + 2 * padding) // stride + 1
+
+print(f'\nWith different stride:')
+print(f'  stride=1: {output_spatial_size(32, 3, 1, 1)}x{output_spatial_size(32, 3, 1, 1)}')
+print(f'  stride=2: {output_spatial_size(32, 3, 2, 1)}x{output_spatial_size(32, 3, 2, 1)}')
+print(f'  stride=2 + padding=0: {output_spatial_size(32, 3, 2, 0)}x{output_spatial_size(32, 3, 2, 0)}')
+</code></pre>
+
+                        <h3>MaxPooling: Downsampling Feature Maps</h3>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+# MaxPooling INTUITION:
+# Take the MAXIMUM value in each 2x2 window
+# Reduces spatial dimensions while keeping important features
+
+# Example: 4x4 feature map
+feature_map = torch.tensor([
+    [1., 3., 2., 5.],
+    [4., 2., 1., 3.],
+    [2., 5., 6., 1.],
+    [3., 2., 4., 7.]
+], dtype=torch.float32)
+
+print('Original 4x4 feature map:')
+print(feature_map)
+
+# MaxPooling2d((2,2)): take max from each 2x2 window
+# [[1,3], [4,2]] → max = 4
+# [[2,5], [1,3]] → max = 5
+# [[2,5], [3,2]] → max = 5
+# [[6,1], [4,7]] → max = 7
+
+pool = nn.MaxPool2d(kernel_size=2, stride=2)
+pooled = pool(feature_map.unsqueeze(0).unsqueeze(0))  # Add batch and channel dims
+print(f'\nAfter MaxPooling2d(2x2):')
+print(pooled.squeeze())
+
+print('\nBenefits of MaxPooling:')
+print('  1. Reduces spatial dimensions (4x4 → 2x2, 75% fewer values)')
+print('  2. Keeps most important information (max values)')
+print('  3. Creates translation invariance (small shifts don\'t matter)')
+print('  4. Reduces parameters in subsequent layers (fewer multiplications)')
+
+# PADDING OPTIONS:
+print('\nMaxPooling with different padding:')
+pool_valid = nn.MaxPool2d(2, stride=2, padding=0)
+pool_same = nn.MaxPool2d(2, stride=1, padding=0)
+x = torch.randn(1, 32, 32, 32)  # 32x32 feature maps
+print(f'  Input: {x.shape}')
+print(f'  MaxPool2d(2, stride=2, padding=0): {pool_valid(x).shape}')
+</code></pre>
+
+                        <h3>Building a CNN: Conv + ReLU + Pool Pattern</h3>
+
+<pre><code class="language-python">import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# CNN ARCHITECTURE: Standard pattern is [Conv → ReLU → Pool] repeated
 class SimpleCNN(nn.Module):
     def __init__(self):
         super(SimpleCNN, self).__init__()
-        # Convolutional layers
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)  # 1 input channel (grayscale)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.pool = nn.MaxPool2d(2, 2)  # 2x2 max pooling
         
-        # Fully connected layers
-        self.fc1 = nn.Linear(64 * 7 * 7, 128)  # After 2 pooling: 28->14->7
-        self.fc2 = nn.Linear(128, 10)  # 10 classes (MNIST digits)
-        self.dropout = nn.Dropout(0.5)
+        # BLOCK 1: Extract low-level features (edges, corners)
+        # Input: 1x28x28 grayscale image (MNIST)
+        self.conv1 = nn.Conv2d(
+            in_channels=1,    # Grayscale image
+            out_channels=32,  # Learn 32 filters detecting different patterns
+            kernel_size=3,    # 3x3 filter
+            padding=1         # Keep spatial dimensions
+        )
+        # Output: 32x28x28 (32 feature maps, each 28x28)
+        
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        # Output after pool: 32x14x14
+        
+        # BLOCK 2: Extract mid-level features (textures, shapes)
+        self.conv2 = nn.Conv2d(
+            in_channels=32,   # Input: 32 feature maps from conv1
+            out_channels=64,  # Increase filter count
+            kernel_size=3,
+            padding=1
+        )
+        # Output: 64x14x14
+        
+        # Output after pool: 64x7x7
+        
+        # CLASSIFIER: Convert spatial features to class predictions
+        # Flatten: 64x7x7 = 3136 features
+        self.fc1 = nn.Linear(64 * 7 * 7, 128)
+        self.dropout = nn.Dropout(p=0.5)  # Reduce overfitting
+        self.fc2 = nn.Linear(128, 10)     # 10 MNIST classes
     
     def forward(self, x):
-        # Conv block 1: Conv -> ReLU -> Pool
-        x = self.pool(F.relu(self.conv1(x)))  # (28, 28) -> (14, 14)
+        # Block 1: Conv → ReLU → Pool
+        # Input: (batch, 1, 28, 28)
+        x = self.conv1(x)              # (batch, 32, 28, 28)
+        x = F.relu(x)                  # Apply activation
+        x = self.pool(x)               # (batch, 32, 14, 14)
         
-        # Conv block 2: Conv -> ReLU -> Pool
-        x = self.pool(F.relu(self.conv2(x)))  # (14, 14) -> (7, 7)
+        # Block 2: Conv → ReLU → Pool
+        x = self.conv2(x)              # (batch, 64, 14, 14)
+        x = F.relu(x)                  # Apply activation
+        x = self.pool(x)               # (batch, 64, 7, 7)
         
-        # Flatten for fully connected layers
-        x = x.view(-1, 64 * 7 * 7)  # Batch x Features
-        
-        # Fully connected layers
-        x = F.relu(self.fc1(x))
-        x = self.dropout(x)
-        x = self.fc2(x)
+        # Classifier
+        x = x.view(x.size(0), -1)      # Flatten: (batch, 3136)
+        x = F.relu(self.fc1(x))        # Dense layer + ReLU
+        x = self.dropout(x)            # Dropout during training
+        x = self.fc2(x)                # Output: (batch, 10)
         return x
 
 # Create model
 model = SimpleCNN()
+print('CNN Architecture:')
 print(model)
 
-# Test forward pass
-x = torch.randn(4, 1, 28, 28)  # Batch of 4 grayscale 28x28 images
+# Count parameters
+total_params = sum(p.numel() for p in model.parameters())
+trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+print(f'\nTotal parameters: {total_params:,}')
+print(f'Trainable parameters: {trainable_params:,}')
+
+# Test forward pass with batch of 4 images
+x = torch.randn(4, 1, 28, 28)
 output = model(x)
-print(f'Output shape: {output.shape}')  # torch.Size([4, 10])</code></pre>
+print(f'\nInput: {x.shape} (4 images, 1 channel, 28x28)')
+print(f'Output: {output.shape} (4 images, 10 classes)')
+print(f'Output probabilities (after softmax):\n{F.softmax(output, dim=1)[:2]}')
+</code></pre>
+
+                        <h3>Training CNN on MNIST</h3>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader
+from torchvision import datasets, transforms
+
+# BUILD MODEL
+class SimpleCNN(nn.Module):
+    def __init__(self):
+        super(SimpleCNN, self).__init__()
+        self.conv1 = nn.Conv2d(1, 32, 3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, 3, padding=1)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.fc1 = nn.Linear(64 * 7 * 7, 128)
+        self.fc2 = nn.Linear(128, 10)
+        self.dropout = nn.Dropout(0.5)
+    
+    def forward(self, x):
+        x = self.pool(torch.relu(self.conv1(x)))
+        x = self.pool(torch.relu(self.conv2(x)))
+        x = x.view(x.size(0), -1)
+        x = torch.relu(self.fc1(x))
+        x = self.dropout(x)
+        x = self.fc2(x)
+        return x
+
+model = SimpleCNN()
+
+# DATA LOADING with preprocessing
+# Normalize MNIST: (pixel - mean) / std
+# For MNIST: mean ≈ 0.1307, std ≈ 0.3081
+transform = transforms.Compose([
+    transforms.ToTensor(),  # Convert PIL image to tensor
+    transforms.Normalize((0.1307,), (0.3081,))  # Normalize
+])
+
+# Load MNIST training set
+train_dataset = datasets.MNIST(
+    root='./data',
+    train=True,
+    transform=transform,
+    download=True
+)
+train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
+
+# Load MNIST test set
+test_dataset = datasets.MNIST(
+    root='./data',
+    train=False,
+    transform=transform,
+    download=True
+)
+test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False)
+
+print(f'Training samples: {len(train_dataset)}')
+print(f'Test samples: {len(test_dataset)}')
+
+# TRAINING SETUP
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+model = model.to(device)
+
+criterion = nn.CrossEntropyLoss()  # Combines LogSoftmax + NLLLoss
+optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+# TRAINING LOOP (5 epochs)
+num_epochs = 5
+
+for epoch in range(num_epochs):
+    model.train()
+    train_loss = 0.0
+    correct = 0
+    total = 0
+    
+    for images, labels in train_loader:
+        images, labels = images.to(device), labels.to(device)
+        
+        # Forward pass
+        outputs = model(images)
+        loss = criterion(outputs, labels)
+        
+        # Backward pass
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        
+        # Statistics
+        train_loss += loss.item()
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum().item()
+    
+    accuracy = 100 * correct / total
+    print(f'Epoch {epoch+1}/{num_epochs} - Loss: {train_loss/len(train_loader):.4f}, Accuracy: {accuracy:.2f}%')
+
+# EVALUATION on test set
+model.eval()
+test_loss = 0.0
+correct = 0
+total = 0
+
+with torch.no_grad():
+    for images, labels in test_loader:
+        images, labels = images.to(device), labels.to(device)
+        outputs = model(images)
+        loss = criterion(outputs, labels)
+        
+        test_loss += loss.item()
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum().item()
+
+test_accuracy = 100 * correct / total
+print(f'\nTest Accuracy: {test_accuracy:.2f}%')
+</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-image me-2"></i>
+                            <strong>CNN Architecture Guidelines:</strong>
+                            <ul>
+                                <li><strong>Progressive depth:</strong> Conv → ReLU → Pool, increasing filters (32 → 64 → 128) as spatial dimensions decrease</li>
+                                <li><strong>Kernel size:</strong> 3×3 is standard; 5×5 or 7×7 for large spatial patterns. Two stacked 3×3 layers ≈ one 5×5 layer but fewer parameters</li>
+                                <li><strong>Stride:</strong> stride=1 for feature extraction, stride≥2 for downsampling (alternative to pooling)</li>
+                                <li><strong>Padding:</strong> padding='same' preserves dimensions; no padding gradually reduces size</li>
+                                <li><strong>GlobalAveragePooling:</strong> Reduces 8×8×256 → 256 vector, more efficient than Flatten + Dense</li>
+                                <li><strong>Dropout:</strong> Place before Dense layers; typical rates 0.3-0.5. Reduces co-adaptation, improves generalization</li>
+                            </ul>
+                        </div>
                     </div>
 
                     <div id="rnn" class="blog-content mt-5">
                         <h2><i class="fas fa-stream me-2 text-teal"></i>Recurrent Neural Networks (RNNs & LSTMs)</h2>
                         
-                        <p>RNNs process sequential data by maintaining hidden states across time steps. LSTMs (Long Short-Term Memory) solve the vanishing gradient problem in standard RNNs.</p>
+                        <p><strong>RNNs process sequential data</strong> (text, time series, audio) by maintaining hidden states across time steps. The key insight: the same weights are applied at each time step, but the hidden state accumulates information from previous steps. <strong>LSTMs (Long Short-Term Memory)</strong> solve the vanishing gradient problem of standard RNNs through gating mechanisms that explicitly control what information to remember.</p>
 
-                        <h3>Simple RNN for Sequence Classification</h3>
-                        <pre><code class="language-python">import torch
+                        <h3>RNN Fundamentals: Processing Sequences</h3>
+
+<pre><code class="language-python">import torch
 import torch.nn as nn
 
-class RNNClassifier(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, num_classes):
-        super(RNNClassifier, self).__init__()
+# RNN INTUITION:
+# For text: "I love deep learning"
+# Token sequence: [42, 156, 89, 234]
+#
+# Processing:
+# h0 = initial hidden state (zeros)
+# h1 = RNN(word_42, h0)  # Process first word with previous hidden
+# h2 = RNN(word_156, h1) # Process second word with updated hidden
+# h3 = RNN(word_89, h2)  # And so on...
+# h4 = RNN(word_234, h3)
+#
+# Final h4 contains context of entire sequence!
+
+# SIMPLE RNN LAYER IMPLEMENTATION CONCEPT:
+# At each time step t:
+# h[t] = tanh(W_ih @ x[t] + W_hh @ h[t-1] + b_h)
+# Where:
+#   W_ih: weight matrix for input
+#   W_hh: weight matrix for hidden state (recurrence)
+#   @ : matrix multiplication
+#   tanh: activation function
+
+class SimpleRNNCell(nn.Module):
+    """Manually implemented RNN cell to understand the math."""
+    def __init__(self, input_size, hidden_size):
+        super(SimpleRNNCell, self).__init__()
+        self.input_size = input_size
         self.hidden_size = hidden_size
-        self.num_layers = num_layers
         
-        # RNN layer
-        self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)
-        
-        # Fully connected output layer
-        self.fc = nn.Linear(hidden_size, num_classes)
+        # Weights
+        self.weight_ih = nn.Linear(input_size, hidden_size)  # Input to hidden
+        self.weight_hh = nn.Linear(hidden_size, hidden_size) # Hidden to hidden (recurrence)
     
-    def forward(self, x):
-        # Initialize hidden state
-        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
+    def forward(self, x, hidden):
+        # x: (batch_size, input_size) - current token
+        # hidden: (batch_size, hidden_size) - previous hidden state
         
-        # Forward propagate RNN
-        out, _ = self.rnn(x, h0)  # out: (batch, seq_len, hidden_size)
-        
-        # Get output from last time step
-        out = self.fc(out[:, -1, :])  # (batch, num_classes)
-        return out
+        # Compute new hidden state
+        new_hidden = torch.tanh(self.weight_ih(x) + self.weight_hh(hidden))
+        return new_hidden
 
-# Create model
-model = RNNClassifier(input_size=10, hidden_size=128, num_layers=2, num_classes=5)
-print(model)
+# PYTORCH'S RNN LAYER (easier to use):
+rnn_layer = nn.RNN(
+    input_size=10,      # Feature dimension per time step
+    hidden_size=20,     # Hidden state dimension
+    num_layers=1,       # Stack 1 RNN layer
+    batch_first=True    # Input format: (batch, seq_len, features)
+)
 
-# Test forward pass
-x = torch.randn(32, 20, 10)  # (batch, seq_len, input_size)
-output = model(x)
-print(f'Output shape: {output.shape}')  # torch.Size([32, 5])</code></pre>
+# Example: sequence of 5 tokens, each with 10 features
+x = torch.randn(4, 5, 10)  # (batch_size=4, seq_len=5, input_size=10)
 
-                        <h3>LSTM for Text Classification</h3>
-                        <pre><code class="language-python">import torch
+# Initialize hidden state to zeros
+h0 = torch.zeros(1, 4, 20)  # (num_layers, batch_size, hidden_size)
+
+# Forward pass
+outputs, hidden_final = rnn_layer(x, h0)
+# outputs: (batch_size=4, seq_len=5, hidden_size=20) - all hidden states
+# hidden_final: (num_layers=1, batch_size=4, hidden_size=20) - final hidden state
+
+print(f'Input shape: {x.shape}')
+print(f'Output (all hidden states): {outputs.shape}')
+print(f'Final hidden state: {hidden_final.shape}')
+print('Final hidden state ≈ context of entire sequence')
+</code></pre>
+
+                        <h3>LSTM: Solving the Vanishing Gradient Problem</h3>
+
+<pre><code class="language-python">import torch
 import torch.nn as nn
 
-class LSTMClassifier(nn.Module):
-    def __init__(self, vocab_size, embed_dim, hidden_dim, num_classes):
-        super(LSTMClassifier, self).__init__()
-        # Embedding layer
+# VANISHING GRADIENT PROBLEM:
+# In standard RNNs, h[t] = tanh(W @ h[t-1] + ...)
+# Backprop: dh[t]/dh[t-1] = W^T * tanh'
+# Over many time steps: dL/dh[0] = product of many small numbers → approaches 0
+# Result: early tokens have almost zero gradient, can't learn long dependencies
+
+# LSTM SOLUTION: Gating mechanisms + cell state
+# LSTM cells have:
+# - hidden state h[t]: short-term context (changes each step)
+# - cell state c[t]: long-term memory (preserved across steps)
+#
+# Three gates control information flow:
+# 1. FORGET GATE: What to discard from previous cell state
+# 2. INPUT GATE: What new information to add
+# 3. OUTPUT GATE: What hidden state to output
+
+# LSTM EQUATIONS (simplified):
+# f[t] = sigmoid(W_f @ [h[t-1], x[t]] + b_f)      # Forget gate
+# i[t] = sigmoid(W_i @ [h[t-1], x[t]] + b_i)      # Input gate
+# c_candidate = tanh(W_c @ [h[t-1], x[t]] + b_c)  # New cell info
+# c[t] = f[t] * c[t-1] + i[t] * c_candidate       # Update cell state
+# o[t] = sigmoid(W_o @ [h[t-1], x[t]] + b_o)      # Output gate
+# h[t] = o[t] * tanh(c[t])                         # New hidden state
+#
+# KEY: c[t] = f[t]*c[t-1] + ... uses addition, not multiplication!
+# Backprop: dL/dc[t] = dL/dc[t+1] + dL/dh[t]
+# Gradient can flow backwards without vanishing
+
+# PYTORCH LSTM:
+lstm_layer = nn.LSTM(
+    input_size=10,      # Features per time step
+    hidden_size=20,     # Hidden/cell state dimension
+    num_layers=1,       # Stack 1 LSTM layer
+    batch_first=True,   # Input format: (batch, seq_len, features)
+    bidirectional=False,# Process left-to-right only
+    dropout=0.0         # Dropout between layers (>1 layer)
+)
+
+# Example: process sequence
+x = torch.randn(4, 5, 10)  # (batch=4, seq_len=5, input=10)
+
+# Initialize hidden and cell states
+h0 = torch.zeros(1, 4, 20)  # (num_layers, batch, hidden)
+c0 = torch.zeros(1, 4, 20)  # (num_layers, batch, hidden)
+
+# Forward pass: returns outputs, (h_final, c_final)
+outputs, (hidden, cell) = lstm_layer(x, (h0, c0))
+# outputs: (4, 5, 20) - hidden state at each time step
+# hidden: (1, 4, 20) - final hidden state
+# cell: (1, 4, 20) - final cell state
+
+print(f'Input: {x.shape}')
+print(f'Output: {outputs.shape} (all hidden states)')
+print(f'Final hidden state: {hidden.shape}')
+print(f'Final cell state: {cell.shape}')
+
+# Key advantage: LSTM "remembers" information from earlier steps
+print('\nLSTM advantages:')
+print('  - Solves vanishing gradient (addition preserves gradient flow)')
+print('  - Long-term memory via cell state (separate from hidden)')
+print('  - Gates control what information flows (learnable)')
+print('  - Can learn dependencies >100 steps apart')
+</code></pre>
+
+                        <h3>Building LSTM Text Classifier</h3>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.optim as optim
+
+class LSTMTextClassifier(nn.Module):
+    def __init__(self, vocab_size, embed_dim, hidden_dim, num_classes, num_layers=1):
+        super(LSTMTextClassifier, self).__init__()
+        
+        # LAYER 1: Embedding
+        # Convert token IDs → dense vectors
+        # Parameters: vocab_size × embed_dim
         self.embedding = nn.Embedding(vocab_size, embed_dim)
         
-        # LSTM layer (bidirectional for better context)
-        self.lstm = nn.LSTM(embed_dim, hidden_dim, batch_first=True, bidirectional=True)
+        # LAYER 2: LSTM
+        # Process sequences while maintaining memory
+        # Returns outputs and (hidden, cell) tuple
+        self.lstm = nn.LSTM(
+            input_size=embed_dim,      # Input to LSTM is embedding vectors
+            hidden_size=hidden_dim,    # Hidden state dimension
+            num_layers=num_layers,     # Stack multiple LSTM layers
+            batch_first=True,          # Input: (batch, seq_len, features)
+            bidirectional=False,       # Process left-to-right
+            dropout=0.3 if num_layers > 1 else 0  # Dropout between LSTM layers
+        )
         
-        # Fully connected layer (2x hidden_dim because bidirectional)
-        self.fc = nn.Linear(hidden_dim * 2, num_classes)
-        self.dropout = nn.Dropout(0.5)
+        # LAYER 3: Dropout
+        self.dropout = nn.Dropout(p=0.3)
+        
+        # LAYER 4: Output classifier
+        # Hidden state → logits
+        self.fc = nn.Linear(hidden_dim, num_classes)
     
     def forward(self, x):
-        # x: (batch, seq_len) - integer token IDs
-        embedded = self.embedding(x)  # (batch, seq_len, embed_dim)
+        # x: (batch_size, seq_len) token IDs
+        # Example: [[5, 42, 156, 0], [89, 234, 0, 0]]
         
-        # LSTM forward pass
+        # Embedding: token IDs → vectors
+        embedded = self.embedding(x)
+        # Shape: (batch_size, seq_len, embed_dim)
+        
+        # LSTM: process sequence
         lstm_out, (hidden, cell) = self.lstm(embedded)
+        # lstm_out: (batch, seq_len, hidden_dim) all hidden states
+        # hidden: (num_layers, batch, hidden_dim) final hidden from each layer
+        # cell: (num_layers, batch, hidden_dim) final cell state
         
-        # Concatenate final forward and backward hidden states
-        hidden = torch.cat((hidden[-2,:,:], hidden[-1,:,:]), dim=1)
+        # Use final hidden state (contains sequence context)
+        # For single layer: hidden[0] = final hidden state
+        # Shape: (batch_size, hidden_dim)
+        final_hidden = hidden[-1]  # Last layer's final hidden state
         
-        # Apply dropout and output layer
-        out = self.dropout(hidden)
-        out = self.fc(out)
-        return out
+        # Dropout regularization
+        dropped = self.dropout(final_hidden)
+        
+        # Classification
+        logits = self.fc(dropped)  # (batch_size, num_classes)
+        return logits
+
+# CREATE MODEL:
+vocab_size = 5000        # Dictionary size
+embed_dim = 128          # Word vector dimension
+hidden_dim = 256         # LSTM hidden state dimension
+num_classes = 2          # Binary classification (positive/negative)
+num_layers = 2           # Stack 2 LSTM layers
+
+model = LSTMTextClassifier(vocab_size, embed_dim, hidden_dim, num_classes, num_layers)
+
+# Count parameters
+total_params = sum(p.numel() for p in model.parameters())
+trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+print(f'Model parameters: {total_params:,}')
+print(f'Trainable: {trainable_params:,}')
+
+# TEST FORWARD PASS:
+batch_size = 4
+seq_len = 20
+x = torch.randint(0, vocab_size, (batch_size, seq_len))  # Random token IDs
+output = model(x)
+print(f'\nInput: {x.shape} (batch, sequence_length)')
+print(f'Output: {output.shape} (batch, num_classes)')
+print(f'Output probabilities:\n{torch.softmax(output, dim=1)}')
+</code></pre>
+
+                        <h3>Bidirectional LSTM: Context from Both Directions</h3>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+# BIDIRECTIONAL LSTM INTUITION:
+# Standard LSTM: "I love [?] learning"
+# Process left-to-right: I → love → ? → learning
+# Hidden state at [?]: context from I, love (past only)
+#
+# Bidirectional: process BOTH directions
+# Left-to-right: I → love → [?] ← learning
+# Right-to-left: learning → ? → love → I
+# Result: hidden state at [?] contains context from BOTH sides!
+#
+# Advantage: much better for understanding full context
+# Disadvantage: can't be used for real-time prediction (need future tokens)
+
+# PYTORCH BIDIRECTIONAL LSTM:
+bilstm = nn.LSTM(
+    input_size=100,
+    hidden_size=256,
+    num_layers=1,
+    batch_first=True,
+    bidirectional=True,  # Process both directions
+    dropout=0.0
+)
+
+# Example sequence
+x = torch.randn(4, 20, 100)  # (batch=4, seq_len=20, embed_dim=100)
+
+outputs, (hidden, cell) = bilstm(x)
+# IMPORTANT: bidirectional output dimensions change!
+# outputs: (batch, seq_len, hidden_dim * 2) - concatenate forward and backward
+print(f'Input shape: {x.shape}')
+print(f'Output shape: {outputs.shape}')
+print(f'  (batch=4, seq_len=20, hidden*2=512)')
+
+# hidden shape: (num_layers*2, batch, hidden) - separate for forward and backward
+print(f'Hidden shape: {hidden.shape}')
+print(f'  (num_layers*2=2, batch=4, hidden=256)')
+print('  hidden[0] = forward final state, hidden[1] = backward final state')
+
+# Typically concatenate both directions:
+forward_hidden = hidden[0]  # (batch, hidden_dim)
+backward_hidden = hidden[1]  # (batch, hidden_dim)
+combined = torch.cat([forward_hidden, backward_hidden], dim=1)  # (batch, hidden_dim*2)
+print(f'\nCombined hidden state: {combined.shape}')
+
+# In classification, use combined or outputs[:, -1, :] (final output)
+context = outputs[:, -1, :]  # Last token output (includes both directions)
+print(f'Final bidirectional context: {context.shape} (batch, hidden*2)')
+</code></pre>
+
+                        <h3>Training LSTM on Real Data</h3>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, Dataset
+
+# Model from previous example
+class LSTMTextClassifier(nn.Module):
+    def __init__(self, vocab_size, embed_dim, hidden_dim, num_classes):
+        super(LSTMTextClassifier, self).__init__()
+        self.embedding = nn.Embedding(vocab_size, embed_dim)
+        self.lstm = nn.LSTM(embed_dim, hidden_dim, batch_first=True)
+        self.fc = nn.Linear(hidden_dim, num_classes)
+        self.dropout = nn.Dropout(0.3)
+    
+    def forward(self, x):
+        embedded = self.embedding(x)
+        lstm_out, (hidden, _) = self.lstm(embedded)
+        context = self.dropout(hidden[-1])  # Final hidden state
+        logits = self.fc(context)
+        return logits
+
+# TRAINING SETUP:
+vocab_size = 5000
+embed_dim = 100
+hidden_dim = 256
+num_classes = 2
+batch_size = 32
+num_epochs = 5
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Create model
-model = LSTMClassifier(vocab_size=10000, embed_dim=100, hidden_dim=256, num_classes=2)
-print(model)
+model = LSTMTextClassifier(vocab_size, embed_dim, hidden_dim, num_classes)
+model.to(device)
 
-# Test forward pass
-x = torch.randint(0, 10000, (32, 50))  # (batch, seq_len) - token IDs
-output = model(x)
-print(f'Output shape: {output.shape}')  # torch.Size([32, 2])</code></pre>
+# Optimizer and loss
+optimizer = optim.Adam(model.parameters(), lr=0.001)
+criterion = nn.CrossEntropyLoss()  # For multi-class classification
+
+# Synthetic data for demo
+X_train = torch.randint(0, vocab_size, (1000, 20))  # 1000 samples, 20 tokens each
+y_train = torch.randint(0, num_classes, (1000,))    # Random labels
+
+train_loader = DataLoader(
+    list(zip(X_train, y_train)),
+    batch_size=batch_size,
+    shuffle=True
+)
+
+# TRAINING LOOP:
+for epoch in range(num_epochs):
+    model.train()
+    total_loss = 0.0
+    correct = 0
+    total = 0
+    
+    for batch_x, batch_y in train_loader:
+        batch_x, batch_y = batch_x.to(device), batch_y.to(device)
+        
+        # Forward pass
+        logits = model(batch_x)
+        loss = criterion(logits, batch_y)
+        
+        # Backward pass
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        
+        # Statistics
+        total_loss += loss.item()
+        _, predicted = torch.max(logits, 1)
+        correct += (predicted == batch_y).sum().item()
+        total += batch_y.size(0)
+    
+    accuracy = 100 * correct / total
+    avg_loss = total_loss / len(train_loader)
+    print(f'Epoch {epoch+1}/{num_epochs} - Loss: {avg_loss:.4f}, Accuracy: {accuracy:.2f}%')
+
+print('Training complete!')
+</code></pre>
 
                         <div class="highlight-box">
-                            <i class="fas fa-lightbulb"></i>
-                            <strong>LSTM vs RNN:</strong> Use LSTMs for longer sequences (>20 steps) where long-term dependencies matter. For very long sequences (>500 tokens), consider Transformers instead. Bidirectional LSTMs see both past and future context but can't be used for real-time prediction.
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>RNN vs LSTM vs GRU Comparison:</strong>
+                            <ul>
+                                <li><strong>RNN:</strong> Basic recurrence, simple but vanishing gradient problem on long sequences (>20 steps)</li>
+                                <li><strong>LSTM:</strong> Full gating mechanism (forget, input, output gates), cell state preserves gradient, best for long sequences (>100 steps)</li>
+                                <li><strong>GRU:</strong> Simplified LSTM (reset and update gates), faster, 25-30% fewer parameters, good for medium sequences</li>
+                                <li><strong>Bidirectional:</strong> Process sequence both directions; better accuracy but can't be used for real-time prediction</li>
+                                <li><strong>When to use:</strong> Short sequences (<20 steps) → RNN, Medium (20-100) → GRU, Long (>100) or very important → LSTM, Transformer</li>
+                            </ul>
                         </div>
                     </div>
 
