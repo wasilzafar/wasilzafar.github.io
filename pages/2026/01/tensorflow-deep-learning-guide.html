@@ -1565,6 +1565,170 @@ print('TensorFlow dropout (inference):', output_infer.numpy())
 # Same input, same output during inference
 </code></pre>
 
+                <h4>Visualizing Regularization Effects on Overfitting</h4>
+                <pre><code class="language-python">import tensorflow as tf
+from tensorflow.keras import layers
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Create a complex synthetic dataset prone to overfitting
+np.random.seed(42)
+n_train = 100
+n_val = 20
+
+# Generate non-linear data with noise
+X_train = np.random.randn(n_train, 10)
+y_train = np.sin(X_train[:, 0]) + np.sin(X_train[:, 1]) + 0.1 * np.random.randn(n_train)
+
+X_val = np.random.randn(n_val, 10)
+y_val = np.sin(X_val[:, 0]) + np.sin(X_val[:, 1]) + 0.1 * np.random.randn(n_val)
+
+# Model WITHOUT regularization (prone to overfitting)
+model_no_reg = tf.keras.Sequential([
+    layers.Dense(128, activation='relu', input_shape=(10,)),
+    layers.Dense(128, activation='relu'),
+    layers.Dense(64, activation='relu'),
+    layers.Dense(64, activation='relu'),
+    layers.Dense(1)
+])
+
+# Model WITH regularization (L2 + Dropout)
+model_with_reg = tf.keras.Sequential([
+    layers.Dense(128, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.001), input_shape=(10,)),
+    layers.Dropout(0.3),
+    layers.Dense(128, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.001)),
+    layers.Dropout(0.3),
+    layers.Dense(64, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.001)),
+    layers.Dropout(0.2),
+    layers.Dense(64, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.001)),
+    layers.Dense(1)
+])
+
+# Compile both models
+model_no_reg.compile(optimizer='adam', loss='mse')
+model_with_reg.compile(optimizer='adam', loss='mse')
+
+# Train both models
+print('Training model WITHOUT regularization...')
+history_no_reg = model_no_reg.fit(
+    X_train, y_train,
+    epochs=100,
+    validation_data=(X_val, y_val),
+    verbose=0,
+    batch_size=16
+)
+
+print('Training model WITH regularization (L2 + Dropout)...')
+history_with_reg = model_with_reg.fit(
+    X_train, y_train,
+    epochs=100,
+    validation_data=(X_val, y_val),
+    verbose=0,
+    batch_size=16
+)
+
+# Create visualization
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+# Plot 1: Training vs Validation Loss (No Regularization)
+ax = axes[0, 0]
+ax.plot(history_no_reg.history['loss'], 'b-', linewidth=2, label='Training Loss', alpha=0.8)
+ax.plot(history_no_reg.history['val_loss'], 'r-', linewidth=2, label='Validation Loss', alpha=0.8)
+ax.fill_between(range(len(history_no_reg.history['loss'])), 
+                 history_no_reg.history['loss'], 
+                 history_no_reg.history['val_loss'], 
+                 alpha=0.2, color='orange', label='Overfitting Gap')
+ax.set_xlabel('Epoch', fontsize=11, fontweight='bold')
+ax.set_ylabel('Loss', fontsize=11, fontweight='bold')
+ax.set_title('WITHOUT Regularization (Overfitting)', fontsize=12, fontweight='bold')
+ax.legend(fontsize=10)
+ax.grid(True, alpha=0.3)
+
+# Plot 2: Training vs Validation Loss (With Regularization)
+ax = axes[0, 1]
+ax.plot(history_with_reg.history['loss'], 'b-', linewidth=2, label='Training Loss', alpha=0.8)
+ax.plot(history_with_reg.history['val_loss'], 'r-', linewidth=2, label='Validation Loss', alpha=0.8)
+ax.fill_between(range(len(history_with_reg.history['loss'])), 
+                 history_with_reg.history['loss'], 
+                 history_with_reg.history['val_loss'], 
+                 alpha=0.2, color='lightgreen', label='Regularization Effect')
+ax.set_xlabel('Epoch', fontsize=11, fontweight='bold')
+ax.set_ylabel('Loss', fontsize=11, fontweight='bold')
+ax.set_title('WITH Regularization (Better Generalization)', fontsize=12, fontweight='bold')
+ax.legend(fontsize=10)
+ax.grid(True, alpha=0.3)
+
+# Plot 3: Overfitting gap comparison
+ax = axes[1, 0]
+gap_no_reg = np.array(history_no_reg.history['val_loss']) - np.array(history_no_reg.history['loss'])
+gap_with_reg = np.array(history_with_reg.history['val_loss']) - np.array(history_with_reg.history['loss'])
+
+epochs_range = np.arange(len(gap_no_reg))
+ax.plot(epochs_range, gap_no_reg, 'r-', linewidth=2.5, label='No Regularization', marker='o', markersize=3, alpha=0.8)
+ax.plot(epochs_range, gap_with_reg, 'g-', linewidth=2.5, label='With Regularization', marker='s', markersize=3, alpha=0.8)
+ax.axhline(y=0, color='black', linestyle='--', alpha=0.5)
+ax.fill_between(epochs_range, gap_no_reg, alpha=0.2, color='red')
+ax.fill_between(epochs_range, gap_with_reg, alpha=0.2, color='green')
+
+ax.set_xlabel('Epoch', fontsize=11, fontweight='bold')
+ax.set_ylabel('Validation Loss - Training Loss', fontsize=11, fontweight='bold')
+ax.set_title('Overfitting Gap: Regularization Reduces Generalization Error', fontsize=12, fontweight='bold')
+ax.legend(fontsize=10)
+ax.grid(True, alpha=0.3)
+
+# Plot 4: Generalization performance
+ax = axes[1, 1]
+final_metrics = {
+    'Training Loss\n(No Reg)': history_no_reg.history['loss'][-1],
+    'Validation Loss\n(No Reg)': history_no_reg.history['val_loss'][-1],
+    'Training Loss\n(With Reg)': history_with_reg.history['loss'][-1],
+    'Validation Loss\n(With Reg)': history_with_reg.history['val_loss'][-1]
+}
+
+colors_bars = ['skyblue', 'salmon', 'lightgreen', 'lightyellow']
+bars = ax.bar(range(len(final_metrics)), list(final_metrics.values()), color=colors_bars, edgecolor='black', linewidth=1.5)
+
+# Add value labels
+for bar, (label, val) in zip(bars, final_metrics.items()):
+    ax.text(bar.get_x() + bar.get_width()/2, bar.get_height(),
+            f'{val:.3f}', ha='center', va='bottom', fontweight='bold', fontsize=10)
+
+ax.set_xticks(range(len(final_metrics)))
+ax.set_xticklabels(final_metrics.keys(), fontsize=9, fontweight='bold')
+ax.set_ylabel('Loss Value', fontsize=11, fontweight='bold')
+ax.set_title('Final Performance: Regularization Improves Validation', fontsize=12, fontweight='bold')
+ax.grid(True, alpha=0.3, axis='y')
+
+# Add improvement annotation
+improvement = ((history_no_reg.history['val_loss'][-1] - history_with_reg.history['val_loss'][-1]) / 
+               history_no_reg.history['val_loss'][-1] * 100)
+ax.text(0.5, 0.95, f'Validation Loss Improvement: {improvement:.1f}%',
+        transform=ax.transAxes, fontsize=11, fontweight='bold',
+        ha='center', va='top', 
+        bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8, edgecolor='orange', linewidth=2))
+
+plt.tight_layout()
+plt.show()
+
+# Print regularization analysis
+print('\nRegularization Impact Summary:')
+print('='*70)
+print(f'{"Metric":<35} {"No Regularization":<20} {"With L2+Dropout":<15}')
+print('='*70)
+print(f'{"Final Training Loss":<35} {history_no_reg.history["loss"][-1]:>18.4f}   {history_with_reg.history["loss"][-1]:>13.4f}')
+print(f'{"Final Validation Loss":<35} {history_no_reg.history["val_loss"][-1]:>18.4f}   {history_with_reg.history["val_loss"][-1]:>13.4f}')
+
+train_val_gap_no_reg = history_no_reg.history['val_loss'][-1] - history_no_reg.history['loss'][-1]
+train_val_gap_with_reg = history_with_reg.history['val_loss'][-1] - history_with_reg.history['loss'][-1]
+print(f'{"Train-Val Gap (overfitting)":<35} {train_val_gap_no_reg:>18.4f}   {train_val_gap_with_reg:>13.4f}')
+print('='*70)
+
+print(f'\nKey Insights:')
+print(f'✓ Regularization reduced overfitting gap by {abs(train_val_gap_no_reg - train_val_gap_with_reg):.4f}')
+print(f'✓ Validation loss improved by {improvement:.1f}% with regularization')
+print(f'✓ Model generalizes better to unseen data with L2 + Dropout')
+</code></pre>
+
                 <div class="highlight-box">
                     <h4><i class="fas fa-bolt me-2"></i>Activation Function Quick Reference</h4>
                     <ul>
@@ -2212,6 +2376,167 @@ dataset_cached = dataset_cached.prefetch(tf.data.AUTOTUNE)
 # Second epoch will use cached data (much faster!)
 
 print('Dataset pipeline optimized for speed')
+</code></pre>
+
+                <div class="highlight-box">
+                    <h4><i class="fas fa-database me-2"></i>tf.data Best Practices</h4>
+                    <ul>
+                        <li>Always use <code>prefetch(AUTOTUNE)</code> at the end of your pipeline</li>
+                        <li>Shuffle before batching: <code>dataset.shuffle().batch().prefetch()</code></li>
+                        <li>Use <code>cache()</code> to store preprocessed data in memory (if it fits)</li>
+                        <li>Parallelize expensive ops with <code>map(..., num_parallel_calls=AUTOTUNE)</code></li>
+                        <li>For large datasets, use <code>TFRecordDataset</code> for efficient serialization</li>
+                    </ul>
+                </div>
+
+                <h4>Visualizing Data Pipeline Performance Impact</h4>
+                <pre><code class="language-python">import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+import time
+
+# Create large synthetic dataset
+n_samples = 5000
+X = np.random.randn(n_samples, 100).astype('float32')
+y = np.random.randint(0, 10, (n_samples,)).astype('int32')
+
+# Define expensive preprocessing function (simulates slow I/O or augmentation)
+def expensive_preprocess(x, y):
+    # Simulate expensive computation (e.g., image augmentation)
+    x = x + tf.random.normal(tf.shape(x), stddev=0.1)
+    x = x * tf.random.uniform(tf.shape(x), 0.9, 1.1)
+    return x, y
+
+# Pipeline 1: NAIVE (no optimization)
+dataset_naive = tf.data.Dataset.from_tensor_slices((X, y))
+dataset_naive = dataset_naive.map(expensive_preprocess)
+dataset_naive = dataset_naive.batch(32)
+# MISSING: prefetch!
+
+# Pipeline 2: WITH PREFETCH (overlaps I/O and computation)
+dataset_prefetch = tf.data.Dataset.from_tensor_slices((X, y))
+dataset_prefetch = dataset_prefetch.map(expensive_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+dataset_prefetch = dataset_prefetch.batch(32)
+dataset_prefetch = dataset_prefetch.prefetch(tf.data.AUTOTUNE)  # KEY: prefetch here!
+
+# Pipeline 3: WITH CACHE + PREFETCH (best for repeated epochs)
+dataset_cached = tf.data.Dataset.from_tensor_slices((X, y))
+dataset_cached = dataset_cached.map(expensive_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+dataset_cached = dataset_cached.cache()  # Cache after preprocessing
+dataset_cached = dataset_cached.batch(32)
+dataset_cached = dataset_cached.prefetch(tf.data.AUTOTUNE)
+
+# Measure performance across epochs
+def measure_epoch_time(dataset, name, num_batches=None):
+    """Measure time to iterate through dataset once"""
+    start = time.time()
+    batch_count = 0
+    for _ in dataset:
+        batch_count += 1
+        if num_batches and batch_count >= num_batches:
+            break
+    elapsed = time.time() - start
+    return elapsed
+
+# Run measurements
+num_epochs = 3
+epoch_times_naive = []
+epoch_times_prefetch = []
+epoch_times_cached = []
+
+print('Measuring data pipeline performance across epochs...')
+print('(This measures time to iterate through dataset, not training time)\n')
+
+for epoch in range(num_epochs):
+    print(f'Epoch {epoch + 1}/{num_epochs}')
+    t_naive = measure_epoch_time(dataset_naive, 'Naive')
+    t_prefetch = measure_epoch_time(dataset_prefetch, 'Prefetch')
+    t_cached = measure_epoch_time(dataset_cached, 'Cached')
+    
+    epoch_times_naive.append(t_naive)
+    epoch_times_prefetch.append(t_prefetch)
+    epoch_times_cached.append(t_cached)
+    
+    print(f'  Naive:            {t_naive:.3f}s')
+    print(f'  With Prefetch:    {t_prefetch:.3f}s ({(1-t_prefetch/t_naive)*100:.1f}% faster)')
+    print(f'  With Cache+Prefetch: {t_cached:.3f}s ({(1-t_cached/t_naive)*100:.1f}% faster)')
+
+# Create visualization
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# Plot 1: Per-epoch timing comparison
+ax = axes[0]
+epochs_range = np.arange(1, num_epochs + 1)
+width = 0.25
+
+bars1 = ax.bar(epochs_range - width, epoch_times_naive, width, label='Naive (No Optimization)', color='salmon', alpha=0.8, edgecolor='black')
+bars2 = ax.bar(epochs_range, epoch_times_prefetch, width, label='With Prefetch', color='skyblue', alpha=0.8, edgecolor='black')
+bars3 = ax.bar(epochs_range + width, epoch_times_cached, width, label='With Cache + Prefetch', color='lightgreen', alpha=0.8, edgecolor='black')
+
+# Add value labels
+for bars in [bars1, bars2, bars3]:
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+                f'{height:.2f}s', ha='center', va='bottom', fontweight='bold', fontsize=9)
+
+ax.set_xlabel('Epoch', fontsize=12, fontweight='bold')
+ax.set_ylabel('Time (seconds)', fontsize=12, fontweight='bold')
+ax.set_title('Data Pipeline Performance: Naive vs Optimized', fontsize=13, fontweight='bold')
+ax.set_xticks(epochs_range)
+ax.legend(fontsize=10, loc='upper right')
+ax.grid(True, alpha=0.3, axis='y')
+
+# Plot 2: Speedup comparison
+ax = axes[1]
+prefetch_speedup = (1 - np.array(epoch_times_prefetch) / np.array(epoch_times_naive)) * 100
+cached_speedup = (1 - np.array(epoch_times_cached) / np.array(epoch_times_naive)) * 100
+
+x_pos = np.arange(len(epochs_range))
+ax.plot(x_pos, prefetch_speedup, 'b-o', linewidth=2.5, markersize=8, label='Prefetch vs Naive', alpha=0.8)
+ax.plot(x_pos, cached_speedup, 'g-s', linewidth=2.5, markersize=8, label='Cache+Prefetch vs Naive', alpha=0.8)
+ax.axhline(y=0, color='black', linestyle='--', alpha=0.5)
+
+ax.fill_between(x_pos, prefetch_speedup, alpha=0.2, color='blue')
+ax.fill_between(x_pos, cached_speedup, alpha=0.2, color='green')
+
+ax.set_xlabel('Epoch', fontsize=12, fontweight='bold')
+ax.set_ylabel('Speedup (%)', fontsize=12, fontweight='bold')
+ax.set_title('Performance Improvement from Optimization', fontsize=13, fontweight='bold')
+ax.set_xticks(x_pos)
+ax.set_xticklabels(epochs_range)
+ax.legend(fontsize=10)
+ax.grid(True, alpha=0.3)
+
+# Add trend annotation
+avg_prefetch_speedup = prefetch_speedup.mean()
+avg_cached_speedup = cached_speedup.mean()
+ax.text(0.5, 0.95, 
+        f'Avg Prefetch Speedup: {avg_prefetch_speedup:.1f}%\nAvg Cache+Prefetch Speedup: {avg_cached_speedup:.1f}%',
+        transform=ax.transAxes, fontsize=11, fontweight='bold',
+        ha='center', va='top',
+        bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.9, edgecolor='orange', linewidth=2))
+
+plt.tight_layout()
+plt.show()
+
+# Print summary table
+print('\nData Pipeline Performance Summary:')
+print('='*80)
+print(f'{"Epoch":<10} {"Naive":<15} {"Prefetch":<15} {"Cache+Prefetch":<15} {"Cache Benefit":<20}')
+print('='*80)
+
+for i, (t_naive, t_pref, t_cache) in enumerate(zip(epoch_times_naive, epoch_times_prefetch, epoch_times_cached), 1):
+    prefetch_benefit = (1 - t_pref / t_naive) * 100
+    cache_benefit = (1 - t_cache / t_pref) * 100 if t_pref > 0 else 0
+    print(f'{i:<10} {t_naive:>12.3f}s   {t_pref:>12.3f}s   {t_cache:>12.3f}s   {cache_benefit:>15.1f}% extra')
+
+print('='*80)
+print(f'\nKey Insights:')
+print(f'✓ Prefetch overlaps I/O with computation: {np.mean(prefetch_speedup):.1f}% average speedup')
+print(f'✓ Cache stores preprocessed data: epoch 2+ benefit from cached data')
+print(f'✓ Combination is most powerful: {np.mean(cached_speedup):.1f}% average speedup')
+print(f'✓ For multi-epoch training, caching provides cumulative benefit')
 </code></pre>
 
                 <div class="highlight-box">
