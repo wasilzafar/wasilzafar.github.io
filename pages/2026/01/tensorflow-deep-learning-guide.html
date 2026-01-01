@@ -2587,86 +2587,198 @@ history = model.fit(X, y, epochs=3, verbose=1)
 
                 <h3 id="transfer-learning">Transfer Learning with Pretrained Models</h3>
 
-                <p><strong>Transfer learning</strong> reuses knowledge from models trained on large datasets (ImageNet, COCO) for new tasks with limited data. Keras provides pretrained models through <code>keras.applications</code>: ResNet, MobileNet, EfficientNet, VGG, Inception, and more.</p>
+                <p><strong>Transfer learning</strong> reuses knowledge from models trained on large datasets (ImageNet with millions of images) for new tasks with limited data. The key insight: lower layers learn universal features (edges, shapes), while upper layers learn task-specific features. You reuse the universal parts!</p>
 
-                <p>The typical workflow: (1) Load pretrained base without top classification layer, (2) Freeze base weights, (3) Add custom classifier, (4) Train top layers, (5) Optionally fine-tune base layers.</p>
-
-                <h4>Transfer Learning Example</h4>
+                <h4>Transfer Learning Concept</h4>
 
 <pre><code class="language-python">import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 import numpy as np
 
-# Load pretrained MobileNetV2 (without top classification layer)
-# Note: Using weights=None for demonstration; use weights='imagenet' in practice
+# TRANSFER LEARNING WORKFLOW:
+# Step 1: Load pretrained model trained on ImageNet (1 million images, 1000 classes)
+# Step 2: Use its learned features (via base model)
+# Step 3: Add custom classification head for YOUR task
+# Step 4: Train only the head (base frozen)
+# Step 5: Optionally fine-tune base with low learning rate
+
+# LOAD PRETRAINED MOBILENETV2
+# MobileNetV2: efficient, trained on ImageNet
+# Parameters:
+#   - weights='imagenet': loads pretrained ImageNet weights (first time downloads)
+#   - weights=None: randomly initialized (for demo)
+#   - include_top=False: exclude original 1000-class head, get features only
+#   - input_shape: your image size (96x96 RGB)
 base_model = keras.applications.MobileNetV2(
-    weights=None,  # Change to 'imagenet' to download pretrained weights
-    include_top=False,  # Exclude classification head
-    input_shape=(96, 96, 3)
+    weights=None,  # Change to 'imagenet' in production
+    include_top=False,  # Get only feature extractor, not classifier
+    input_shape=(96, 96, 3)  # Your image dimensions
 )
 
-# Freeze base model weights
+# FREEZE base model
+# trainable=False: don't update weights during training
+# Why? Keep learned features from ImageNet, only train new head
 base_model.trainable = False
 
-# Build custom classifier on top
+print(f'Base model layers: {len(base_model.layers)}')
+print(f'Base model parameters: {base_model.count_params():,}')
+print(f'All frozen? {not any(layer.trainable for layer in base_model.layers)}')
+
+# BUILD CUSTOM CLASSIFIER ON TOP
+# Input: image 96x96x3
 inputs = keras.Input(shape=(96, 96, 3))
-x = base_model(inputs, training=False)  # Run base in inference mode
-x = layers.GlobalAveragePooling2D()(x)  # Reduce spatial dimensions
+
+# Pass through frozen base (training=False = use batch norm statistics from training)
+# base_model output: spatial feature maps (e.g., 3x3x1280)
+x = base_model(inputs, training=False)
+
+# GLOBAL AVERAGE POOLING: Reduce spatial dimensions
+# Input: (batch_size, 3, 3, 1280) feature maps
+# Output: (batch_size, 1280) by averaging each channel across space
+# Why? Reduces parameters, prevents overfitting, position-invariant
+x = layers.GlobalAveragePooling2D()(x)
+
+# DROPOUT: Regularization during training
+# Randomly drop 30% of neurons to prevent overfitting
 x = layers.Dropout(0.3)(x)
-outputs = layers.Dense(10, activation='softmax')(x)  # 10-class classification
 
+# CUSTOM CLASSIFIER HEAD: Your task-specific layer
+# Output: 10 classes, softmax probabilities
+outputs = layers.Dense(10, activation='softmax')(x)
+
+# Create final model
 model = keras.Model(inputs, outputs)
-model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
-print('Transfer learning model created.')
-print(f'Trainable parameters: {sum([tf.size(w).numpy() for w in model.trainable_weights])}')
-print(f'Frozen parameters: {sum([tf.size(w).numpy() for w in model.non_trainable_weights])}')
+# COMPILE with Adam optimizer
+model.compile(
+    optimizer='adam',
+    loss='sparse_categorical_crossentropy',  # For integer labels
+    metrics=['accuracy']
+)
+
+print('\nTransfer Learning Model Architecture:')
+print(f'Trainable parameters: {sum(tf.size(w).numpy() for w in model.trainable_weights):,}')
+print(f'Frozen parameters: {sum(tf.size(w).numpy() for w in model.non_trainable_weights):,}')
+print(f'Total parameters: {model.count_params():,}')
+
+# TRAINING:
+# X_train: (N, 96, 96, 3) images
+# y_train: (N,) integer labels 0-9
+# model.fit(X_train, y_train, epochs=10, validation_split=0.2)
+# Only the Dense(10) and Dropout layers get updated!
 </code></pre>
 
-                <p><code>GlobalAveragePooling2D</code> converts feature maps (e.g., 3×3×1280) to a 1D vector (1280) by averaging each channel. This reduces parameters and prevents overfitting compared to flattening.</p>
+                <h4>What is GlobalAveragePooling2D?</h4>
 
-                <h4>Fine-Tuning Strategy</h4>
+<pre><code class="language-python">import tensorflow as tf
+import numpy as np
 
-                <p>After training top layers, unfreeze base layers and fine-tune with lower learning rate:</p>
+# Example: Feature maps from base model
+# Shape: (batch_size=1, height=3, width=3, channels=1280)
+# This is 3x3x1280, way too large to pass to Dense layer directly
+
+feature_map = np.random.randn(1, 3, 3, 1280)
+print('Feature map shape:', feature_map.shape)
+
+# GLOBAL AVERAGE POOLING: Average across height and width for each channel
+# Formula: output[c] = mean(feature_map[:, :, c]) for each channel c
+gap = tf.keras.layers.GlobalAveragePooling2D()
+output = gap(feature_map)
+print('After GlobalAveragePooling2D:', output.shape)  # (1, 1280)
+
+# Result: each channel is reduced to its average value
+# 3x3x1280 → 1280 (1280× fewer parameters!)
+
+# Alternative would be Flatten():
+flatten = tf.keras.layers.Flatten()
+flattened = flatten(feature_map)
+print('With Flatten():', flattened.shape)  # (1, 28800) - way too big!
+
+# GlobalAveragePooling2D is better:
+# 1. Fewer parameters (1280 vs 28800)
+# 2. More robust to spatial shifts
+# 3. Better generalization
+</code></pre>
+
+                <h4>Fine-Tuning: Unlocking the Base Model</h4>
+
+                <p>After training the head with frozen base, optionally unfreeze some base layers and fine-tune with very low learning rate:</p>
 
 <pre><code class="language-python">import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-import numpy as np
 
-# Assume model from previous example exists
-# Create base and build model
-base = keras.applications.MobileNetV2(
-    weights=None,
-    include_top=False,
-    input_shape=(96, 96, 3)
-)
-base.trainable = False
+# Assume model built from previous example (base frozen)
+# After training head for ~5 epochs...
 
-inputs = keras.Input(shape=(96, 96, 3))
-x = base(inputs, training=False)
-x = layers.GlobalAveragePooling2D()(x)
-outputs = layers.Dense(10, activation='softmax')(x)
-model = keras.Model(inputs, outputs)
+# FINE-TUNING STRATEGY:
+# Step 1: Unfreeze base model
+base_model.trainable = True
 
-# Initial training (top layers only)
-model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+# Step 2: Freeze early layers (keep general features)
+# Only unfreeze last few layers (task-specific features)
+# Example: MobileNetV2 has ~150 layers
+for layer in base_model.layers[:-30]:  # Freeze all but last 30 layers
+    layer.trainable = False
 
-# Simulate: Train top layers first
-# model.fit(train_data, epochs=5)
+print(f'Total layers: {len(base_model.layers)}')
+print(f'Frozen layers: {sum(1 for l in base_model.layers if not l.trainable)}')
+print(f'Trainable layers: {sum(1 for l in base_model.layers if l.trainable)}')
 
-# Fine-tuning: Unfreeze base and train with lower LR
-base.trainable = True
-
+# Step 3: Recompile with MUCH LOWER learning rate
+# Fine-tuning uses ~1/100th the learning rate of initial training
+# Why? Preserve learned features, only make small adjustments
 model.compile(
-    optimizer=keras.optimizers.Adam(learning_rate=1e-5),  # Lower LR for fine-tuning
+    optimizer=keras.optimizers.Adam(learning_rate=1e-5),  # 1e-5 vs 1e-3
     loss='sparse_categorical_crossentropy',
     metrics=['accuracy']
 )
 
-print('Model ready for fine-tuning.')
-print('Use lower learning rate (1e-5) to avoid destroying pretrained features.')
+print('Model ready for fine-tuning with low learning rate.')
+
+# TRAINING:
+# model.fit(X_train, y_train, epochs=10, validation_split=0.2)
+# Now both the last 30 layers of base AND the Dense head will be updated!
+# But at very small steps (lr = 1e-5)
+</code></pre>
+
+                <h4>Transfer Learning Best Practices & When to Use</h4>
+
+<pre><code class="language-python">import tensorflow as tf
+
+# WHEN TO USE TRANSFER LEARNING:
+print('Use transfer learning when:')
+print('  - Limited training data (< 10,000 images)')
+print('  - Task similar to ImageNet (object recognition)')
+print('  - Computational resources are limited')
+print('  - Need quick results')
+print('')
+print('Train from scratch when:')
+print('  - Very large dataset (100k+ images)')
+print('  - Task very different from ImageNet')
+print('  - Have GPU/TPU resources')
+print('  - Time available for long training')
+
+# AVAILABLE PRETRAINED MODELS:
+models_dict = {
+    'MobileNetV2': 'Efficient, mobile-friendly, 3.5M params',
+    'EfficientNetB0': 'Better accuracy-efficiency tradeoff, 5.3M params',
+    'ResNet50': 'Accurate but large, 25.6M params',
+    'InceptionV3': 'Very accurate, 27M params',
+    'VGG16': 'Simple, 138M params (large!)',
+}
+
+print('\nPopular models and sizes:')
+for name, desc in models_dict.items():
+    print(f'  {name}: {desc}')
+
+# RULE OF THUMB:
+print('\nQuick decision:')
+print('  Small/Medium data + accuracy-focused → EfficientNetB0')
+print('  Small/Medium data + speed-focused → MobileNetV2')
+print('  Large data → Train custom ResNet from scratch')
+print('  Very small data (< 1000 images) → Transfer learning essential!')
 </code></pre>
 
                 <p>Fine-tuning improves performance by adapting pretrained features to your specific domain. Use learning rates 10-100× smaller than initial training to preserve learned representations.</p>
@@ -2684,120 +2796,534 @@ print('Use lower learning rate (1e-5) to avoid destroying pretrained features.')
 
                 <h3 id="computer-vision">Computer Vision: CNN for Image Classification</h3>
 
-                <p>Convolutional Neural Networks (CNNs) are the standard for image tasks. They use convolutional layers to detect spatial patterns (edges, textures, objects) and pooling layers to reduce dimensions while maintaining invariance.</p>
+                <p><strong>Convolutional Neural Networks (CNNs)</strong> are the gold standard for image tasks. The core insight: images have spatial structure. CNNs leverage this by using convolutional layers that detect local patterns (edges, textures, shapes) without losing spatial information.</p>
 
-                <h4>Building a CNN from Scratch</h4>
+                <h4>Understanding Convolution: How Filters Work</h4>
+
+<pre><code class="language-python">import numpy as np
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+
+# CONVOLUTION INTUITION:
+# A filter (3x3) slides across an image (32x32), computing dot products
+# Each position outputs a scalar → creates a feature map
+
+# Example: Simple Sobel edge detection filter
+# This filter detects vertical edges:
+edge_filter = np.array([
+    [-1, 0, 1],
+    [-2, 0, 2],
+    [-1, 0, 1]
+], dtype='float32')
+
+print('Vertical edge detection filter (Sobel):')
+print(edge_filter)
+print('')
+
+# When Conv2D(16, (3,3)) is created:
+# - 16 random filters are initialized
+# - During training, they learn to detect useful features
+# - Early layers learn simple patterns (edges, corners)
+# - Middle layers learn textures (corners, corners)
+# - Deep layers learn high-level objects (faces, wheels)
+
+# PARAMETERS in Conv2D(32, (3,3)):
+# - filters=32: number of different filters to learn
+# - kernel_size=(3,3): filter dimensions
+# - For RGB image, each filter learns 3x3x3 weights (3 color channels)
+# - Total parameters per layer: 32 filters × 3×3×3 = 864 + 32 bias = 896
+
+params_per_filter = 3 * 3 * 3  # kernel height × width × input channels
+total_params = 32 * params_per_filter + 32  # 32 filters + bias per filter
+print(f'Conv2D(32, (3,3)) on RGB image: {total_params} parameters')
+
+# STRIDE and PADDING:
+# Conv2D(32, (3,3), strides=2, padding='same')
+# - strides=2: filter moves 2 pixels at a time (reduces spatial dims faster)
+# - padding='same': pad input with zeros so output same size as input
+# - padding='valid': no padding, output is smaller
+
+# Output spatial dimensions formula:
+# output_height = (input_height - kernel_size + 2*padding) / stride + 1
+def output_size(input_size, kernel_size, stride, padding_type):
+    padding = kernel_size - 1 if padding_type == 'same' else 0
+    return (input_size - kernel_size + 2 * padding) // stride + 1
+
+print(f'\n32x32 image with Conv2D(kernel=3, stride=1, padding=same):')
+print(f'  Output size: {output_size(32, 3, 1, "same")}x{output_size(32, 3, 1, "same")}')
+
+print(f'\n32x32 image with Conv2D(kernel=3, stride=2, padding=same):')
+print(f'  Output size: {output_size(32, 3, 2, "same")}x{output_size(32, 3, 2, "same")}')
+</code></pre>
+
+                <h4>MaxPooling: Downsampling Feature Maps</h4>
+
+<pre><code class="language-python">import numpy as np
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+
+# MaxPooling example: take maximum value in 2x2 window
+feature_map = np.array([
+    [1, 3, 2, 5],
+    [4, 2, 1, 3],
+    [2, 5, 6, 1],
+    [3, 2, 4, 7]
+], dtype='float32')
+
+print('Original 4x4 feature map:')
+print(feature_map)
+
+# Manual 2x2 MaxPooling:
+# Top-left 2x2: max([1,3,4,2]) = 4
+# Top-right 2x2: max([2,5,1,3]) = 5
+# Bottom-left 2x2: max([2,5,3,2]) = 5
+# Bottom-right 2x2: max([6,1,4,7]) = 7
+pooled = np.array([
+    [4, 5],
+    [5, 7]
+], dtype='float32')
+
+print('\nAfter MaxPooling2D((2,2)):')
+print(pooled)
+print(f'Size reduced: 4x4 → 2x2 (75% fewer values)')
+
+# Why MaxPooling?
+print('\nBenefits of MaxPooling:')
+print('  1. Reduces spatial dimensions → faster computation')
+print('  2. Makes features translation-invariant (resistant to small shifts)')
+print('  3. Keeps most important information (max value)')
+print('  4. Prevents overfitting by reducing parameters')
+
+# Alternative: AveragePooling2D computes mean instead of max
+# Less common, but useful for some domains
+</code></pre>
+
+                <h4>Building a Complete CNN Architecture</h4>
 
 <pre><code class="language-python">import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras import layers
+from tensorflow import layers
 import numpy as np
 
-# Build CNN for 32x32 RGB images (CIFAR-10 style)
+# BUILDING A CNN: Standard pattern is Conv → Activation → Pooling → Repeat
+
 model = keras.Sequential([
-    # First convolutional block
-    layers.Conv2D(32, (3, 3), activation='relu', input_shape=(32, 32, 3)),
+    # INPUT: 32x32x3 RGB images (CIFAR-10 style)
+    
+    # BLOCK 1: Extract low-level features (edges, colors)
+    # Conv2D(filters=32, kernel_size=3): 32 filters learning 3x3 patterns
+    layers.Conv2D(
+        filters=32,           # Learn 32 different 3x3 filters
+        kernel_size=(3, 3),   # Each filter is 3x3
+        padding='same',       # Keep spatial dimensions same
+        activation='relu',    # ReLU: max(0, x)
+        input_shape=(32, 32, 3)
+    ),
+    # After: 32x32x32 (height × width × num_filters)
+    
+    layers.MaxPooling2D(
+        pool_size=(2, 2)      # Take max from each 2x2 window
+    ),
+    # After pooling: 16x16x32 (spatial dims halved)
+    
+    # BLOCK 2: Extract mid-level features (textures, shapes)
+    layers.Conv2D(
+        filters=64,           # Increase filter count as features get more complex
+        kernel_size=(3, 3),
+        padding='same',
+        activation='relu'
+    ),
+    # After: 16x16x64
+    
     layers.MaxPooling2D((2, 2)),
+    # After: 8x8x64
     
-    # Second convolutional block
-    layers.Conv2D(64, (3, 3), activation='relu'),
+    # BLOCK 3: Extract high-level features (objects, patterns)
+    layers.Conv2D(
+        filters=128,
+        kernel_size=(3, 3),
+        padding='same',
+        activation='relu'
+    ),
+    # After: 8x8x128
+    
     layers.MaxPooling2D((2, 2)),
+    # After: 4x4x128
     
-    # Third convolutional block
-    layers.Conv2D(128, (3, 3), activation='relu'),
+    # CLASSIFIER: Convert spatial features to class predictions
     
-    # Global pooling instead of flatten
+    # GlobalAveragePooling2D: Average across spatial dimensions
+    # 4x4x128 → 128 (much smaller than Flatten: 4×4×128=2048)
     layers.GlobalAveragePooling2D(),
     
-    # Dense classifier
-    layers.Dropout(0.5),
-    layers.Dense(10, activation='softmax')  # 10 classes
+    # Dropout: Randomly deactivate 50% of neurons during training
+    # Reduces co-adaptation, improves generalization
+    layers.Dropout(rate=0.5),
+    
+    # Dense classifier: 128 features → 10 class probabilities
+    layers.Dense(
+        units=10,             # One unit per class
+        activation='softmax'  # Output: class probabilities summing to 1
+    )
 ])
 
+# Compile
 model.compile(
     optimizer='adam',
-    loss='sparse_categorical_crossentropy',
+    loss='sparse_categorical_crossentropy',  # For integer labels 0-9
     metrics=['accuracy']
 )
 
+print('CNN Architecture Summary:')
 model.summary()
+print(f'\nTotal parameters: {model.count_params():,}')
+print(f'Parameter breakdown:')
+for layer in model.layers:
+    if hasattr(layer, 'count_params'):
+        print(f'  {layer.name}: {layer.count_params():,}')
 </code></pre>
 
-                <p><code>Conv2D(32, (3,3))</code> creates 32 filters of size 3×3 that slide across the image detecting patterns. <code>MaxPooling2D</code> downsamples by taking maximum value in 2×2 windows, reducing spatial dimensions while keeping important features.</p>
-
-                <h4>Training on Synthetic Data</h4>
+                <h4>Training CNN on Real Data</h4>
 
 <pre><code class="language-python">import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 import numpy as np
 
-# CNN model
+# Build model (from previous example)
 model = keras.Sequential([
-    layers.Conv2D(16, 3, activation='relu', input_shape=(32, 32, 3)),
-    layers.MaxPooling2D(),
-    layers.Conv2D(32, 3, activation='relu'),
+    layers.Conv2D(32, (3, 3), padding='same', activation='relu', 
+                  input_shape=(32, 32, 3)),
+    layers.MaxPooling2D((2, 2)),
+    layers.Conv2D(64, (3, 3), padding='same', activation='relu'),
+    layers.MaxPooling2D((2, 2)),
+    layers.Conv2D(128, (3, 3), padding='same', activation='relu'),
     layers.GlobalAveragePooling2D(),
+    layers.Dropout(0.5),
     layers.Dense(10, activation='softmax')
 ])
 
 model.compile(
-    optimizer='adam',
+    optimizer=keras.optimizers.Adam(learning_rate=0.001),
     loss='sparse_categorical_crossentropy',
     metrics=['accuracy']
 )
 
-# Synthetic training data
-images = np.random.rand(100, 32, 32, 3).astype('float32')
-labels = np.random.randint(0, 10, (100,))
+# OPTION 1: Load from tf.keras.datasets (MNIST, CIFAR-10, etc.)
+# Each pixel value 0-255, normalized to 0-1
+(X_train, y_train), (X_test, y_test) = keras.datasets.cifar10.load_data()
+X_train = X_train / 255.0
+X_test = X_test / 255.0
+y_train = y_train.squeeze()  # Remove extra dimension
+y_test = y_test.squeeze()
 
-# Train
-history = model.fit(images, labels, epochs=3, batch_size=32, verbose=1)
+print(f'Training data shape: {X_train.shape}')
+print(f'  Contains: {X_train.shape[0]} images of size {X_train.shape[1]}x{X_train.shape[2]}')
+print(f'Training labels shape: {y_train.shape} (classes 0-9)')
 
-print('\nCNN trained on synthetic images.')
-print(f'Final accuracy: {history.history["accuracy"][-1]:.2%}')
+# DATA AUGMENTATION: Create variations of images
+# Improves generalization by increasing effective dataset size
+augmentation = keras.Sequential([
+    layers.RandomFlip('horizontal'),    # Flip 50% of images left-right
+    layers.RandomRotation(0.1),         # Rotate by ±10%
+    layers.RandomZoom(0.1),             # Zoom by ±10%
+])
+
+# TRAINING with augmentation
+history = model.fit(
+    # Apply augmentation on-the-fly during training
+    # augmentation(X_train) would augment all images
+    X_train,
+    y_train,
+    epochs=10,
+    batch_size=128,
+    validation_split=0.2,  # Use 20% for validation
+    verbose=1
+)
+
+# EVALUATION on test set (unseen data)
+test_loss, test_accuracy = model.evaluate(X_test, y_test, verbose=0)
+print(f'\nTest accuracy: {test_accuracy:.2%}')
+print(f'Test loss: {test_loss:.4f}')
 </code></pre>
 
-                <p>For real datasets, use <code>tf.keras.datasets</code> (MNIST, CIFAR-10) or <code>tensorflow_datasets</code> (hundreds of ready-to-use datasets with preprocessing).</p>
-
                 <div class="highlight-box">
-                    <h4><i class="fas fa-image me-2"></i>CNN Architecture Principles</h4>
+                    <h4><i class="fas fa-brain me-2"></i>CNN Design Best Practices</h4>
                     <ul>
-                        <li><strong>Convolution → Activation → Pooling</strong> is the standard block pattern</li>
-                        <li>Increase filter count as you go deeper (16 → 32 → 64 → 128)</li>
-                        <li>Use small filters (3×3) stacked; more effective than large filters (5×5, 7×7)</li>
-                        <li>GlobalAveragePooling reduces parameters vs Flatten+Dense</li>
-                        <li>Data augmentation (flips, rotations, crops) dramatically improves generalization</li>
+                        <li><strong>Progressive depth:</strong> Use Conv → ReLU → Pool pattern, increasing filter count (32 → 64 → 128) as spatial dimensions decrease</li>
+                        <li><strong>Kernel size:</strong> 3×3 filters stacked are more efficient than 5×5 or 7×7; two 3×3 layers have same receptive field as 5×5 but fewer parameters</li>
+                        <li><strong>Padding:</strong> Use padding='same' to preserve spatial dimensions in early layers; reduces padding/no padding in later layers</li>
+                        <li><strong>Pooling strategy:</strong> MaxPooling after each block; stride matches kernel size (no overlap) for clean downsampling</li>
+                        <li><strong>Data augmentation:</strong> Essential for small datasets; use random flips, rotations, crops to increase effective training data size</li>
+                        <li><strong>GlobalAveragePooling2D:</strong> Superior to Flatten for classification; position-invariant, fewer parameters, less overfitting</li>
+                        <li><strong>Dropout placement:</strong> Add after pooling or before Dense layers; rate 0.3-0.5 typical</li>
                     </ul>
                 </div>
 
                 <h3 id="nlp-basics">Natural Language Processing Basics</h3>
 
-                <p>NLP with TensorFlow involves tokenization (converting text to integer sequences), embedding (mapping tokens to dense vectors), and sequential models (LSTM, GRU) to capture context. Keras provides <code>TextVectorization</code> for preprocessing and <code>Embedding</code> layer for learnable word representations.</p>
+                <p><strong>Natural Language Processing (NLP)</strong> with deep learning involves three core steps: (1) <strong>Tokenization</strong>—converting text to sequences of integers representing words, (2) <strong>Embedding</strong>—mapping those integers to dense vectors capturing semantic meaning, and (3) <strong>Sequential modeling</strong>—using RNNs (LSTM, GRU) to process sequences while maintaining context. Keras provides <code>TextVectorization</code> for preprocessing and <code>Embedding</code> for learnable word representations.</p>
 
-                <h4>Text Classification with LSTM</h4>
+                <h4>Text Tokenization & Vectorization</h4>
 
 <pre><code class="language-python">import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 import numpy as np
 
-# Hyperparameters
-vocab_size = 1000  # Total unique words
-seq_length = 20    # Fixed sequence length
-embedding_dim = 32 # Dense vector size per word
+# TOKENIZATION INTUITION:
+# Raw text: "I love deep learning"
+# Tokenization: "I" → vocab_id 42, "love" → 156, "deep" → 89, "learning" → 234
+# Result: [42, 156, 89, 234]
 
-# Build NLP model
+# TextVectorization does this automatically!
+# Step 1: Create vectorizer and adapt to training data
+texts = [
+    "I love deep learning",
+    "Deep learning is great",
+    "I love machine learning",
+    "Great neural networks"
+]
+
+vectorizer = keras.layers.TextVectorization(
+    max_tokens=50,         # Keep only top 50 most frequent words
+    output_sequence_length=10  # Pad/truncate to 10 tokens
+)
+
+# Analyze training texts to build vocabulary
+vectorizer.adapt(texts)
+
+# Check vocabulary
+print('Vocabulary size:', len(vectorizer.get_vocabulary()))
+print('Sample vocabulary:', vectorizer.get_vocabulary()[:10])
+
+# Vectorize individual text
+sample_text = "I love deep learning"
+vectorized = vectorizer(sample_text)
+print(f'\nOriginal: "{sample_text}"')
+print(f'Vectorized: {vectorized.numpy()}')
+print('(each number is token ID)')
+
+# OPTIONS in TextVectorization:
+print('\nTextVectorization parameters:')
+print('  - max_tokens: Keep only top N most frequent words (vocabulary size)')
+print('  - output_sequence_length: Pad to fixed length (handles variable-length inputs)')
+print('  - standardize: Lowercase, remove punctuation (default) or custom function')
+print('  - split: Split by whitespace (default) or custom regex')
+print('  - ngrams: Also include bigrams (word pairs), trigrams, etc.')
+</code></pre>
+
+                <h4>Understanding Embeddings: From Tokens to Vectors</h4>
+
+<pre><code class="language-python">import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+import numpy as np
+
+# EMBEDDING INTUITION:
+# Token ID 42 ("love") → 32-dimensional dense vector
+# Similar words (e.g., "like", "adore") → similar vectors (close in space)
+# This captures semantic relationships!
+
+# Embedding layer: learnable lookup table
+# Initialize: random 32-dimensional vectors
+# During training: update vectors so related words get similar embeddings
+
+vocab_size = 1000          # 1000 different words in vocabulary
+embedding_dim = 32         # Each word → 32-d vector
+seq_length = 20            # Each input: 20 token sequence
+
+# Create embedding layer
+embedding = layers.Embedding(
+    input_dim=vocab_size,       # Vocabulary size
+    output_dim=embedding_dim,   # Vector dimension per word
+    input_length=seq_length     # Expected sequence length
+)
+
+# Example: Tokenized sequence of 5 words from vocab (IDs: 10, 20, 30, 40, 50)
+token_sequence = np.array([[10, 20, 30, 40, 50]])
+
+# Embedding lookup: convert tokens to vectors
+embedded = embedding(token_sequence)
+print('Input shape (token IDs):', token_sequence.shape)
+print('  Batch of 1 sample, 5 tokens')
+
+print('\nOutput shape (embedded vectors):', embedded.shape)
+print('  Batch of 1 sample, 5 tokens, 32 dimensions each')
+
+# INTERPRETATION:
+# token_sequence[0,0] = 10 → embedding(10) = vector of 32 floats (e.g., [0.2, -0.5, 0.1, ...])
+# During training, embedding(10) updates to capture meaning of word with ID 10
+
+# ADVANTAGES of Embedding vs One-Hot:
+print('\n\nEmbedding vs One-Hot Encoding:')
+print('One-Hot: [0,0,1,0,0,0,0,0,0,0] ← 1000-dimensional, sparse, wastes memory')
+print('Embedding: [0.2, -0.5, 0.1, ...] ← 32-dimensional, dense, efficient')
+print(f'Size reduction: 1000 → {embedding_dim}x')
+
+# HOW EMBEDDINGS ARE LEARNED:
+print('\nEmbedding learning:')
+print('1. Initialize: random vectors for each word')
+print('2. Train model on downstream task (e.g., sentiment classification)')
+print('3. Backprop updates embedding vectors')
+print('4. Similar words naturally end up with similar vectors')
+print('5. Example: "good" and "great" vectors become close')
+</code></pre>
+
+                <h4>Building an LSTM Text Classifier</h4>
+
+<pre><code class="language-python">import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+import numpy as np
+
+# PARAMETERS:
+vocab_size = 1000          # Unique words in vocabulary
+seq_length = 20            # Max sequence length
+embedding_dim = 32         # Word vector dimension
+lstm_units = 64            # Hidden state dimension in LSTM
+
+# TEXT CLASSIFICATION MODEL:
 model = keras.Sequential([
-    # Embedding: vocab_size words → embedding_dim dimensional vectors
-    layers.Embedding(vocab_size, embedding_dim, input_length=seq_length),
+    # INPUT: Token sequences (batch_size, seq_length)
+    # Example: [[42, 156, 89, 234, 0, 0, ...], ...]
     
-    # LSTM: process sequence and output hidden state
-    layers.LSTM(64, return_sequences=False),  # return_sequences=False → single output
+    # LAYER 1: Embedding
+    # Converts token IDs → dense vectors
+    # Output: (batch_size, seq_length, embedding_dim)
+    layers.Embedding(
+        input_dim=vocab_size,      # Dictionary size
+        output_dim=embedding_dim,  # Vector dimension
+        input_length=seq_length
+    ),
+    # After: (batch_size, 20, 32)
     
-    # Classifier
+    # LAYER 2: LSTM (Long Short-Term Memory)
+    # Processes sequence while maintaining memory
+    # Each LSTM cell:
+    #   - Input: current token vector + previous hidden state
+    #   - Output: new hidden state
+    # return_sequences=False → output only FINAL hidden state
+    layers.LSTM(
+        units=lstm_units,            # Hidden state dimension
+        return_sequences=False,      # Only return final state (not all states)
+        dropout=0.2,                 # 20% dropout inside LSTM
+        recurrent_dropout=0.2        # Dropout on recurrent connections
+    ),
+    # After: (batch_size, 64)
+    # Single vector per sample containing sequence context
+    
+    # LAYER 3: Dropout
+    # Prevent overfitting: randomly drop 30% of units
+    layers.Dropout(rate=0.3),
+    
+    # LAYER 4: Output
+    # Binary classification: 1 unit + sigmoid
+    layers.Dense(
+        units=1,              # 1 output (probability)
+        activation='sigmoid'  # Squash to [0, 1]
+    )
+    # Output: (batch_size, 1) probability for each sample
+])
+
+# COMPILE:
+model.compile(
+    optimizer=keras.optimizers.Adam(learning_rate=0.001),
+    loss='binary_crossentropy',  # Binary classification loss
+    metrics=['accuracy']
+)
+
+model.summary()
+print('\nModel flow:')
+print('Text → Tokenize → [42, 156, 89, 234, ...]')
+print('       → Embed → [[0.2, -0.5, ...], [0.1, 0.8, ...], ...]')
+print('       → LSTM → [final_context_vector]')
+print('       → Dense(1) + sigmoid → 0.8 (probability of positive sentiment)')
+</code></pre>
+
+                <h4>LSTM Internals: How It Remembers</h4>
+
+<pre><code class="language-python">import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+import numpy as np
+
+# LSTM CELL INTERNALS:
+# Each LSTM cell has:
+# - hidden state h[t]: current context/memory
+# - cell state c[t]: long-term memory
+#
+# Processing token at time t:
+# 1. FORGET GATE: Decide what to forget from previous memory
+# 2. INPUT GATE: Decide what new information to add
+# 3. CELL UPDATE: Update internal state
+# 4. OUTPUT GATE: Decide what to output as new hidden state
+
+# Example: "I love deep learning" → sentiment = positive
+# Token sequence: [I, love, deep, learning]
+#
+# Step 1: Process "I"
+#   hidden_state = some vector
+#
+# Step 2: Process "love" (positive word)
+#   FORGET: Keep most previous state
+#   INPUT: Add strong positive signal
+#   hidden_state updated to reflect "love"
+#
+# Step 3: Process "deep"
+#   Accumulate context
+#
+# Step 4: Process "learning"
+#   hidden_state now contains full context of all tokens
+#   LSTM remembers "love" (positive) despite appearing at beginning!
+
+# KEY INSIGHT: LSTM solves vanishing gradient problem
+# Traditional RNN: gradients decay exponentially over long sequences
+# LSTM: maintains constant error flow via cell state connections
+
+print('LSTM Advantages:')
+print('  1. Remembers long-range dependencies (words far apart)')
+print('  2. Handles variable-length sequences efficiently')
+print('  3. Solves vanishing gradient problem')
+print('')
+print('LSTM vs Traditional RNN:')
+print('  RNN: small hidden state, prone to forgetting')
+print('  LSTM: gated mechanism explicitly controls what to remember/forget')
+print('  GRU: similar to LSTM but simpler (6 gates vs 3 gates in LSTM)')
+print('')
+
+# COMPARISON: Different architectures
+architectures = {
+    'LSTM': 'Full gating mechanism, 4 gates (forget, input, output, cell)',
+    'GRU': 'Simplified, 2 gates (reset, update), fewer params than LSTM',
+    'SimpleRNN': 'Basic recurrence, no gating, vanishing gradients',
+    'Bidirectional': 'Process sequence left-to-right AND right-to-left',
+}
+
+print('RNN Architecture Comparison:')
+for name, desc in architectures.items():
+    print(f'  {name}: {desc}')
+</code></pre>
+
+                <h4>Training Text Classifier on Real Data</h4>
+
+<pre><code class="language-python">import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+import tensorflow_datasets as tfds
+import numpy as np
+
+# Build model
+vocab_size = 1000
+seq_length = 20
+
+model = keras.Sequential([
+    layers.Embedding(vocab_size, 32, input_length=seq_length),
+    layers.LSTM(64, return_sequences=False),
     layers.Dropout(0.3),
-    layers.Dense(1, activation='sigmoid')  # Binary sentiment classification
+    layers.Dense(1, activation='sigmoid')
 ])
 
 model.compile(
@@ -2806,36 +3332,61 @@ model.compile(
     metrics=['accuracy']
 )
 
-model.summary()
+# OPTION 1: IMDb movie reviews dataset (pre-tokenized)
+# Load reviews pre-tokenized as integer sequences
+(X_train, y_train), (X_test, y_test) = keras.datasets.imdb.load_data(num_words=vocab_size)
+
+# Pad sequences to fixed length
+X_train = keras.preprocessing.sequence.pad_sequences(X_train, maxlen=seq_length)
+X_test = keras.preprocessing.sequence.pad_sequences(X_test, maxlen=seq_length)
+
+print(f'Training data shape: {X_train.shape}')
+print(f'  {X_train.shape[0]} reviews, each {X_train.shape[1]} tokens')
+print(f'Labels: {y_train.shape} (0=negative, 1=positive sentiment)')
+
+# TRAINING:
+history = model.fit(
+    X_train,
+    y_train,
+    epochs=5,
+    batch_size=128,
+    validation_split=0.2,  # 20% for validation
+    verbose=1
+)
+
+# EVALUATION:
+test_loss, test_accuracy = model.evaluate(X_test, y_test, verbose=0)
+print(f'\nTest accuracy: {test_accuracy:.2%}')
+print(f'Test loss: {test_loss:.4f}')
+
+# PREDICTION on new text:
+new_reviews = [
+    [1, 45, 120, 50, 200, 0, 0, 0, 0, 0],  # Example: words with IDs [1, 45, 120, ...]
+    [200, 50, 30, 15, 8, 2, 1, 0, 0, 0]
+]
+
+new_reviews = keras.preprocessing.sequence.pad_sequences(
+    new_reviews, maxlen=seq_length
+)
+
+predictions = model.predict(new_reviews)
+print(f'\nPredictions (probability of positive sentiment):')
+for i, pred in enumerate(predictions):
+    print(f'  Review {i+1}: {pred[0]:.2%}')
 </code></pre>
 
-                <p><code>Embedding</code> converts integer token IDs to dense vectors (learnable during training). <code>LSTM</code> processes sequences while maintaining memory of previous tokens—critical for context understanding.</p>
-
-                <h4>Training on Synthetic Sequences</h4>
-
-<pre><code class="language-python">import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-import numpy as np
-
-vocab_size = 1000
-seq_length = 20
-
-# Model
-model = keras.Sequential([
-    layers.Embedding(vocab_size, 32, input_length=seq_length),
-    layers.LSTM(32),
-    layers.Dense(1, activation='sigmoid')
-])
-
-model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-
-# Synthetic data: random token sequences
-X_sequences = np.random.randint(0, vocab_size, (200, seq_length))
-y_labels = np.random.randint(0, 2, (200,))
-
-# Train
-history = model.fit(X_sequences, y_labels, epochs=3, batch_size=32, verbose=1)
+                <div class="highlight-box">
+                    <h4><i class="fas fa-font me-2"></i>NLP Best Practices</h4>
+                    <ul>
+                        <li><strong>Tokenization:</strong> Use TextVectorization for automatic token ID assignment and vocabulary building</li>
+                        <li><strong>Embedding dimension:</strong> Start with 32-128; higher for larger datasets/vocabularies</li>
+                        <li><strong>Sequence length:</strong> Use fixed length with padding/truncation; balance between preserving info and computation</li>
+                        <li><strong>LSTM vs GRU:</strong> LSTM more powerful but slower; GRU simpler and faster; start with GRU, upgrade if needed</li>
+                        <li><strong>Bidirectional:</strong> Process sequences backward too; often improves performance with 2x parameters</li>
+                        <li><strong>Pre-trained embeddings:</strong> Word2Vec, GloVe, FastText save computation; start with random embeddings if small data</li>
+                        <li><strong>Data augmentation:</strong> Paraphrasing, back-translation, synonym replacement increase training data</li>
+                    </ul>
+                </div>
 
 print('\nNLP model trained on synthetic token sequences.')
 </code></pre>
