@@ -567,6 +567,9 @@
                         </li>
                         <li><a href="#part5">Part 5: Advanced Topics</a>
                             <ol>
+                                <li><a href="#attention-layers">Attention Layers & MultiHeadAttention</a></li>
+                                <li><a href="#transformer-keras">Building Transformers with Keras</a></li>
+                                <li><a href="#distributed-training">Distributed Training & Multi-GPU</a></li>
                                 <li><a href="#performance">Performance Optimization</a></li>
                                 <li><a href="#interpretability">Model Interpretability</a></li>
                                 <li><a href="#deployment">Deployment & Serving</a></li>
@@ -2195,6 +2198,520 @@ print('LSTM input shape: (samples, timesteps, features)')
 
                 <!-- Part 5: Advanced Topics -->
                 <h2 id="part5">Part 5: Advanced Topics</h2>
+
+                <!-- Attention Layers & MultiHeadAttention -->
+                <h3 id="attention-layers">Attention Layers & MultiHeadAttention</h3>
+
+                <p>Attention mechanisms allow models to focus on relevant parts of input sequences. Keras provides <code>keras.layers.MultiHeadAttention</code>, a production-ready implementation of scaled dot-product attention with multiple heads for parallel processing of different representation subspaces.</p>
+
+                <h4>Basic Multi-Head Attention</h4>
+
+                <p>The MultiHeadAttention layer computes attention weights over a sequence or between two different sequences:</p>
+
+                <pre><code class="language-python">import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+
+# Create multi-head attention layer
+attention = layers.MultiHeadAttention(
+    num_heads=8,      # Number of attention heads
+    key_dim=64,       # Dimension of each head
+    dropout=0.1       # Dropout for regularization
+)
+
+# Prepare inputs
+batch_size = 32
+seq_length = 20
+feature_dim = 512
+
+# Query, Key, Value tensors
+query = tf.random.normal([batch_size, seq_length, feature_dim])
+key = tf.random.normal([batch_size, seq_length, feature_dim])
+value = tf.random.normal([batch_size, seq_length, feature_dim])
+
+# Self-attention (query, key, value from same source)
+attn_output = attention(query, value, key=key, return_attention_scores=False)
+print(f'Attention output shape: {attn_output.shape}')  # [32, 20, 512]
+
+# Get attention weights
+attn_output, attn_weights = attention(query, value, key=key, return_attention_scores=True)
+print(f'Attention weights shape: {attn_weights.shape}')  # [32, 8, 20, 20]</code></pre>
+
+                <p><strong>Cross-Attention:</strong> Use different sequences for Query vs Key/Value, useful for encoder-decoder architectures:</p>
+
+                <pre><code class="language-python">import tensorflow as tf
+from tensorflow.keras import layers
+
+attention = layers.MultiHeadAttention(
+    num_heads=8,
+    key_dim=64
+)
+
+# Encoder output (context for attention)
+encoder_output = tf.random.normal([16, 30, 512])  # (batch, src_len, d_model)
+
+# Decoder query
+decoder_query = tf.random.normal([16, 20, 512])  # (batch, tgt_len, d_model)
+
+# Cross-attention: Query from decoder, Key/Value from encoder
+cross_attn = attention(
+    query=decoder_query,
+    value=encoder_output,
+    key=encoder_output
+)
+
+print(f'Cross-attention output shape: {cross_attn.shape}')  # [16, 20, 512]</code></pre>
+
+                <p><strong>Attention Masking:</strong> Prevent attention to padding tokens or future positions:</p>
+
+                <pre><code class="language-python">import tensorflow as tf
+from tensorflow.keras import layers
+import numpy as np
+
+attention = layers.MultiHeadAttention(
+    num_heads=8,
+    key_dim=64
+)
+
+# Input sequences
+query = tf.random.normal([4, 10, 512])
+key = tf.random.normal([4, 10, 512])
+value = tf.random.normal([4, 10, 512])
+
+# Create causal mask (prevent attention to future tokens)
+mask = tf.linalg.band_part(tf.ones((10, 10)), -1, 0)  # Lower triangular
+mask = (1.0 - mask) * -1e9  # Mask future positions with large negative values
+
+# Apply attention with mask
+attn_output = attention(
+    query,
+    value,
+    key=key,
+    attention_mask=mask
+)
+print(f'Masked attention output: {attn_output.shape}')  # [4, 10, 512]</code></pre>
+
+                <div class="experiment-card">
+                    <div class="card-meta mb-2">
+                        <span class="badge bg-teal text-white">Attention Concepts</span>
+                    </div>
+                    <div class="card-content">
+                        <ul>
+                            <li><strong>Self-Attention:</strong> Query, Key, Value from same sequence; learns dependencies within sequence</li>
+                            <li><strong>Cross-Attention:</strong> Query from different sequence than Key/Value; fuses information from encoder to decoder</li>
+                            <li><strong>Multi-Head:</strong> Multiple parallel attention heads capture different types of relationships</li>
+                            <li><strong>Scaled Dot-Product:</strong> Scores = softmax(Q·K^T / √d_k), prevents gradient vanishing with large dimensions</li>
+                            <li><strong>Masking:</strong> Causal mask prevents future information leak; padding mask ignores padding tokens</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Building Transformers with Keras -->
+                <h3 id="transformer-keras">Building Transformers with Keras</h3>
+
+                <p>Combine MultiHeadAttention with feed-forward networks and normalization layers to build complete Transformer encoder-decoder architectures.</p>
+
+                <h4>Transformer Encoder Block</h4>
+
+                <p>A typical encoder block has self-attention and feed-forward layers with residual connections and layer normalization:</p>
+
+                <pre><code class="language-python">import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+
+class TransformerEncoderBlock(layers.Layer):
+    def __init__(self, embed_dim, num_heads, ff_dim, dropout=0.1):
+        super().__init__()
+        self.att = layers.MultiHeadAttention(
+            num_heads=num_heads,
+            key_dim=embed_dim // num_heads,
+            dropout=dropout
+        )
+        self.ffn = keras.Sequential([
+            layers.Dense(ff_dim, activation='relu'),
+            layers.Dense(embed_dim)
+        ])
+        self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
+        self.dropout1 = layers.Dropout(dropout)
+        self.dropout2 = layers.Dropout(dropout)
+
+    def call(self, inputs, training=False):
+        # Self-attention block with residual connection
+        attn_output = self.att(inputs, inputs, training=training)
+        attn_output = self.dropout1(attn_output, training=training)
+        out1 = self.layernorm1(inputs + attn_output)
+
+        # Feed-forward block with residual connection
+        ffn_output = self.ffn(out1)
+        ffn_output = self.dropout2(ffn_output, training=training)
+        out2 = self.layernorm2(out1 + ffn_output)
+
+        return out2
+
+# Test the encoder block
+encoder_block = TransformerEncoderBlock(
+    embed_dim=512,
+    num_heads=8,
+    ff_dim=2048,
+    dropout=0.1
+)
+
+input_seq = tf.random.normal([8, 20, 512])  # (batch, seq_len, embed_dim)
+output = encoder_block(input_seq, training=True)
+print(f'Encoder block output shape: {output.shape}')  # [8, 20, 512]</code></pre>
+
+                <h4>Complete Transformer Model</h4>
+
+                <p>Stack encoder blocks and add embeddings for a complete sequence model:</p>
+
+                <pre><code class="language-python">import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+import numpy as np
+
+class PositionalEmbedding(layers.Layer):
+    def __init__(self, max_len, d_model):
+        super().__init__()
+        self.d_model = d_model
+        # Create positional encodings
+        pe = np.zeros((max_len, d_model))
+        position = np.arange(0, max_len, dtype=np.float32)[:, np.newaxis]
+        div_term = np.exp(np.arange(0, d_model, 2) * -(np.log(10000.0) / d_model))
+        pe[:, 0::2] = np.sin(position * div_term)
+        pe[:, 1::2] = np.cos(position * div_term)
+        self.pe = tf.constant(pe[np.newaxis, ...], dtype=tf.float32)
+
+    def call(self, x):
+        return x + self.pe[:, :tf.shape(x)[1], :]
+
+class TransformerModel(keras.Model):
+    def __init__(self, vocab_size, max_len, d_model, num_heads, num_layers, ff_dim):
+        super().__init__()
+        self.embedding = layers.Embedding(vocab_size, d_model)
+        self.pos_embedding = PositionalEmbedding(max_len, d_model)
+        self.encoder_blocks = [
+            TransformerEncoderBlock(d_model, num_heads, ff_dim)
+            for _ in range(num_layers)
+        ]
+        self.final_norm = layers.LayerNormalization(epsilon=1e-6)
+        self.output_dense = layers.Dense(vocab_size)
+
+    def call(self, inputs, training=False):
+        # Embed and add positional encodings
+        x = self.embedding(inputs)
+        x = self.pos_embedding(x)
+
+        # Pass through encoder blocks
+        for encoder_block in self.encoder_blocks:
+            x = encoder_block(x, training=training)
+
+        # Final normalization and output
+        x = self.final_norm(x)
+        x = self.output_dense(x)
+        return x
+
+# Create and use model
+model = TransformerModel(
+    vocab_size=10000,
+    max_len=100,
+    d_model=512,
+    num_heads=8,
+    num_layers=6,
+    ff_dim=2048
+)
+
+# Forward pass
+input_ids = tf.random.uniform([8, 50], minval=0, maxval=10000, dtype=tf.int32)
+output = model(input_ids, training=True)
+print(f'Transformer output shape: {output.shape}')  # [8, 50, 10000]
+
+# Count parameters
+total_params = sum([tf.size(w).numpy() for w in model.trainable_weights])
+print(f'Total parameters: {total_params / 1e6:.1f}M')</code></pre>
+
+                <h4>Vision Transformer (ViT) with Keras</h4>
+
+                <p>Apply Transformers to image patches for state-of-the-art vision models:</p>
+
+                <pre><code class="language-python">import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+
+class PatchEmbedding(layers.Layer):
+    def __init__(self, patch_size, embed_dim):
+        super().__init__()
+        self.patch_size = patch_size
+        self.embed_dim = embed_dim
+        self.projection = layers.Dense(embed_dim)
+
+    def call(self, images):
+        # images shape: (batch, height, width, channels)
+        batch_size = tf.shape(images)[0]
+        
+        # Extract patches
+        patches = tf.image.extract_patches(
+            images,
+            sizes=[1, self.patch_size, self.patch_size, 1],
+            strides=[1, self.patch_size, self.patch_size, 1],
+            rates=[1, 1, 1, 1],
+            padding='VALID'
+        )
+        
+        # Flatten patches
+        num_patches = tf.shape(patches)[1] * tf.shape(patches)[2]
+        patch_dim = tf.shape(patches)[-1]
+        patches = tf.reshape(patches, [batch_size, num_patches, patch_dim])
+        
+        # Project to embedding dimension
+        embeddings = self.projection(patches)
+        return embeddings
+
+class VisionTransformer(keras.Model):
+    def __init__(self, image_size, patch_size, num_classes, d_model, num_heads, num_layers, ff_dim):
+        super().__init__()
+        num_patches = (image_size // patch_size) ** 2
+        
+        self.patch_embed = PatchEmbedding(patch_size, d_model)
+        self.cls_token = self.add_weight(
+            'cls_token',
+            shape=[1, 1, d_model],
+            initializer='random_normal'
+        )
+        self.pos_embed = self.add_weight(
+            'pos_embed',
+            shape=[1, num_patches + 1, d_model],
+            initializer='random_normal'
+        )
+        
+        self.encoder_blocks = [
+            TransformerEncoderBlock(d_model, num_heads, ff_dim)
+            for _ in range(num_layers)
+        ]
+        
+        self.norm = layers.LayerNormalization(epsilon=1e-6)
+        self.head = layers.Dense(num_classes)
+
+    def call(self, images, training=False):
+        batch_size = tf.shape(images)[0]
+        
+        # Embed patches
+        x = self.patch_embed(images)
+        
+        # Add class token
+        cls_tokens = tf.broadcast_to(self.cls_token, [batch_size, 1, tf.shape(x)[-1]])
+        x = tf.concat([cls_tokens, x], axis=1)
+        
+        # Add positional embeddings
+        x = x + self.pos_embed
+        
+        # Transformer encoder blocks
+        for encoder_block in self.encoder_blocks:
+            x = encoder_block(x, training=training)
+        
+        # Classification from [CLS] token
+        x = self.norm(x)
+        x = x[:, 0]  # Take [CLS] token
+        x = self.head(x)
+        return x
+
+# Create ViT model
+vit = VisionTransformer(
+    image_size=224,
+    patch_size=16,
+    num_classes=1000,
+    d_model=768,
+    num_heads=12,
+    num_layers=12,
+    ff_dim=3072
+)
+
+# Forward pass
+images = tf.random.normal([4, 224, 224, 3])
+logits = vit(images, training=True)
+print(f'ViT output shape: {logits.shape}')  # [4, 1000]</code></pre>
+
+                <div class="experiment-card">
+                    <div class="card-meta mb-2">
+                        <span class="badge bg-teal text-white">Transformer Architecture</span>
+                    </div>
+                    <div class="card-content">
+                        <ul>
+                            <li><strong>Patch Embedding:</strong> Convert images to sequence of patch embeddings (224×224 → 14×14 patches)</li>
+                            <li><strong>Positional Encoding:</strong> Add learnable or sinusoidal position embeddings to preserve sequence order</li>
+                            <li><strong>Multi-Head Attention:</strong> Self-attention allows global receptive field from first layer</li>
+                            <li><strong>Feed-Forward:</strong> Per-token MLPs with ReLU activation capture non-linear patterns</li>
+                            <li><strong>Layer Norm & Residuals:</strong> Normalize before sublayers (pre-norm) and skip connections enable deep networks</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Distributed Training -->
+                <h3 id="distributed-training">Distributed Training & Multi-GPU</h3>
+
+                <p>Scale model training across multiple GPUs or TPUs using TensorFlow's distribution strategies. Keras models automatically support distributed training with minimal code changes.</p>
+
+                <h4>Single-Machine Multi-GPU with MirroredStrategy</h4>
+
+                <p>Replicate model on all GPUs and sync gradients after each batch:</p>
+
+                <pre><code class="language-python">import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+import numpy as np
+
+# Create distribution strategy
+strategy = tf.distribute.MirroredStrategy()
+
+print(f'Number of devices: {strategy.num_replicas_in_sync}')
+print(f'Devices: {tf.config.list_physical_devices("GPU")}')
+
+# Build model inside strategy scope
+with strategy.scope():
+    model = keras.Sequential([
+        layers.Dense(64, activation='relu', input_shape=(20,)),
+        layers.Dropout(0.2),
+        layers.Dense(32, activation='relu'),
+        layers.Dense(10, activation='softmax')
+    ])
+    
+    model.compile(
+        optimizer='adam',
+        loss='categorical_crossentropy',
+        metrics=['accuracy']
+    )
+
+# Data preparation
+X = np.random.randn(1000, 20).astype('float32')
+y = np.eye(10)[np.random.randint(0, 10, 1000)]
+
+# Training automatically uses all GPUs
+history = model.fit(
+    X, y,
+    epochs=5,
+    batch_size=32,  # Per-GPU batch size
+    verbose=1
+)
+
+print('Training complete with multi-GPU acceleration.')</code></pre>
+
+                <h4>Multi-Machine with ParameterServerStrategy</h4>
+
+                <p>Distribute training across multiple machines with parameter servers:</p>
+
+                <pre><code class="language-python">import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+
+# Setup for multi-machine training
+# Requires cluster configuration (TF_CONFIG environment variable)
+
+if tf.config.list_physical_devices('GPU'):
+    # Multi-GPU strategy
+    strategy = tf.distribute.MultiWorkerMirroredStrategy()
+else:
+    # Fallback: single machine
+    strategy = tf.distribute.get_strategy()
+
+print(f'Devices: {strategy.num_replicas_in_sync}')
+
+# Build and compile inside strategy scope
+with strategy.scope():
+    model = keras.Sequential([
+        layers.Dense(128, activation='relu', input_shape=(100,)),
+        layers.Dropout(0.3),
+        layers.Dense(64, activation='relu'),
+        layers.Dense(32, activation='relu'),
+        layers.Dense(10, activation='softmax')
+    ])
+    
+    model.compile(
+        optimizer=keras.optimizers.Adam(learning_rate=0.001),
+        loss='sparse_categorical_crossentropy',
+        metrics=['accuracy']
+    )
+
+print('Model ready for multi-machine distributed training')
+print('Set TF_CONFIG environment variable with cluster specification')</code></pre>
+
+                <h4>Custom Training Loop with Distribution</h4>
+
+                <p>For fine-grained control, use <code>strategy.run()</code> with custom training steps:</p>
+
+                <pre><code class="language-python">import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+import numpy as np
+
+strategy = tf.distribute.MirroredStrategy()
+
+# Data preparation
+X = np.random.randn(1000, 32).astype('float32')
+y = np.random.randint(0, 10, 1000)
+
+dataset = tf.data.Dataset.from_tensor_slices((X, y))
+dataset = dataset.shuffle(1000).batch(32)
+dist_dataset = strategy.experimental_distribute_dataset(dataset)
+
+# Build model
+with strategy.scope():
+    model = keras.Sequential([
+        layers.Dense(64, activation='relu'),
+        layers.Dense(10, activation='softmax')
+    ])
+    
+    optimizer = keras.optimizers.Adam()
+    loss_fn = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+
+# Custom training step
+def train_step(batch_x, batch_y):
+    with tf.GradientTape() as tape:
+        logits = model(batch_x, training=True)
+        loss_value = loss_fn(batch_y, logits)
+        scaled_loss = loss_value / strategy.num_replicas_in_sync
+    
+    grads = tape.gradient(scaled_loss, model.trainable_weights)
+    optimizer.apply_gradients(zip(grads, model.trainable_weights))
+    
+    return loss_value
+
+@tf.function
+def distributed_train_step(dist_inputs):
+    per_replica_losses = strategy.run(train_step, args=(dist_inputs[0], dist_inputs[1]))
+    return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_losses, axis=None)
+
+# Training loop
+epochs = 3
+for epoch in range(epochs):
+    total_loss = 0.0
+    num_batches = 0
+    
+    for dist_batch in dist_dataset:
+        loss = distributed_train_step(dist_batch)
+        total_loss += loss
+        num_batches += 1
+    
+    avg_loss = total_loss / num_batches
+    print(f'Epoch {epoch + 1}, Loss: {avg_loss:.4f}')
+
+print('Custom distributed training complete')</code></pre>
+
+                <p><strong>Gradient Synchronization:</strong> TensorFlow automatically synchronizes gradients across replicas. Batch size is per-replica; total batch = batch_size × num_replicas.</p>
+
+                <div class="experiment-card">
+                    <div class="card-meta mb-2">
+                        <span class="badge bg-teal text-white">Distribution Strategies</span>
+                    </div>
+                    <div class="card-content">
+                        <ul>
+                            <li><strong>MirroredStrategy:</strong> Single machine, multi-GPU; fastest for one node with many GPUs</li>
+                            <li><strong>MultiWorkerMirroredStrategy:</strong> Multiple machines with all-reduce gradient sync</li>
+                            <li><strong>ParameterServerStrategy:</strong> Distribute parameters across servers; good for large models with many workers</li>
+                            <li><strong>TPUStrategy:</strong> Optimized for Google Cloud TPUs; minimal code changes</li>
+                            <li><strong>Automatic Batch Scaling:</strong> Batch size is per-replica; total batch = batch_size × num_replicas</li>
+                        </ul>
+                    </div>
+                </div>
 
                 <h3 id="performance">Performance Optimization</h3>
 
