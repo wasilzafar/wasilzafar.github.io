@@ -790,9 +790,8 @@ print(data.mean())
 /* Toggle Button */
 .toc-toggle-btn {
     position: fixed;
-    top: 50%;
-    left: 20px;
-    transform: translateY(-50%);
+    bottom: 2rem;
+    left: 2rem;
     width: 60px;
     height: 60px;
     background: var(--color-teal);
@@ -811,12 +810,12 @@ print(data.mean())
 
 .toc-toggle-btn:hover {
     background: var(--color-crimson);
-    transform: translateY(-50%) scale(1.1);
+    transform: scale(1.1);
     box-shadow: 0 6px 16px rgba(191, 9, 47, 0.5);
 }
 
 .toc-toggle-btn:active {
-    transform: translateY(-50%) scale(0.95);
+    transform: scale(0.95);
 }
 
 /* Side Navigation Overlay */
@@ -956,7 +955,8 @@ print(data.mean())
         width: 50px;
         height: 50px;
         font-size: 1.2rem;
-        left: 15px;
+        left: 1rem;
+        bottom: 1rem;
     }
 }
 
@@ -1099,20 +1099,22 @@ html {
 - ❌ Contact/location pages
 
 **Key Features**:
-- **Floating Button**: Vertically centered on left side (50% from top) at 20px from edge
+- **Bottom Left Position**: Fixed at bottom left corner (2rem from bottom and left edges) - opposite the scroll-to-top button
 - **Slide from Left**: Panel slides in from left side below navbar (top: 64px)
 - **Active Highlighting**: Current section highlighted with crimson background and arrow indicator
 - **Smooth Scrolling**: Click TOC links for smooth scroll to section
 - **Close Options**: Click × button, press ESC, or click backdrop to close
 - **Background Lock**: Prevents page scroll when TOC is open
-- **Mobile Responsive**: 280px width on mobile, 350px on desktop
+- **Mobile Responsive**: 280px width on mobile, 350px on desktop; 1rem spacing on mobile
 
 **Critical Implementation Notes**:
 - **MUST position below navbar**: Set `top: 64px` and `height: calc(100% - 64px)` to start below fixed navbar
-- **Toggle button vertically centered**: Use `top: 50%` with `transform: translateY(-50%)`
+- **Toggle button at bottom left**: Use `bottom: 2rem; left: 2rem` (opposite scroll-to-top button at bottom right)
+- **No vertical centering transform**: Button uses fixed bottom positioning, no translateY needed
 - **Close button visibility**: Set `opacity: 0; visibility: hidden` by default, show only when `.sidenav-toc.open`
-- **Z-index layering**: Navbar (~1030) → Overlay backdrop (1049) → TOC panel (1050)
+- **Z-index layering**: Navbar (~1030) → Overlay backdrop (1049) → TOC toggle (1049) → TOC panel (1050)
 - **Active section detection**: Scroll offset of 200px ensures proper section highlighting
+- **Symmetrical layout**: TOC toggle (bottom left, teal) mirrors scroll-to-top (bottom right, teal)
 
 **Reference Examples**:
 - See [/pages/2025/12/python-data-science-numpy-foundations.html](/pages/2025/12/python-data-science-numpy-foundations.html)
