@@ -73,7 +73,8 @@ All styles in `/css/main.css` using **CSS custom properties** (variables):
 - `.highlight-box`: Key insights with teal left border, light background
 - `.experiment-card`: Card for studies/examples with hover animation
 - `.bias-tag`: Inline tag with teal background, white text
-- `.toc-box`: Table of contents container with border and link styles
+- `.sidenav-toc`: Side navigation overlay for Table of Contents (replaces old .toc-box)
+- `.toc-toggle-btn`: Floating button to open/close TOC navigation
 - `.blog-content`: Main article text with justified alignment, 1.05rem font, 1.8 line-height
 - `.blog-hero`: Gradient background (navy to blue) with white text
 
@@ -316,6 +317,245 @@ df3 = pd.read_json('data.json')
 - Button scrolls to Table of Contents instead of top
 - See business-sales-marketing-systems-glossary.html for implementation
 
+### Print Button (Standard Feature)
+
+**All long-form blog articles include a Print button** in the blog-meta section for easy printing with optimized formatting and color preservation. This button triggers the browser's native print dialog and applies comprehensive print CSS to hide non-essential elements and preserve design colors.
+
+**Implementation Pattern** (3 parts):
+
+**1. HTML Button** (add to blog-meta section after reading-time):
+```html
+<div class="blog-meta">
+    <span><i class="fas fa-calendar me-2"></i>Date</span>
+    <span><i class="fas fa-user me-2"></i>Author</span>
+    <span class="reading-time"><i class="fas fa-clock me-1"></i>X min read</span>
+    <button onclick="window.print()" class="print-btn" title="Print this article">
+        <i class="fas fa-print"></i> Print
+    </button>
+</div>
+```
+
+**2. Blog-Meta Flexbox and Print Button CSS** (update blog-meta styles):
+```css
+.blog-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.95rem;
+    color: var(--color-teal);
+    margin-bottom: 1rem;
+}
+
+.blog-meta span {
+    margin-right: 0;  /* Remove since gap handles spacing */
+}
+
+.print-btn {
+    background: var(--color-teal);
+    color: white;
+    border: none;
+    padding: 0.4rem 1rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.print-btn:hover {
+    background: var(--color-crimson);
+    transform: translateY(-1px);
+}
+
+.print-btn:active {
+    transform: translateY(0);
+}
+```
+
+**3. Comprehensive Print CSS** (add before `</style>` closing tag - 120+ lines):
+```css
+/* Print Styles - Comprehensive print optimization with color preservation */
+@media print {
+    /* Force color printing - CRITICAL for preserving design elements */
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Hide non-essential elements */
+    nav,
+    .navbar,
+    footer,
+    .back-link,
+    .related-posts,
+    .scroll-to-top,
+    .print-btn,
+    .toc-toggle-btn,
+    .sidenav-toc,
+    .sidenav-overlay {
+        display: none !important;
+    }
+
+    /* Optimize page layout */
+    body {
+        font-size: 12pt;
+        line-height: 1.6;
+        color: #000;
+    }
+
+    .container {
+        max-width: 100%;
+        padding: 0;
+    }
+
+    /* Preserve heading colors and styles */
+    h1, h2, h3, h4, h5, h6 {
+        page-break-after: avoid;
+        page-break-inside: avoid;
+    }
+
+    h2 {
+        color: var(--color-navy) !important;
+        border-bottom: 2px solid var(--color-teal) !important;
+    }
+
+    h3 {
+        color: var(--color-blue) !important;
+    }
+
+    h4 {
+        color: var(--color-crimson) !important;
+    }
+
+    /* Preserve link colors */
+    a {
+        color: var(--color-blue) !important;
+        text-decoration: underline;
+    }
+
+    /* Preserve TOC box styling */
+    .toc-box {
+        border: 2px solid var(--color-teal) !important;
+        background: rgba(59, 151, 151, 0.1) !important;
+        page-break-inside: avoid;
+    }
+
+    .toc-box h4 {
+        color: var(--color-navy) !important;
+    }
+
+    .toc-box a {
+        color: var(--color-blue) !important;
+    }
+
+    /* Preserve highlight boxes */
+    .highlight-box {
+        background: rgba(59, 151, 151, 0.1) !important;
+        border-left: 4px solid var(--color-teal) !important;
+        page-break-inside: avoid;
+    }
+
+    /* Preserve experiment cards */
+    .experiment-card {
+        border: 1px solid #ddd !important;
+        background: #f8f9fa !important;
+        page-break-inside: avoid;
+    }
+
+    .experiment-card h4 {
+        color: var(--color-crimson) !important;
+    }
+
+    /* Preserve tags and badges */
+    .bias-tag,
+    .badge {
+        background: var(--color-teal) !important;
+        color: white !important;
+        border: 1px solid var(--color-teal) !important;
+    }
+
+    .reading-time {
+        background: var(--color-crimson) !important;
+        color: white !important;
+    }
+
+    /* Code blocks */
+    pre {
+        page-break-inside: avoid;
+        border: 1px solid #ddd !important;
+        background: #f5f5f5 !important;
+    }
+
+    code {
+        background: #f5f5f5 !important;
+    }
+
+    /* Tables */
+    table {
+        page-break-inside: avoid;
+    }
+
+    /* Images */
+    img {
+        max-width: 100% !important;
+        page-break-inside: avoid;
+    }
+
+    /* Prevent orphans and widows */
+    p, li {
+        orphans: 3;
+        widows: 3;
+    }
+}
+```
+
+**When to Include**:
+- ✅ All blog articles with >800 words
+- ✅ Long-form technical tutorials
+- ✅ Glossary pages
+- ✅ Research articles
+- ❌ Homepage
+- ❌ Category landing pages
+- ❌ Contact/location pages
+
+**Key Features**:
+- **Color Preservation**: Forces browser to print colors using `print-color-adjust: exact !important`
+- **Element Hiding**: Removes nav, footer, related posts, scroll-to-top, and print button itself
+- **Typography Optimization**: 12pt font, 1.6 line-height for readability
+- **Page Break Control**: Prevents breaks inside code blocks, cards, headings, and images
+- **Design Consistency**: Preserves all header colors (navy h2, blue h3, crimson h4), borders, and backgrounds
+
+**Critical Implementation Notes**:
+- **MUST use `!important` flag** on all `display: none` rules to override Bootstrap
+- **MUST include both `nav` and `.navbar`** selectors for complete hiding
+- **MUST set `-webkit-print-color-adjust: exact !important`** on `*` selector for Safari/Chrome
+- **Update blog-meta to flexbox** with `gap: 1rem` for proper spacing
+- **Remove `margin-right: 1.5rem`** from `.blog-meta span` (gap handles spacing)
+
+**Troubleshooting**:
+
+*Issue: Colors not printing*
+- Solution: Ensure `print-color-adjust: exact !important` is on `*` selector
+- Browser setting: Users must enable "Background graphics" in print dialog
+
+*Issue: Navigation visible in print*
+- Solution: Add `.navbar` selector alongside `nav` with `!important` flag
+- Verify: `nav, .navbar { display: none !important; }`
+
+*Issue: Page breaks in middle of code blocks*
+- Solution: Add `page-break-inside: avoid` to `pre`, `.experiment-card`, `.highlight-box`
+
+*Issue: Print button appears in print preview*
+- Solution: Ensure `.print-btn { display: none !important; }` in @media print
+
+**Reference Examples**:
+- See `/pages/2026/01/python-artificial-neural-networks-guide.html`
+- See `/pages/2025/12/python-data-science-machine-learning.html`
+- See `/pages/2025/11/business-sales-marketing-systems-glossary.html`
+
 ### PrismJS Code Snippets with Copy and Theme Switcher (Standard Feature)
 
 **All blog articles with code snippets MUST include PrismJS with toolbar, copy button, and theme switcher** for optimal developer experience. The theme switcher allows readers to choose their preferred syntax highlighting theme, and the selection persists across all pages via localStorage.
@@ -538,6 +778,345 @@ print(data.mean())
 - **CRITICAL**: Do NOT set `background` property on `pre[class*="language-"]` - this overrides theme backgrounds. Only set `border-radius`, `margin`, and `box-shadow`
 - Theme switcher syncs all dropdowns on page and re-applies highlighting with `Prism.highlightAll()`
 
+### Side Navigation Table of Contents (Standard Feature)
+
+**All long-form blog articles include a side navigation TOC** for improved navigation and readability. This is a sliding overlay panel from the left side with a floating toggle button, active section highlighting, and smooth scrolling.
+
+**Implementation Pattern** (3 parts required):
+
+**1. STYLE Section - CSS for Toggle Button, Side Panel, and Overlay**:
+```css
+/* Side Navigation Table of Contents (Modern Overlay Style) */
+/* Toggle Button */
+.toc-toggle-btn {
+    position: fixed;
+    top: 50%;
+    left: 20px;
+    transform: translateY(-50%);
+    width: 60px;
+    height: 60px;
+    background: var(--color-teal);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 1.5rem;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(59, 151, 151, 0.4);
+    transition: all 0.3s ease;
+    z-index: 1049;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.toc-toggle-btn:hover {
+    background: var(--color-crimson);
+    transform: translateY(-50%) scale(1.1);
+    box-shadow: 0 6px 16px rgba(191, 9, 47, 0.5);
+}
+
+.toc-toggle-btn:active {
+    transform: translateY(-50%) scale(0.95);
+}
+
+/* Side Navigation Overlay */
+.sidenav-toc {
+    height: calc(100% - 64px);
+    width: 0;
+    position: fixed;
+    z-index: 1050;
+    top: 64px;
+    left: 0;
+    background: linear-gradient(135deg, var(--color-navy) 0%, var(--color-blue) 100%);
+    overflow-x: hidden;
+    overflow-y: auto;
+    transition: width 0.4s ease;
+    padding-top: 30px;
+    box-shadow: 4px 0 15px rgba(0, 0, 0, 0.3);
+}
+
+.sidenav-toc.open {
+    width: 350px;
+}
+
+/* Header row with close button and title */
+.sidenav-toc .toc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 30px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--color-teal);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.sidenav-toc.open .toc-header {
+    opacity: 1;
+    visibility: visible;
+}
+
+.sidenav-toc .closebtn {
+    font-size: 32px;
+    color: white;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    line-height: 1;
+    padding: 0;
+    margin: 0;
+}
+
+.sidenav-toc .closebtn:hover {
+    color: var(--color-crimson);
+    transform: rotate(90deg);
+}
+
+.sidenav-toc h3 {
+    color: white;
+    margin: 0;
+    padding: 0;
+    font-weight: 700;
+    font-size: 1.3rem;
+    flex-grow: 1;
+}
+
+.sidenav-toc ol {
+    list-style: decimal;
+    padding: 0;
+    padding-left: 30px;
+    margin: 0;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.sidenav-toc ol li {
+    margin: 0;
+    margin-bottom: 8px;
+}
+
+.sidenav-toc a {
+    padding: 12px 30px;
+    text-decoration: none;
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.85);
+    display: block;
+    transition: all 0.3s ease;
+    border-left: 4px solid transparent;
+    position: relative;
+}
+
+.sidenav-toc a:hover {
+    color: white;
+    background: rgba(59, 151, 151, 0.2);
+    border-left-color: var(--color-teal);
+    padding-left: 35px;
+}
+
+.sidenav-toc a.active {
+    color: white;
+    background: rgba(191, 9, 47, 0.3);
+    border-left-color: var(--color-crimson);
+    font-weight: 600;
+}
+
+.sidenav-toc a.active::before {
+    content: '▶';
+    position: absolute;
+    left: 15px;
+    font-size: 0.7rem;
+    color: var(--color-crimson);
+}
+
+/* Overlay backdrop */
+.sidenav-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1049;
+    transition: opacity 0.4s ease;
+}
+
+.sidenav-overlay.show {
+    display: block;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .sidenav-toc.open {
+        width: 280px;
+    }
+    
+    .toc-toggle-btn {
+        width: 50px;
+        height: 50px;
+        font-size: 1.2rem;
+        left: 15px;
+    }
+}
+
+/* Smooth scroll behavior */
+html {
+    scroll-behavior: smooth;
+}
+```
+
+**2. HTML - Toggle Button, Side Panel, and Overlay (before main content section)**:
+```html
+<!-- Table of Contents Toggle Button -->
+<button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+    <i class="fas fa-list"></i>
+</button>
+
+<!-- Side Navigation Overlay -->
+<div id="tocSidenav" class="sidenav-toc">
+    <div class="toc-header">
+        <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+        <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+    </div>
+    <ol>
+        <li>
+            <a href="#introduction" onclick="closeNav()">Getting Started</a>
+            <ul>
+                <li><a href="#introduction" onclick="closeNav()">Introduction</a></li>
+                <li><a href="#setup" onclick="closeNav()">Setup & Installation</a></li>
+                <li><a href="#fundamentals" onclick="closeNav()">Core Fundamentals</a></li>
+            </ul>
+        </li>
+        <li>
+            <a href="#core-concepts" onclick="closeNav()">Core Concepts</a>
+            <ul>
+                <li><a href="#concept-1" onclick="closeNav()">Concept 1</a></li>
+                <li><a href="#concept-2" onclick="closeNav()">Concept 2</a></li>
+                <li><a href="#concept-3" onclick="closeNav()">Concept 3</a></li>
+            </ul>
+        </li>
+        <li>
+            <a href="#advanced-topics" onclick="closeNav()">Advanced Topics</a>
+            <ul>
+                <li><a href="#topic-1" onclick="closeNav()">Advanced Topic 1</a></li>
+                <li><a href="#topic-2" onclick="closeNav()">Advanced Topic 2</a></li>
+            </ul>
+        </li>
+        <li><a href="#conclusion" onclick="closeNav()">Conclusion & Next Steps</a></li>
+    </ol>
+</div>
+
+<!-- Overlay Backdrop -->
+<div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+```
+
+**3. Before `</body>` - JavaScript for Navigation Control and Active Section Highlighting**:
+```html
+<!-- Side Navigation TOC Script -->
+<script>
+    // Open side navigation
+    function openNav() {
+        document.getElementById('tocSidenav').classList.add('open');
+        document.getElementById('tocOverlay').classList.add('show');
+        document.body.style.overflow = 'hidden'; // Prevent background scroll
+    }
+
+    // Close side navigation
+    function closeNav() {
+        document.getElementById('tocSidenav').classList.remove('open');
+        document.getElementById('tocOverlay').classList.remove('show');
+        document.body.style.overflow = 'auto';
+    }
+
+    // Close on ESC key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeNav();
+        }
+    });
+
+    // Highlight active section in TOC based on scroll position
+    document.addEventListener('DOMContentLoaded', function() {
+        const sections = document.querySelectorAll('[id]');
+        const tocLinks = document.querySelectorAll('.sidenav-toc a');
+        
+        function highlightActiveSection() {
+            let currentSection = '';
+            
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                const sectionHeight = section.clientHeight;
+                
+                if (window.scrollY >= sectionTop - 200) {
+                    currentSection = section.getAttribute('id');
+                }
+            });
+            
+            tocLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + currentSection) {
+                    link.classList.add('active');
+                }
+            });
+        }
+        
+        // Highlight on scroll
+        window.addEventListener('scroll', highlightActiveSection);
+        
+        // Initial highlight
+        highlightActiveSection();
+        
+        // Smooth scroll for TOC links
+        tocLinks.forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href');
+                const targetSection = document.querySelector(targetId);
+                
+                if (targetSection) {
+                    const offsetTop = targetSection.offsetTop - 80; // Account for fixed navbar
+                    window.scrollTo({
+                        top: offsetTop,
+                        behavior: 'smooth'
+                    });
+                }
+                
+                // Close nav after clicking
+                setTimeout(closeNav, 300);
+            });
+        });
+    });
+</script>
+```
+
+**When to Include**:
+- ✅ All blog articles with >1000 words
+- ✅ Long-form technical tutorials (e.g., data science series)
+- ✅ Articles with 5+ main sections
+- ❌ Short articles (<800 words)
+- ❌ Category landing pages
+- ❌ Contact/location pages
+
+**Key Features**:
+- **Floating Button**: Vertically centered on left side (50% from top) at 20px from edge
+- **Slide from Left**: Panel slides in from left side below navbar (top: 64px)
+- **Active Highlighting**: Current section highlighted with crimson background and arrow indicator
+- **Smooth Scrolling**: Click TOC links for smooth scroll to section
+- **Close Options**: Click × button, press ESC, or click backdrop to close
+- **Background Lock**: Prevents page scroll when TOC is open
+- **Mobile Responsive**: 280px width on mobile, 350px on desktop
+
+**Critical Implementation Notes**:
+- **MUST position below navbar**: Set `top: 64px` and `height: calc(100% - 64px)` to start below fixed navbar
+- **Toggle button vertically centered**: Use `top: 50%` with `transform: translateY(-50%)`
+- **Close button visibility**: Set `opacity: 0; visibility: hidden` by default, show only when `.sidenav-toc.open`
+- **Z-index layering**: Navbar (~1030) → Overlay backdrop (1049) → TOC panel (1050)
+- **Active section detection**: Scroll offset of 200px ensures proper section highlighting
+
+**Reference Examples**:
+- See [/pages/2025/12/python-data-science-numpy-foundations.html](/pages/2025/12/python-data-science-numpy-foundations.html)
+
 ### Analytics Tracking Convention
 
 **Semantic Naming for Extensibility**:
@@ -672,8 +1251,14 @@ Example: cta_read_article_psychology_001
 ### Task: Add Scroll-to-Top button to existing article
 → Add CSS (before `</style>`), HTML button (after footer), and JavaScript (before `</body>`). See "Scroll-to-Top Button" section for complete code snippets.
 
+### Task: Add Print button to blog article
+→ Update blog-meta to flexbox layout, add print button HTML after reading-time, add print-btn CSS, add comprehensive @media print rules before `</style>`. See "Print Button" section for complete implementation.
+
 ### Task: Add PrismJS with theme switcher to article with code snippets
 → Add (1) Multiple theme CSS files in HEAD, (2) Toolbar/dropdown styling in STYLE section, (3) Prism scripts and theme switcher JavaScript before `</body>`. See "PrismJS Code Snippets with Copy and Theme Switcher" section for complete implementation.
+
+### Task: Add Side Navigation TOC to blog article
+→ Add (1) CSS styles for `.toc-toggle-btn`, `.sidenav-toc`, and `.sidenav-overlay`, (2) HTML for toggle button, side nav, and overlay backdrop before main content, (3) JavaScript for open/close functions and active section highlighting before `</body>`. See "Side Navigation Table of Contents" section for complete implementation.
 
 ### Task: Create new category page
 → Copy existing category (e.g., psychology.html), update icon, description, back link path
