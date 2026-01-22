@@ -2167,7 +2167,22 @@ print(f"Mean fold accuracy: {sum(fold_scores)/len(fold_scores):.3f}")</code></pr
                     <div id="pipelines" class="blog-content mt-5">
                         <h2><i class="fas fa-stream me-2 text-teal"></i>Pipelines & Automation</h2>
                         
-                        <p>Pipelines chain preprocessing and modeling steps, preventing data leakage and simplifying code.</p>
+                        <p>Pipelines chain preprocessing and modeling steps, preventing data leakage and simplifying code. They ensure transformations are applied consistently and in the correct order.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb text-warning me-2"></i>
+                            <strong>Why Pipelines?</strong><br>
+                            <ul>
+                                <li><strong>Prevent Data Leakage:</strong> Ensure test data never influences preprocessing (fit only on train)</li>
+                                <li><strong>Reproducibility:</strong> Same transformations applied to train, validation, and test sets</li>
+                                <li><strong>Cleaner Code:</strong> Replace dozens of lines with a single pipeline.fit()</li>
+                                <li><strong>Easy Cross-Validation:</strong> Pass entire pipeline to cross_val_score()</li>
+                                <li><strong>Hyperparameter Tuning:</strong> Tune preprocessing and model parameters together in GridSearchCV</li>
+                            </ul>
+                        </div>
+
+                        <h3>Pipeline Constructor & Basic Usage</h3>
+                        <p>The Pipeline constructor takes a list of (name, transformer) tuples. All steps except the last must be transformers (have fit/transform methods). The last step can be a transformer or estimator.</p>
 
                         <pre><code class="language-python">from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -2181,44 +2196,440 @@ iris = load_iris()
 X, y = iris.data, iris.target
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Create pipeline
+# Create pipeline: list of (name, object) tuples
+# Names are arbitrary but should be descriptive
 pipeline = Pipeline([
-    ('scaler', StandardScaler()),
-    ('classifier', RandomForestClassifier(n_estimators=100, random_state=42))
+    ('scaler', StandardScaler()),  # Step 1: Scale features
+    ('classifier', RandomForestClassifier(n_estimators=100, random_state=42))  # Step 2: Classify
 ])
 
-# Fit entire pipeline
+# Alternative syntax using make_pipeline (auto-generates names)
+from sklearn.pipeline import make_pipeline
+pipeline_auto = make_pipeline(
+    StandardScaler(),  # Name: 'standardscaler'
+    RandomForestClassifier(n_estimators=100, random_state=42)  # Name: 'randomforestclassifier'
+)
+
+# Fit entire pipeline: fits scaler on X_train, transforms X_train, then fits classifier
 pipeline.fit(X_train, y_train)
 
-# Predict
+# Predict: transforms X_test using fitted scaler, then predicts using fitted classifier
 y_pred = pipeline.predict(X_test)
 print(f"Pipeline accuracy: {pipeline.score(X_test, y_test):.3f}")
 
-# Cross-validate entire pipeline
+# Cross-validate entire pipeline (CORRECT way - no data leakage)
 scores = cross_val_score(pipeline, X, y, cv=5)
-print(f"CV mean: {scores.mean():.3f}")</code></pre>
+print(f"CV mean: {scores.mean():.3f} (+/- {scores.std() * 2:.3f})")</code></pre>
 
-                        <h3>ColumnTransformer for Mixed Data</h3>
+                        <h3>Pipeline Methods & Attributes</h3>
+                        <p>Pipelines expose the same methods as the final estimator, plus additional pipeline-specific functionality:</p>
+
+                        <pre><code class="language-python">from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+
+# Load data
+iris = load_iris()
+X, y = iris.data, iris.target
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Create multi-step pipeline
+pipeline = Pipeline([
+    ('scaler', StandardScaler()),
+    ('pca', PCA(n_components=2)),
+    ('classifier', RandomForestClassifier(n_estimators=100, random_state=42))
+])
+
+# Key Pipeline Methods:
+# 1. fit(X, y) - Fit all transformers and final estimator
+pipeline.fit(X_train, y_train)
+
+# 2. predict(X) - Transform data through pipeline and predict
+predictions = pipeline.predict(X_test)
+
+# 3. predict_proba(X) - Get class probabilities (if final estimator supports it)
+probabilities = pipeline.predict_proba(X_test)
+print(f"Class probabilities shape: {probabilities.shape}")  # (n_samples, n_classes)
+
+# 4. score(X, y) - Transform X and score using final estimator
+accuracy = pipeline.score(X_test, y_test)
+print(f"Test accuracy: {accuracy:.3f}")
+
+# 5. fit_transform(X, y) - Fit pipeline and return transformed X (uses all steps)
+X_transformed = Pipeline([
+    ('scaler', StandardScaler()),
+    ('pca', PCA(n_components=2))
+]).fit_transform(X_train)
+print(f"Transformed shape: {X_transformed.shape}")  # (120, 2) - reduced to 2 components
+
+# 6. Access individual steps using named_steps attribute
+print(f"\nStep names: {pipeline.named_steps.keys()}")
+print(f"Scaler mean: {pipeline.named_steps['scaler'].mean_}")
+print(f"PCA explained variance: {pipeline.named_steps['pca'].explained_variance_ratio_}")
+print(f"Classifier feature importances: {pipeline.named_steps['classifier'].feature_importances_}")
+
+# 7. Access steps by index
+print(f"\nFirst step: {pipeline.steps[0]}")  # ('scaler', StandardScaler(...))
+print(f"Second step name: {pipeline.steps[1][0]}")  # 'pca'
+print(f"Last step (estimator): {pipeline[-1]}")  # RandomForestClassifier(...)
+
+# 8. Get parameters of any step (useful for GridSearchCV)
+print(f"\nAll pipeline parameters:")
+print(pipeline.get_params().keys())</code></pre>
+
+                        <h3>Modifying Pipeline Steps</h3>
+                        <p>You can set parameters of individual steps using the <code>step_name__parameter</code> syntax:</p>
+
+                        <pre><code class="language-python">from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.svm import SVC
+from sklearn.datasets import load_iris
+
+# Load data
+iris = load_iris()
+X, y = iris.data, iris.target
+
+# Create pipeline
+pipeline = Pipeline([
+    ('scaler', StandardScaler()),
+    ('pca', PCA(n_components=2)),
+    ('svc', SVC(kernel='rbf'))
+])
+
+# Set parameters using double underscore notation
+# Format: step_name__parameter_name
+pipeline.set_params(
+    pca__n_components=3,  # Change PCA components from 2 to 3
+    svc__C=10.0,          # Set SVM regularization
+    svc__kernel='linear'  # Change kernel from 'rbf' to 'linear'
+)
+
+print("Updated parameters:")
+print(f"PCA components: {pipeline.named_steps['pca'].n_components}")
+print(f"SVC kernel: {pipeline.named_steps['svc'].kernel}")
+print(f"SVC C: {pipeline.named_steps['svc'].C}")
+
+# This syntax is crucial for GridSearchCV
+from sklearn.model_selection import GridSearchCV
+
+param_grid = {
+    'pca__n_components': [2, 3, 4],
+    'svc__C': [0.1, 1, 10],
+    'svc__kernel': ['linear', 'rbf']
+}
+
+grid = GridSearchCV(pipeline, param_grid, cv=5)
+grid.fit(X, y)
+print(f"\nBest parameters: {grid.best_params_}")
+print(f"Best CV score: {grid.best_score_:.3f}")</code></pre>
+
+                        <h3>ColumnTransformer for Mixed Data Types</h3>
+                        <p>ColumnTransformer applies different preprocessing to different columns (e.g., scaling numeric, encoding categorical):</p>
+
                         <pre><code class="language-python">from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestClassifier
+import pandas as pd
+import numpy as np
 
-# Define transformers for different column types
+# Create sample mixed data
+data = pd.DataFrame({
+    'age': [25, 30, np.nan, 45, 50],
+    'income': [50000, 60000, 55000, np.nan, 80000],
+    'city': ['NY', 'LA', 'NY', 'SF', 'LA'],
+    'gender': ['M', 'F', 'F', 'M', 'F'],
+    'purchased': [0, 1, 0, 1, 1]
+})
+
+X = data.drop('purchased', axis=1)
+y = data['purchased']
+
+# Define column groups
 numeric_features = ['age', 'income']
 categorical_features = ['city', 'gender']
 
-preprocessor = ColumnTransformer(
-    transformers=[
-        ('num', StandardScaler(), numeric_features),
-        ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)
-    ])
-
-# Complete pipeline
-full_pipeline = Pipeline([
-    ('preprocessor', preprocessor),
-    ('classifier', LogisticRegression(max_iter=1000))
+# Create preprocessing pipelines for each data type
+numeric_transformer = Pipeline([
+    ('imputer', SimpleImputer(strategy='median')),  # Fill missing values
+    ('scaler', StandardScaler())                    # Scale features
 ])
 
-full_pipeline.fit(X_train, y_train)</code></pre>
+categorical_transformer = Pipeline([
+    ('imputer', SimpleImputer(strategy='most_frequent')),  # Fill missing categories
+    ('onehot', OneHotEncoder(handle_unknown='ignore'))     # One-hot encode
+])
+
+# Combine transformers using ColumnTransformer
+# transformers: list of (name, transformer, columns) tuples
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', numeric_transformer, numeric_features),
+        ('cat', categorical_transformer, categorical_features)
+    ],
+    remainder='drop'  # Options: 'drop' (default), 'passthrough', or a transformer
+)
+
+# Create full pipeline with preprocessor and model
+full_pipeline = Pipeline([
+    ('preprocessor', preprocessor),
+    ('classifier', RandomForestClassifier(n_estimators=100, random_state=42))
+])
+
+# Fit and predict (single call handles everything!)
+full_pipeline.fit(X, y)
+predictions = full_pipeline.predict(X)
+print(f"Predictions: {predictions}")
+
+# Access transformed column names
+# Note: OneHotEncoder creates multiple columns
+preprocessor.fit(X)
+print(f"\nTransformed feature names:")
+print(preprocessor.get_feature_names_out())</code></pre>
+
+                        <h3>ColumnTransformer with Remainder</h3>
+                        <p>Control what happens to columns not specified in transformers:</p>
+
+                        <pre><code class="language-python">from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+import pandas as pd
+import numpy as np
+
+# Sample data with extra columns
+X = pd.DataFrame({
+    'age': [25, 30, 35],
+    'income': [50000, 60000, 70000],
+    'city': ['NY', 'LA', 'SF'],
+    'id': [101, 102, 103],  # Not used in transformers
+    'timestamp': ['2024-01-01', '2024-01-02', '2024-01-03']  # Not used
+})
+
+# Option 1: Drop unspecified columns (default)
+ct_drop = ColumnTransformer([
+    ('scale', StandardScaler(), ['age', 'income']),
+    ('encode', OneHotEncoder(), ['city'])
+], remainder='drop')  # 'id' and 'timestamp' will be dropped
+
+# Option 2: Pass through unspecified columns unchanged
+ct_passthrough = ColumnTransformer([
+    ('scale', StandardScaler(), ['age', 'income']),
+    ('encode', OneHotEncoder(), ['city'])
+], remainder='passthrough')  # 'id' and 'timestamp' kept as-is
+
+# Option 3: Apply a transformer to remaining columns
+ct_custom = ColumnTransformer([
+    ('scale', StandardScaler(), ['age', 'income']),
+    ('encode', OneHotEncoder(), ['city'])
+], remainder=StandardScaler())  # Scale remaining numeric columns
+
+X_drop = ct_drop.fit_transform(X)
+X_pass = ct_passthrough.fit_transform(X)
+X_custom = ct_custom.fit_transform(X)
+
+print(f"Drop: {X_drop.shape}")  # (3, 5) - age, income, city_NY, city_LA, city_SF
+print(f"Passthrough: {X_pass.shape}")  # (3, 7) - adds id and timestamp
+print(f"Custom: {X_custom.shape}")  # (3, 7) - scales id and timestamp too</code></pre>
+
+                        <h3>FeatureUnion: Parallel Feature Extraction</h3>
+                        <p>FeatureUnion runs multiple transformers in parallel and concatenates results (useful for combining different feature extraction methods):</p>
+
+                        <pre><code class="language-python">from sklearn.pipeline import FeatureUnion, Pipeline
+from sklearn.preprocessing import StandardScaler, PolynomialFeatures
+from sklearn.decomposition import PCA
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+import numpy as np
+
+# Load data
+iris = load_iris()
+X, y = iris.data, iris.target
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Create parallel feature transformations
+feature_union = FeatureUnion([
+    ('pca', PCA(n_components=2)),                    # Extract 2 principal components
+    ('poly', PolynomialFeatures(degree=2, include_bias=False))  # Add polynomial features
+])
+
+# Combine with classifier in pipeline
+pipeline = Pipeline([
+    ('scaler', StandardScaler()),           # Scale original features
+    ('features', feature_union),            # Create 2 PCA + polynomial features in parallel
+    ('classifier', RandomForestClassifier(n_estimators=100, random_state=42))
+])
+
+pipeline.fit(X_train, y_train)
+
+# Check combined feature count
+# Original: 4 features
+# PCA: 2 features
+# Polynomial (degree=2 on 4 features): 14 features (4 + 6 interactions + 4 squares)
+# Total: 2 + 14 = 16 features
+X_transformed = pipeline.named_steps['features'].transform(
+    pipeline.named_steps['scaler'].transform(X_train[:1])
+)
+print(f"Original features: {X_train.shape[1]}")  # 4
+print(f"After FeatureUnion: {X_transformed.shape[1]}")  # 16
+print(f"Accuracy: {pipeline.score(X_test, y_test):.3f}")</code></pre>
+
+                        <h3>Custom Transformers</h3>
+                        <p>Create custom transformers by implementing fit() and transform() methods:</p>
+
+                        <pre><code class="language-python">from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+import numpy as np
+
+# Custom transformer: Log transform features
+class LogTransformer(BaseEstimator, TransformerMixin):
+    """Apply log(x + 1) transformation to avoid log(0)"""
+    
+    def fit(self, X, y=None):
+        # No fitting needed for log transform
+        return self
+    
+    def transform(self, X):
+        # Apply log(x + 1) element-wise
+        return np.log1p(X)
+
+# Custom transformer: Feature selector based on variance
+class VarianceThreshold(BaseEstimator, TransformerMixin):
+    """Remove low-variance features"""
+    
+    def __init__(self, threshold=0.1):
+        self.threshold = threshold
+    
+    def fit(self, X, y=None):
+        # Calculate variance of each feature
+        self.variances_ = np.var(X, axis=0)
+        # Store mask of features to keep
+        self.mask_ = self.variances_ > self.threshold
+        return self
+    
+    def transform(self, X):
+        # Keep only high-variance features
+        return X[:, self.mask_]
+
+# Load data
+iris = load_iris()
+X, y = iris.data, iris.target
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Use custom transformers in pipeline
+pipeline = Pipeline([
+    ('log', LogTransformer()),                        # Custom: Log transform
+    ('var_filter', VarianceThreshold(threshold=0.5)), # Custom: Remove low-variance
+    ('classifier', RandomForestClassifier(n_estimators=100, random_state=42))
+])
+
+pipeline.fit(X_train, y_train)
+print(f"Original features: {X_train.shape[1]}")  # 4
+print(f"After variance filter: {np.sum(pipeline.named_steps['var_filter'].mask_)}")  # e.g., 3
+print(f"Accuracy: {pipeline.score(X_test, y_test):.3f}")</code></pre>
+
+                        <div class="experiment-card">
+                            <div class="card-meta mb-2">
+                                <span class="badge bg-teal text-white">Real-World Pipeline Example</span>
+                            </div>
+                            <div class="card-content">
+                                <h4>Complete Production Pipeline</h4>
+                                <p>A typical ML pipeline for mixed data with feature engineering, selection, and tuning:</p>
+                                <pre><code class="language-python">from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.impute import SimpleImputer
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV
+import pandas as pd
+import numpy as np
+
+# Sample dataset
+np.random.seed(42)
+data = pd.DataFrame({
+    'age': np.random.randint(20, 70, 100),
+    'income': np.random.randint(30000, 120000, 100),
+    'city': np.random.choice(['NY', 'LA', 'SF', 'CHI'], 100),
+    'education': np.random.choice(['HS', 'BS', 'MS', 'PhD'], 100),
+    'target': np.random.randint(0, 2, 100)
+})
+
+X = data.drop('target', axis=1)
+y = data['target']
+
+# Define preprocessing for different column types
+numeric_features = ['age', 'income']
+categorical_features = ['city', 'education']
+
+numeric_transformer = Pipeline([
+    ('imputer', SimpleImputer(strategy='median')),
+    ('scaler', StandardScaler())
+])
+
+categorical_transformer = Pipeline([
+    ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
+    ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
+])
+
+# Combine preprocessors
+preprocessor = ColumnTransformer([
+    ('num', numeric_transformer, numeric_features),
+    ('cat', categorical_transformer, categorical_features)
+])
+
+# Full pipeline with feature selection and model
+full_pipeline = Pipeline([
+    ('preprocessor', preprocessor),
+    ('feature_selection', SelectKBest(f_classif, k=5)),
+    ('classifier', RandomForestClassifier(random_state=42))
+])
+
+# Hyperparameter grid for tuning
+param_grid = {
+    'feature_selection__k': [3, 5, 'all'],
+    'classifier__n_estimators': [50, 100, 200],
+    'classifier__max_depth': [5, 10, None]
+}
+
+# Grid search with cross-validation
+grid_search = GridSearchCV(
+    full_pipeline,
+    param_grid,
+    cv=5,
+    scoring='accuracy',
+    n_jobs=-1
+)
+
+grid_search.fit(X, y)
+
+print(f"Best parameters: {grid_search.best_params_}")
+print(f"Best CV score: {grid_search.best_score_:.3f}")
+print(f"\nPipeline steps:")
+for name, step in grid_search.best_estimator_.named_steps.items():
+    print(f"  {name}: {step}")</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="highlight-box mt-4">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            <strong>Pipeline Best Practices:</strong><br>
+                            <ul>
+                                <li><strong>Always fit on training data only:</strong> Never fit transformers on test data</li>
+                                <li><strong>Use pipelines with cross-validation:</strong> Prevents data leakage across folds</li>
+                                <li><strong>Name steps descriptively:</strong> Makes debugging and parameter access easier</li>
+                                <li><strong>Combine with GridSearchCV:</strong> Tune preprocessing and model together</li>
+                                <li><strong>Save entire pipeline:</strong> Use joblib.dump(pipeline, 'model.pkl') for deployment</li>
+                                <li><strong>Custom transformers inherit BaseEstimator + TransformerMixin:</strong> Ensures compatibility</li>
+                            </ul>
+                        </div>
                     </div>
 
                     <!-- Tuning -->
