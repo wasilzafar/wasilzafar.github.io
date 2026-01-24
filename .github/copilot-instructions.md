@@ -50,6 +50,25 @@ All blog articles follow strict conventions documented in `BLOG-INFRASTRUCTURE.m
   7. Related Posts section with 2-3 internal links
   8. Consistent footer with social links
 
+- **Standardized Layout (MANDATORY for all blog posts)**:
+  ```html
+  <!-- Main Content -->
+  <section class="py-5">
+      <div class="container">
+          <div class="row">
+              <div class="col-lg-8 mx-auto">
+                  <div class="blog-content">
+                      <!-- Article content here -->
+                  </div>
+              </div>
+          </div>
+      </div>
+  </section>
+  ```
+  - **Always use `col-lg-8 mx-auto`** for centered content with consistent max width
+  - Do NOT use `col-lg-10`, `col-lg-12`, or direct `<div class="container"><div class="blog-content">` without row/col wrapper
+  - This ensures uniform, centered content across all 24+ blog posts for optimal readability
+
 - **Relative Paths** (critical):
   - From `/pages/YYYY/MM/article.html` → root: `../../../`
   - Example: `<link rel="stylesheet" href="../../../css/main.css">`
