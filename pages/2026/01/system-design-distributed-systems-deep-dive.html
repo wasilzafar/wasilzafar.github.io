@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, archive" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Deep dive into distributed systems fundamentals including consensus algorithms (Paxos, Raft), distributed coordination, HDFS, GFS, and building fault-tolerant distributed architectures." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="Distributed Systems, Paxos, Raft, Consensus Algorithms, HDFS, GFS, Distributed File Systems, ZooKeeper, Leader Election, Distributed Coordination, Byzantine Fault Tolerance" />
+    <meta property="og:title" content="System Design Series Part 13: Distributed Systems Deep Dive" />
+    <meta property="og:description" content="Master consensus algorithms, distributed coordination, and distributed file systems for fault-tolerant architectures." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-01-25" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    
+    <title>System Design Series Part 13: Distributed Systems Deep Dive - Wasil Zafar</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', { 'ad_storage': 'denied', 'ad_user_data': 'denied', 'ad_personalization': 'denied', 'analytics_storage': 'denied', 'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE'] });
+        gtag('consent', 'default', { 'ad_storage': 'granted', 'ad_user_data': 'granted', 'ad_personalization': 'granted', 'analytics_storage': 'granted' });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+
+    <style>
+        .blog-hero { background: linear-gradient(135deg, var(--color-navy) 0%, var(--color-blue) 100%); color: white; padding: 80px 0; }
+        .blog-header { margin-bottom: 2rem; }
+        .blog-meta { font-size: 0.95rem; color: var(--color-teal); margin-bottom: 1rem; display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; }
+        .print-btn { background: var(--color-teal); color: white; border: none; padding: 0.4rem 1rem; border-radius: 4px; font-size: 0.9rem; cursor: pointer; transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 0.5rem; }
+        .print-btn:hover { background: var(--color-crimson); }
+        @media print { .print-btn, nav, .navbar, footer, .back-link, .related-posts, .scroll-to-top, .toc-toggle-btn, .sidenav-toc, .sidenav-overlay { display: none !important; } }
+        .blog-content { max-width: 900px; margin: 0 auto; font-size: 1.05rem; line-height: 1.8; color: #333; }
+        .blog-content h2 { font-size: 1.8rem; font-weight: 700; margin-top: 2.5rem; margin-bottom: 1.5rem; color: var(--color-navy); border-bottom: 3px solid var(--color-teal); padding-bottom: 0.5rem; }
+        .blog-content h3 { font-size: 1.3rem; font-weight: 600; margin-top: 2rem; margin-bottom: 1rem; color: var(--color-blue); }
+        .blog-content h4 { font-size: 1.1rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--color-crimson); }
+        .blog-content p { margin-bottom: 1.2rem; text-align: justify; }
+        .blog-content strong { color: var(--color-crimson); }
+        .highlight-box { background: rgba(59, 151, 151, 0.1); border-left: 4px solid var(--color-teal); padding: 1.5rem; margin: 2rem 0; border-radius: 4px; }
+        .experiment-card { background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; transition: all 0.3s ease; }
+        .experiment-card:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); transform: translateY(-2px); }
+        .experiment-card h4 { color: var(--color-crimson); font-weight: 700; }
+        pre[class*="language-"] { margin: 1.5rem 0; padding-top: 3rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); }
+        .toc-toggle-btn { position: fixed; bottom: 2rem; left: 2rem; width: 50px; height: 50px; background: var(--color-teal); color: white; border: none; border-radius: 50%; font-size: 1.2rem; cursor: pointer; box-shadow: 0 4px 12px rgba(59, 151, 151, 0.4); transition: all 0.3s ease; z-index: 1049; display: flex; align-items: center; justify-content: center; }
+        .toc-toggle-btn:hover { background: var(--color-crimson); transform: scale(1.1); }
+        .sidenav-toc { height: calc(100% - 64px); width: 0; position: fixed; z-index: 1050; top: 64px; left: 0; background: linear-gradient(135deg, var(--color-navy) 0%, var(--color-blue) 100%); overflow-x: hidden; overflow-y: auto; transition: width 0.4s ease; padding-top: 30px; box-shadow: 4px 0 15px rgba(0, 0, 0, 0.3); }
+        .sidenav-toc.open { width: 350px; }
+        .sidenav-toc .toc-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 30px; margin-bottom: 20px; border-bottom: 2px solid var(--color-teal); opacity: 0; visibility: hidden; transition: all 0.3s ease; }
+        .sidenav-toc.open .toc-header { opacity: 1; visibility: visible; }
+        .sidenav-toc .closebtn { font-size: 32px; color: white; background: transparent; border: none; cursor: pointer; }
+        .sidenav-toc .closebtn:hover { color: var(--color-crimson); transform: rotate(90deg); }
+        .sidenav-toc h3 { color: white; margin: 0; font-weight: 700; font-size: 1.3rem; flex-grow: 1; }
+        .sidenav-toc ol { list-style: decimal; padding-left: 30px; color: rgba(255, 255, 255, 0.9); }
+        .sidenav-toc ol li { margin-bottom: 8px; }
+        .sidenav-toc ul { list-style-type: lower-alpha; padding-left: 30px; margin-top: 8px; }
+        .sidenav-toc a { padding: 12px 30px; text-decoration: none; font-size: 0.95rem; color: rgba(255, 255, 255, 0.85); display: block; transition: all 0.3s ease; border-left: 4px solid transparent; }
+        .sidenav-toc a:hover { color: white; background: rgba(59, 151, 151, 0.2); border-left-color: var(--color-teal); padding-left: 35px; }
+        .sidenav-toc a.active { color: white; background: rgba(191, 9, 47, 0.3); border-left-color: var(--color-crimson); font-weight: 600; }
+        .sidenav-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 1049; }
+        .sidenav-overlay.show { display: block; }
+        @media (max-width: 768px) { .sidenav-toc.open { width: 280px; } .toc-toggle-btn { width: 45px; height: 45px; left: 1rem; bottom: 1rem; } }
+        html { scroll-behavior: smooth; }
+        .reading-time { display: inline-block; background: var(--color-crimson); color: white; padding: 0.3rem 0.8rem; border-radius: 4px; font-size: 0.9rem; }
+        .back-link { display: inline-block; color: white; text-decoration: none; transition: all 0.3s ease; margin-bottom: 1rem; opacity: 0.9; }
+        .back-link:hover { color: var(--color-teal); opacity: 1; transform: translateX(-5px); }
+        .related-posts { background: #f8f9fa; border-radius: 8px; padding: 2rem; margin-top: 3rem; }
+        .related-posts h3 { color: var(--color-navy); margin-bottom: 1.5rem; }
+        .related-post-item { padding: 1rem; border-left: 3px solid var(--color-teal); margin-bottom: 1rem; }
+        .related-post-item:hover { background: white; border-left-color: var(--color-crimson); }
+        .related-post-item a { color: var(--color-blue); text-decoration: none; font-weight: 600; }
+        .scroll-to-top { position: fixed; bottom: 2rem; right: 2rem; width: 50px; height: 50px; background: var(--color-teal); color: white; border: none; border-radius: 50%; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(59, 151, 151, 0.3); z-index: 999; }
+        .scroll-to-top.show { opacity: 1; visibility: visible; }
+        .scroll-to-top:hover { background: var(--color-crimson); transform: translateY(-3px); }
+    </style>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div class="content-wrap">
+            <div class="msg-wrap"><p style="font-size: 14px; color: var(--color-navy);">We use cookies. See our <a href="/privacy-policy.html" style="color: var(--color-teal);">Privacy Policy</a>.</p></div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal);">Reject All</button>
+            </div>
+        </div>
+    </div>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+                <h1 class="display-4 fw-bold mb-3">System Design Series Part 13: Distributed Systems Deep Dive</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>January 25, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>55 min read</span>
+                    <button onclick="window.print()" class="print-btn"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Deep dive into distributed systems including consensus algorithms (Paxos, Raft), distributed coordination (ZooKeeper), distributed file systems (HDFS, GFS), and building fault-tolerant distributed architectures at scale.</p>
+            </div>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents"><i class="fas fa-list"></i></button>
+
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#introduction" onclick="closeNav()">Distributed Systems Fundamentals</a>
+                <ul>
+                    <li><a href="#introduction" onclick="closeNav()">What are Distributed Systems?</a></li>
+                    <li><a href="#challenges" onclick="closeNav()">Key Challenges</a></li>
+                </ul>
+            </li>
+            <li><a href="#consensus" onclick="closeNav()">Consensus Algorithms</a>
+                <ul>
+                    <li><a href="#consensus" onclick="closeNav()">Why Consensus Matters</a></li>
+                    <li><a href="#paxos" onclick="closeNav()">Paxos Algorithm</a></li>
+                    <li><a href="#raft" onclick="closeNav()">Raft Algorithm</a></li>
+                    <li><a href="#pbft" onclick="closeNav()">Byzantine Fault Tolerance</a></li>
+                </ul>
+            </li>
+            <li><a href="#coordination" onclick="closeNav()">Distributed Coordination</a>
+                <ul>
+                    <li><a href="#coordination" onclick="closeNav()">Coordination Patterns</a></li>
+                    <li><a href="#zookeeper" onclick="closeNav()">Apache ZooKeeper</a></li>
+                    <li><a href="#etcd" onclick="closeNav()">etcd</a></li>
+                    <li><a href="#leader-election" onclick="closeNav()">Leader Election</a></li>
+                </ul>
+            </li>
+            <li><a href="#dfs" onclick="closeNav()">Distributed File Systems</a>
+                <ul>
+                    <li><a href="#dfs" onclick="closeNav()">DFS Architecture</a></li>
+                    <li><a href="#hdfs" onclick="closeNav()">HDFS (Hadoop)</a></li>
+                    <li><a href="#gfs" onclick="closeNav()">GFS (Google)</a></li>
+                    <li><a href="#object-storage" onclick="closeNav()">Object Storage (S3)</a></li>
+                </ul>
+            </li>
+            <li><a href="#clocks" onclick="closeNav()">Distributed Clocks & Ordering</a>
+                <ul>
+                    <li><a href="#clocks" onclick="closeNav()">Logical Clocks</a></li>
+                    <li><a href="#vector-clocks" onclick="closeNav()">Vector Clocks</a></li>
+                </ul>
+            </li>
+            <li><a href="#next-steps" onclick="closeNav()">Next Steps</a></li>
+        </ol>
+    </div>
+
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <div id="introduction" class="blog-content">
+                    <h2><i class="fas fa-network-wired me-2 text-teal"></i>Distributed Systems Fundamentals</h2>
+                    
+                    <div class="highlight-box" style="background: rgba(191, 9, 47, 0.1); border-left-color: var(--color-crimson);">
+                        <i class="fas fa-book me-2"></i>
+                        <strong>Series Navigation:</strong> This is Part 13 of the 15-part System Design Series. <a href="system-design-low-level-design-patterns.html">Review Part 12: Low-Level Design</a> first.
+                    </div>
+                    
+                    <p><strong>Distributed Systems</strong> are systems where components are located on different networked computers and communicate by passing messages. They present unique challenges around consistency, availability, and partition tolerance that don't exist in single-machine systems.</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Key Insight:</strong> Distributed systems fail in ways that single-machine systems never do. Understanding consensus algorithms and coordination patterns is essential for building reliable distributed architectures.
+                    </div>
+                </div>
+
+                <div id="challenges" class="blog-content mt-5">
+                    <h3>Key Challenges in Distributed Systems</h3>
+                    
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Challenge</th>
+                                <th>Description</th>
+                                <th>Solutions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Network Failures</strong></td>
+                                <td>Messages can be lost, delayed, duplicated, or reordered</td>
+                                <td>Retries, timeouts, idempotency, sequence numbers</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Partial Failures</strong></td>
+                                <td>Some nodes fail while others continue</td>
+                                <td>Heartbeats, failure detectors, consensus protocols</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Clock Skew</strong></td>
+                                <td>No global clock; different machines have different times</td>
+                                <td>Logical clocks, vector clocks, TrueTime</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Consistency</strong></td>
+                                <td>Keeping data in sync across replicas</td>
+                                <td>Consensus algorithms, quorums, eventual consistency</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Split-Brain</strong></td>
+                                <td>Network partition causes multiple leaders</td>
+                                <td>Fencing tokens, leader leases, consensus</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="experiment-card mt-4">
+                        <h4><i class="fas fa-bug me-2"></i>The Eight Fallacies of Distributed Computing</h4>
+                        <div class="experiment-content">
+<pre><code class="language-python"># Assumptions that engineers wrongly make about distributed systems:
+
+"""
+1. The network is reliable
+2. Latency is zero
+3. Bandwidth is infinite
+4. The network is secure
+5. Topology doesn't change
+6. There is one administrator
+7. Transport cost is zero
+8. The network is homogeneous
+
+Reality: All of these assumptions are FALSE in production systems.
+"""
+
+# Example: Handling unreliable networks
+class ReliableClient:
+    def __init__(self, max_retries=3, timeout=5):
+        self.max_retries = max_retries
+        self.timeout = timeout
+    
+    def send_with_retry(self, request):
+        for attempt in range(self.max_retries):
+            try:
+                response = self._send(request, timeout=self.timeout)
+                return response
+            except TimeoutError:
+                if attempt == self.max_retries - 1:
+                    raise
+                # Exponential backoff
+                time.sleep(2 ** attempt)
+            except ConnectionError:
+                if attempt == self.max_retries - 1:
+                    raise
+                time.sleep(1)</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="consensus" class="blog-content mt-5">
+                    <h2><i class="fas fa-handshake me-2 text-teal"></i>Consensus Algorithms</h2>
+                    
+                    <p>Consensus algorithms allow distributed nodes to agree on a single value, even when some nodes fail. They are the foundation of replicated state machines and distributed databases.</p>
+                    
+                    <ul>
+                        <li><strong>Agreement:</strong> All non-faulty nodes decide on the same value</li>
+                        <li><strong>Validity:</strong> The decided value was proposed by some node</li>
+                        <li><strong>Termination:</strong> All non-faulty nodes eventually decide</li>
+                    </ul>
+                </div>
+
+                <div id="paxos" class="blog-content mt-5">
+                    <h3>Paxos Algorithm</h3>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Key Insight:</strong> Paxos is notoriously difficult to understand and implement. It's often referred to as the algorithm that "makes your head hurt." Raft was designed as a more understandable alternative.
+                    </div>
+                    
+                    <h4>Paxos Roles</h4>
+                    <ul>
+                        <li><strong>Proposers:</strong> Propose values to be agreed upon</li>
+                        <li><strong>Acceptors:</strong> Vote on proposals and remember accepted values</li>
+                        <li><strong>Learners:</strong> Learn the decided value</li>
+                    </ul>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-cogs me-2"></i>Basic Paxos Flow</h4>
+                        <div class="experiment-content">
+<pre><code class="language-python"># Basic Paxos (Single-Decree Paxos)
+"""
+Phase 1: Prepare
+1. Proposer selects proposal number n
+2. Proposer sends Prepare(n) to majority of acceptors
+3. Acceptors respond with Promise(n, v) if n > highest seen
+   - Include previously accepted value v (if any)
+
+Phase 2: Accept
+1. If proposer receives majority promises:
+   - If any promise included accepted value, use highest-numbered one
+   - Otherwise, use proposer's own value
+2. Proposer sends Accept(n, v) to acceptors
+3. Acceptors accept if n >= highest promised
+4. If majority accept, value is chosen
+"""
+
+class PaxosAcceptor:
+    def __init__(self, node_id):
+        self.node_id = node_id
+        self.promised_id = None
+        self.accepted_id = None
+        self.accepted_value = None
+    
+    def receive_prepare(self, proposal_id):
+        """Phase 1b: Respond to Prepare"""
+        if self.promised_id is None or proposal_id > self.promised_id:
+            self.promised_id = proposal_id
+            return {
+                'promised': True,
+                'accepted_id': self.accepted_id,
+                'accepted_value': self.accepted_value
+            }
+        return {'promised': False}
+    
+    def receive_accept(self, proposal_id, value):
+        """Phase 2b: Respond to Accept"""
+        if self.promised_id is None or proposal_id >= self.promised_id:
+            self.promised_id = proposal_id
+            self.accepted_id = proposal_id
+            self.accepted_value = value
+            return {'accepted': True}
+        return {'accepted': False}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="raft" class="blog-content mt-5">
+                    <h3>Raft Algorithm</h3>
+                    
+                    <p>Raft was designed for understandability. It separates consensus into three sub-problems:</p>
+                    
+                    <ul>
+                        <li><strong>Leader Election:</strong> Choose one leader at a time</li>
+                        <li><strong>Log Replication:</strong> Leader replicates its log to followers</li>
+                        <li><strong>Safety:</strong> Never return stale or incorrect data</li>
+                    </ul>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-crown me-2"></i>Raft Implementation</h4>
+                        <div class="experiment-content">
+<pre><code class="language-python">from enum import Enum
+import random
+import time
+
+class State(Enum):
+    FOLLOWER = 1
+    CANDIDATE = 2
+    LEADER = 3
+
+class RaftNode:
+    def __init__(self, node_id, peers):
+        self.node_id = node_id
+        self.peers = peers
+        
+        # Persistent state
+        self.current_term = 0
+        self.voted_for = None
+        self.log = []  # List of (term, command)
+        
+        # Volatile state
+        self.commit_index = 0
+        self.last_applied = 0
+        self.state = State.FOLLOWER
+        
+        # Leader state (reinitialized after election)
+        self.next_index = {}
+        self.match_index = {}
+        
+        # Timing
+        self.election_timeout = self._random_timeout()
+        self.last_heartbeat = time.time()
+    
+    def _random_timeout(self):
+        return random.uniform(150, 300) / 1000  # 150-300ms
+    
+    def on_election_timeout(self):
+        """Start election if no heartbeat received"""
+        self.state = State.CANDIDATE
+        self.current_term += 1
+        self.voted_for = self.node_id
+        votes_received = 1  # Vote for self
+        
+        # Request votes from all peers
+        for peer in self.peers:
+            response = self.send_request_vote(peer)
+            if response and response['vote_granted']:
+                votes_received += 1
+        
+        # Check if won election
+        if votes_received > len(self.peers) // 2:
+            self._become_leader()
+        else:
+            self.state = State.FOLLOWER
+    
+    def _become_leader(self):
+        """Transition to leader state"""
+        self.state = State.LEADER
+        # Initialize leader state
+        for peer in self.peers:
+            self.next_index[peer] = len(self.log) + 1
+            self.match_index[peer] = 0
+        # Send initial heartbeats
+        self.send_heartbeats()
+    
+    def handle_request_vote(self, candidate_term, candidate_id, last_log_idx, last_log_term):
+        """Handle RequestVote RPC"""
+        if candidate_term < self.current_term:
+            return {'term': self.current_term, 'vote_granted': False}
+        
+        if candidate_term > self.current_term:
+            self.current_term = candidate_term
+            self.state = State.FOLLOWER
+            self.voted_for = None
+        
+        # Check if candidate's log is at least as up-to-date
+        log_ok = (last_log_term > self._last_log_term() or 
+                  (last_log_term == self._last_log_term() and 
+                   last_log_idx >= len(self.log)))
+        
+        if (self.voted_for is None or self.voted_for == candidate_id) and log_ok:
+            self.voted_for = candidate_id
+            return {'term': self.current_term, 'vote_granted': True}
+        
+        return {'term': self.current_term, 'vote_granted': False}
+    
+    def handle_append_entries(self, leader_term, leader_id, prev_log_idx, 
+                               prev_log_term, entries, leader_commit):
+        """Handle AppendEntries RPC (heartbeat + log replication)"""
+        if leader_term < self.current_term:
+            return {'term': self.current_term, 'success': False}
+        
+        self.last_heartbeat = time.time()
+        self.state = State.FOLLOWER
+        
+        if leader_term > self.current_term:
+            self.current_term = leader_term
+            self.voted_for = None
+        
+        # Check log consistency
+        if prev_log_idx > 0:
+            if len(self.log) < prev_log_idx:
+                return {'term': self.current_term, 'success': False}
+            if self.log[prev_log_idx - 1][0] != prev_log_term:
+                return {'term': self.current_term, 'success': False}
+        
+        # Append new entries
+        for i, entry in enumerate(entries):
+            idx = prev_log_idx + i
+            if idx < len(self.log):
+                if self.log[idx][0] != entry[0]:
+                    self.log = self.log[:idx]
+                    self.log.append(entry)
+            else:
+                self.log.append(entry)
+        
+        # Update commit index
+        if leader_commit > self.commit_index:
+            self.commit_index = min(leader_commit, len(self.log))
+        
+        return {'term': self.current_term, 'success': True}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="pbft" class="blog-content mt-5">
+                    <h3>Byzantine Fault Tolerance (BFT)</h3>
+                    
+                    <p>BFT algorithms handle malicious nodes (Byzantine faults), not just crash faults. They're used in blockchain and high-security systems.</p>
+                    
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Algorithm</th>
+                                <th>Fault Tolerance</th>
+                                <th>Message Complexity</th>
+                                <th>Use Case</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Paxos/Raft</strong></td>
+                                <td>f < n/2 (crash faults)</td>
+                                <td>O(n)</td>
+                                <td>Databases, coordination</td>
+                            </tr>
+                            <tr>
+                                <td><strong>PBFT</strong></td>
+                                <td>f < n/3 (Byzantine)</td>
+                                <td>O(n²)</td>
+                                <td>Permissioned blockchains</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Proof of Work</strong></td>
+                                <td>51% honest compute</td>
+                                <td>O(n)</td>
+                                <td>Bitcoin, public chains</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="experiment-card mt-4">
+                        <h4><i class="fas fa-shield-alt me-2"></i>PBFT Flow</h4>
+                        <div class="experiment-content">
+<pre><code class="language-python"># PBFT (Practical Byzantine Fault Tolerance)
+"""
+Requires 3f + 1 nodes to tolerate f Byzantine faults
+
+Phases:
+1. Pre-Prepare: Primary broadcasts client request
+2. Prepare: Each replica broadcasts PREPARE message
+3. Commit: After 2f PREPARE messages, broadcast COMMIT
+4. Reply: After 2f+1 COMMIT messages, execute and reply
+
+View Change: If primary is faulty, replicas elect new primary
+"""
+
+class PBFTNode:
+    def __init__(self, node_id, total_nodes):
+        self.node_id = node_id
+        self.n = total_nodes
+        self.f = (total_nodes - 1) // 3  # Max faulty nodes
+        self.view = 0
+        self.sequence_number = 0
+        self.prepared = {}   # (v, n) -> set of nodes
+        self.committed = {}  # (v, n) -> set of nodes
+        self.log = []
+    
+    def is_primary(self):
+        return self.node_id == self.view % self.n
+    
+    def handle_request(self, request):
+        if not self.is_primary():
+            return self.forward_to_primary(request)
+        
+        self.sequence_number += 1
+        # Broadcast PRE-PREPARE
+        msg = {
+            'type': 'PRE-PREPARE',
+            'view': self.view,
+            'seq': self.sequence_number,
+            'digest': hash(request),
+            'request': request
+        }
+        self.broadcast(msg)
+    
+    def handle_pre_prepare(self, msg):
+        # Verify and broadcast PREPARE
+        if self.verify_pre_prepare(msg):
+            prepare_msg = {
+                'type': 'PREPARE',
+                'view': msg['view'],
+                'seq': msg['seq'],
+                'digest': msg['digest'],
+                'node_id': self.node_id
+            }
+            self.broadcast(prepare_msg)
+    
+    def handle_prepare(self, msg):
+        key = (msg['view'], msg['seq'])
+        if key not in self.prepared:
+            self.prepared[key] = set()
+        self.prepared[key].add(msg['node_id'])
+        
+        # If received 2f prepares (including self), enter COMMIT phase
+        if len(self.prepared[key]) >= 2 * self.f:
+            commit_msg = {
+                'type': 'COMMIT',
+                'view': msg['view'],
+                'seq': msg['seq'],
+                'digest': msg['digest'],
+                'node_id': self.node_id
+            }
+            self.broadcast(commit_msg)</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="coordination" class="blog-content mt-5">
+                    <h2><i class="fas fa-sitemap me-2 text-teal"></i>Distributed Coordination</h2>
+                    
+                    <p>Coordination services provide primitives for building distributed systems: configuration management, leader election, distributed locks, and group membership.</p>
+                </div>
+
+                <div id="zookeeper" class="blog-content mt-5">
+                    <h3>Apache ZooKeeper</h3>
+                    
+                    <p>ZooKeeper provides a hierarchical namespace (like a filesystem) with strong consistency guarantees. It's used by Kafka, HBase, and many other distributed systems.</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-folder-tree me-2"></i>ZooKeeper Patterns</h4>
+                        <div class="experiment-content">
+<pre><code class="language-python">from kazoo.client import KazooClient
+
+# Connect to ZooKeeper ensemble
+zk = KazooClient(hosts='zk1:2181,zk2:2181,zk3:2181')
+zk.start()
+
+# Configuration Management
+def store_config(path, config):
+    """Store configuration in ZooKeeper"""
+    zk.ensure_path(path)
+    zk.set(path, json.dumps(config).encode())
+
+def watch_config(path, callback):
+    """Watch for configuration changes"""
+    @zk.DataWatch(path)
+    def watch_config_node(data, stat):
+        if data:
+            config = json.loads(data.decode())
+            callback(config)
+
+# Distributed Lock
+lock = zk.Lock("/locks/my-resource", "client-1")
+with lock:
+    # Critical section - only one client at a time
+    perform_exclusive_operation()
+
+# Leader Election
+election = zk.Election("/election/my-service", "server-1")
+
+def leader_function():
+    """Called when this node becomes leader"""
+    print("I am the leader!")
+    while True:
+        # Do leader work
+        time.sleep(1)
+
+# Run for election (blocks until elected or cancelled)
+election.run(leader_function)
+
+# Service Discovery
+def register_service(service_name, host, port):
+    """Register a service instance"""
+    path = f"/services/{service_name}"
+    zk.ensure_path(path)
+    # Ephemeral node: auto-deleted if client disconnects
+    zk.create(
+        f"{path}/instance-",
+        f"{host}:{port}".encode(),
+        ephemeral=True,
+        sequence=True
+    )
+
+def discover_services(service_name):
+    """Get all instances of a service"""
+    path = f"/services/{service_name}"
+    children = zk.get_children(path)
+    instances = []
+    for child in children:
+        data, _ = zk.get(f"{path}/{child}")
+        instances.append(data.decode())
+    return instances</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="etcd" class="blog-content mt-5">
+                    <h3>etcd</h3>
+                    
+                    <p>etcd is a distributed key-value store using Raft consensus. It's the backbone of Kubernetes for storing cluster state.</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-key me-2"></i>etcd Operations</h4>
+                        <div class="experiment-content">
+<pre><code class="language-python">import etcd3
+
+# Connect to etcd cluster
+etcd = etcd3.client(host='etcd1', port=2379)
+
+# Key-Value Operations
+etcd.put('/config/database/host', 'db.example.com')
+value, metadata = etcd.get('/config/database/host')
+
+# Transactions (atomic operations)
+etcd.transaction(
+    compare=[
+        etcd.transactions.value('/config/version') == '1'
+    ],
+    success=[
+        etcd.transactions.put('/config/database/host', 'new-db.example.com'),
+        etcd.transactions.put('/config/version', '2')
+    ],
+    failure=[
+        etcd.transactions.get('/config/version')
+    ]
+)
+
+# Watch for changes
+events_iterator, cancel = etcd.watch('/config/', prefix=True)
+for event in events_iterator:
+    print(f"Key: {event.key}, Value: {event.value}")
+
+# Lease-based ephemeral keys (auto-expire)
+lease = etcd.lease(ttl=30)  # 30 second lease
+etcd.put('/services/api/instance-1', '192.168.1.10:8080', lease=lease)
+
+# Keep lease alive (heartbeat)
+while True:
+    lease.refresh()
+    time.sleep(10)
+
+# Distributed Lock
+lock = etcd.lock('/locks/my-resource', ttl=30)
+with lock:
+    # Critical section
+    pass</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="leader-election" class="blog-content mt-5">
+                    <h3>Leader Election Patterns</h3>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-crown me-2"></i>Leader Election with Fencing</h4>
+                        <div class="experiment-content">
+<pre><code class="language-python"># Leader Election with Fencing Tokens
+"""
+Problem: Network partitions can cause "split-brain" (multiple leaders)
+Solution: Fencing tokens ensure only the true leader can make changes
+
+Fencing token: Monotonically increasing number given to each new leader
+Storage systems reject requests with old fencing tokens
+"""
+
+class LeaderElection:
+    def __init__(self, zk_client, election_path, node_id):
+        self.zk = zk_client
+        self.path = election_path
+        self.node_id = node_id
+        self.is_leader = False
+        self.fencing_token = 0
+    
+    def run_election(self):
+        """Participate in leader election"""
+        # Create sequential ephemeral node
+        self.zk.ensure_path(self.path)
+        self.my_node = self.zk.create(
+            f"{self.path}/candidate-",
+            self.node_id.encode(),
+            ephemeral=True,
+            sequence=True
+        )
+        
+        self._check_leadership()
+    
+    def _check_leadership(self):
+        """Check if this node is the leader"""
+        children = sorted(self.zk.get_children(self.path))
+        my_seq = self.my_node.split('-')[-1]
+        
+        if children[0].endswith(my_seq):
+            # I am the leader!
+            self._become_leader()
+        else:
+            # Watch the node before me
+            my_index = next(i for i, c in enumerate(children) if c.endswith(my_seq))
+            predecessor = children[my_index - 1]
+            
+            @self.zk.DataWatch(f"{self.path}/{predecessor}")
+            def watch_predecessor(data, stat):
+                if stat is None:  # Predecessor deleted
+                    self._check_leadership()
+    
+    def _become_leader(self):
+        """Transition to leader with new fencing token"""
+        # Increment fencing token (stored in ZK for persistence)
+        token_data, stat = self.zk.get(f"{self.path}/fencing_token")
+        self.fencing_token = int(token_data.decode()) + 1
+        self.zk.set(f"{self.path}/fencing_token", str(self.fencing_token).encode())
+        
+        self.is_leader = True
+        print(f"Became leader with fencing token {self.fencing_token}")
+    
+    def perform_leader_action(self, storage, operation):
+        """Perform action only if still valid leader"""
+        if not self.is_leader:
+            raise NotLeaderError()
+        
+        # Include fencing token in all storage operations
+        storage.execute(operation, fencing_token=self.fencing_token)</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="dfs" class="blog-content mt-5">
+                    <h2><i class="fas fa-folder-open me-2 text-teal"></i>Distributed File Systems</h2>
+                    
+                    <p>Distributed file systems store files across multiple machines, providing scalability, fault tolerance, and high throughput for large datasets.</p>
+                </div>
+
+                <div id="hdfs" class="blog-content mt-5">
+                    <h3>HDFS (Hadoop Distributed File System)</h3>
+                    
+                    <p>HDFS is designed for large files (GB to TB) with write-once, read-many access patterns. It's optimized for batch processing workloads.</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-server me-2"></i>HDFS Architecture</h4>
+                        <div class="experiment-content">
+<pre><code class="language-python"># HDFS Architecture
+"""
+Components:
+- NameNode: Metadata server (single master)
+  - File namespace (directory tree)
+  - Block-to-DataNode mapping
+  - Persists to fsimage + edit log
+  
+- DataNode: Block storage (many workers)
+  - Stores actual data blocks (default 128MB)
+  - Sends heartbeats to NameNode
+  - Replication factor (default 3)
+  
+- Secondary NameNode: Checkpoint helper
+  - Merges fsimage + edit log periodically
+  - NOT a failover node!
+"""
+
+# Write Path
+"""
+1. Client contacts NameNode, requests to create file
+2. NameNode creates entry in namespace, returns block ID and DataNode list
+3. Client writes to first DataNode (DN1)
+4. DN1 forwards to DN2, DN2 forwards to DN3 (pipeline)
+5. Acks flow back: DN3 → DN2 → DN1 → Client
+6. Client requests next block, repeat
+7. Client closes file, NameNode persists metadata
+"""
+
+# Read Path
+"""
+1. Client contacts NameNode, requests file location
+2. NameNode returns list of blocks and their DataNode locations
+3. Client reads blocks from nearest DataNode (rack-aware)
+4. If DataNode fails, client retries with next replica
+"""
+
+# Rack Awareness
+"""
+Default replication placement policy:
+- 1st replica: Local rack, same node as client (or random)
+- 2nd replica: Different rack
+- 3rd replica: Same rack as 2nd, different node
+
+Benefits:
+- Survives rack failure (power, switch)
+- Good write performance (local + one remote)
+- Good read performance (can read from local rack)
+"""
+
+# Python HDFS Client
+from hdfs import InsecureClient
+
+client = InsecureClient('http://namenode:50070', user='hadoop')
+
+# Write file
+with client.write('/user/data/myfile.txt', overwrite=True) as writer:
+    writer.write(b'Hello HDFS!')
+
+# Read file
+with client.read('/user/data/myfile.txt') as reader:
+    content = reader.read()
+
+# List directory
+files = client.list('/user/data/')
+
+# Get file status
+status = client.status('/user/data/myfile.txt')
+print(f"Size: {status['length']}, Replication: {status['replication']}")</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="gfs" class="blog-content mt-5">
+                    <h3>GFS (Google File System)</h3>
+                    
+                    <p>GFS (2003) inspired HDFS. Key design choices:</p>
+                    
+                    <ul>
+                        <li><strong>Large blocks (64MB):</strong> Reduces metadata, amortizes seek time</li>
+                        <li><strong>Append-only:</strong> Optimized for append, not random writes</li>
+                        <li><strong>Relaxed consistency:</strong> At-least-once semantics for appends</li>
+                        <li><strong>Co-located compute:</strong> Move computation to data</li>
+                    </ul>
+                </div>
+
+                <div id="object-storage" class="blog-content mt-5">
+                    <h3>Object Storage (S3 Architecture)</h3>
+                    
+                    <p>Object storage (like S3) provides a flat namespace of buckets and objects, optimized for web-scale workloads with HTTP access.</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-cloud me-2"></i>S3-Style Architecture</h4>
+                        <div class="experiment-content">
+<pre><code class="language-python"># Object Storage Architecture
+"""
+Key Differences from File Systems:
+- Flat namespace (bucket + key), not hierarchical
+- Objects are immutable (replace, not update)
+- Eventually consistent (reads may return stale data)
+- HTTP API (GET, PUT, DELETE, LIST)
+- Designed for massive scale (exabytes)
+
+Components:
+- Load Balancer: Route requests
+- API Gateway: Authentication, rate limiting
+- Metadata Service: Object metadata, bucket policies
+- Storage Nodes: Erasure-coded data chunks
+"""
+
+class ObjectStorageService:
+    def __init__(self, metadata_db, storage_cluster):
+        self.metadata = metadata_db
+        self.storage = storage_cluster
+    
+    def put_object(self, bucket, key, data, metadata=None):
+        """Store object with erasure coding"""
+        # Validate bucket exists and permissions
+        if not self.metadata.bucket_exists(bucket):
+            raise BucketNotFoundError()
+        
+        # Calculate content hash for integrity
+        content_hash = hashlib.sha256(data).hexdigest()
+        
+        # Erasure code the data (e.g., Reed-Solomon)
+        # Split into k data chunks, compute m parity chunks
+        # Can recover from any m chunk failures
+        chunks = self._erasure_encode(data, k=6, m=3)
+        
+        # Distribute chunks across storage nodes
+        chunk_locations = []
+        for i, chunk in enumerate(chunks):
+            nodes = self.storage.select_nodes(num=3)  # Store each chunk on 3 nodes
+            for node in nodes:
+                node.store_chunk(bucket, key, i, chunk)
+            chunk_locations.append(nodes)
+        
+        # Store metadata
+        self.metadata.put_object_metadata(
+            bucket, key,
+            size=len(data),
+            content_hash=content_hash,
+            chunk_locations=chunk_locations,
+            user_metadata=metadata,
+            created_at=datetime.now()
+        )
+        
+        return content_hash
+    
+    def get_object(self, bucket, key):
+        """Retrieve object, reconstructing from erasure coding if needed"""
+        meta = self.metadata.get_object_metadata(bucket, key)
+        if not meta:
+            raise ObjectNotFoundError()
+        
+        # Fetch chunks (only need k of k+m)
+        chunks = []
+        for i, locations in enumerate(meta['chunk_locations']):
+            for node in locations:
+                try:
+                    chunk = node.get_chunk(bucket, key, i)
+                    chunks.append((i, chunk))
+                    break
+                except ChunkNotFoundError:
+                    continue  # Try next replica
+        
+        # Decode data
+        data = self._erasure_decode(chunks, k=6, m=3)
+        
+        # Verify integrity
+        if hashlib.sha256(data).hexdigest() != meta['content_hash']:
+            raise DataCorruptionError()
+        
+        return data, meta</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="clocks" class="blog-content mt-5">
+                    <h2><i class="fas fa-clock me-2 text-teal"></i>Distributed Clocks & Ordering</h2>
+                    
+                    <p>In distributed systems, there's no global clock. Physical clocks drift, and network delays are unpredictable. We need logical clocks to establish event ordering.</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-history me-2"></i>Lamport Clocks</h4>
+                        <div class="experiment-content">
+<pre><code class="language-python"># Lamport Logical Clocks
+"""
+Rules:
+1. Each process has a counter, starts at 0
+2. Before each event, increment counter
+3. When sending message, include counter value
+4. When receiving, set counter = max(local, received) + 1
+
+Property: If a → b (a happened-before b), then L(a) < L(b)
+Limitation: L(a) < L(b) does NOT imply a → b
+"""
+
+class LamportClock:
+    def __init__(self):
+        self.time = 0
+    
+    def tick(self):
+        """Local event occurred"""
+        self.time += 1
+        return self.time
+    
+    def send(self):
+        """Prepare timestamp for outgoing message"""
+        self.tick()
+        return self.time
+    
+    def receive(self, msg_timestamp):
+        """Update clock on message receipt"""
+        self.time = max(self.time, msg_timestamp) + 1
+        return self.time
+
+# Example: Three processes
+p1_clock = LamportClock()
+p2_clock = LamportClock()
+p3_clock = LamportClock()
+
+# P1 sends to P2
+t1 = p1_clock.send()  # t1 = 1
+print(f"P1 sends at time {t1}")
+
+# P2 receives and sends to P3
+t2 = p2_clock.receive(t1)  # t2 = 2
+print(f"P2 receives at time {t2}")
+t3 = p2_clock.send()  # t3 = 3
+print(f"P2 sends at time {t3}")
+
+# P3 receives
+t4 = p3_clock.receive(t3)  # t4 = 4
+print(f"P3 receives at time {t4}")</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="vector-clocks" class="blog-content mt-5">
+                    <h3>Vector Clocks</h3>
+                    
+                    <p>Vector clocks extend Lamport clocks to detect concurrent events (events where neither happened-before the other).</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-arrows-alt me-2"></i>Vector Clock Implementation</h4>
+                        <div class="experiment-content">
+<pre><code class="language-python"># Vector Clocks
+"""
+Each process maintains a vector of counters, one per process.
+Rules:
+1. On local event: increment own counter
+2. On send: include entire vector
+3. On receive: take element-wise max, then increment own counter
+
+Comparison:
+- V1 < V2 (happened-before): All V1[i] <= V2[i] and at least one V1[i] < V2[i]
+- V1 || V2 (concurrent): Neither V1 < V2 nor V2 < V1
+"""
+
+class VectorClock:
+    def __init__(self, node_id, num_nodes):
+        self.node_id = node_id
+        self.vector = [0] * num_nodes
+    
+    def tick(self):
+        """Local event"""
+        self.vector[self.node_id] += 1
+        return self.copy()
+    
+    def send(self):
+        """Prepare timestamp for message"""
+        return self.tick()
+    
+    def receive(self, other_vector):
+        """Merge on message receipt"""
+        for i in range(len(self.vector)):
+            self.vector[i] = max(self.vector[i], other_vector[i])
+        self.vector[self.node_id] += 1
+        return self.copy()
+    
+    def copy(self):
+        return list(self.vector)
+    
+    @staticmethod
+    def compare(v1, v2):
+        """
+        Returns:
+        -1 if v1 < v2 (v1 happened before v2)
+         1 if v1 > v2 (v2 happened before v1)
+         0 if v1 || v2 (concurrent)
+        """
+        less = any(v1[i] < v2[i] for i in range(len(v1)))
+        greater = any(v1[i] > v2[i] for i in range(len(v1)))
+        
+        if less and not greater:
+            return -1
+        elif greater and not less:
+            return 1
+        else:
+            return 0  # Concurrent or equal
+
+# Example: Detecting conflicts in distributed database
+def resolve_conflict(value1, vc1, value2, vc2):
+    """Resolve write conflict using vector clocks"""
+    comparison = VectorClock.compare(vc1, vc2)
+    
+    if comparison == -1:
+        return value2  # v2 is newer
+    elif comparison == 1:
+        return value1  # v1 is newer
+    else:
+        # Concurrent writes - need application-level resolution
+        return merge_values(value1, value2)  # e.g., CRDTs</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box mt-4">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Google's TrueTime:</strong> Google Spanner uses TrueTime, which provides globally synchronized time with bounded uncertainty. This enables external consistency (real-time ordering) without vector clocks, but requires atomic clocks and GPS receivers in every datacenter.
+                    </div>
+                </div>
+
+                <div id="next-steps" class="blog-content mt-5">
+                    <h2><i class="fas fa-arrow-right me-2 text-teal"></i>Next Steps</h2>
+                    
+                    <p>You now have a deep understanding of distributed systems internals! Continue to Part 14 to learn about Authentication & Security patterns including OAuth, JWT, and advanced security practices.</p>
+                    
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 14: Authentication & Security</h5>
+                            <p class="text-muted small mb-2">Learn OAuth, JWT, RBAC, and security best practices.</p>
+                            <a href="system-design-authentication-security.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 12: Low-Level Design Fundamentals</h5>
+                            <p class="text-muted small mb-2">Master OOD, SOLID principles, and design patterns.</p>
+                            <a href="system-design-low-level-design-patterns.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 8: CAP Theorem & Consistency</h5>
+                            <p class="text-muted small mb-2">Understand trade-offs between consistency, availability, and partition tolerance.</p>
+                            <a href="system-design-cap-theorem-consistency.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer id="social-media" class="bg-dark text-light py-5">
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest">
+                            <i class="fab fa-pinterest-p"></i>
+                        </a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email">
+                            <i class="fas fa-envelope"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="bg-secondary">
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Buy me a coffee</a> to fuel more deep dives!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top"><i class="fas fa-arrow-up"></i></button>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const scrollToTopBtn = document.getElementById('scrollToTop');
+            window.addEventListener('scroll', function() { scrollToTopBtn.classList.toggle('show', window.scrollY > 300); });
+            scrollToTopBtn.addEventListener('click', function() { window.scrollTo({ top: 0, behavior: 'smooth' }); });
+        });
+        function openNav() { document.getElementById('tocSidenav').classList.add('open'); document.getElementById('tocOverlay').classList.add('show'); document.body.style.overflow = 'hidden'; }
+        function closeNav() { document.getElementById('tocSidenav').classList.remove('open'); document.getElementById('tocOverlay').classList.remove('show'); document.body.style.overflow = 'auto'; }
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeNav(); });
+        const themes = { 'prism-theme': 'Tomorrow Night', 'prism-default': 'Default', 'prism-dark': 'Dark', 'prism-twilight': 'Twilight', 'prism-okaidia': 'Okaidia', 'prism-solarizedlight': 'Solarized Light' };
+        const savedTheme = localStorage.getItem('prism-theme') || 'prism-theme';
+        function switchTheme(themeId) { Object.keys(themes).forEach(id => { const link = document.getElementById(id); if (link) link.disabled = true; }); const selectedLink = document.getElementById(themeId); if (selectedLink) { selectedLink.disabled = false; localStorage.setItem('prism-theme', themeId); } setTimeout(() => Prism.highlightAll(), 10); }
+        document.addEventListener('DOMContentLoaded', function() { switchTheme(savedTheme); });
+        Prism.plugins.toolbar.registerButton('theme-switcher', function() { const select = document.createElement('select'); Object.keys(themes).forEach(id => { const opt = document.createElement('option'); opt.value = id; opt.textContent = themes[id]; if (id === savedTheme) opt.selected = true; select.appendChild(opt); }); select.addEventListener('change', e => switchTheme(e.target.value)); return select; });
+    </script>
+</body>
+</html>
