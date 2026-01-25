@@ -404,7 +404,6 @@ Preferences are stored as JSON in a cookie named `cookieConsent`:
 
 ✅ **Utility Pages**
 - `pages/contact.html`
-- `pages/location.html`
 
 ✅ **Category Pages (All 7)**
 - `pages/categories/psychology.html`
