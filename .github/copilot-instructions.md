@@ -17,8 +17,7 @@
 │   ├── categories/           # Blog category pages (psychology, philosophy, etc.)
 │   ├── 2024/03/             # Archived articles by year/month
 │   ├── 2025/10/             # Current articles organized chronologically
-│   ├── contact.html         # Contact form page
-│   └── location.html        # Location/map page
+│   └── contact.html         # Contact form page
 ├── images/                   # Static assets
 ├── BLOG-INFRASTRUCTURE.md   # Blog standards & conventions
 └── .template-blog-post.html  # Reusable blog post template
