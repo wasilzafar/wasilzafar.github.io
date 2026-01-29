@@ -11,13 +11,27 @@
 ```
 /
 ├── index.html                 # Homepage (hero, about, skills, certifications)
-├── css/main.css              # Consolidated styles (1551 lines, single file)
-├── js/main.js                # Consolidated scripts (446 lines, single file)
+├── css/main.css              # Consolidated styles (single file)
+├── js/main.js                # Consolidated scripts (single file)
 ├── pages/
 │   ├── categories/           # Blog category pages (psychology, philosophy, etc.)
-│   ├── 2024/03/             # Archived articles by year/month
-│   ├── 2025/10/             # Current articles organized chronologically
-│   └── contact.html         # Contact form page
+│   ├── series/               # Multi-part article series (5+ related articles)
+│   │   ├── cloud-computing/          # 11 articles
+│   │   ├── data-structures/          # 12 articles
+│   │   ├── economics/                # 9 articles
+│   │   ├── embedded-systems/         # 12 articles
+│   │   ├── ethics-moral-philosophy/  # 6 articles
+│   │   ├── logic-critical-thinking/  # 6 articles
+│   │   ├── nlp/                      # 16 articles
+│   │   ├── python-data-science/      # 5 articles
+│   │   ├── artificial-intelligence/  # 6 articles
+│   │   └── system-design/            # 15 articles
+│   ├── 2025/                 # Standalone articles by year/month
+│   │   ├── 10/
+│   │   ├── 11/
+│   │   └── 12/
+│   ├── 2026/01/              # Standalone articles (non-series)
+│   └── contact.html          # Contact form page
 ├── images/                   # Static assets
 ├── BLOG-INFRASTRUCTURE.md   # Blog standards & conventions
 └── .template-blog-post.html  # Reusable blog post template
@@ -28,16 +42,47 @@
 1. **No Build System**: Static HTML serves directly—no compilation, bundling, or transpilation needed
 2. **Consolidated CSS/JS**: Single `main.css` and `main.js` files manage all styling and functionality across the entire site
 3. **CDN Dependencies**: Bootstrap 5, Font Awesome, Google Fonts, Leaflet maps loaded via CDN
-4. **Chronological Blog Organization**: Articles in `/pages/YYYY/MM/` folders for easy archiving and SEO
+4. **Hybrid Blog Organization**: 
+   - **Series articles** (5+ related) in `/pages/series/[series-name]/` for topical clustering
+   - **Standalone articles** in `/pages/YYYY/MM/` for chronological archiving
 5. **Reusable Components**: Card-based layouts (experiment-card, highlight-box, toc-box, bias-tag) used across blog articles
 
 ## Critical Patterns & Conventions
+
+### Series Organization
+
+**Multi-part series** (5+ related articles) are organized in `/pages/series/[series-name]/`:
+
+| Series | Folder | Articles | Category Page |
+|--------|--------|----------|---------------|
+| Cloud Computing | `/pages/series/cloud-computing/` | 11 | technology.html |
+| Data Structures & Algorithms | `/pages/series/data-structures/` | 12 | technology.html |
+| System Design | `/pages/series/system-design/` | 15 | technology.html |
+| NLP | `/pages/series/nlp/` | 16 | technology.html |
+| Embedded Systems | `/pages/series/embedded-systems/` | 12 | technology.html |
+| Artificial Intelligence | `/pages/series/artificial-intelligence/` | 6 | technology.html |
+| Python Data Science | `/pages/series/python-data-science/` | 5 | technology.html |
+| Economics | `/pages/series/economics/` | 9 | business.html |
+| Ethics & Moral Philosophy | `/pages/series/ethics-moral-philosophy/` | 6 | philosophy.html |
+| Logic & Critical Thinking | `/pages/series/logic-critical-thinking/` | 6 | philosophy.html |
+
+**Standalone articles** (one-off guides, glossaries) remain in `/pages/YYYY/MM/`:
+- `automotive-embedded-systems-guide.html`
+- `money-markets-currencies-stocks-guide.html`
+- `philosophy-famous-thought-experiments.html`
+
+**When to create a new series folder**:
+- 5+ related articles planned on the same topic
+- Articles share common navigation/cross-references
+- Topic warrants its own learning path
 
 ### Blog Post Structure (Mandatory)
 
 All blog articles follow strict conventions documented in `BLOG-INFRASTRUCTURE.md`. The `.template-blog-post.html` exemplifies this:
 
-- **File Path**: `/pages/YYYY/MM/article-slug.html` (e.g., `/pages/2025/11/psychology-experiments-cognitive-biases.html`)
+- **File Path**: 
+  - Series: `/pages/series/[series-name]/article-slug.html` (e.g., `/pages/series/cloud-computing/cloud-storage-services-guide.html`)
+  - Standalone: `/pages/YYYY/MM/article-slug.html` (e.g., `/pages/2025/11/psychology-experiments-cognitive-biases.html`)
 - **Metadata**: Always include `<meta>` tags for description, keywords, Open Graph (og:*), and article-specific metadata (publish_time, author, section)
 - **Content Structure**:
   1. Navigation bar with links to Home, About, Interests, and current category
@@ -69,8 +114,12 @@ All blog articles follow strict conventions documented in `BLOG-INFRASTRUCTURE.m
   - This ensures uniform, centered content across all 24+ blog posts for optimal readability
 
 - **Relative Paths** (critical):
-  - From `/pages/YYYY/MM/article.html` → root: `../../../`
+  - From `/pages/series/[name]/article.html` → root: `../../../` (3 levels)
+  - From `/pages/YYYY/MM/article.html` → root: `../../../` (3 levels)
   - Example: `<link rel="stylesheet" href="../../../css/main.css">`
+  - Series to category: `../../categories/technology.html`
+  - Series to sibling series: `../python-data-science/article.html`
+  - Same series articles: `cloud-storage-services-guide.html` (relative, same folder)
 
 ### CSS Architecture
 
@@ -1187,13 +1236,25 @@ Example: cta_read_article_psychology_001
 **Link Conventions**:
 - Root → `/` (e.g., `<a href="/">Home</a>`)
 - From homepage → `pages/categories/psychology.html`
-- From category → `../../2025/11/article.html`
-- From article → `../../../css/main.css`
+- From category to series article → `../series/cloud-computing/cloud-storage-services-guide.html`
+- From category to standalone article → `../2026/01/article.html`
+- From series article to CSS/JS → `../../../css/main.css` (3 levels: pages/series/[name]/)
+- From series article to category → `../../categories/technology.html`
+- From series article to sibling series → `../python-data-science/python-setup-notebooks-guide.html`
+- Inter-series article links (same series) → `cloud-storage-services-guide.html` (relative, same folder)
 
 ## Development Workflow
 
 ### Adding a New Blog Article
 
+**For Series Articles** (part of multi-article series):
+1. **Create file** at `/pages/series/[series-name]/article-slug.html`
+2. **Copy template** from `.template-blog-post.html`
+3. **Update relative paths**: `../../../css/main.css`, `../../../js/main.js`, `../../categories/[category].html`
+4. **Add inter-article navigation** linking to other articles in the same series
+5. **Update category page** with path: `../series/[series-name]/article.html`
+
+**For Standalone Articles** (one-off guides, glossaries):
 1. **Create file** at `/pages/YYYY/MM/article-slug.html`
 2. **Copy template** from `.template-blog-post.html`
 3. **Replace placeholders**:
@@ -1268,6 +1329,12 @@ Example: cta_read_article_psychology_001
 ### Task: Add new blog article
 → Copy `.template-blog-post.html`, fill placeholders, update category page with article card
 
+### Task: Add new series article
+→ Create file in `/pages/series/[series-name]/`, update relative paths, add inter-series navigation, update category page with path `../series/[series-name]/article.html`
+
+### Task: Create new series folder
+→ Create folder at `/pages/series/[series-name]/`, add first article, update category page with new series section
+
 ### Task: Add Scroll-to-Top button to existing article
 → Add CSS (before `</style>`), HTML button (after footer), and JavaScript (before `</body>`). See "Scroll-to-Top Button" section for complete code snippets.
 
@@ -1302,15 +1369,17 @@ Example: cta_read_article_psychology_001
 | `BLOG-INFRASTRUCTURE.md` | Blog standards | 298 lines | Low (reference, updated when standards change) |
 | `.template-blog-post.html` | Blog template | Full example | Never (keep as reference) |
 | `pages/categories/*.html` | Category landing pages | ~280 lines each | High (new articles added frequently) |
-| `pages/YYYY/MM/*.html` | Individual articles | ~400 lines each | New articles monthly |
+| `pages/series/[name]/*.html` | Series articles | ~400 lines each | New series articles regularly |
+| `pages/YYYY/MM/*.html` | Standalone articles | ~400 lines each | Occasional standalone articles |
 
 ## Critical Gotchas
 
-1. **Path Confusion**: Blog articles are 3 directories deep (`pages/YYYY/MM/`). Always triple-check relative paths (`../../../` to reach root).
-2. **No Build System**: Changes to CSS/JS take effect immediately—no compilation step. Files must be valid HTML/CSS/JavaScript as written.
-3. **Consolidation Philosophy**: Don't create new CSS or JS files. Add to `main.css` and `main.js` instead (site-wide performance benefit).
-4. **Tag Manager**: GTM ID is **GTM-PBS8M2JR** (hardcoded in pages). Analytics track all page views automatically.
-5. **Mobile Responsiveness**: Bootstrap's grid system (col-lg-6, col-md-12, etc.) handles breakpoints. Test on mobile before publishing.
+1. **Path Confusion**: Both series articles (`pages/series/[name]/`) and standalone articles (`pages/YYYY/MM/`) are 3 directories deep. Use `../../../` to reach root.
+2. **Series vs Standalone**: Use `/pages/series/` for 5+ related articles with cross-references. Use `/pages/YYYY/MM/` for one-off guides.
+3. **No Build System**: Changes to CSS/JS take effect immediately—no compilation step. Files must be valid HTML/CSS/JavaScript as written.
+4. **Consolidation Philosophy**: Don't create new CSS or JS files. Add to `main.css` and `main.js` instead (site-wide performance benefit).
+5. **Tag Manager**: GTM ID is **GTM-PBS8M2JR** (hardcoded in pages). Analytics track all page views automatically.
+6. **Mobile Responsiveness**: Bootstrap's grid system (col-lg-6, col-md-12, etc.) handles breakpoints. Test on mobile before publishing.
 
 ## Resources
 
@@ -1322,5 +1391,5 @@ Example: cta_read_article_psychology_001
 
 ---
 
-**Last Updated**: December 30, 2025  
+**Last Updated**: January 29, 2026  
 **Maintained By**: Wasil Zafar
