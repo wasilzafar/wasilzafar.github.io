@@ -617,3 +617,228 @@ document.addEventListener('DOMContentLoaded', function() {
     initAnalyticsTracking();
 });
 
+/* ============================================
+   Blog Post Features (Consolidated)
+   ============================================ */
+
+/**
+ * Initialize Scroll-to-Top Button and Category Indicator
+ * Works on all blog pages with .blog-content
+ */
+function initBlogScrollFeatures() {
+    const scrollToTopBtn = document.getElementById('scrollToTop');
+    const categoryIndicator = document.getElementById('categoryIndicator');
+    const categoryText = document.getElementById('categoryText');
+    
+    // Only run on pages with these elements
+    if (!scrollToTopBtn && !categoryIndicator) return;
+    
+    // Auto-detect H2 sections in the article
+    const h2Elements = document.querySelectorAll('.blog-content h2');
+    const sections = [];
+    
+    h2Elements.forEach(function(h2) {
+        let text = h2.textContent.trim().replace(/^\d+\.\s*/, ''); // Remove leading numbers
+        if (text.length > 25) {
+            text = text.substring(0, 22) + '...';
+        }
+        sections.push({
+            element: h2,
+            name: text
+        });
+    });
+    
+    // Show/hide button and update category indicator on scroll
+    window.addEventListener('scroll', function() {
+        if (window.scrollY > 300) {
+            if (scrollToTopBtn) scrollToTopBtn.classList.add('show');
+            
+            // Update category indicator based on current section
+            if (categoryIndicator && sections.length > 0) {
+                let currentSection = sections[0].name;
+                
+                for (let i = 0; i < sections.length; i++) {
+                    const rect = sections[i].element.getBoundingClientRect();
+                    if (rect.top <= 150) {
+                        currentSection = sections[i].name;
+                    }
+                }
+                
+                // Handle both formats: direct text or #categoryText span
+                if (categoryText) {
+                    categoryText.textContent = currentSection;
+                } else {
+                    categoryIndicator.textContent = currentSection;
+                }
+                categoryIndicator.classList.add('show');
+            }
+        } else {
+            if (scrollToTopBtn) scrollToTopBtn.classList.remove('show');
+            if (categoryIndicator) categoryIndicator.classList.remove('show');
+        }
+    });
+    
+    // Smooth scroll to top on click
+    if (scrollToTopBtn) {
+        scrollToTopBtn.addEventListener('click', function() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    }
+}
+
+/**
+ * Initialize Side Navigation TOC
+ * Handles open/close functionality and active section highlighting
+ */
+function initSideNavTOC() {
+    const tocSidenav = document.getElementById('tocSidenav');
+    const tocOverlay = document.getElementById('tocOverlay');
+    
+    // Only run on pages with TOC sidenav
+    if (!tocSidenav) return;
+    
+    // Make openNav and closeNav globally available
+    window.openNav = function() {
+        tocSidenav.classList.add('open');
+        if (tocOverlay) tocOverlay.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    };
+    
+    window.closeNav = function() {
+        tocSidenav.classList.remove('open');
+        if (tocOverlay) tocOverlay.classList.remove('show');
+        document.body.style.overflow = 'auto';
+    };
+    
+    // Close on ESC key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            window.closeNav();
+        }
+    });
+    
+    // Highlight active section in TOC based on scroll position
+    const tocLinks = tocSidenav.querySelectorAll('a[href^="#"]');
+    const sections = document.querySelectorAll('[id]');
+    
+    function highlightActiveSection() {
+        let currentSection = '';
+        
+        sections.forEach(function(section) {
+            const sectionTop = section.offsetTop;
+            if (window.scrollY >= sectionTop - 200) {
+                currentSection = section.getAttribute('id');
+            }
+        });
+        
+        tocLinks.forEach(function(link) {
+            link.classList.remove('active');
+            if (link.getAttribute('href') === '#' + currentSection) {
+                link.classList.add('active');
+            }
+        });
+    }
+    
+    window.addEventListener('scroll', highlightActiveSection);
+    highlightActiveSection(); // Initial highlight
+    
+    // Smooth scroll for TOC links
+    tocLinks.forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const targetId = this.getAttribute('href');
+            const targetSection = document.querySelector(targetId);
+            
+            if (targetSection) {
+                const offsetTop = targetSection.offsetTop - 80; // Account for fixed navbar
+                window.scrollTo({
+                    top: offsetTop,
+                    behavior: 'smooth'
+                });
+            }
+            
+            setTimeout(window.closeNav, 300);
+        });
+    });
+}
+
+/**
+ * Initialize Prism.js Theme Switcher
+ * Allows users to switch between different syntax highlighting themes
+ */
+function initPrismThemeSwitcher() {
+    // Check if Prism is available
+    if (typeof Prism === 'undefined' || !Prism.plugins || !Prism.plugins.toolbar) return;
+    
+    const themes = {
+        'prism-theme': 'Tomorrow Night',
+        'prism-default': 'Default',
+        'prism-dark': 'Dark',
+        'prism-twilight': 'Twilight',
+        'prism-okaidia': 'Okaidia',
+        'prism-solarizedlight': 'Solarized Light'
+    };
+    
+    // Load saved theme from localStorage or use default
+    const savedTheme = localStorage.getItem('prism-theme') || 'prism-theme';
+    
+    // Function to switch theme
+    window.switchPrismTheme = function(themeId) {
+        Object.keys(themes).forEach(function(id) {
+            const link = document.getElementById(id);
+            if (link) {
+                link.disabled = true;
+            }
+        });
+        
+        const selectedLink = document.getElementById(themeId);
+        if (selectedLink) {
+            selectedLink.disabled = false;
+            localStorage.setItem('prism-theme', themeId);
+        }
+        
+        // Update all dropdowns on the page
+        document.querySelectorAll('div.code-toolbar select.prism-theme-selector').forEach(function(dropdown) {
+            dropdown.value = themeId;
+        });
+        
+        // Re-apply syntax highlighting
+        setTimeout(function() {
+            Prism.highlightAll();
+        }, 10);
+    };
+    
+    // Apply saved theme on load
+    window.switchPrismTheme(savedTheme);
+    
+    // Register theme switcher button in Prism toolbar
+    Prism.plugins.toolbar.registerButton('theme-switcher', function(env) {
+        const select = document.createElement('select');
+        select.setAttribute('aria-label', 'Select code theme');
+        select.className = 'prism-theme-selector';
+        
+        Object.keys(themes).forEach(function(themeId) {
+            const option = document.createElement('option');
+            option.value = themeId;
+            option.textContent = themes[themeId];
+            if (themeId === savedTheme) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+        
+        select.addEventListener('change', function(e) {
+            window.switchPrismTheme(e.target.value);
+        });
+        
+        return select;
+    });
+}
+
+// Initialize blog features when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    initBlogScrollFeatures();
+    initSideNavTOC();
+    initPrismThemeSwitcher();
+});
+
