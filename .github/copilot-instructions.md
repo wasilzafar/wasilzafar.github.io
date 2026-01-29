@@ -278,9 +278,11 @@ df3 = pd.read_json('data.json')
 
 **Always Defer Initialization**: Scripts run on `DOMContentLoaded` or when elements are detected. Don't require manual initialization.
 
-### Scroll-to-Top Button (Standard Feature)
+### Scroll-to-Top Button & Category Indicator (Standard Features)
 
-**All long-form blog articles include a Scroll-to-Top button** for improved user experience. This is a fixed circular button that appears after scrolling down 300px.
+**All blog articles include both features** for improved user experience:
+1. **Scroll-to-Top Button**: Fixed circular button appearing after scrolling 300px
+2. **Category Indicator**: Fixed badge showing current section name, updating dynamically on scroll
 
 **Implementation Pattern** (3 parts):
 
@@ -324,6 +326,33 @@ df3 = pd.read_json('data.json')
     transform: translateY(-1px);
 }
 
+/* Category Indicator */
+.category-indicator {
+    position: fixed;
+    bottom: 2rem;
+    right: 5rem;
+    background: var(--color-navy);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(19, 36, 64, 0.3);
+    z-index: 999;
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.category-indicator.show {
+    opacity: 1;
+    visibility: visible;
+}
+
 @media (max-width: 768px) {
     .scroll-to-top {
         bottom: 1rem;
@@ -332,30 +361,73 @@ df3 = pd.read_json('data.json')
         height: 45px;
         font-size: 1rem;
     }
+    
+    .category-indicator {
+        bottom: 1rem;
+        right: 4rem;
+        font-size: 0.75rem;
+        padding: 0.4rem 0.8rem;
+        max-width: 150px;
+    }
 }
 ```
 
-**2. HTML Button** (add after footer, before scripts):
+**2. HTML Elements** (add after footer, before scripts):
 ```html
 <!-- Scroll-to-Top Button -->
 <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
     <i class="fas fa-arrow-up"></i>
 </button>
+
+<!-- Category Indicator -->
+<div id="categoryIndicator" class="category-indicator"></div>
 ```
 
 **3. JavaScript** (add before `</body>` closing tag):
 ```html
-<!-- Scroll-to-Top Script -->
+<!-- Scroll-to-Top and Category Indicator Script -->
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const scrollToTopBtn = document.getElementById('scrollToTop');
+        const categoryIndicator = document.getElementById('categoryIndicator');
         
-        // Show/hide button on scroll
+        // Auto-detect H2 sections in the article (works with or without id attributes)
+        const h2Elements = document.querySelectorAll('.blog-content h2');
+        const sections = [];
+        
+        h2Elements.forEach(function(h2, index) {
+            let text = h2.textContent.trim().replace(/^\d+\.\s*/, ''); // Remove leading numbers like "1. "
+            if (text.length > 25) {
+                text = text.substring(0, 22) + '...';
+            }
+            sections.push({
+                element: h2,
+                name: text
+            });
+        });
+        
+        // Show/hide button and update category indicator on scroll
         window.addEventListener('scroll', function() {
             if (window.scrollY > 300) {
                 scrollToTopBtn.classList.add('show');
+                
+                // Update category indicator based on current section
+                if (sections.length > 0) {
+                    let currentSection = sections[0].name;
+                    
+                    for (let i = 0; i < sections.length; i++) {
+                        const rect = sections[i].element.getBoundingClientRect();
+                        if (rect.top <= 150) {
+                            currentSection = sections[i].name;
+                        }
+                    }
+                    
+                    categoryIndicator.textContent = currentSection;
+                    categoryIndicator.classList.add('show');
+                }
             } else {
                 scrollToTopBtn.classList.remove('show');
+                categoryIndicator.classList.remove('show');
             }
         });
         
@@ -368,21 +440,24 @@ df3 = pd.read_json('data.json')
 ```
 
 **When to Include**:
-- ✅ All blog articles with >1000 words
-- ✅ Long-form technical tutorials (e.g., data science series)
+- ✅ All blog articles (now standard on all 111 blog pages)
+- ✅ Long-form technical tutorials
 - ✅ Glossary pages with extensive content
-- ❌ Homepage (already at top, short content)
-- ❌ Category landing pages (moderate length)
-- ❌ Contact/location pages (single-screen content)
+- ❌ Homepage (short content)
+- ❌ Category landing pages
+- ❌ Contact/location pages
 
 **Reference Examples**:
-- See `/pages/2025/12/python-data-science-*.html` (all data science tutorials)
-- See `/pages/2025/11/business-sales-marketing-systems-glossary.html` (glossary with category indicator)
+- See `/pages/series/python-data-science/*.html` (all data science tutorials)
+- See `/pages/series/cloud-computing/*.html` (cloud computing series)
+- See `/pages/2025/11/business-sales-marketing-systems-glossary.html` (glossary)
 
-**Advanced Variant** (for glossaries with multiple sections):
-- Add category indicator showing current section
-- Button scrolls to Table of Contents instead of top
-- See business-sales-marketing-systems-glossary.html for implementation
+**Key Implementation Notes**:
+- **No H2 id required**: JavaScript detects H2 elements directly and stores element references
+- **Section name truncation**: Long section names truncated to 22 chars + "..." for clean display
+- **Leading number removal**: Strips "1. ", "2. ", etc. from section names using regex
+- **Position detection**: Uses `getBoundingClientRect().top <= 150` for accurate section tracking
+- **Synchronized visibility**: Both scroll-to-top and category indicator appear/hide together at 300px scroll
 
 ### Print Button (Standard Feature)
 
