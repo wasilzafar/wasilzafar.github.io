@@ -698,6 +698,96 @@ df3 = pd.read_json('data.json')
 - See `/pages/2025/12/python-data-science-machine-learning.html`
 - See `/pages/2025/11/business-sales-marketing-systems-glossary.html`
 
+### Series Navigation & Related Posts (Standard Feature)
+
+**All series blog articles include Related Posts sections** for cross-linking within the series. Standalone articles include simpler Related Reading sections. The CSS is in `main.css` and provides consistent styling across all blog pages.
+
+**CSS Classes Available** (all in main.css):
+
+| Class | Purpose |
+|-------|---------|
+| `.related-posts` | Container with gradient background, teal border |
+| `.related-posts h3` | Section header with teal underline |
+| `.related-post-item` | Individual article card with hover effects |
+| `.series-next` | Highlighted "Next in Series" callout box |
+| `.series-nav` | Previous/Next navigation at article bottom |
+| `.series-nav-item` | Individual nav link (`.prev` or `.next`) |
+
+**1. Related Posts Section** (for series articles):
+```html
+<!-- Related Posts -->
+<div class="related-posts">
+    <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+    <div class="related-post-item">
+        <h5>Part 2: Article Title</h5>
+        <p>Brief description of the article content and what readers will learn.</p>
+        <a href="article-slug.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+    </div>
+    <div class="related-post-item">
+        <h5>Part 3: Another Article</h5>
+        <p>Description of this related article.</p>
+        <a href="another-article.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+    </div>
+    <div class="related-post-item">
+        <h5>Part 4: Third Article</h5>
+        <p>Description of the third related article.</p>
+        <a href="third-article.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+    </div>
+</div>
+```
+
+**2. Next in Series Callout** (highlighted box for prominent callouts):
+```html
+<div class="series-next">
+    <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+    <p>In <a href="next-article.html"><strong>Part X: Article Title</strong></a>, we'll explore topic description and learn about specific concepts covered in the next article.</p>
+</div>
+```
+
+**3. Previous/Next Navigation** (optional bottom navigation):
+```html
+<div class="series-nav">
+    <a href="prev-article.html" class="series-nav-item prev">
+        <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span>
+        <span class="nav-title">Part 1: Previous Article Title</span>
+    </a>
+    <a href="next-article.html" class="series-nav-item next">
+        <span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span>
+        <span class="nav-title">Part 3: Next Article Title</span>
+    </a>
+</div>
+```
+
+**4. Standalone Article Related Reading** (for non-series articles):
+```html
+<div class="related-posts">
+    <h3><i class="fas fa-link me-2"></i>Related Reading</h3>
+    <div class="related-post-item">
+        <a href="/pages/categories/category.html">Explore More Category Articles</a>
+        <p>Discover more insights about the topic area.</p>
+    </div>
+</div>
+```
+
+**Header Icon Conventions**:
+- `fa-book` - Related Articles in This Series (technical series)
+- `fa-book-reader` - Continue the Series (narrative series like NLP, System Design)
+- `fa-link` - Related Reading (standalone articles)
+- `fa-arrow-right` - Next in the Series (callout boxes)
+
+**When to Include**:
+- ✅ All series articles (link to 2-3 related articles in the series)
+- ✅ Standalone articles (link to category page or related standalone articles)
+- ✅ Long-form guides (link to related content)
+- ❌ Category landing pages
+- ❌ Contact/location pages
+
+**Reference Examples**:
+- See `/pages/series/system-design/system-design-introduction.html` (series with related posts)
+- See `/pages/series/nlp/nlp-evaluation-ethics.html` (series with next callout)
+- See `/pages/series/cloud-computing/cloud-storage-services-guide.html` (technical series)
+- See `/pages/2025/11/psychology-experiments-cognitive-biases.html` (standalone with related reading)
+
 ### PrismJS Code Snippets with Copy and Theme Switcher (Standard Feature)
 
 **All blog articles with code snippets MUST include PrismJS with toolbar, copy button, and theme switcher** for optimal developer experience. The theme switcher allows readers to choose their preferred syntax highlighting theme, and the selection persists across all pages via localStorage.
@@ -1422,6 +1512,12 @@ Example: cta_read_article_psychology_001
 ### Task: Add Side Navigation TOC to blog article
 → Add (1) CSS styles for `.toc-toggle-btn`, `.sidenav-toc`, and `.sidenav-overlay`, (2) HTML for toggle button, side nav, and overlay backdrop before main content, (3) JavaScript for open/close functions and active section highlighting before `</body>`. See "Side Navigation Table of Contents" section for complete implementation.
 
+### Task: Add Related Posts section to series article
+→ Use `.related-posts` container with `.related-post-item` cards. All CSS is in main.css. See "Series Navigation & Related Posts" section for HTML patterns and icon conventions.
+
+### Task: Add "Next in Series" callout box
+→ Use `.series-next` class for highlighted navigation callout. CSS is in main.css. See "Series Navigation & Related Posts" section for implementation.
+
 ### Task: Create new category page
 → Copy existing category (e.g., psychology.html), update icon, description, back link path
 
@@ -1439,8 +1535,8 @@ Example: cta_read_article_psychology_001
 | File | Purpose | Size | Edit Frequency |
 |------|---------|------|---|
 | `index.html` | Homepage | 539 lines | Rarely (annual updates) |
-| `css/main.css` | All styling | 1551 lines | Moderate (new blog article styles) |
-| `js/main.js` | All scripts | 446 lines | Low (maps, analytics mostly stable) |
+| `css/main.css` | All styling | ~2300 lines | Moderate (new blog article styles) |
+| `js/main.js` | All scripts | ~840 lines | Low (consolidated blog features) |
 | `BLOG-INFRASTRUCTURE.md` | Blog standards | 298 lines | Low (reference, updated when standards change) |
 | `.template-blog-post.html` | Blog template | Full example | Never (keep as reference) |
 | `pages/categories/*.html` | Category landing pages | ~280 lines each | High (new articles added frequently) |
