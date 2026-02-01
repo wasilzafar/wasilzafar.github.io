@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, archive" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Part 17: File Systems & Storage - Learn about inodes, directory structures, journaling, ext4, NTFS, and file system internals." />
+    <meta name="keywords" content="file systems, inodes, ext4, NTFS, journaling, directory structure, file allocation, VFS, storage management, disk layout" />
+    
+    <meta property="og:title" content="Part 17: File Systems & Storage | Computer Architecture & OS Mastery" />
+    <meta property="og:description" content="Master file systems: inodes, journaling, ext4, NTFS, and storage internals." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://wasilzafar.com/pages/series/computer-architecture/comp-arch-file-systems.html" />
+    <meta property="article:published_time" content="2026-01-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>Part 17: File Systems & Storage | Computer Architecture & OS Mastery - Wasil Zafar</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', { 'ad_storage': 'denied', 'ad_user_data': 'denied', 'ad_personalization': 'denied', 'analytics_storage': 'denied', 'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE'] });
+        gtag('consent', 'default', { 'ad_storage': 'granted', 'ad_user_data': 'granted', 'ad_personalization': 'granted', 'analytics_storage': 'granted' });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <script>
+        (function(w, d, s, l, i) { w[l] = w[l] || []; w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'}); var f = d.getElementsByTagName(s)[0], j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : ''; j.async = true; j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl; f.parentNode.insertBefore(j, f); })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <a href="../../categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+            <h1 class="display-4 fw-bold mt-4">Part 17: File Systems & Storage</h1>
+            <div class="blog-meta">
+                <span><i class="fas fa-calendar me-2"></i>January 31, 2026</span>
+                <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                <span class="reading-time"><i class="fas fa-clock me-1"></i>30 min read</span>
+                <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+            </div>
+            <p class="lead mt-3">Explore how operating systems organize, store, and manage persistent data through file system structures.</p>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#introduction" onclick="closeNav()">Introduction</a></li>
+            <li><a href="#file-concepts" onclick="closeNav()">File Concepts</a></li>
+            <li><a href="#directory-structure" onclick="closeNav()">Directory Structure</a></li>
+            <li><a href="#file-allocation" onclick="closeNav()">File Allocation Methods</a></li>
+            <li><a href="#inodes" onclick="closeNav()">Inodes & Metadata</a></li>
+            <li><a href="#vfs" onclick="closeNav()">Virtual File System</a></li>
+            <li><a href="#ext4" onclick="closeNav()">ext4 File System</a></li>
+            <li><a href="#ntfs" onclick="closeNav()">NTFS File System</a></li>
+            <li><a href="#journaling" onclick="closeNav()">Journaling</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion & Next Steps</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <div id="introduction" class="blog-content">
+                    <h2><i class="fas fa-folder-open me-2 text-teal"></i>Introduction</h2>
+                    <p>File systems provide the abstraction for persistent storage. They organize data on disk, manage metadata, and ensure data integrity through mechanisms like journaling.</p>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-sitemap me-2"></i>
+                        <strong>Series Context:</strong> This is <strong>Part 17 of 24</strong> in the Computer Architecture & Operating Systems Mastery series. We transition from memory management to persistent storage.
+                    </div>
+
+                    <div class="experiment-card" id="series-nav">
+                        <h4><i class="fas fa-map-signs me-2"></i>Complete Series Navigation</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-2">24-Part Series</span>
+                            <span class="badge bg-crimson">Computer Architecture & OS Mastery</span>
+                        </div>
+                        <div class="content">
+                            <ol>
+                                <li><a href="comp-arch-foundations.html"><strong>Part 1:</strong> Foundations of Computer Systems</a> — System overview, architectures, OS role</li>
+                                <li><a href="comp-arch-digital-logic.html"><strong>Part 2:</strong> Digital Logic & CPU Building Blocks</a> — Gates, registers, datapath, microarchitecture</li>
+                                <li><a href="comp-arch-isa.html"><strong>Part 3:</strong> Instruction Set Architecture (ISA)</a> — RISC vs CISC, instruction formats, addressing</li>
+                                <li><a href="comp-arch-assembly.html"><strong>Part 4:</strong> Assembly Language & Machine Code</a> — Registers, stack, calling conventions</li>
+                                <li><a href="comp-arch-linkers-loaders.html"><strong>Part 5:</strong> Assemblers, Linkers & Loaders</a> — Object files, ELF, dynamic linking</li>
+                                <li><a href="comp-arch-compilers.html"><strong>Part 6:</strong> Compilers & Program Translation</a> — Lexing, parsing, code generation</li>
+                                <li><a href="comp-arch-cpu-pipelining.html"><strong>Part 7:</strong> CPU Execution & Pipelining</a> — Fetch-decode-execute, hazards, prediction</li>
+                                <li><a href="comp-arch-os-kernel.html"><strong>Part 8:</strong> OS Architecture & Kernel Design</a> — Monolithic, microkernel, system calls</li>
+                                <li><a href="comp-arch-processes.html"><strong>Part 9:</strong> Processes & Program Execution</a> — Process lifecycle, PCB, fork/exec</li>
+                                <li><a href="comp-arch-threads-concurrency.html"><strong>Part 10:</strong> Threads & Concurrency</a> — Threading models, pthreads, race conditions</li>
+                                <li><a href="comp-arch-cpu-scheduling.html"><strong>Part 11:</strong> CPU Scheduling Algorithms</a> — FCFS, RR, CFS, real-time scheduling</li>
+                                <li><a href="comp-arch-synchronization.html"><strong>Part 12:</strong> Synchronization & Coordination</a> — Locks, semaphores, classic problems</li>
+                                <li><a href="comp-arch-deadlocks.html"><strong>Part 13:</strong> Deadlocks & Prevention</a> — Coffman conditions, Banker's algorithm</li>
+                                <li><a href="comp-arch-cache-memory-hierarchy.html"><strong>Part 14:</strong> Memory Hierarchy & Cache</a> — L1/L2/L3, cache coherence, NUMA</li>
+                                <li><a href="comp-arch-memory-management.html"><strong>Part 15:</strong> Memory Management Fundamentals</a> — Address spaces, fragmentation, allocation</li>
+                                <li><a href="comp-arch-virtual-memory.html"><strong>Part 16:</strong> Virtual Memory & Paging</a> — Page tables, TLB, demand paging</li>
+                                <li><strong>Part 17: File Systems & Storage (This Guide)</strong> — Inodes, journaling, ext4, NTFS</li>
+                                <li><a href="comp-arch-io-devices.html"><strong>Part 18:</strong> I/O Systems & Device Drivers</a> — Interrupts, DMA, disk scheduling</li>
+                                <li><a href="comp-arch-multiprocessor.html"><strong>Part 19:</strong> Multiprocessor Systems</a> — SMP, NUMA, cache coherence</li>
+                                <li><a href="comp-arch-security.html"><strong>Part 20:</strong> OS Security & Protection</a> — Privilege levels, ASLR, sandboxing</li>
+                                <li><a href="comp-arch-virtualization.html"><strong>Part 21:</strong> Virtualization & Containers</a> — Hypervisors, namespaces, cgroups</li>
+                                <li><a href="comp-arch-kernel-internals.html"><strong>Part 22:</strong> Advanced Kernel Internals</a> — Linux subsystems, kernel debugging</li>
+                                <li><a href="comp-arch-case-studies.html"><strong>Part 23:</strong> Case Studies</a> — Linux vs Windows vs macOS</li>
+                                <li><a href="comp-arch-capstone-projects.html"><strong>Part 24:</strong> Capstone Projects</a> — Shell, thread pool, paging simulator</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-question-circle me-2"></i>
+                        <strong>The Persistent Challenge:</strong> How does the OS turn a spinning magnetic platter or flash chips into a reliable hierarchical file system? And how does it survive sudden power loss?
+                    </div>
+                </div>
+
+                <div id="file-concepts" class="blog-content mt-5">
+                    <h2><i class="fas fa-file me-2 text-teal"></i>File Concepts</h2>
+                    
+                    <p>A <strong>file</strong> is an abstraction for persistent storage—a named collection of related data with associated metadata.</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-archive me-2"></i>File Attributes</h4>
+                        <div class="content">
+<pre class="language-text"><code>File Metadata:
+══════════════════════════════════════════════════════════════
+
+Core Attributes:
+• Name: Human-readable identifier (e.g., "report.pdf")
+• Type: File extension or magic number
+• Location: Pointer to data blocks on disk
+• Size: Current file size in bytes
+
+
+Timestamps:
+• Created (ctime): When file was created
+• Modified (mtime): Last data modification
+• Accessed (atime): Last read/access
+
+
+Permissions:
+• Owner (user ID)
+• Group (group ID)
+• Mode (read/write/execute bits)
+
+
+$ ls -la report.pdf
+-rw-r--r-- 1 wasil users 24576 Jan 15 10:30 report.pdf
+ ││││││││││ │ │     │     │     │     │
+ ││││││││││ │ │     │     │     │     └─ Name
+ ││││││││││ │ │     │     │     └───── mtime
+ ││││││││││ │ │     │     └─────────── Size
+ ││││││││││ │ │     └───────────────── Group
+ ││││││││││ │ └─────────────────────── Owner
+ ││││││││││ └───────────────────────── Links
+ └─────────┘─────────────────────────── Permissions</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="directory-structure" class="blog-content mt-5">
+                    <h2><i class="fas fa-sitemap me-2 text-teal"></i>Directory Structure</h2>
+                    
+                    <p><strong>Directories</strong> are special files that map names to file metadata. They create the hierarchical namespace.</p>
+
+<pre class="language-text"><code>Directory as a File:
+══════════════════════════════════════════════════════════════
+
+A directory contains entries mapping names → inodes:
+
+/home/wasil/documents/
+┌────────────────────────────────────────┐
+│   Name          │    Inode Number   │
+├──────────────────┼────────────────────┤
+│   .             │        12345      │  ← This directory
+│   ..            │        12300      │  ← Parent directory
+│   report.pdf    │        12350      │
+│   notes.txt     │        12351      │
+│   project/      │        12400      │  ← Subdirectory
+└──────────────────┴────────────────────┘
+
+
+Path Resolution: /home/wasil/report.pdf
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Start at root inode (inode 2 on most systems)
+2. Read root directory, find "home" → inode 100
+3. Read inode 100, get data blocks, find "wasil" → inode 12300
+4. Read inode 12300, find "report.pdf" → inode 12350
+5. Read inode 12350 to get file metadata and data block pointers
+
+Each step requires disk I/O! Caching is crucial.</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-link me-2"></i>
+                        <strong>Hard Links vs Symbolic Links:</strong> Hard links are additional directory entries pointing to the same inode. Symbolic (soft) links are files containing a path string. Hard links can't cross file systems; symlinks can.
+                    </div>
+                </div>
+
+                <div id="file-allocation" class="blog-content mt-5">
+                    <h2><i class="fas fa-puzzle-piece me-2 text-teal"></i>File Allocation Methods</h2>
+                    
+                    <p>How does the file system map file data to disk blocks? Three classic approaches.</p>
+
+<pre class="language-text"><code>1. CONTIGUOUS ALLOCATION:
+══════════════════════════════════════════════════════════════
+
+File A: Start=10, Length=4
+[  ] [  ] [  ] ... [A0][A1][A2][A3] [  ] [  ] ...
+                    10  11  12  13
+
+✓ Simple - just store start + length
+✓ Fast sequential and random access
+✗ External fragmentation (like memory)
+✗ File can't grow easily
+
+Used by: CD-ROMs, DVDs (files don't change)
+
+
+2. LINKED ALLOCATION:
+══════════════════════════════════════════════════════════════
+
+Each block contains pointer to next block:
+
+[A0|25] ──→ [A1|42] ──→ [A2|18] ──→ [A3|nil]
+block 10    block 25    block 42    block 18
+
+✓ No external fragmentation
+✓ Files can grow easily
+✗ Random access is slow (must traverse list)
+✗ Pointer space overhead
+✗ One bad block breaks the chain
+
+Variation: FAT (File Allocation Table) keeps all pointers
+in a table in memory for faster access.
+
+
+3. INDEXED ALLOCATION:
+══════════════════════════════════════════════════════════════
+
+Index block contains pointers to all data blocks:
+
+Index Block (block 50):
+┌─────────────┐
+│  [0] → 10   │
+│  [1] → 25   │ ──────→ Data blocks scattered anywhere
+│  [2] → 42   │
+│  [3] → 18   │
+└─────────────┘
+
+✓ Fast random access (direct to any block)
+✓ No external fragmentation
+✗ Index block overhead for small files
+✗ Limited file size by index block size
+
+Solution: Multi-level index (used by Unix/ext4)</code></pre>
+                </div>
+
+                <div id="inodes" class="blog-content mt-5">
+                    <h2><i class="fas fa-info-circle me-2 text-teal"></i>Inodes & Metadata</h2>
+                    
+                    <p>The <strong>inode</strong> (index node) is Unix's solution for storing file metadata and block pointers.</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-database me-2"></i>Inode Structure</h4>
+                        <div class="content">
+<pre class="language-text"><code>Unix Inode (typical 256 bytes):
+══════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────┐
+│  File type and permissions (mode)           │
+│  Owner UID, Group GID                       │
+│  File size in bytes                         │
+│  Timestamps: atime, mtime, ctime            │
+│  Link count (number of hard links)          │
+├─────────────────────────────────────────────────────┤
+│  Direct block pointers [0-11]               │ ─→ 12 blocks
+├─────────────────────────────────────────────────────┤
+│  Single indirect pointer                    │ ─→ +1024 blocks
+├─────────────────────────────────────────────────────┤
+│  Double indirect pointer                    │ ─→ +1M blocks
+├─────────────────────────────────────────────────────┤
+│  Triple indirect pointer                    │ ─→ +1G blocks
+└─────────────────────────────────────────────────────┘
+
+Multi-level Indexing (4KB blocks, 4-byte pointers):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Direct:     12 × 4KB = 48 KB
+Single:     1024 × 4KB = 4 MB
+Double:     1024² × 4KB = 4 GB
+Triple:     1024³ × 4KB = 4 TB
+
+Small files (most files!) use only direct blocks → fast!</code></pre>
+                        </div>
+                    </div>
+
+<pre class="language-bash"><code># View inode information
+$ ls -i report.pdf
+12350 report.pdf
+
+$ stat report.pdf
+  File: report.pdf
+  Size: 24576        Blocks: 48         IO Block: 4096   regular file
+Device: 801h/2049d   Inode: 12350       Links: 1
+Access: (0644/-rw-r--r--)  Uid: ( 1000/   wasil)   Gid: ( 1000/   users)
+Access: 2025-01-15 10:30:00.000000000 +0000
+Modify: 2025-01-15 10:25:00.000000000 +0000
+Change: 2025-01-15 10:25:00.000000000 +0000
+ Birth: 2025-01-10 09:00:00.000000000 +0000
+
+# See file system inode usage
+$ df -i
+Filesystem      Inodes  IUsed   IFree IUse% Mounted on
+/dev/sda1     6553600 234567 6319033    4% /</code></pre>
+                </div>
+
+                <div id="vfs" class="blog-content mt-5">
+                    <h2><i class="fas fa-layer-group me-2 text-teal"></i>Virtual File System (VFS)</h2>
+                    
+                    <p>The <strong>VFS</strong> is an abstraction layer allowing the kernel to support multiple file system types with a uniform interface.</p>
+
+<pre class="language-text"><code>VFS Architecture:
+══════════════════════════════════════════════════════════════
+
+              User Space
+───────────────────────────────────────────────────
+    open()  read()  write()  close()  stat()
+───────────────────────────────────────────────────
+              Kernel Space
+                  │
+         ┌────────┴────────┐
+         │      VFS       │  ← Common interface
+         └────────┬────────┘
+                 │
+    ┌───────────┼───────────┐
+    │           │           │
+┌───┴───┐ ┌────┴───┐ ┌───┴────┐
+│  ext4  │ │  NTFS   │ │  NFS    │  ← Filesystem drivers
+└────────┘ └─────────┘ └─────────┘
+    │           │           │
+    ▼           ▼           ▼
+  Local       Local       Network
+  Disk        Disk        Server
+
+
+VFS Objects:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• superblock:  Represents mounted filesystem
+• inode:       File metadata (in-memory)
+• dentry:      Directory entry (cached paths)
+• file:        Open file (per-process)</code></pre>
+                </div>
+
+                <div id="ext4" class="blog-content mt-5">
+                    <h2><i class="fab fa-linux me-2 text-teal"></i>ext4 File System</h2>
+                    
+                    <p><strong>ext4</strong> (fourth extended filesystem) is the default Linux filesystem, evolved from ext2/ext3.</p>
+
+<pre class="language-text"><code>ext4 Features:
+══════════════════════════════════════════════════════════════
+
+1. EXTENTS (instead of indirect blocks):
+   Contiguous block ranges in single descriptor
+   [start_block, length] vs thousands of pointers
+   
+2. BLOCK GROUPS:
+   Disk divided into groups for locality
+   Each group has own inode table, bitmap, data blocks
+
+3. DELAYED ALLOCATION:
+   Don't allocate blocks until flush time
+   Better placement decisions, reduced fragmentation
+
+4. JOURNALING (see below)
+
+5. Limits:
+   • Max file size: 16 TB
+   • Max volume size: 1 EB (exabyte)
+   • Max filename: 255 bytes</code></pre>
+
+<pre class="language-bash"><code># Create ext4 filesystem
+$ sudo mkfs.ext4 /dev/sdb1
+
+# View ext4 superblock info
+$ sudo tune2fs -l /dev/sda1
+Filesystem magic number:  0xEF53
+Filesystem features:      has_journal ext_attr dir_index filetype
+Block size:               4096
+Inode size:               256
+
+# Check filesystem
+$ sudo e2fsck -n /dev/sda1</code></pre>
+                </div>
+
+                <div id="ntfs" class="blog-content mt-5">
+                    <h2><i class="fab fa-windows me-2 text-teal"></i>NTFS File System</h2>
+                    
+                    <p><strong>NTFS</strong> (New Technology File System) is Windows' primary filesystem since Windows NT.</p>
+
+<pre class="language-text"><code>NTFS Key Concepts:
+══════════════════════════════════════════════════════════════
+
+1. MASTER FILE TABLE (MFT):
+   • Every file/directory is an MFT record
+   • Record 0 = $MFT itself
+   • Each record typically 1KB
+   • Contains attributes (name, data, timestamps)
+
+2. EVERYTHING IS AN ATTRIBUTE:
+   • $STANDARD_INFORMATION - timestamps, permissions
+   • $FILE_NAME - name(s) and parent reference
+   • $DATA - actual file content
+   • $INDEX_ROOT - B-tree for directories
+
+3. RESIDENT vs NON-RESIDENT:
+   • Small files (&lt;700 bytes) stored IN the MFT record
+   • Larger files have data runs pointing to clusters
+
+4. FEATURES:
+   • Journaling (transaction log)
+   • ACLs (Access Control Lists)
+   • Compression and encryption (EFS)
+   • Alternate Data Streams (multiple $DATA attributes)
+   • Hard links and symbolic links</code></pre>
+                </div>
+
+                <div id="journaling" class="blog-content mt-5">
+                    <h2><i class="fas fa-book me-2 text-teal"></i>Journaling</h2>
+                    
+                    <p><strong>Journaling</strong> protects filesystem consistency during crashes. Changes are logged before applied.</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-shield-alt me-2"></i>Write-Ahead Logging</h4>
+                        <div class="content">
+<pre class="language-text"><code>The Problem Without Journaling:
+══════════════════════════════════════════════════════════════
+
+Creating a file requires multiple disk writes:
+1. Allocate inode
+2. Initialize inode
+3. Add directory entry
+4. Update directory inode
+5. Update free block/inode bitmaps
+
+Crash between steps → INCONSISTENT state!
+• Orphan inodes (allocated but not in any directory)
+• Directory points to unallocated inode
+• Blocks marked used but unreferenced
+
+Without journaling: Run fsck for hours to repair!
+
+
+Journaling Solution:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Write intent to JOURNAL
+2. Apply changes to actual locations
+3. Mark journal entry complete
+
+┌───────────┐    ┌───────────┐    ┌───────────┐
+│   Write   │ → │   Apply   │ → │  Commit   │
+│  Journal  │    │  Changes  │    │  (delete) │
+└───────────┘    └───────────┘    └───────────┘
+
+Crash recovery:
+• Incomplete journal entry → discard (undo)
+• Complete entry, changes not applied → replay (redo)
+
+Recovery in seconds, not hours!</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Journal Modes:</strong> ext4 supports: <em>journal</em> (safest, slowest—logs data+metadata), <em>ordered</em> (default—data written before metadata logged), <em>writeback</em> (fastest—metadata only, data may be stale).
+                    </div>
+                </div>
+
+                <div id="conclusion" class="blog-content mt-5">
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion & Next Steps</h2>
+                    
+                    <p>File systems are fundamental to how computers organize persistent data. We've covered:</p>
+                    
+                    <ul>
+                        <li><strong>File Concepts:</strong> Attributes, metadata, and permissions</li>
+                        <li><strong>Directory Structure:</strong> Hierarchical namespace via directory entries</li>
+                        <li><strong>Allocation Methods:</strong> Contiguous, linked, and indexed approaches</li>
+                        <li><strong>Inodes:</strong> Unix's metadata and block pointer structure</li>
+                        <li><strong>VFS:</strong> Kernel abstraction for multiple filesystem types</li>
+                        <li><strong>ext4 & NTFS:</strong> Real-world filesystem implementations</li>
+                        <li><strong>Journaling:</strong> Crash consistency through write-ahead logging</li>
+                    </ul>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-key me-2"></i>
+                        <strong>Key Insight:</strong> File systems are all about managing two things: metadata (inodes, directory entries) and data blocks. Journaling ensures these stay consistent even through crashes.
+                    </div>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="comp-arch-io-devices.html"><strong>Part 18: I/O Systems & Device Drivers</strong></a>, we'll explore how the OS communicates with hardware devices—interrupts, DMA, and disk scheduling algorithms.</p>
+                    </div>
+                </div>
+
+                <div class="related-posts">
+                    <h3><i class="fas fa-book me-2"></i>Continue the Computer Architecture & OS Series</h3>
+                    <div class="related-post-item">
+                        <h5>Part 16: Virtual Memory & Paging</h5>
+                        <p>Page tables, TLB, and demand paging.</p>
+                        <a href="comp-arch-virtual-memory.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                    </div>
+                    <div class="related-post-item">
+                        <h5>Part 18: I/O Systems & Device Drivers</h5>
+                        <p>Interrupts, DMA, and disk scheduling.</p>
+                        <a href="comp-arch-io-devices.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                    </div>
+                    <div class="related-post-item">
+                        <h5>Part 23: Case Studies</h5>
+                        <p>Linux vs Windows vs macOS file systems.</p>
+                        <a href="comp-arch-case-studies.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.</p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small"><i class="fas fa-icons me-2"></i>Icons from <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a></p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">Enjoying this content? <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script>
+        const themes = { 'prism-theme': 'Tomorrow Night', 'prism-default': 'Default', 'prism-dark': 'Dark', 'prism-twilight': 'Twilight', 'prism-okaidia': 'Okaidia', 'prism-solarizedlight': 'Solarized Light' };
+        const savedTheme = localStorage.getItem('prism-theme') || 'prism-theme';
+        function switchTheme(themeId) { Object.keys(themes).forEach(id => { const link = document.getElementById(id); if (link) link.disabled = true; }); const selectedLink = document.getElementById(themeId); if (selectedLink) { selectedLink.disabled = false; localStorage.setItem('prism-theme', themeId); } document.querySelectorAll('div.code-toolbar select').forEach(dropdown => { dropdown.value = themeId; }); setTimeout(() => Prism.highlightAll(), 10); }
+        document.addEventListener('DOMContentLoaded', function() { switchTheme(savedTheme); });
+        Prism.plugins.toolbar.registerButton('theme-switcher', function(env) { const select = document.createElement('select'); select.setAttribute('aria-label', 'Select code theme'); Object.keys(themes).forEach(themeId => { const option = document.createElement('option'); option.value = themeId; option.textContent = themes[themeId]; if (themeId === savedTheme) option.selected = true; select.appendChild(option); }); select.addEventListener('change', function(e) { switchTheme(e.target.value); }); return select; });
+    </script>
+</body>
+</html>

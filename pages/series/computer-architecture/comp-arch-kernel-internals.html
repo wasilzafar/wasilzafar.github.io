@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, archive" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Part 22: Advanced Kernel Internals - Deep dive into Linux kernel subsystems, kernel modules, debugging techniques, and kernel development." />
+    <meta name="keywords" content="kernel internals, Linux kernel, kernel modules, kernel debugging, proc filesystem, sysfs, kernel tracing, ftrace, perf, eBPF" />
+    
+    <meta property="og:title" content="Part 22: Advanced Kernel Internals | Computer Architecture & OS Mastery" />
+    <meta property="og:description" content="Deep dive into Linux kernel internals: subsystems, modules, debugging, and development." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://wasilzafar.com/pages/series/computer-architecture/comp-arch-kernel-internals.html" />
+    <meta property="article:published_time" content="2026-01-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>Part 22: Advanced Kernel Internals | Computer Architecture & OS Mastery - Wasil Zafar</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', { 'ad_storage': 'denied', 'ad_user_data': 'denied', 'ad_personalization': 'denied', 'analytics_storage': 'denied', 'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE'] });
+        gtag('consent', 'default', { 'ad_storage': 'granted', 'ad_user_data': 'granted', 'ad_personalization': 'granted', 'analytics_storage': 'granted' });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <script>
+        (function(w, d, s, l, i) { w[l] = w[l] || []; w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'}); var f = d.getElementsByTagName(s)[0], j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : ''; j.async = true; j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl; f.parentNode.insertBefore(j, f); })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <a href="../../categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+            <h1 class="display-4 fw-bold mt-4">Part 22: Advanced Kernel Internals</h1>
+            <div class="blog-meta">
+                <span><i class="fas fa-calendar me-2"></i>January 31, 2026</span>
+                <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                <span class="reading-time"><i class="fas fa-clock me-1"></i>40 min read</span>
+                <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+            </div>
+            <p class="lead mt-3">Deep dive into Linux kernel internals—subsystems, modules, debugging techniques, and kernel development practices.</p>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#introduction" onclick="closeNav()">Introduction</a></li>
+            <li><a href="#kernel-architecture" onclick="closeNav()">Linux Kernel Architecture</a></li>
+            <li><a href="#kernel-subsystems" onclick="closeNav()">Major Subsystems</a></li>
+            <li><a href="#kernel-modules" onclick="closeNav()">Kernel Modules</a></li>
+            <li><a href="#proc-sysfs" onclick="closeNav()">proc & sysfs</a></li>
+            <li><a href="#kernel-debugging" onclick="closeNav()">Kernel Debugging</a></li>
+            <li><a href="#tracing" onclick="closeNav()">Tracing & Profiling</a></li>
+            <li><a href="#ebpf" onclick="closeNav()">eBPF</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion & Next Steps</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <div id="introduction" class="blog-content">
+                    <h2><i class="fab fa-linux me-2 text-teal"></i>Introduction</h2>
+                    <p>The Linux kernel is a complex piece of software managing hardware resources, processes, memory, and I/O. Understanding its internals is essential for system programmers and performance engineers.</p>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-sitemap me-2"></i>
+                        <strong>Series Context:</strong> This is <strong>Part 22 of 24</strong> in the Computer Architecture & Operating Systems Mastery series. We explore the Linux kernel's internal structure and debugging tools.
+                    </div>
+
+                    <div class="experiment-card" id="series-nav">
+                        <h4><i class="fas fa-map-signs me-2"></i>Complete Series Navigation</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-2">24-Part Series</span>
+                            <span class="badge bg-crimson">Computer Architecture & OS Mastery</span>
+                        </div>
+                        <div class="content">
+                            <ol>
+                                <li><a href="comp-arch-foundations.html"><strong>Part 1:</strong> Foundations of Computer Systems</a> — System overview, architectures, OS role</li>
+                                <li><a href="comp-arch-digital-logic.html"><strong>Part 2:</strong> Digital Logic & CPU Building Blocks</a> — Gates, registers, datapath, microarchitecture</li>
+                                <li><a href="comp-arch-isa.html"><strong>Part 3:</strong> Instruction Set Architecture (ISA)</a> — RISC vs CISC, instruction formats, addressing</li>
+                                <li><a href="comp-arch-assembly.html"><strong>Part 4:</strong> Assembly Language & Machine Code</a> — Registers, stack, calling conventions</li>
+                                <li><a href="comp-arch-linkers-loaders.html"><strong>Part 5:</strong> Assemblers, Linkers & Loaders</a> — Object files, ELF, dynamic linking</li>
+                                <li><a href="comp-arch-compilers.html"><strong>Part 6:</strong> Compilers & Program Translation</a> — Lexing, parsing, code generation</li>
+                                <li><a href="comp-arch-cpu-pipelining.html"><strong>Part 7:</strong> CPU Execution & Pipelining</a> — Fetch-decode-execute, hazards, prediction</li>
+                                <li><a href="comp-arch-os-kernel.html"><strong>Part 8:</strong> OS Architecture & Kernel Design</a> — Monolithic, microkernel, system calls</li>
+                                <li><a href="comp-arch-processes.html"><strong>Part 9:</strong> Processes & Program Execution</a> — Process lifecycle, PCB, fork/exec</li>
+                                <li><a href="comp-arch-threads-concurrency.html"><strong>Part 10:</strong> Threads & Concurrency</a> — Threading models, pthreads, race conditions</li>
+                                <li><a href="comp-arch-cpu-scheduling.html"><strong>Part 11:</strong> CPU Scheduling Algorithms</a> — FCFS, RR, CFS, real-time scheduling</li>
+                                <li><a href="comp-arch-synchronization.html"><strong>Part 12:</strong> Synchronization & Coordination</a> — Locks, semaphores, classic problems</li>
+                                <li><a href="comp-arch-deadlocks.html"><strong>Part 13:</strong> Deadlocks & Prevention</a> — Coffman conditions, Banker's algorithm</li>
+                                <li><a href="comp-arch-cache-memory-hierarchy.html"><strong>Part 14:</strong> Memory Hierarchy & Cache</a> — L1/L2/L3, cache coherence, NUMA</li>
+                                <li><a href="comp-arch-memory-management.html"><strong>Part 15:</strong> Memory Management Fundamentals</a> — Address spaces, fragmentation, allocation</li>
+                                <li><a href="comp-arch-virtual-memory.html"><strong>Part 16:</strong> Virtual Memory & Paging</a> — Page tables, TLB, demand paging</li>
+                                <li><a href="comp-arch-file-systems.html"><strong>Part 17:</strong> File Systems & Storage</a> — Inodes, journaling, ext4, NTFS</li>
+                                <li><a href="comp-arch-io-devices.html"><strong>Part 18:</strong> I/O Systems & Device Drivers</a> — Interrupts, DMA, disk scheduling</li>
+                                <li><a href="comp-arch-multiprocessor.html"><strong>Part 19:</strong> Multiprocessor Systems</a> — SMP, NUMA, cache coherence</li>
+                                <li><a href="comp-arch-security.html"><strong>Part 20:</strong> OS Security & Protection</a> — Privilege levels, ASLR, sandboxing</li>
+                                <li><a href="comp-arch-virtualization.html"><strong>Part 21:</strong> Virtualization & Containers</a> — Hypervisors, namespaces, cgroups</li>
+                                <li><strong>Part 22: Advanced Kernel Internals (This Guide)</strong> — Linux subsystems, kernel debugging</li>
+                                <li><a href="comp-arch-case-studies.html"><strong>Part 23:</strong> Case Studies</a> — Linux vs Windows vs macOS</li>
+                                <li><a href="comp-arch-capstone-projects.html"><strong>Part 24:</strong> Capstone Projects</a> — Shell, thread pool, paging simulator</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-question-circle me-2"></i>
+                        <strong>Under the Hood:</strong> The Linux kernel is ~30 million lines of code managing hardware from embedded devices to supercomputers. How is it organized, and how do we debug it when things go wrong?
+                    </div>
+                </div>
+
+                <div id="kernel-architecture" class="blog-content mt-5">
+                    <h2><i class="fas fa-sitemap me-2 text-teal"></i>Linux Kernel Architecture</h2>
+                    
+                    <p>Linux is a <strong>monolithic kernel</strong>—all core services run in kernel space. But it's modular, with loadable kernel modules.</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-folder-tree me-2"></i>Source Tree Structure</h4>
+                        <div class="content">
+<pre class="language-text"><code>Linux Kernel Source (~30M lines):
+══════════════════════════════════════════════════════════════
+
+linux/
+├── arch/           # Architecture-specific (x86, arm, riscv)
+├── block/          # Block I/O layer
+├── drivers/        # Device drivers (~60% of code!)
+├── fs/             # File systems (ext4, btrfs, nfs)
+├── include/        # Header files
+├── init/           # Kernel initialization
+├── ipc/            # Inter-process communication
+├── kernel/         # Core (scheduler, signals, time)
+├── lib/            # Kernel library routines
+├── mm/             # Memory management
+├── net/            # Networking stack
+├── scripts/        # Build scripts
+├── security/       # SELinux, AppArmor
+├── sound/          # Audio subsystem (ALSA)
+└── tools/          # Userspace tools (perf, bpf)</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="kernel-subsystems" class="blog-content mt-5">
+                    <h2><i class="fas fa-puzzle-piece me-2 text-teal"></i>Major Subsystems</h2>
+                    
+                    <p>The kernel is organized into interconnected subsystems.</p>
+
+<pre class="language-text"><code>Core Subsystems:
+══════════════════════════════════════════════════════════════
+
+1. PROCESS SCHEDULER (kernel/sched/)
+   • CFS (Completely Fair Scheduler) - default
+   • Real-time schedulers (FIFO, RR)
+   • Per-CPU runqueues, load balancing
+
+2. MEMORY MANAGEMENT (mm/)
+   • Page allocator (buddy system)
+   • Slab allocator (small objects)
+   • Virtual memory (page tables, TLB)
+   • OOM killer
+
+3. VIRTUAL FILE SYSTEM (fs/)
+   • VFS abstraction layer
+   • Inode cache, dentry cache
+   • Page cache for I/O
+
+4. NETWORKING (net/)
+   • Socket layer
+   • Protocol stacks (TCP/IP, UDP)
+   • Netfilter (iptables/nftables)
+
+5. DEVICE MODEL (drivers/)
+   • Unified driver framework
+   • sysfs representation
+   • Power management</code></pre>
+                </div>
+
+                <div id="kernel-modules" class="blog-content mt-5">
+                    <h2><i class="fas fa-cube me-2 text-teal"></i>Kernel Modules</h2>
+                    
+                    <p><strong>Loadable Kernel Modules</strong> (LKMs) extend the kernel at runtime without reboot.</p>
+
+<pre class="language-bash"><code># List loaded modules
+$ lsmod
+Module                  Size  Used by
+ext4                  811008  1
+mbcache                16384  1 ext4
+jbd2                  131072  1 ext4
+nvme                   45056  3
+
+# Load/unload module
+$ sudo modprobe nvme      # Load with dependencies
+$ sudo rmmod nvme         # Unload
+
+# Module info
+$ modinfo ext4
+filename:       /lib/modules/6.1.0/kernel/fs/ext4/ext4.ko
+license:        GPL
+description:    Fourth Extended Filesystem
+author:         Theodore Ts'o
+
+# View kernel ring buffer for module messages
+$ dmesg | tail -20</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-code me-2"></i>
+                        <strong>Module Entry Points:</strong> Every module has <code>module_init()</code> (called on load) and <code>module_exit()</code> (called on unload). Modules export symbols that other modules can use.
+                    </div>
+                </div>
+
+                <div id="proc-sysfs" class="blog-content mt-5">
+                    <h2><i class="fas fa-folder-open me-2 text-teal"></i>proc & sysfs</h2>
+                    
+                    <p><strong>/proc</strong> and <strong>/sys</strong> are virtual filesystems exposing kernel data structures.</p>
+
+<pre class="language-bash"><code># /proc - Process and kernel information
+$ cat /proc/cpuinfo        # CPU details
+$ cat /proc/meminfo        # Memory statistics
+$ cat /proc/interrupts     # Interrupt counts
+$ cat /proc/1234/maps      # Memory map of PID 1234
+$ cat /proc/1234/fd/       # Open file descriptors
+
+# /sys - Kernel object hierarchy
+$ ls /sys/class/net/       # Network interfaces
+$ cat /sys/block/sda/queue/scheduler  # I/O scheduler
+$ echo 1 &gt; /sys/class/leds/input0::capslock/brightness
+
+# Tunable parameters via /proc/sys
+$ cat /proc/sys/vm/swappiness
+60
+$ echo 10 | sudo tee /proc/sys/vm/swappiness  # Less swappy</code></pre>
+                </div>
+
+                <div id="kernel-debugging" class="blog-content mt-5">
+                    <h2><i class="fas fa-bug me-2 text-teal"></i>Kernel Debugging</h2>
+                    
+                    <p>Debugging kernel code is challenging—there's no debugger running underneath!</p>
+
+<pre class="language-text"><code>Debugging Techniques:
+══════════════════════════════════════════════════════════════
+
+1. printk() - Kernel's printf
+   pr_info("Value: %d\n", x);
+   pr_err("Error: %s\n", msg);
+   
+2. dmesg - Kernel ring buffer
+   $ dmesg -w  # Follow new messages
+
+3. KGDB - Kernel debugger
+   Connect GDB to kernel via serial/network
+   
+4. Crash dumps (kdump)
+   Capture memory on panic for post-mortem
+
+5. KASAN - Kernel Address Sanitizer
+   Detects use-after-free, buffer overflow
+   
+6. lockdep - Lock dependency checker
+   Detects potential deadlocks</code></pre>
+
+<pre class="language-bash"><code># Analyze kernel panic
+$ dmesg | grep -i panic
+[  123.456] Kernel panic - not syncing: Fatal exception
+
+# Check for kernel warnings/bugs
+$ dmesg | grep -E 'BUG|WARNING|Oops'
+
+# Magic SysRq key (emergency commands)
+$ echo b &gt; /proc/sysrq-trigger  # Reboot immediately
+$ echo c &gt; /proc/sysrq-trigger  # Crash (for testing)</code></pre>
+                </div>
+
+                <div id="tracing" class="blog-content mt-5">
+                    <h2><i class="fas fa-search me-2 text-teal"></i>Tracing & Profiling</h2>
+                    
+                    <p><strong>Tracing</strong> observes kernel behavior without modifying it.</p>
+
+<pre class="language-bash"><code># perf - Performance profiling
+$ perf top                    # Real-time CPU profiling
+$ perf record ./program       # Record profile
+$ perf report                 # Analyze profile
+
+# ftrace - Function tracer
+$ cd /sys/kernel/debug/tracing
+$ echo function &gt; current_tracer
+$ echo 1 &gt; tracing_on
+$ cat trace                   # See function calls
+
+# trace-cmd (friendlier ftrace interface)
+$ trace-cmd record -p function_graph -F ./program
+$ trace-cmd report</code></pre>
+                </div>
+
+                <div id="ebpf" class="blog-content mt-5">
+                    <h2><i class="fas fa-network-wired me-2 text-teal"></i>eBPF</h2>
+                    
+                    <p><strong>eBPF</strong> (extended Berkeley Packet Filter) runs sandboxed programs in the kernel—revolutionizing observability and networking.</p>
+
+<pre class="language-text"><code>eBPF Architecture:
+══════════════════════════════════════════════════════════════
+
+ User Space                      Kernel Space
+┌─────────────┐              ┌───────────────────┐
+│ BPF Program │  ──────────→ │ BPF Verifier    │
+│ (C / bpftrace)            ├───────────────────┤
+└─────────────┘              │ JIT Compiler    │
+                             ├───────────────────┤
+                             │ BPF VM (runs    │
+                             │ at attach point)│
+                             └───────────────────┘
+
+Attach Points:
+• kprobes - Any kernel function
+• tracepoints - Stable trace points
+• XDP - Network packet processing
+• tc - Traffic control
+• cgroup - Resource control</code></pre>
+
+<pre class="language-bash"><code># bpftrace - High-level eBPF scripting
+$ sudo bpftrace -e 'kprobe:sys_read { @[comm] = count(); }'
+# Count read() calls by process name
+
+# Trace syscall latency
+$ sudo bpftrace -e '
+    tracepoint:syscalls:sys_enter_read { @start[tid] = nsecs; }
+    tracepoint:syscalls:sys_exit_read /@start[tid]/ {
+        @latency = hist(nsecs - @start[tid]);
+        delete(@start[tid]);
+    }'
+
+# BCC tools (pre-built eBPF tools)
+$ sudo execsnoop           # Trace new processes
+$ sudo opensnoop          # Trace file opens
+$ sudo tcpconnect         # Trace TCP connections</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>eBPF Safety:</strong> The verifier ensures BPF programs terminate (bounded loops), don't access invalid memory, and don't crash the kernel. But they run with kernel privileges—loading requires CAP_BPF.
+                    </div>
+                </div>
+
+                <div id="conclusion" class="blog-content mt-5">
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion & Next Steps</h2>
+                    
+                    <p>The Linux kernel is a masterpiece of systems engineering. We've covered:</p>
+                    
+                    <ul>
+                        <li><strong>Architecture:</strong> Source tree organization and subsystems</li>
+                        <li><strong>Subsystems:</strong> Scheduler, memory, VFS, networking</li>
+                        <li><strong>Modules:</strong> Loadable kernel modules (LKMs)</li>
+                        <li><strong>proc & sysfs:</strong> Virtual filesystems for introspection</li>
+                        <li><strong>Debugging:</strong> printk, dmesg, KGDB, sanitizers</li>
+                        <li><strong>Tracing:</strong> perf, ftrace, trace-cmd</li>
+                        <li><strong>eBPF:</strong> Safe kernel programmability</li>
+                    </ul>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-key me-2"></i>
+                        <strong>Key Insight:</strong> eBPF is transforming Linux—enabling safe, dynamic extension of the kernel for networking, security, and observability without modifying kernel source or loading traditional modules.
+                    </div>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="comp-arch-case-studies.html"><strong>Part 23: Case Studies</strong></a>, we'll compare how Linux, Windows, and macOS solve common OS challenges differently.</p>
+                    </div>
+                </div>
+
+                <div class="related-posts">
+                    <h3><i class="fas fa-book me-2"></i>Continue the Computer Architecture & OS Series</h3>
+                    <div class="related-post-item">
+                        <h5>Part 21: Virtualization & Containers</h5>
+                        <p>Hypervisors, namespaces, and cgroups.</p>
+                        <a href="comp-arch-virtualization.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                    </div>
+                    <div class="related-post-item">
+                        <h5>Part 23: Case Studies</h5>
+                        <p>Comparing Linux, Windows, and macOS.</p>
+                        <a href="comp-arch-case-studies.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                    </div>
+                    <div class="related-post-item">
+                        <h5>Part 8: OS Architecture & Kernel Design</h5>
+                        <p>Kernel design fundamentals.</p>
+                        <a href="comp-arch-os-kernel.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.</p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small"><i class="fas fa-icons me-2"></i>Icons from <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a></p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">Enjoying this content? <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script>
+        const themes = { 'prism-theme': 'Tomorrow Night', 'prism-default': 'Default', 'prism-dark': 'Dark', 'prism-twilight': 'Twilight', 'prism-okaidia': 'Okaidia', 'prism-solarizedlight': 'Solarized Light' };
+        const savedTheme = localStorage.getItem('prism-theme') || 'prism-theme';
+        function switchTheme(themeId) { Object.keys(themes).forEach(id => { const link = document.getElementById(id); if (link) link.disabled = true; }); const selectedLink = document.getElementById(themeId); if (selectedLink) { selectedLink.disabled = false; localStorage.setItem('prism-theme', themeId); } document.querySelectorAll('div.code-toolbar select').forEach(dropdown => { dropdown.value = themeId; }); setTimeout(() => Prism.highlightAll(), 10); }
+        document.addEventListener('DOMContentLoaded', function() { switchTheme(savedTheme); });
+        Prism.plugins.toolbar.registerButton('theme-switcher', function(env) { const select = document.createElement('select'); select.setAttribute('aria-label', 'Select code theme'); Object.keys(themes).forEach(themeId => { const option = document.createElement('option'); option.value = themeId; option.textContent = themes[themeId]; if (themeId === savedTheme) option.selected = true; select.appendChild(option); }); select.addEventListener('change', function(e) { switchTheme(e.target.value); }); return select; });
+    </script>
+</body>
+</html>
