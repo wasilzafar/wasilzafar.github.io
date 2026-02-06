@@ -1,0 +1,1786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kernel Development Series - Phase 9: ELF Loading & Executables | Wasil Zafar</title>
+    <meta name="description" content="Parse the ELF executable format and implement program loading to run compiled applications in your operating system kernel.">
+    <meta name="keywords" content="kernel development, ELF, executable format, program loading, linker, dynamic loading, OS development">
+    <meta name="author" content="Wasil Zafar">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Kernel Development Series - Phase 9: ELF Loading & Executables">
+    <meta property="og:description" content="Parse the ELF executable format and implement program loading to run compiled applications in your operating system kernel.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://wasilzafar.com/pages/series/kernel-development/kernel-dev-phase-09-elf.html">
+    <meta property="og:image" content="https://wasilzafar.com/images/og-kernel-dev.png">
+    <meta property="article:published_time" content="2026-02-06">
+    <meta property="article:author" content="Wasil Zafar">
+    <meta property="article:section" content="Technology">
+
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+    
+    <!-- Google Consent Mode v2 -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('consent', 'default', {
+        'ad_storage': 'denied',
+        'ad_user_data': 'denied',
+        'ad_personalization': 'denied',
+        'analytics_storage': 'denied',
+        'wait_for_update': 500
+      });
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="../../../images/favicon_io/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="../../../css/main.css">
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. 
+                    By clicking "Accept All", you consent to our use of cookies. See our 
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a> 
+                    for more information.
+                </p>
+                
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#about">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#skills">Skills</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#certifications">Certifications</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#interests">Interests</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">Phase 9: ELF Loading & Executables</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>February 6, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>28 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Parse the ELF executable format, understand program headers and sections, and implement a loader to run compiled programs in your kernel.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation Overlay -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#introduction" onclick="closeNav()">Introduction</a>
+                <ul>
+                    <li><a href="#executable-formats" onclick="closeNav()">Executable Formats</a></li>
+                    <li><a href="#why-elf" onclick="closeNav()">Why ELF?</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#elf-structure" onclick="closeNav()">ELF File Structure</a>
+                <ul>
+                    <li><a href="#elf-header" onclick="closeNav()">ELF Header</a></li>
+                    <li><a href="#program-headers" onclick="closeNav()">Program Headers</a></li>
+                    <li><a href="#section-headers" onclick="closeNav()">Section Headers</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#parsing" onclick="closeNav()">Parsing ELF Files</a>
+                <ul>
+                    <li><a href="#validation" onclick="closeNav()">Header Validation</a></li>
+                    <li><a href="#segment-loading" onclick="closeNav()">Segment Loading</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#loader" onclick="closeNav()">Program Loader</a>
+                <ul>
+                    <li><a href="#memory-setup" onclick="closeNav()">Memory Setup</a></li>
+                    <li><a href="#entry-point" onclick="closeNav()">Entry Point</a></li>
+                    <li><a href="#stack-setup" onclick="closeNav()">Stack & Arguments</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#exec" onclick="closeNav()">Implementing exec()</a>
+            </li>
+            <li><a href="#build" onclick="closeNav()">What You Can Build</a></li>
+            <li><a href="#next-steps" onclick="closeNav()">Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- Introduction -->
+                <div id="introduction" class="blog-content">
+                    <h2><i class="fas fa-file-code me-2 text-teal"></i>Introduction: Running Programs</h2>
+                    
+                    <div class="highlight-box crimson">
+                        <i class="fas fa-flag me-2"></i>
+                        <strong>Phase 9 Goals:</strong> By the end of this phase, your kernel will load and execute ELF binaries. You'll understand the ELF format, parse headers, load segments into memory, and jump to entry points to run real compiled programs.
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-map-signs me-2"></i>Complete Series Navigation</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-2">18-Part Series</span>
+                            <span class="badge bg-crimson">OS Development Mastery</span>
+                        </div>
+                        <div class="content">
+                            <ol>
+                                <li><a href="kernel-dev-phase-00-orientation.html">Phase 0: Orientation & Big Picture</a> - OS fundamentals, kernel architectures, learning path</li>
+                                <li><a href="kernel-dev-phase-01-boot-process.html">Phase 1: How a Computer Starts</a> - BIOS/UEFI, boot sequence, dev environment</li>
+                                <li><a href="kernel-dev-phase-02-real-mode.html">Phase 2: Real Mode - First Steps</a> - Real mode, bootloader, BIOS interrupts</li>
+                                <li><a href="kernel-dev-phase-03-protected-mode.html">Phase 3: Entering Protected Mode</a> - GDT, 32-bit mode, C code execution</li>
+                                <li><a href="kernel-dev-phase-04-display-input.html">Phase 4: Display, Input & Output</a> - VGA text mode, keyboard handling</li>
+                                <li><a href="kernel-dev-phase-05-interrupts.html">Phase 5: Interrupts & CPU Control</a> - IDT, ISRs, PIC programming</li>
+                                <li><a href="kernel-dev-phase-06-memory.html">Phase 6: Memory Management</a> - Paging, virtual memory, heap allocator</li>
+                                <li><a href="kernel-dev-phase-07-filesystem.html">Phase 7: Disk Access & Filesystems</a> - Block devices, FAT, VFS layer</li>
+                                <li><a href="kernel-dev-phase-08-processes.html">Phase 8: Processes & User Mode</a> - Task switching, system calls, user space</li>
+                                <li><strong>Phase 9: ELF Loading & Executables (This Guide)</strong> - ELF format, program loading</li>
+                                <li><a href="kernel-dev-phase-10-stdlib-shell.html">Phase 10: Standard Library & Shell</a> - C library, command-line shell</li>
+                                <li><a href="kernel-dev-phase-11-long-mode.html">Phase 11: 64-Bit Long Mode</a> - x86-64, 64-bit paging, modern architecture</li>
+                                <li><a href="kernel-dev-phase-12-uefi.html">Phase 12: Modern Booting with UEFI</a> - UEFI boot services, memory maps</li>
+                                <li><a href="kernel-dev-phase-13-graphics.html">Phase 13: Graphics & GUI Systems</a> - Framebuffer, windowing, drawing</li>
+                                <li><a href="kernel-dev-phase-14-input-timing.html">Phase 14: Advanced Input & Timing</a> - Mouse, high-precision timers</li>
+                                <li><a href="kernel-dev-phase-15-hardware-drivers.html">Phase 15: Hardware Discovery & Drivers</a> - PCI, device drivers, NVMe</li>
+                                <li><a href="kernel-dev-phase-16-performance.html">Phase 16: Performance & Optimization</a> - Caching, scheduler tuning</li>
+                                <li><a href="kernel-dev-phase-17-security.html">Phase 17: Stability, Security & Finishing</a> - Debugging, hardening, completion</li>
+                            </ol>
+                        </div>
+                    </div>
+                    
+                    <p>In Phase 8, we created processes with embedded bytecode—the program was hardcoded directly into the kernel. That's like a restaurant where you can only order what the chef decided to make that morning. Real operating systems let you run <em>any</em> program—games, text editors, compilers, whatever you want. The magic that makes this possible is an <strong>executable format</strong>.</p>
+
+                    <pre><code class="language-c">/*
+ * THE JOURNEY FROM SOURCE CODE TO RUNNING PROGRAM
+ * ================================================
+ * 
+ * hello.c                 hello.o                hello (ELF)
+ * ┌─────────────┐        ┌─────────────┐        ┌─────────────┐
+ * │ #include... │  gcc   │ .text       │  ld    │ ELF Header  │
+ * │             │───────>│ .data       │───────>│ Prog Headers│
+ * │ int main()  │ -c     │ .bss        │        │ .text       │
+ * │ {           │        │ .rodata     │        │ .data       │
+ * │   printf(); │        │ Relocations │        │ .bss        │
+ * │ }           │        │ Symbols     │        │ Entry Point │
+ * └─────────────┘        └─────────────┘        └─────────────┘
+ *    Source Code           Object File           Executable
+ * 
+ * 
+ * WHAT THE OS LOADER DOES:
+ * ┌──────────────────────────────────────────────────────────┐
+ * │  1. Read ELF header → Validate magic number             │
+ * │  2. Parse program headers → Find loadable segments      │
+ * │  3. Allocate memory → Map pages for each segment        │
+ * │  4. Copy code/data → Load from file to memory           │
+ * │  5. Zero BSS → Initialize uninitialized data            │
+ * │  6. Setup stack → Prepare argc, argv, environment       │
+ * │  7. Jump to entry → Start executing at e_entry          │
+ * └──────────────────────────────────────────────────────────┘
+ */</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Key Insight:</strong> ELF (Executable and Linkable Format) is the standard executable format on Unix-like systems. Understanding ELF lets your OS run programs compiled with standard toolchains like GCC.
+                    </div>
+
+                    <h3 id="executable-formats">Executable Formats</h3>
+                    
+                    <p>Every operating system needs a way to package programs. An executable format defines how code, data, and metadata are organized in a file. Think of it like a shipping container with a manifest—the format tells the loader where everything is.</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-history me-2"></i>Executable Format Evolution</h4>
+                        <div class="content">
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Format</th>
+                                        <th>Era</th>
+                                        <th>Used By</th>
+                                        <th>Characteristics</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>a.out</strong></td>
+                                        <td>1970s</td>
+                                        <td>Early Unix</td>
+                                        <td>Simple, fixed layout, limited</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>COFF</strong></td>
+                                        <td>1980s</td>
+                                        <td>System V, early Windows</td>
+                                        <td>Sections, symbols, debug info</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>PE (Portable Executable)</strong></td>
+                                        <td>1993</td>
+                                        <td>Windows (.exe, .dll)</td>
+                                        <td>DOS stub, COFF-based, imports</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Mach-O</strong></td>
+                                        <td>1989</td>
+                                        <td>macOS, iOS</td>
+                                        <td>Fat binaries, LC commands</td>
+                                    </tr>
+                                    <tr class="table-success">
+                                        <td><strong>ELF</strong></td>
+                                        <td>1995</td>
+                                        <td>Linux, BSD, Solaris, etc.</td>
+                                        <td>Flexible, extensible, standard</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <p><strong>Real-World Analogy:</strong> Think of executable formats like book formats. A physical book, an ebook, and an audiobook all contain "The Lord of the Rings," but they're packaged differently. Each reader (Kindle, Audible, your eyes) expects a specific format. Similarly, Windows expects PE files, macOS expects Mach-O, and Linux expects ELF.</p>
+                    
+                    <h3 id="why-elf">Why ELF?</h3>
+                    
+                    <p>ELF (Executable and Linkable Format) became the standard for Unix-like systems because it solves real problems elegantly:</p>
+
+                    <pre><code class="language-c">/*
+ * ELF ADVANTAGES OVER OLDER FORMATS
+ * ==================================
+ * 
+ * 1. FLEXIBLE LAYOUT
+ *    ┌─────────────────────────────────────────────┐
+ *    │ Header can point anywhere in file           │
+ *    │ Sections/segments in any order              │
+ *    │ No fixed offsets -> easy to extend          │
+ *    └─────────────────────────────────────────────┘
+ * 
+ * 2. DUAL VIEW (Linking vs Execution)
+ *    ┌───────────────┬───────────────┐
+ *    │ LINK VIEW     │ EXEC VIEW     │
+ *    │ (Sections)    │ (Segments)    │
+ *    ├───────────────┼───────────────┤
+ *    │ .text         │ LOAD (RX)     │
+ *    │ .rodata       │               │
+ *    ├───────────────┼───────────────┤
+ *    │ .data         │ LOAD (RW)     │
+ *    │ .bss          │               │
+ *    └───────────────┴───────────────┘
+ * 
+ * 3. SUPPORTS EVERYTHING
+ *    - Static executables    (ET_EXEC)
+ *    - Relocatable objects   (ET_REL)
+ *    - Shared libraries      (ET_DYN)
+ *    - Core dumps            (ET_CORE)
+ *    - Multiple architectures (x86, ARM, MIPS, RISC-V, ...)
+ */</code></pre>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Two Views of ELF:</strong> ELF has separate "views"—the <strong>linking view</strong> (sections for compilers/linkers) and the <strong>execution view</strong> (segments for the OS loader). We only need the execution view to run programs. Segments tell us what to load where; sections are optional metadata for debuggers.
+                    </div>
+
+                    <p><strong>What You'll Build:</strong> By the end of this phase, you'll be able to compile a C program on your development machine, copy the resulting ELF binary to your OS's filesystem, and run it. Your homemade operating system will execute real compiled programs!</p>
+                </div>
+
+                <!-- ELF Structure Section -->
+                <div id="elf-structure" class="blog-content mt-5">
+                    <h2><i class="fas fa-sitemap me-2 text-teal"></i>ELF File Structure</h2>
+                    
+                    <p>An ELF file is like a well-organized filing cabinet. At the front is an index (the ELF header) that tells you where to find everything else. The file can contain program headers (for loading), section headers (for linking/debugging), and the actual code and data.</p>
+
+                    <pre><code class="language-c">/*
+ * ELF FILE LAYOUT
+ * ================
+ * 
+ * ┌───────────────────────────────────────────────────────────┐
+ * │                      ELF HEADER                           │
+ * │  Magic: 0x7F 'E' 'L' 'F'                                  │
+ * │  Entry point, header table offsets, flags                 │
+ * ├───────────────────────────────────────────────────────────┤
+ * │                   PROGRAM HEADERS                         │
+ * │  (Array of Elf32_Phdr structures)                         │
+ * │  Describe segments for loading into memory                │
+ * │  ┌─────────────────────────────────────────────────────┐  │
+ * │  │ PT_LOAD: .text + .rodata (RX) at 0x08048000        │  │
+ * │  │ PT_LOAD: .data + .bss (RW) at 0x0804C000           │  │
+ * │  │ PT_INTERP: /lib/ld-linux.so.2 (dynamic only)       │  │
+ * │  └─────────────────────────────────────────────────────┘  │
+ * ├───────────────────────────────────────────────────────────┤
+ * │                       .text                               │
+ * │  Executable code (your main(), functions, etc.)           │
+ * ├───────────────────────────────────────────────────────────┤
+ * │                      .rodata                              │
+ * │  Read-only data (string literals, constants)              │
+ * ├───────────────────────────────────────────────────────────┤
+ * │                       .data                               │
+ * │  Initialized global/static variables                      │
+ * ├───────────────────────────────────────────────────────────┤
+ * │                       .bss                                │
+ * │  Uninitialized globals (not stored, just size noted)      │
+ * ├───────────────────────────────────────────────────────────┤
+ * │                   SECTION HEADERS                         │
+ * │  (Array of Elf32_Shdr structures)                         │
+ * │  Metadata for linker, debugger, tools                     │
+ * └───────────────────────────────────────────────────────────┘
+ */</code></pre>
+                    
+                    <h3 id="elf-header">ELF Header</h3>
+                    
+                    <p>The ELF header is always at offset 0 in the file. It's exactly 52 bytes for 32-bit ELF. Every field has a purpose:</p>
+
+                    <pre><code class="language-c">/* ELF32 Header */
+typedef struct {
+    uint8_t  e_ident[16];   // Magic number and other info
+    uint16_t e_type;        // Object file type
+    uint16_t e_machine;     // Architecture
+    uint32_t e_version;     // Object file version
+    uint32_t e_entry;       // Entry point virtual address
+    uint32_t e_phoff;       // Program header table offset
+    uint32_t e_shoff;       // Section header table offset
+    uint32_t e_flags;       // Processor-specific flags
+    uint16_t e_ehsize;      // ELF header size
+    uint16_t e_phentsize;   // Program header table entry size
+    uint16_t e_phnum;       // Program header table entry count
+    uint16_t e_shentsize;   // Section header table entry size
+    uint16_t e_shnum;       // Section header table entry count
+    uint16_t e_shstrndx;    // Section name string table index
+} Elf32_Ehdr;
+
+// ELF magic number
+#define ELF_MAGIC 0x464C457F  // "\x7FELF" in little endian
+
+// e_type values
+#define ET_NONE   0  // No file type
+#define ET_REL    1  // Relocatable file
+#define ET_EXEC   2  // Executable file
+#define ET_DYN    3  // Shared object file
+#define ET_CORE   4  // Core file
+
+// e_machine for i386
+#define EM_386    3
+</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-microscope me-2"></i>ELF Header Field Breakdown</h4>
+                        <div class="content">
+                            <table class="table table-bordered table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Field</th>
+                                        <th>Size</th>
+                                        <th>Purpose</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>e_ident[0-3]</code></td>
+                                        <td>4</td>
+                                        <td>Magic: <code>0x7F</code>, <code>'E'</code>, <code>'L'</code>, <code>'F'</code></td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>e_ident[4]</code></td>
+                                        <td>1</td>
+                                        <td>Class: 1=32-bit, 2=64-bit</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>e_ident[5]</code></td>
+                                        <td>1</td>
+                                        <td>Endianness: 1=little, 2=big</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>e_type</code></td>
+                                        <td>2</td>
+                                        <td>File type: REL, EXEC, DYN, CORE</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>e_machine</code></td>
+                                        <td>2</td>
+                                        <td>Architecture: 3=i386, 62=AMD64</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>e_entry</code></td>
+                                        <td>4</td>
+                                        <td>Virtual address of entry point (<code>_start</code>)</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>e_phoff</code></td>
+                                        <td>4</td>
+                                        <td>Program header table file offset</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>e_phnum</code></td>
+                                        <td>2</td>
+                                        <td>Number of program headers</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <p><strong>Examining Real ELF Files:</strong> Use <code>readelf -h</code> on any Linux executable to see the header:</p>
+
+                    <pre><code class="language-bash"># Examine a real ELF header
+$ readelf -h /bin/ls
+
+ELF Header:
+  Magic:   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00 
+  Class:                             ELF64
+  Data:                              2's complement, little endian
+  Version:                           1 (current)
+  Type:                              DYN (Position-Independent Executable file)
+  Machine:                           Advanced Micro Devices X86-64
+  Entry point address:               0x6aa0
+  Start of program headers:          64 (bytes into file)
+  Number of program headers:         13
+  ...
+
+# View the raw bytes of an ELF header
+$ hexdump -C /bin/ls | head -4
+00000000  7f 45 4c 46 02 01 01 00  00 00 00 00 00 00 00 00  |.ELF............|
+00000010  03 00 3e 00 01 00 00 00  a0 6a 00 00 00 00 00 00  |..>......j......|
+00000020  40 00 00 00 00 00 00 00  88 2a 02 00 00 00 00 00  |@........*......|
+00000030  00 00 00 00 40 00 38 00  0d 00 40 00 1e 00 1d 00  |....@.8...@.....|</code></pre>
+                    
+                    <h3 id="program-headers">Program Headers</h3>
+                    
+                    <p>Program headers describe <strong>segments</strong>—contiguous chunks of the file to load into memory. For execution, we only care about <code>PT_LOAD</code> segments. Each header tells us:</p>
+                    
+                    <ul>
+                        <li>Where to find the segment in the file (<code>p_offset</code>)</li>
+                        <li>Where to load it in memory (<code>p_vaddr</code>)</li>
+                        <li>How many bytes to copy (<code>p_filesz</code>) and total memory needed (<code>p_memsz</code>)</li>
+                        <li>What permissions to set (<code>p_flags</code>: read, write, execute)</li>
+                    </ul>
+
+                    <pre><code class="language-c">/* ELF32 Program Header */
+typedef struct {
+    uint32_t p_type;    // Segment type
+    uint32_t p_offset;  // Segment file offset
+    uint32_t p_vaddr;   // Segment virtual address
+    uint32_t p_paddr;   // Segment physical address
+    uint32_t p_filesz;  // Segment size in file
+    uint32_t p_memsz;   // Segment size in memory
+    uint32_t p_flags;   // Segment flags
+    uint32_t p_align;   // Segment alignment
+} Elf32_Phdr;
+
+// Segment types
+#define PT_NULL    0  // Unused
+#define PT_LOAD    1  // Loadable segment
+#define PT_DYNAMIC 2  // Dynamic linking info
+#define PT_INTERP  3  // Interpreter pathname
+#define PT_NOTE    4  // Auxiliary information
+#define PT_PHDR    6  // Program header table
+
+// Segment flags
+#define PF_X  0x1  // Executable
+#define PF_W  0x2  // Writable
+#define PF_R  0x4  // Readable
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-key me-2"></i>
+                        <strong>The BSS Trick:</strong> When <code>p_memsz > p_filesz</code>, the extra bytes are <strong>BSS</strong> (uninitialized data). We don't store zeros in the file—we just note how many bytes to zero at load time. A program with a large uninitialized array doesn't bloat the executable file.
+                    </div>
+
+                    <pre><code class="language-c">/*
+ * UNDERSTANDING PT_LOAD SEGMENTS
+ * ===============================
+ * 
+ * File:                              Memory:
+ * ┌────────────────────┐            ┌────────────────────┐ 0x08048000
+ * │ .text (code)       │ ────────→  │ .text (RX)         │
+ * │ 0x1000 bytes       │            │ 0x1000 bytes       │
+ * ├────────────────────┤            ├────────────────────┤ 0x08049000
+ * │ .rodata (strings)  │ ────────→  │ .rodata (R-)       │
+ * │ 0x500 bytes        │            │ 0x500 bytes        │
+ * ├────────────────────┤            ├────────────────────┤
+ *                                   │ (padding to page)  │
+ *                                   ├────────────────────┤ 0x0804A000
+ * │ .data (init vars)  │ ────────→  │ .data (RW)         │
+ * │ 0x100 bytes        │            │ 0x100 bytes        │
+ * └────────────────────┘            ├────────────────────┤
+ *                                   │ .bss (zeroed)      │ ← Not in file!
+ *                                   │ 0x2000 bytes       │    Just zeroed
+ *                                   └────────────────────┘    at load time
+ * 
+ * Typical program has 2 PT_LOAD segments:
+ *   1. Code segment (RX): .text + .rodata
+ *   2. Data segment (RW): .data + .bss
+ */</code></pre>
+                    
+                    <h3 id="section-headers">Section Headers</h3>
+                    
+                    <p>Section headers provide a <strong>linking view</strong>—detailed information for linkers, debuggers, and tools. For loading executables, we can ignore them entirely! But they're useful to understand:</p>
+
+                    <pre><code class="language-c">/* ELF32 Section Header */
+typedef struct {
+    uint32_t sh_name;       // Section name (index into string table)
+    uint32_t sh_type;       // Section type
+    uint32_t sh_flags;      // Section flags
+    uint32_t sh_addr;       // Virtual address in memory
+    uint32_t sh_offset;     // Offset in file
+    uint32_t sh_size;       // Size of section
+    uint32_t sh_link;       // Link to another section
+    uint32_t sh_info;       // Additional information
+    uint32_t sh_addralign;  // Alignment
+    uint32_t sh_entsize;    // Entry size if section holds table
+} Elf32_Shdr;
+
+// Common section types
+#define SHT_NULL      0   // Inactive
+#define SHT_PROGBITS  1   // Program data (.text, .data, .rodata)
+#define SHT_SYMTAB    2   // Symbol table
+#define SHT_STRTAB    3   // String table
+#define SHT_NOBITS    8   // No file data (.bss)
+</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-list me-2"></i>Common ELF Sections</h4>
+                        <div class="content">
+                            <table class="table table-bordered table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Section</th>
+                                        <th>Type</th>
+                                        <th>Contents</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>.text</code></td>
+                                        <td>PROGBITS</td>
+                                        <td>Executable machine code</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.rodata</code></td>
+                                        <td>PROGBITS</td>
+                                        <td>Read-only data (strings, constants)</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.data</code></td>
+                                        <td>PROGBITS</td>
+                                        <td>Initialized writable data</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.bss</code></td>
+                                        <td>NOBITS</td>
+                                        <td>Uninitialized data (zeroed)</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.symtab</code></td>
+                                        <td>SYMTAB</td>
+                                        <td>Symbol table (functions, variables)</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.strtab</code></td>
+                                        <td>STRTAB</td>
+                                        <td>String table (symbol names)</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>.shstrtab</code></td>
+                                        <td>STRTAB</td>
+                                        <td>Section name strings</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <p><strong>Key Difference:</strong> Sections are for <strong>tools</strong> (compilers, linkers, debuggers). Segments are for the <strong>OS loader</strong>. An ELF file always has a header, usually has program headers (for executables), and optionally has section headers (can be stripped).</p>
+                </div>
+
+                <!-- Parsing Section -->
+                <div id="parsing" class="blog-content mt-5">
+                    <h2><i class="fas fa-search me-2 text-teal"></i>Parsing ELF Files</h2>
+                    
+                    <p>Before we can load a program, we need to verify it's a valid ELF file for our architecture. This is called <strong>validation</strong>. Then we iterate through the program headers to find loadable segments.</p>
+                    
+                    <h3 id="validation">Header Validation</h3>
+                    
+                    <p>ELF validation is crucial for security and stability. A malformed ELF file could crash the kernel or worse—be a deliberate attack. We check:</p>
+                    
+                    <ul>
+                        <li><strong>Magic number:</strong> First 4 bytes must be <code>0x7F, 'E', 'L', 'F'</code></li>
+                        <li><strong>Class:</strong> Must be 32-bit (we're on i386)</li>
+                        <li><strong>Endianness:</strong> Must be little-endian (x86 standard)</li>
+                        <li><strong>File type:</strong> Must be ET_EXEC (executable)</li>
+                        <li><strong>Architecture:</strong> Must be EM_386 (Intel 80386)</li>
+                    </ul>
+
+                    <pre><code class="language-c">/* Validate ELF header */
+bool elf_validate(Elf32_Ehdr* header) {
+    // Check magic number
+    if (*(uint32_t*)header->e_ident != ELF_MAGIC) {
+        return false;
+    }
+    
+    // Check class (32-bit)
+    if (header->e_ident[4] != 1) {  // ELFCLASS32
+        return false;
+    }
+    
+    // Check data encoding (little endian)
+    if (header->e_ident[5] != 1) {  // ELFDATA2LSB
+        return false;
+    }
+    
+    // Check file type (executable)
+    if (header->e_type != ET_EXEC) {
+        return false;
+    }
+    
+    // Check machine type (i386)
+    if (header->e_machine != EM_386) {
+        return false;
+    }
+    
+    return true;
+}
+</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-shield-alt me-2"></i>
+                        <strong>Security Note:</strong> In a real OS, you'd also check that the entry point falls within a valid segment, that addresses don't overflow, and that the file isn't truncated. Never trust user-supplied data!
+                    </div>
+                    
+                    <h3 id="segment-loading">Segment Loading</h3>
+                    
+                    <p>Once validated, we iterate through program headers looking for <code>PT_LOAD</code> segments. Each one needs memory allocated and data copied:</p>
+
+                    <pre><code class="language-c">/*
+ * SEGMENT LOADING PROCESS
+ * ========================
+ * 
+ * For each PT_LOAD segment:
+ * 
+ *    ELF File                          Process Memory
+ *    ┌──────────────────┐              ┌──────────────────┐
+ *    │                  │              │                  │
+ *    │  p_offset ───────┼──────┐       │                  │
+ *    │                  │      │       │                  │
+ *    ├──────────────────┤      │       ├──────────────────┤ p_vaddr
+ *    │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│      └──────>│▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│ ← memcpy
+ *    │▓▓▓ p_filesz ▓▓▓▓▓│              │▓▓▓ code/data ▓▓▓▓│
+ *    │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│              │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│
+ *    ├──────────────────┤              ├──────────────────┤ p_vaddr + p_filesz
+ *    │                  │              │░░░░░░░░░░░░░░░░░░│ ← memset 0
+ *    │  (not in file)   │              │░░░░ BSS ░░░░░░░░░│   (if memsz > filesz)
+ *    │                  │              │░░░░░░░░░░░░░░░░░░│
+ *    └──────────────────┘              └──────────────────┘ p_vaddr + p_memsz
+ * 
+ * Steps:
+ *   1. Calculate number of pages needed
+ *   2. Allocate physical frames
+ *   3. Map pages at p_vaddr with correct permissions
+ *   4. Copy p_filesz bytes from file
+ *   5. Zero remaining (p_memsz - p_filesz) bytes
+ */
+
+/* Process a single PT_LOAD segment */
+void load_segment(Elf32_Phdr* phdr, uint8_t* file_data, uint32_t* page_dir) {
+    uint32_t vaddr_start = phdr->p_vaddr & ~0xFFF;  // Page-align down
+    uint32_t vaddr_end = (phdr->p_vaddr + phdr->p_memsz + 0xFFF) & ~0xFFF;
+    
+    // Determine page flags
+    uint32_t flags = PAGE_PRESENT | PAGE_USER;
+    if (phdr->p_flags & PF_W) {
+        flags |= PAGE_WRITE;
+    }
+    // Note: x86 page tables don't have execute bit in 32-bit mode
+    // (NX bit requires PAE or 64-bit)
+    
+    // Allocate and map pages
+    for (uint32_t vaddr = vaddr_start; vaddr < vaddr_end; vaddr += 0x1000) {
+        uint32_t frame = alloc_frame();
+        map_page(page_dir, vaddr, frame, flags);
+    }
+    
+    // Copy segment data from file
+    memcpy((void*)phdr->p_vaddr, 
+           file_data + phdr->p_offset, 
+           phdr->p_filesz);
+    
+    // Zero BSS portion (memsz > filesz)
+    if (phdr->p_memsz > phdr->p_filesz) {
+        memset((void*)(phdr->p_vaddr + phdr->p_filesz), 
+               0, 
+               phdr->p_memsz - phdr->p_filesz);
+    }
+}
+</code></pre>
+                </div>
+
+                <!-- Loader Section -->
+                <div id="loader" class="blog-content mt-5">
+                    <h2><i class="fas fa-upload me-2 text-teal"></i>Program Loader</h2>
+                    
+                    <p>The program loader is the component that takes an ELF file and transforms it into a running process. It combines everything we've built: memory management (Phase 6), filesystem (Phase 7), and process infrastructure (Phase 8).</p>
+                    
+                    <h3 id="memory-setup">Memory Setup</h3>
+                    
+                    <p>Each process needs its own address space. We create a new page directory and map the ELF segments into it. The memory layout follows Unix conventions:</p>
+
+                    <pre><code class="language-c">/*
+ * TYPICAL USER PROCESS ADDRESS SPACE
+ * ====================================
+ * 
+ * 0xFFFFFFFF ┌─────────────────────────────────────┐
+ *            │                                     │
+ *            │     Kernel Space (Not Accessible    │
+ *            │     from User Mode - Page Fault)    │
+ *            │                                     │
+ * 0xC0000000 ├─────────────────────────────────────┤
+ *            │         (Reserved/Unmapped)         │
+ * 0xBFFFF000 ├─────────────────────────────────────┤
+ *            │     ↓ User Stack (grows down)       │
+ *            │     [argc][argv ptrs][env ptrs]     │
+ *            │     [actual strings...]             │
+ *            │                                     │
+ *            ├ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┤
+ *            │         (unmapped - stack guard)    │
+ *            │                                     │
+ *            │               ...                   │
+ *            │                                     │
+ *            ├ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┤
+ *            │     ↑ Heap (grows up via sbrk)      │
+ * 0x0804C000 ├─────────────────────────────────────┤
+ *            │          .bss (zeroed)              │
+ *            │          .data (RW)                 │
+ * 0x0804A000 ├─────────────────────────────────────┤
+ *            │          .rodata (R-)               │
+ *            │          .text (RX)                 │
+ * 0x08048000 ├─────────────────────────────────────┤ ← Typical start
+ *            │         (unmapped - null guard)     │
+ * 0x00000000 └─────────────────────────────────────┘
+ */
+
+/* Create address space for new process */
+uint32_t* create_user_address_space(void) {
+    // Allocate page directory
+    uint32_t* page_dir = (uint32_t*)alloc_frame();
+    memset(page_dir, 0, 4096);
+    
+    // Map kernel space (upper 1GB) - shared across all processes
+    // This lets syscalls work without switching page directories
+    for (int i = 768; i < 1024; i++) {
+        page_dir[i] = kernel_page_dir[i];
+    }
+    
+    // Self-reference for recursive mapping trick
+    page_dir[1023] = (uint32_t)page_dir | PAGE_PRESENT | PAGE_WRITE;
+    
+    return page_dir;
+}
+</code></pre>
+                    
+                    <h3 id="entry-point">Entry Point</h3>
+                    
+                    <p>The ELF header's <code>e_entry</code> field contains the virtual address where execution should begin. This is typically <code>_start</code> from crt0 (the C runtime startup code), which then calls <code>main()</code>.</p>
+
+                    <pre><code class="language-c">/* Load ELF executable */
+uint32_t elf_load(uint8_t* file_data, uint32_t* page_dir) {
+    Elf32_Ehdr* header = (Elf32_Ehdr*)file_data;
+    
+    if (!elf_validate(header)) {
+        return 0;
+    }
+    
+    // Get program header table
+    Elf32_Phdr* phdrs = (Elf32_Phdr*)(file_data + header->e_phoff);
+    
+    // Load each PT_LOAD segment
+    for (int i = 0; i < header->e_phnum; i++) {
+        Elf32_Phdr* phdr = &phdrs[i];
+        
+        if (phdr->p_type != PT_LOAD) {
+            continue;
+        }
+        
+        // Allocate pages for segment
+        uint32_t vaddr = phdr->p_vaddr;
+        uint32_t mem_size = phdr->p_memsz;
+        uint32_t file_size = phdr->p_filesz;
+        
+        // Map pages (user-accessible)
+        uint32_t flags = PAGE_PRESENT | PAGE_USER;
+        if (phdr->p_flags & PF_W) {
+            flags |= PAGE_WRITE;
+        }
+        
+        for (uint32_t addr = vaddr; addr < vaddr + mem_size; addr += 0x1000) {
+            uint32_t frame = alloc_frame();
+            map_page(page_dir, addr, frame, flags);
+        }
+        
+        // Copy segment data
+        memcpy((void*)vaddr, file_data + phdr->p_offset, file_size);
+        
+        // Zero remaining (BSS)
+        if (mem_size > file_size) {
+            memset((void*)(vaddr + file_size), 0, mem_size - file_size);
+        }
+    }
+    
+    return header->e_entry;  // Return entry point
+}
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Why 0x08048000?</strong> This traditional Linux start address leaves low memory unmapped as a "null pointer guard." Accessing <code>NULL</code> (address 0) causes a page fault instead of silently corrupting data—a helpful debugging feature!
+                    </div>
+                    
+                    <h3 id="stack-setup">Stack & Arguments</h3>
+                    
+                    <p>Before jumping to user code, we need to set up the stack with the expected arguments. C programs expect <code>argc</code>, <code>argv</code>, and <code>envp</code> at specific stack locations:</p>
+
+                    <pre><code class="language-c">/*
+ * USER STACK LAYOUT (at program start)
+ * =====================================
+ * 
+ * High addresses
+ *        ┌────────────────────────────────┐
+ *        │ "PATH=/bin:/usr/bin"           │ ← Environment strings
+ *        │ "/home/user/hello"             │ ← argv[1] string
+ *        │ "./hello"                      │ ← argv[0] string (program name)
+ *        ├────────────────────────────────┤
+ *        │ NULL                           │ ← End of envp[]
+ *        │ ptr to "PATH=..."              │ ← envp[0]
+ *        ├────────────────────────────────┤
+ *        │ NULL                           │ ← End of argv[]
+ *        │ ptr to "/home/user/hello"      │ ← argv[1]
+ *        │ ptr to "./hello"               │ ← argv[0]
+ *        ├────────────────────────────────┤
+ *   SP → │ argc = 2                       │ ← Stack pointer here at entry
+ *        └────────────────────────────────┘
+ * Low addresses
+ * 
+ * _start in crt0 does:
+ *   pop ecx        ; ecx = argc
+ *   mov esi, esp   ; esi = argv
+ *   push [esp+ecx*4+4]  ; envp
+ *   push esi       ; argv
+ *   push ecx       ; argc
+ *   call main
+ */
+
+/* Setup user stack with arguments */
+uint32_t setup_user_stack(uint32_t* page_dir, int argc, char** argv, char** envp) {
+    // Allocate stack pages (typically 8KB = 2 pages)
+    uint32_t stack_top = 0xC0000000;  // Below kernel space
+    uint32_t stack_base = stack_top - 0x2000;  // 8KB stack
+    
+    for (uint32_t addr = stack_base; addr < stack_top; addr += 0x1000) {
+        uint32_t frame = alloc_frame();
+        map_page(page_dir, addr, frame, PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
+    }
+    
+    uint32_t sp = stack_top;
+    
+    // Copy string data first (at top of stack)
+    // Then build pointer arrays
+    // Finally push argc
+    
+    // 1. Copy environment strings (if any)
+    int envc = 0;
+    uint32_t* env_ptrs = NULL;
+    if (envp) {
+        while (envp[envc]) envc++;
+        env_ptrs = kmalloc(sizeof(uint32_t) * (envc + 1));
+        for (int i = 0; i < envc; i++) {
+            size_t len = strlen(envp[i]) + 1;
+            sp -= len;
+            memcpy((void*)sp, envp[i], len);
+            env_ptrs[i] = sp;
+        }
+        env_ptrs[envc] = 0;  // NULL terminator
+    }
+    
+    // 2. Copy argument strings
+    uint32_t* argv_ptrs = kmalloc(sizeof(uint32_t) * (argc + 1));
+    for (int i = 0; i < argc; i++) {
+        size_t len = strlen(argv[i]) + 1;
+        sp -= len;
+        memcpy((void*)sp, argv[i], len);
+        argv_ptrs[i] = sp;
+    }
+    argv_ptrs[argc] = 0;  // NULL terminator
+    
+    // Align to 4 bytes
+    sp &= ~0x3;
+    
+    // 3. Push envp array
+    for (int i = envc; i >= 0; i--) {
+        sp -= 4;
+        *(uint32_t*)sp = env_ptrs ? env_ptrs[i] : 0;
+    }
+    
+    // 4. Push argv array
+    for (int i = argc; i >= 0; i--) {
+        sp -= 4;
+        *(uint32_t*)sp = argv_ptrs[i];
+    }
+    
+    // 5. Push argc
+    sp -= 4;
+    *(uint32_t*)sp = argc;
+    
+    kfree(argv_ptrs);
+    if (env_ptrs) kfree(env_ptrs);
+    
+    return sp;  // Return stack pointer for entry
+}
+</code></pre>
+                </div>
+
+                <!-- Exec Section -->
+                <div id="exec" class="blog-content mt-5">
+                    <h2><i class="fas fa-play me-2 text-teal"></i>Implementing exec()</h2>
+                    
+                    <p>The <code>exec()</code> system call replaces the current process's memory image with a new program. Unlike <code>fork()</code>, which creates a copy, <code>exec()</code> <strong>transforms</strong> the process—same PID, new program. This is the Unix model for running programs.</p>
+
+                    <pre><code class="language-c">/*
+ * THE EXEC SYSTEM CALL
+ * =====================
+ * 
+ * Before exec():
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │  Process 42 (/bin/shell)                                    │
+ * │  ┌─────────────┐ ┌─────────────┐ ┌─────────────────────────┐│
+ * │  │ shell code  │ │ shell data  │ │ stack: cmd="./hello"   ││
+ * │  └─────────────┘ └─────────────┘ └─────────────────────────┘│
+ * │  PID=42, PPID=1, files={stdin,stdout,stderr}                │
+ * └─────────────────────────────────────────────────────────────┘
+ *                            │
+ *                            │ exec("./hello", {"./hello", NULL})
+ *                            ▼
+ * After exec():
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │  Process 42 (./hello)  ← Same PID!                          │
+ * │  ┌─────────────┐ ┌─────────────┐ ┌─────────────────────────┐│
+ * │  │ hello code  │ │ hello data  │ │ stack: argc=1,argv      ││
+ * │  └─────────────┘ └─────────────┘ └─────────────────────────┘│
+ * │  PID=42, PPID=1, files={stdin,stdout,stderr} ← Files kept! │
+ * └─────────────────────────────────────────────────────────────┘
+ * 
+ * exec() keeps: PID, PPID, file descriptors, working directory
+ * exec() replaces: code, data, stack, heap, signal handlers
+ */</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Fork-Exec Pattern:</strong> Unix typically uses <code>fork()</code> + <code>exec()</code> together. The shell forks, the child calls exec to run the command, and the parent waits. This separation allows the child to set up redirections, pipes, and environment before exec.
+                    </div>
+
+                    <pre><code class="language-c">/* Execute a program */
+int sys_exec(const char* path, char* const argv[]) {
+    // Read file from filesystem
+    vfs_node_t* file = vfs_open(path);
+    if (!file) {
+        return -1;
+    }
+    
+    // Read entire file into memory
+    uint32_t size = file->length;
+    uint8_t* data = kmalloc(size);
+    vfs_read(file, 0, size, data);
+    vfs_close(file);
+    
+    // Create new address space
+    uint32_t* new_page_dir = create_page_directory();
+    
+    // Load ELF
+    uint32_t entry = elf_load(data, new_page_dir);
+    kfree(data);
+    
+    if (!entry) {
+        free_page_directory(new_page_dir);
+        return -1;
+    }
+    
+    // Setup user stack
+    uint32_t user_stack = 0xBFFFF000;
+    map_user_stack(new_page_dir, user_stack);
+    
+    // Copy arguments to user stack
+    int argc = count_args(argv);
+    uint32_t sp = setup_args(user_stack, argc, argv);
+    
+    // Switch address space
+    switch_page_directory(new_page_dir);
+    
+    // Jump to user mode
+    enter_user_mode(entry, sp);
+    
+    // Never reaches here
+    return 0;
+}
+</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-code me-2"></i>The exec() Family</h4>
+                        <div class="content">
+                            <table class="table table-bordered table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Function</th>
+                                        <th>Path Resolution</th>
+                                        <th>Arguments</th>
+                                        <th>Environment</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>execl</code></td>
+                                        <td>Exact path</td>
+                                        <td>List</td>
+                                        <td>Inherited</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>execv</code></td>
+                                        <td>Exact path</td>
+                                        <td>Array</td>
+                                        <td>Inherited</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>execle</code></td>
+                                        <td>Exact path</td>
+                                        <td>List</td>
+                                        <td>Explicit</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>execve</code></td>
+                                        <td>Exact path</td>
+                                        <td>Array</td>
+                                        <td>Explicit</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>execlp</code></td>
+                                        <td>Search PATH</td>
+                                        <td>List</td>
+                                        <td>Inherited</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>execvp</code></td>
+                                        <td>Search PATH</td>
+                                        <td>Array</td>
+                                        <td>Inherited</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <p class="small text-muted mb-0">l=list arguments, v=vector(array), e=explicit environment, p=PATH search</p>
+                        </div>
+                    </div>
+
+                    <p><strong>Error Handling:</strong> If exec() succeeds, it never returns—the new program simply starts running. If it fails (file not found, not executable, permission denied), it returns -1 and sets errno. The calling code must handle this:</p>
+
+                    <pre><code class="language-c">/* Example: Shell executing a command */
+void shell_exec_command(char* path, char** argv) {
+    pid_t pid = fork();
+    
+    if (pid == 0) {
+        // Child process
+        execv(path, argv);
+        
+        // If we get here, exec failed!
+        printf("exec failed: %s\n", strerror(errno));
+        exit(127);  // Standard exit code for "command not found"
+    } else if (pid > 0) {
+        // Parent: wait for child
+        int status;
+        waitpid(pid, &status, 0);
+        
+        if (WIFEXITED(status)) {
+            printf("Program exited with code %d\n", WEXITSTATUS(status));
+        }
+    } else {
+        // fork() failed
+        printf("fork failed\n");
+    }
+}
+</code></pre>
+                </div>
+
+                <!-- What You Can Build Section -->
+                <div id="build" class="blog-content mt-5">
+                    <h2><i class="fas fa-hammer me-2 text-teal"></i>What You Can Build</h2>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Phase 9 Project:</strong> An OS that runs real programs! Compile C programs with GCC, produce ELF binaries, and your kernel loads and executes them. You can now run programs written by others on your OS.
+                    </div>
+                    
+                    <h3>Project 1: Simple ELF Loader</h3>
+                    
+                    <p>Build a complete ELF loader that can run statically linked programs:</p>
+
+                    <pre><code class="language-c">/* Complete ELF loader implementation */
+#include "elf.h"
+#include "paging.h"
+#include "process.h"
+#include "fs.h"
+
+/* Main ELF loading function */
+int elf_exec(const char* path, int argc, char** argv) {
+    // 1. Read file from filesystem
+    vfs_node_t* file = vfs_open(path);
+    if (!file) {
+        return -ENOENT;
+    }
+    
+    // 2. Read ELF header
+    Elf32_Ehdr ehdr;
+    if (vfs_read(file, 0, sizeof(ehdr), &ehdr) != sizeof(ehdr)) {
+        vfs_close(file);
+        return -EIO;
+    }
+    
+    // 3. Validate header
+    if (!elf_validate(&ehdr)) {
+        vfs_close(file);
+        return -ENOEXEC;
+    }
+    
+    // 4. Create new address space
+    uint32_t* new_pd = create_user_address_space();
+    
+    // 5. Read and process program headers
+    size_t phdr_size = ehdr.e_phentsize * ehdr.e_phnum;
+    Elf32_Phdr* phdrs = kmalloc(phdr_size);
+    vfs_read(file, ehdr.e_phoff, phdr_size, phdrs);
+    
+    for (int i = 0; i < ehdr.e_phnum; i++) {
+        if (phdrs[i].p_type == PT_LOAD) {
+            // Read segment from file
+            uint8_t* segment_data = kmalloc(phdrs[i].p_filesz);
+            vfs_read(file, phdrs[i].p_offset, phdrs[i].p_filesz, segment_data);
+            
+            // Load segment into address space (temporarily switch PD)
+            load_segment(&phdrs[i], segment_data, new_pd);
+            
+            kfree(segment_data);
+        }
+    }
+    
+    kfree(phdrs);
+    vfs_close(file);
+    
+    // 6. Setup user stack with arguments
+    uint32_t user_sp = setup_user_stack(new_pd, argc, argv, NULL);
+    
+    // 7. Update current process
+    pcb_t* proc = get_current_process();
+    
+    // Free old address space
+    if (proc->page_directory != kernel_page_directory) {
+        free_page_directory(proc->page_directory);
+    }
+    
+    proc->page_directory = new_pd;
+    
+    // 8. Switch to new address space and jump to entry
+    switch_page_directory(new_pd);
+    enter_user_mode(ehdr.e_entry, user_sp);
+    
+    // Never reached
+    return 0;
+}
+</code></pre>
+
+                    <h3>Project 2: readelf Command</h3>
+                    
+                    <p>Build a user-space tool that displays ELF file information (like the Linux <code>readelf</code> command):</p>
+
+                    <pre><code class="language-c">/* User-space readelf utility */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include "elf.h"
+
+void print_elf_header(Elf32_Ehdr* ehdr) {
+    printf("ELF Header:\n");
+    printf("  Magic:   ");
+    for (int i = 0; i < 16; i++) {
+        printf("%02x ", ehdr->e_ident[i]);
+    }
+    printf("\n");
+    
+    printf("  Class:                             ");
+    printf("%s\n", ehdr->e_ident[4] == 1 ? "ELF32" : "ELF64");
+    
+    printf("  Data:                              ");
+    printf("%s\n", ehdr->e_ident[5] == 1 ? "little endian" : "big endian");
+    
+    const char* types[] = {"NONE", "REL", "EXEC", "DYN", "CORE"};
+    printf("  Type:                              %s\n", 
+           ehdr->e_type < 5 ? types[ehdr->e_type] : "UNKNOWN");
+    
+    printf("  Entry point address:               0x%x\n", ehdr->e_entry);
+    printf("  Start of program headers:          %d (bytes into file)\n", ehdr->e_phoff);
+    printf("  Number of program headers:         %d\n", ehdr->e_phnum);
+    printf("  Start of section headers:          %d (bytes into file)\n", ehdr->e_shoff);
+    printf("  Number of section headers:         %d\n", ehdr->e_shnum);
+}
+
+void print_program_headers(FILE* f, Elf32_Ehdr* ehdr) {
+    printf("\nProgram Headers:\n");
+    printf("  Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align\n");
+    
+    fseek(f, ehdr->e_phoff, SEEK_SET);
+    
+    const char* ptypes[] = {"NULL", "LOAD", "DYNAMIC", "INTERP", "NOTE", 
+                            "SHLIB", "PHDR", "TLS"};
+    
+    for (int i = 0; i < ehdr->e_phnum; i++) {
+        Elf32_Phdr phdr;
+        fread(&phdr, sizeof(phdr), 1, f);
+        
+        printf("  %-14s 0x%06x 0x%08x 0x%08x 0x%05x 0x%05x %c%c%c 0x%x\n",
+               phdr.p_type < 8 ? ptypes[phdr.p_type] : "UNKNOWN",
+               phdr.p_offset, phdr.p_vaddr, phdr.p_paddr,
+               phdr.p_filesz, phdr.p_memsz,
+               phdr.p_flags & PF_R ? 'R' : ' ',
+               phdr.p_flags & PF_W ? 'W' : ' ',
+               phdr.p_flags & PF_X ? 'E' : ' ',
+               phdr.p_align);
+    }
+}
+
+int main(int argc, char** argv) {
+    if (argc < 2) {
+        printf("Usage: readelf <elf-file>\n");
+        return 1;
+    }
+    
+    FILE* f = fopen(argv[1], "rb");
+    if (!f) {
+        printf("Cannot open %s\n", argv[1]);
+        return 1;
+    }
+    
+    Elf32_Ehdr ehdr;
+    fread(&ehdr, sizeof(ehdr), 1, f);
+    
+    if (*(uint32_t*)ehdr.e_ident != ELF_MAGIC) {
+        printf("Not an ELF file\n");
+        fclose(f);
+        return 1;
+    }
+    
+    print_elf_header(&ehdr);
+    print_program_headers(f, &ehdr);
+    
+    fclose(f);
+    return 0;
+}
+</code></pre>
+
+                    <h3>Project 3: Compile Test Programs</h3>
+                    
+                    <p>Create simple test programs to verify your loader works. Use a cross-compiler targeting your OS:</p>
+
+                    <pre><code class="language-bash"># Create a minimal C runtime (crt0.S)
+cat > crt0.S << 'EOF'
+.section .text
+.global _start
+
+_start:
+    # Standard System V i386 ABI startup
+    # Stack: [argc][argv0][argv1]...[NULL][envp0]...[NULL]
+    
+    xor %ebp, %ebp          # Clear frame pointer (end of stack trace)
+    
+    pop %ecx                # argc
+    mov %esp, %esi          # argv
+    
+    # Calculate envp = argv + (argc + 1) * 4
+    lea 4(%esi,%ecx,4), %edx
+    
+    # Align stack to 16 bytes (ABI requirement)
+    and $0xFFFFFFF0, %esp
+    
+    push %edx               # envp
+    push %esi               # argv
+    push %ecx               # argc
+    
+    call main               # Call main(argc, argv, envp)
+    
+    push %eax               # Exit code
+    call exit               # exit(return value)
+    
+    # If exit returns (shouldn't), halt
+    hlt
+EOF
+
+# Create a minimal syscall wrapper
+cat > syscalls.c << 'EOF'
+static inline int syscall1(int num, int arg1) {
+    int ret;
+    asm volatile ("int $0x80" : "=a"(ret) : "a"(num), "b"(arg1));
+    return ret;
+}
+
+static inline int syscall3(int num, int arg1, int arg2, int arg3) {
+    int ret;
+    asm volatile ("int $0x80" : "=a"(ret) : "a"(num), "b"(arg1), "c"(arg2), "d"(arg3));
+    return ret;
+}
+
+void exit(int status) {
+    syscall1(1, status);  // SYS_EXIT = 1
+    while(1);
+}
+
+int write(int fd, const void* buf, int count) {
+    return syscall3(4, fd, (int)buf, count);  // SYS_WRITE = 4
+}
+
+void puts(const char* s) {
+    int len = 0;
+    while (s[len]) len++;
+    write(1, s, len);
+    write(1, "\n", 1);
+}
+EOF
+
+# Write a test program
+cat > hello.c << 'EOF'
+void puts(const char* s);
+void exit(int status);
+
+int main(int argc, char** argv) {
+    puts("Hello from user space!");
+    
+    puts("Arguments:");
+    for (int i = 0; i < argc; i++) {
+        puts(argv[i]);
+    }
+    
+    return 42;  // Exit code
+}
+EOF
+
+# Compile everything (using cross-compiler)
+i686-elf-as -o crt0.o crt0.S
+i686-elf-gcc -c -ffreestanding -O2 -o syscalls.o syscalls.c
+i686-elf-gcc -c -ffreestanding -O2 -o hello.o hello.c
+
+# Link into static ELF executable
+i686-elf-ld -T link.ld -o hello crt0.o syscalls.o hello.o
+
+# Verify it's a valid ELF
+i686-elf-readelf -h hello</code></pre>
+
+                    <h3>Exercises</h3>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-dumbbell me-2"></i>Exercise 1: Dynamic Linker Stub</h4>
+                        <div class="content">
+                            <p><strong>Goal:</strong> Detect dynamically linked executables and print an error message.</p>
+                            <ol>
+                                <li>Check for <code>PT_INTERP</code> segment in program headers</li>
+                                <li>If found, read the interpreter path (e.g., "/lib/ld-linux.so.2")</li>
+                                <li>Return <code>-ENOEXEC</code> with message "Dynamic linking not supported"</li>
+                                <li>Later: Implement basic dynamic linking (Phase 10+)</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-dumbbell me-2"></i>Exercise 2: Shebang Support</h4>
+                        <div class="content">
+                            <p><strong>Goal:</strong> Allow scripts to be executed directly.</p>
+                            <ol>
+                                <li>Check if file starts with <code>#!</code> (shebang)</li>
+                                <li>Parse the interpreter path (e.g., <code>#!/bin/sh</code>)</li>
+                                <li>Recursively exec the interpreter with script as argument</li>
+                                <li>Handle arguments on shebang line (e.g., <code>#!/usr/bin/env python</code>)</li>
+                            </ol>
+                            <pre><code class="language-c">int exec_or_script(const char* path, char** argv) {
+    // Read first 2 bytes
+    char magic[2];
+    read_file(path, magic, 2);
+    
+    if (magic[0] == '#' && magic[1] == '!') {
+        // Parse interpreter from first line
+        char interp[256];
+        read_shebang_line(path, interp);
+        
+        // Build new argv: [interpreter, script, original args...]
+        char** new_argv = build_script_argv(interp, path, argv);
+        return elf_exec(interp, count_args(new_argv), new_argv);
+    }
+    
+    // Regular ELF
+    return elf_exec(path, count_args(argv), argv);
+}</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-dumbbell me-2"></i>Exercise 3: Position-Independent Executables (PIE)</h4>
+                        <div class="content">
+                            <p><strong>Goal:</strong> Support executables that can load at any address.</p>
+                            <ol>
+                                <li>Detect <code>ET_DYN</code> type (used for PIE and shared libs)</li>
+                                <li>Choose random base address (ASLR)</li>
+                                <li>Add base offset to all segment virtual addresses</li>
+                                <li>Adjust entry point by same offset</li>
+                            </ol>
+                            <p><strong>Why:</strong> Modern Linux compiles most programs as PIE for security (ASLR makes exploits harder).</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-dumbbell me-2"></i>Exercise 4: ELF Section Viewer</h4>
+                        <div class="content">
+                            <p><strong>Goal:</strong> Extend readelf to show section headers and symbol tables.</p>
+                            <ol>
+                                <li>Parse section header table at <code>e_shoff</code></li>
+                                <li>Read section name string table (<code>e_shstrndx</code>)</li>
+                                <li>Display section names, types, addresses, sizes</li>
+                                <li>Parse <code>.symtab</code> to show function/variable names</li>
+                            </ol>
+                            <pre><code class="language-bash"># Your readelf output should look like:
+$ readelf -S hello
+Section Headers:
+  [Nr] Name              Type            Addr     Off    Size
+  [ 0]                   NULL            00000000 000000 000000
+  [ 1] .text             PROGBITS        08048000 001000 000234
+  [ 2] .rodata           PROGBITS        08048234 001234 000048
+  [ 3] .data             PROGBITS        08049000 002000 000010
+  [ 4] .bss              NOBITS          08049010 002010 000100
+  [ 5] .symtab           SYMTAB          00000000 002010 000180
+  [ 6] .strtab           STRTAB          00000000 002190 000090</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Next Steps Section -->
+                <div id="next-steps" class="blog-content mt-5">
+                    <h2><i class="fas fa-arrow-right me-2 text-teal"></i>Next Steps</h2>
+                    
+                    <p>With program loading working, your OS can now run real compiled programs! But those programs need a way to interact with the system—they need a <strong>standard library</strong>. And we need a <strong>shell</strong> to manage running programs interactively.</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-graduation-cap me-2"></i>
+                        <strong>Phase 9 Achievements:</strong>
+                        <ul class="mb-0">
+                            <li>Understand the ELF executable format (headers, segments, sections)</li>
+                            <li>Parse and validate ELF files for security</li>
+                            <li>Load program segments into memory with correct permissions</li>
+                            <li>Setup user stack with argc, argv, envp</li>
+                            <li>Implement the exec() system call</li>
+                            <li>Run real GCC-compiled programs on your OS!</li>
+                        </ul>
+                    </div>
+
+                    <pre><code class="language-c">/*
+ * PHASE 10 PREVIEW: STANDARD LIBRARY & SHELL
+ * ===========================================
+ * 
+ * Right now, programs must use raw syscalls. Phase 10 adds:
+ * 
+ * 1. MINIMAL C LIBRARY
+ *    ┌────────────────────────────────────────────────────────┐
+ *    │ stdio.h:  printf(), scanf(), fopen(), fclose(), ...   │
+ *    │ stdlib.h: malloc(), free(), exit(), atoi(), ...       │
+ *    │ string.h: strlen(), strcpy(), memcpy(), strcmp(), ... │
+ *    │ unistd.h: read(), write(), fork(), exec(), pipe()     │
+ *    └────────────────────────────────────────────────────────┘
+ * 
+ * 2. COMMAND-LINE SHELL
+ *    ╔════════════════════════════════════════════════════════╗
+ *    ║  MyOS Shell v1.0                                       ║
+ *    ║  $ ls                                                  ║
+ *    ║  bin/  home/  etc/                                     ║
+ *    ║  $ cat hello.c                                         ║
+ *    ║  int main() { puts("Hello!"); return 0; }              ║
+ *    ║  $ ./hello                                             ║
+ *    ║  Hello!                                                ║
+ *    ║  $ echo $?                                             ║
+ *    ║  0                                                     ║
+ *    ╚════════════════════════════════════════════════════════╝
+ * 
+ * 3. BASIC UTILITIES
+ *    - ls: list directory contents
+ *    - cat: display file contents
+ *    - echo: print arguments
+ *    - cd: change directory
+ *    - pwd: print working directory
+ *    - ps: list processes
+ *    - kill: send signals
+ * 
+ * Your OS will finally feel like a real Unix system!
+ */</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-key me-2"></i>Key Takeaways</h4>
+                        <div class="content">
+                            <ol>
+                                <li><strong>ELF is elegant:</strong> A single format for executables, objects, and libraries. The dual-view design (linking vs execution) keeps it flexible.</li>
+                                <li><strong>Segments matter, sections optional:</strong> For loading programs, we only need program headers. Section headers are for tools.</li>
+                                <li><strong>BSS saves space:</strong> Zero-initialized data isn't stored in the file—we just note the size and zero it at load time.</li>
+                                <li><strong>exec() transforms:</strong> It replaces the current process image, keeping PID and file descriptors but creating a fresh address space.</li>
+                                <li><strong>Cross-compilation is key:</strong> You need a compiler that produces ELF binaries for your target architecture and links against your minimal C library.</li>
+                                <li><strong>Validation matters:</strong> Never trust user-supplied data. Validate every field, check bounds, verify addresses.</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 8: Processes & User Mode</h5>
+                            <p class="text-muted small mb-2">Review task switching, system calls, and user mode execution.</p>
+                            <a href="kernel-dev-phase-08-processes.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 10: Standard Library & Shell</h5>
+                            <p class="text-muted small mb-2">Build a minimal C library and implement a command-line shell.</p>
+                            <a href="kernel-dev-phase-10-stdlib-shell.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 11: 64-Bit Long Mode</h5>
+                            <p class="text-muted small mb-2">Upgrade to x86-64 architecture with 64-bit paging.</p>
+                            <a href="kernel-dev-phase-11-long-mode.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook">
+                            <i class="fab fa-facebook-f"></i>
+                        </a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter">
+                            <i class="fab fa-twitter"></i>
+                        </a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn">
+                            <i class="fab fa-linkedin-in"></i>
+                        </a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube">
+                            <i class="fab fa-youtube"></i>
+                        </a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram">
+                            <i class="fab fa-instagram"></i>
+                        </a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest">
+                            <i class="fab fa-pinterest-p"></i>
+                        </a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email">
+                            <i class="fas fa-envelope"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="bg-secondary">
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+    
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+    
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>

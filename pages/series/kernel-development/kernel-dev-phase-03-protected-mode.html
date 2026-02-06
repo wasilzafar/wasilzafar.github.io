@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kernel Development Series - Phase 3: Entering Protected Mode | Wasil Zafar</title>
+    <meta name="description" content="Learn how to transition from real mode to 32-bit protected mode: set up the GDT, enable the A20 line, and start running C code in your kernel.">
+    <meta name="keywords" content="kernel development, protected mode, GDT, Global Descriptor Table, A20 line, x86 architecture, OS development, C runtime, 32-bit mode">
+    <meta name="author" content="Wasil Zafar">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Kernel Development Series - Phase 3: Entering Protected Mode">
+    <meta property="og:description" content="Learn how to transition from real mode to 32-bit protected mode: set up the GDT, enable the A20 line, and start running C code in your kernel.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://wasilzafar.com/pages/series/kernel-development/kernel-dev-phase-03-protected-mode.html">
+    <meta property="og:image" content="https://wasilzafar.com/images/og-kernel-dev.png">
+    <meta property="article:published_time" content="2026-02-06">
+    <meta property="article:author" content="Wasil Zafar">
+    <meta property="article:section" content="Technology">
+
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+    
+    <!-- Google Consent Mode v2 -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('consent', 'default', {
+        'ad_storage': 'denied',
+        'ad_user_data': 'denied',
+        'ad_personalization': 'denied',
+        'analytics_storage': 'denied',
+        'wait_for_update': 500
+      });
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="../../../images/favicon_io/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="../../../css/main.css">
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. 
+                    By clicking "Accept All", you consent to our use of cookies. See our 
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a> 
+                    for more information.
+                </p>
+                
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#about">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#skills">Skills</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#certifications">Certifications</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#interests">Interests</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">Phase 3: Entering Protected Mode</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>February 6, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>25 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Transition from 16-bit real mode to 32-bit protected mode, set up the GDT, enable the A20 line, and start writing C code for your kernel.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation Overlay -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#introduction" onclick="closeNav()">Introduction</a>
+                <ul>
+                    <li><a href="#why-protected-mode" onclick="closeNav()">Why Protected Mode?</a></li>
+                    <li><a href="#mode-comparison" onclick="closeNav()">Real vs Protected Mode</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#gdt" onclick="closeNav()">Global Descriptor Table</a>
+                <ul>
+                    <li><a href="#gdt-structure" onclick="closeNav()">GDT Structure</a></li>
+                    <li><a href="#segment-descriptors" onclick="closeNav()">Segment Descriptors</a></li>
+                    <li><a href="#gdt-implementation" onclick="closeNav()">GDT Implementation</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#segments" onclick="closeNav()">Segments</a>
+                <ul>
+                    <li><a href="#code-segment" onclick="closeNav()">Code Segment</a></li>
+                    <li><a href="#data-segment" onclick="closeNav()">Data Segment</a></li>
+                    <li><a href="#stack-segment" onclick="closeNav()">Stack Segment</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#a20-line" onclick="closeNav()">A20 Line Gate</a>
+                <ul>
+                    <li><a href="#a20-history" onclick="closeNav()">Historical Context</a></li>
+                    <li><a href="#a20-methods" onclick="closeNav()">Enabling Methods</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#mode-switch" onclick="closeNav()">Switching to 32-Bit Mode</a>
+                <ul>
+                    <li><a href="#cr0-register" onclick="closeNav()">CR0 Register</a></li>
+                    <li><a href="#far-jump" onclick="closeNav()">The Far Jump</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#c-runtime" onclick="closeNav()">C Runtime Setup</a>
+                <ul>
+                    <li><a href="#linker-script" onclick="closeNav()">Linker Script</a></li>
+                    <li><a href="#calling-c" onclick="closeNav()">Calling C Code</a></li>
+                    <li><a href="#stack-setup" onclick="closeNav()">Stack Setup</a></li>
+                </ul>
+            </li>
+            <li><a href="#build" onclick="closeNav()">What You Can Build</a></li>
+            <li><a href="#next-steps" onclick="closeNav()">Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- Introduction -->
+                <div id="introduction" class="blog-content">
+                    <h2><i class="fas fa-shield-alt me-2 text-teal"></i>Introduction: Breaking Free from Real Mode</h2>
+                    
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-flag me-2"></i>
+                        <strong>Phase 3 Goals:</strong> By the end of this phase, you'll have transitioned your bootloader from 16-bit real mode to 32-bit protected mode, set up proper memory segmentation, and successfully called your first C function in kernel space.
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-map-signs me-2"></i>Complete Series Navigation</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-2">18-Part Series</span>
+                            <span class="badge bg-crimson">OS Development Mastery</span>
+                        </div>
+                        <div class="content">
+                            <ol>
+                                <li><a href="kernel-dev-phase-00-orientation.html">Phase 0: Orientation & Big Picture</a> - OS fundamentals, kernel architectures, learning path</li>
+                                <li><a href="kernel-dev-phase-01-boot-process.html">Phase 1: How a Computer Starts</a> - BIOS/UEFI, boot sequence, dev environment</li>
+                                <li><a href="kernel-dev-phase-02-real-mode.html">Phase 2: Real Mode - First Steps</a> - Real mode, bootloader, BIOS interrupts</li>
+                                <li><strong>Phase 3: Entering Protected Mode (This Guide)</strong> - GDT, 32-bit mode, C code execution</li>
+                                <li><a href="kernel-dev-phase-04-display-input.html">Phase 4: Display, Input & Output</a> - VGA text mode, keyboard handling</li>
+                                <li><a href="kernel-dev-phase-05-interrupts.html">Phase 5: Interrupts & CPU Control</a> - IDT, ISRs, PIC programming</li>
+                                <li><a href="kernel-dev-phase-06-memory.html">Phase 6: Memory Management</a> - Paging, virtual memory, heap allocator</li>
+                                <li><a href="kernel-dev-phase-07-filesystem.html">Phase 7: Disk Access & Filesystems</a> - Block devices, FAT, VFS layer</li>
+                                <li><a href="kernel-dev-phase-08-processes.html">Phase 8: Processes & User Mode</a> - Task switching, system calls, user space</li>
+                                <li><a href="kernel-dev-phase-09-elf.html">Phase 9: ELF Loading & Executables</a> - ELF format, program loading</li>
+                                <li><a href="kernel-dev-phase-10-stdlib-shell.html">Phase 10: Standard Library & Shell</a> - C library, command-line shell</li>
+                                <li><a href="kernel-dev-phase-11-long-mode.html">Phase 11: 64-Bit Long Mode</a> - x86-64, 64-bit paging, modern architecture</li>
+                                <li><a href="kernel-dev-phase-12-uefi.html">Phase 12: Modern Booting with UEFI</a> - UEFI boot services, memory maps</li>
+                                <li><a href="kernel-dev-phase-13-graphics.html">Phase 13: Graphics & GUI Systems</a> - Framebuffer, windowing, drawing</li>
+                                <li><a href="kernel-dev-phase-14-input-timing.html">Phase 14: Advanced Input & Timing</a> - Mouse, high-precision timers</li>
+                                <li><a href="kernel-dev-phase-15-hardware-drivers.html">Phase 15: Hardware Discovery & Drivers</a> - PCI, device drivers, NVMe</li>
+                                <li><a href="kernel-dev-phase-16-performance.html">Phase 16: Performance & Optimization</a> - Caching, scheduler tuning</li>
+                                <li><a href="kernel-dev-phase-17-security.html">Phase 17: Stability, Security & Finishing</a> - Debugging, hardening, completion</li>
+                            </ol>
+                        </div>
+                    </div>
+                    
+                    <p>In Phase 2, you mastered real mode - the CPU's 16-bit compatibility mode with direct hardware access but severe limitations. Now it's time to <strong>break free</strong>. Protected mode is the gateway to modern operating system development: 32-bit computing, gigabytes of memory, hardware-enforced security, and the ability to write your kernel in C.</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-home me-2"></i>Protected Mode Analogy: Moving to a Modern House</h4>
+                        <div class="content">
+                            <p>Real mode is like living in a single-room cabin where everything is in one space - no privacy, no separation, and if something catches fire, you lose everything.</p>
+                            <p class="mb-0">Protected mode is like moving to a <strong>modern house with separate rooms</strong>:</p>
+                            <ul class="mb-0">
+                                <li><strong>Room doors (memory protection)</strong> - Each room (process) has walls and doors</li>
+                                <li><strong>Security system (privilege rings)</strong> - Only the homeowner (kernel) has master keys</li>
+                                <li><strong>Multiple floors (privilege levels)</strong> - Ring 0 is the penthouse, Ring 3 is the lobby</li>
+                                <li><strong>Bigger property (4GB address space)</strong> - Room for a mansion, not just a cabin</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Key Insight:</strong> Protected mode isn't just about more memory. It gives us hardware-enforced memory protection, privilege levels (rings), and the ability to use high-level languages like C effectively. It's the foundation for all modern operating systems.
+                    </div>
+
+                    <h3 id="why-protected-mode">Why Protected Mode?</h3>
+                    
+                    <p>Every modern operating system - Windows, Linux, macOS - runs in protected mode (or its 64-bit successor, long mode). Here's why:</p>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="highlight-box">
+                                <h5><i class="fas fa-expand me-2 text-teal"></i>Memory Freedom</h5>
+                                <ul class="mb-0">
+                                    <li><strong>32-bit addresses</strong>: Access up to 4GB RAM (vs 1MB)</li>
+                                    <li><strong>Flat memory model</strong>: No more segment:offset math</li>
+                                    <li><strong>Virtual memory ready</strong>: Foundation for paging</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="highlight-box">
+                                <h5><i class="fas fa-shield-alt me-2 text-teal"></i>Hardware Protection</h5>
+                                <ul class="mb-0">
+                                    <li><strong>Ring 0-3</strong>: Kernel vs user privileges</li>
+                                    <li><strong>Segment limits</strong>: Bounds checking</li>
+                                    <li><strong>Page-level protection</strong>: Read/write/execute</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h3 id="mode-comparison">Real vs Protected Mode</h3>
+
+                    <table class="table table-bordered mt-3">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Feature</th>
+                                <th>Real Mode</th>
+                                <th>Protected Mode</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Bit Width</strong></td>
+                                <td>16-bit registers</td>
+                                <td>32-bit registers (EAX, EBX, etc.)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Address Space</strong></td>
+                                <td>1MB (20-bit)</td>
+                                <td>4GB (32-bit)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Memory Model</strong></td>
+                                <td>Segmented (segment:offset)</td>
+                                <td>Flat (or segmented with descriptors)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Protection</strong></td>
+                                <td>None - any code can access anything</td>
+                                <td>Hardware enforced - rings 0-3</td>
+                            </tr>
+                            <tr>
+                                <td><strong>BIOS Access</strong></td>
+                                <td>Direct via INT instructions</td>
+                                <td>Not available (must use drivers)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Segment Registers</strong></td>
+                                <td>Contain actual addresses</td>
+                                <td>Contain selectors into GDT</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Multitasking</strong></td>
+                                <td>Software only (cooperative)</td>
+                                <td>Hardware-assisted (TSS)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Point of No Return:</strong> Once you enter protected mode, you <em>lose access to BIOS interrupts</em>. That's why we did all our BIOS-based disk loading in Phase 2. In protected mode, you must write your own drivers or use BIOS services through a V86 mode wrapper (complex!).
+                    </div>
+                </div>
+
+                <!-- GDT Section -->
+                <div id="gdt" class="blog-content mt-5">
+                    <h2><i class="fas fa-table me-2 text-teal"></i>Global Descriptor Table (GDT)</h2>
+                    
+                    <p>The GDT is the <strong>heart of protected mode</strong>. It's a table in memory that defines memory segments - their base address, size, permissions, and type. Before switching to protected mode, you must set up at least a minimal GDT.</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-book me-2"></i>GDT Analogy: Building Access Control</h4>
+                        <div class="content">
+                            <p>Think of the GDT as a <strong>security desk in a large building</strong>:</p>
+                            <ul class="mb-0">
+                                <li>Each "segment" is like a <strong>floor pass</strong> defining which floors you can access</li>
+                                <li>The <strong>base address</strong> is which floor the pass starts from</li>
+                                <li>The <strong>limit</strong> is how many floors you can access</li>
+                                <li>The <strong>access rights</strong> determine if you can read, write, or execute</li>
+                                <li>The <strong>privilege level</strong> is like employee vs. guest badge</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <h3 id="gdt-structure">GDT Structure</h3>
+                    
+                    <p>The GDT is an array of 8-byte entries called <strong>segment descriptors</strong>. The CPU locates the GDT using a special register:</p>
+
+<pre><code class="language-plaintext">GDT POINTER (GDTR - 6 bytes)
+═══════════════════════════════════════════════════════════════
+┌────────────────────────────────────────────────────────────┐
+│  Size (16-bit)  │       Linear Address (32-bit)            │
+│   (Limit - 1)   │      (Where GDT starts in memory)        │
+└────────────────────────────────────────────────────────────┘
+      Offset 0          Offset 2-5
+
+GLOBAL DESCRIPTOR TABLE LAYOUT
+═══════════════════════════════════════════════════════════════
+┌──────────────────────────────┐
+│  Null Descriptor (8 bytes)   │  ← Entry 0: MUST be all zeros!
+├──────────────────────────────┤
+│  Code Segment (8 bytes)      │  ← Entry 1: 0x08 selector
+├──────────────────────────────┤
+│  Data Segment (8 bytes)      │  ← Entry 2: 0x10 selector
+├──────────────────────────────┤
+│  (Optional more entries)     │
+└──────────────────────────────┘</code></pre>
+                    
+                    <h3 id="segment-descriptors">Segment Descriptors</h3>
+                    
+                    <p>Each segment descriptor is 8 bytes packed with information. This is one of the most complex structures in x86:</p>
+
+<pre><code class="language-plaintext">SEGMENT DESCRIPTOR FORMAT (8 bytes = 64 bits)
+═══════════════════════════════════════════════════════════════
+
+Byte 7    Byte 6    Byte 5    Byte 4    Byte 3-2   Byte 1-0
+┌────────┬────────┬────────┬────────┬──────────┬───────────┐
+│Base    │Flags + │Access  │Base    │Base      │Limit      │
+│[31:24] │Limit   │Byte    │[23:16] │[15:0]    │[15:0]     │
+│        │[19:16] │        │        │          │           │
+└────────┴────────┴────────┴────────┴──────────┴───────────┘
+
+ACCESS BYTE (Byte 5)
+═══════════════════════════════════════════════════════════════
+Bit 7   Bit 6-5   Bit 4    Bit 3    Bit 2    Bit 1    Bit 0
+┌─────┬─────────┬───────┬────────┬────────┬────────┬────────┐
+│  P  │   DPL   │   S   │   E    │   DC   │   RW   │   A    │
+└─────┴─────────┴───────┴────────┴────────┴────────┴────────┘
+
+P  = Present (1 = segment is valid)
+DPL = Descriptor Privilege Level (0=highest, 3=lowest)
+S  = Descriptor type (1=code/data, 0=system)
+E  = Executable (1=code segment, 0=data segment)
+DC = Direction/Conforming
+RW = Read/Write (code: readable, data: writable)
+A  = Accessed (CPU sets this when segment is accessed)
+
+FLAGS (Byte 6, upper nibble)
+═══════════════════════════════════════════════════════════════
+Bit 7    Bit 6    Bit 5    Bit 4
+┌──────┬────────┬────────┬────────┐
+│  G   │  D/B   │   L    │  AVL   │
+└──────┴────────┴────────┴────────┘
+
+G   = Granularity (0=byte, 1=4KB pages)
+D/B = Default operation size (0=16-bit, 1=32-bit)
+L   = Long mode (1=64-bit, only for code segments)
+AVL = Available for system software</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-calculator me-2"></i>
+                        <strong>Example: Code Segment Access Byte</strong><br>
+                        <code>10011010b</code> means: Present=1, DPL=0 (Ring 0), Type=1 (code/data), Exec=1 (code), DC=0, RW=1 (readable), A=0
+                    </div>
+
+                    <h3 id="gdt-implementation">Complete GDT Implementation</h3>
+                    
+                    <p>Here's a complete, well-documented GDT for protected mode:</p>
+
+                    <pre><code class="language-nasm">; ═══════════════════════════════════════════════════════════════
+; gdt.asm - Global Descriptor Table for Protected Mode
+; ═══════════════════════════════════════════════════════════════
+
+; Define segment selectors (offsets into GDT)
+CODE_SEG equ gdt_code - gdt_start   ; 0x08
+DATA_SEG equ gdt_data - gdt_start   ; 0x10
+
+gdt_start:
+; ─────────────────────────────────────────────────────────────────
+; Null Descriptor (REQUIRED - CPU checks for this)
+; ─────────────────────────────────────────────────────────────────
+gdt_null:
+    dq 0x0                          ; 8 bytes of zeros
+    
+; ─────────────────────────────────────────────────────────────────
+; Code Segment Descriptor
+; Base = 0x00000000, Limit = 0xFFFFF (4GB with granularity)
+; Access: Present, Ring 0, Code, Execute/Read
+; Flags: 4KB granularity, 32-bit
+; ─────────────────────────────────────────────────────────────────
+gdt_code:
+    dw 0xFFFF               ; Limit (bits 0-15)
+    dw 0x0000               ; Base (bits 0-15)
+    db 0x00                 ; Base (bits 16-23)
+    db 10011010b            ; Access byte:
+                            ;   1 = Present
+                            ;   00 = Ring 0
+                            ;   1 = Code/Data segment
+                            ;   1 = Executable (code)
+                            ;   0 = Non-conforming
+                            ;   1 = Readable
+                            ;   0 = Accessed (CPU sets)
+    db 11001111b            ; Flags + Limit (bits 16-19):
+                            ;   1 = 4KB granularity
+                            ;   1 = 32-bit segment
+                            ;   0 = Not 64-bit
+                            ;   0 = Available
+                            ;   1111 = Limit bits 16-19
+    db 0x00                 ; Base (bits 24-31)
+    
+; ─────────────────────────────────────────────────────────────────
+; Data Segment Descriptor
+; Base = 0x00000000, Limit = 0xFFFFF (4GB with granularity)
+; Access: Present, Ring 0, Data, Read/Write
+; Flags: 4KB granularity, 32-bit
+; ─────────────────────────────────────────────────────────────────
+gdt_data:
+    dw 0xFFFF               ; Limit (bits 0-15)
+    dw 0x0000               ; Base (bits 0-15)
+    db 0x00                 ; Base (bits 16-23)
+    db 10010010b            ; Access byte:
+                            ;   1 = Present
+                            ;   00 = Ring 0
+                            ;   1 = Code/Data segment
+                            ;   0 = Data (not executable)
+                            ;   0 = Grows up
+                            ;   1 = Writable
+                            ;   0 = Accessed
+    db 11001111b            ; Flags + Limit (bits 16-19)
+    db 0x00                 ; Base (bits 24-31)
+
+gdt_end:
+
+; ─────────────────────────────────────────────────────────────────
+; GDT Descriptor (pointer loaded into GDTR)
+; ─────────────────────────────────────────────────────────────────
+gdt_descriptor:
+    dw gdt_end - gdt_start - 1      ; Size (limit = size - 1)
+    dd gdt_start                    ; Linear address of GDT
+</code></pre>
+                    
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Flat Memory Model:</strong> Both our code and data segments have base=0 and limit=4GB. This gives us a "flat" memory model where segment:offset = linear address. Modern operating systems use this approach and rely on paging for protection instead of segmentation.
+                    </div>
+                </div>
+
+                <!-- Segments Section -->
+                <div id="segments" class="blog-content mt-5">
+                    <h2><i class="fas fa-puzzle-piece me-2 text-teal"></i>Memory Segments in Protected Mode</h2>
+                    
+                    <p>In protected mode, segment registers don't hold addresses directly. Instead, they hold <strong>selectors</strong> - indexes into the GDT that point to segment descriptors.</p>
+
+<pre><code class="language-plaintext">SEGMENT SELECTOR FORMAT (16 bits)
+═══════════════════════════════════════════════════════════════
+Bits 15-3    Bit 2    Bits 1-0
+┌───────────┬───────┬──────────┐
+│   Index   │  TI   │   RPL    │
+└───────────┴───────┴──────────┘
+
+Index = Entry number in GDT (bits 3-15)
+TI    = Table Indicator (0=GDT, 1=LDT)
+RPL   = Requested Privilege Level (0-3)
+
+EXAMPLES:
+───────────────────────────────────────────────────────────────
+0x08 = 0000 0000 0000 1000b = Index 1, GDT, Ring 0 → Code segment
+0x10 = 0000 0000 0001 0000b = Index 2, GDT, Ring 0 → Data segment
+0x1B = 0000 0000 0001 1011b = Index 3, GDT, Ring 3 → User code</code></pre>
+                    
+                    <h3 id="code-segment">Code Segment (CS)</h3>
+                    
+                    <p>The code segment defines where executable code can run. In protected mode, the processor checks that every instruction fetch comes from an executable segment:</p>
+
+<pre><code class="language-nasm">; After entering protected mode, CS must be loaded with a far jump
+; This flushes the CPU's prefetch queue and loads the new selector
+
+; Jump to 32-bit code using code segment selector
+jmp CODE_SEG:protected_mode_entry
+
+[bits 32]
+protected_mode_entry:
+    ; Now running in 32-bit protected mode!
+    ; CS automatically loaded with CODE_SEG (0x08)
+    
+    ; The code segment descriptor specifies:
+    ; - Base address: 0x00000000
+    ; - Limit: 0xFFFFF × 4KB = 4GB
+    ; - Execute and read permissions
+    ; - Ring 0 (kernel mode)</code></pre>
+                    
+                    <h3 id="data-segment">Data Segment (DS, ES, FS, GS)</h3>
+                    
+                    <p>Data segments control access to memory for reading and writing data:</p>
+
+<pre><code class="language-nasm">[bits 32]
+protected_mode_entry:
+    ; Load data segment selector into all data segment registers
+    mov ax, DATA_SEG        ; DATA_SEG = 0x10
+    mov ds, ax              ; Data segment
+    mov es, ax              ; Extra segment
+    mov fs, ax              ; F segment (386+)
+    mov gs, ax              ; G segment (386+)
+    
+    ; Now we can access memory using DS:
+    mov eax, [0x100000]     ; Read from 1MB mark
+    mov [0xB8000], eax      ; Write to video memory
+    
+    ; With flat model (base=0), addresses are linear:
+    ; DS:0x100000 = 0x00000000 + 0x100000 = 0x100000</code></pre>
+                    
+                    <h3 id="stack-segment">Stack Segment (SS)</h3>
+                    
+                    <p>The stack segment controls stack operations (PUSH, POP, CALL, RET):</p>
+
+<pre><code class="language-nasm">[bits 32]
+setup_stack:
+    ; Load stack segment selector
+    mov ax, DATA_SEG        ; Use same segment as data
+    mov ss, ax              ; Stack segment
+    
+    ; Set up stack pointer
+    ; Stack typically placed at high memory
+    mov esp, 0x90000        ; Stack top at 576KB
+    mov ebp, esp            ; Base pointer = stack pointer
+    
+    ; Now we can use the stack:
+    push eax                ; Push register
+    push dword 0x12345678   ; Push immediate
+    call some_function      ; CALL uses stack
+    pop eax                 ; Pop value
+    
+    ; Stack grows DOWN: high addresses → low addresses
+    ; PUSH: ESP decreases by 4, then value stored at [ESP]
+    ; POP:  Value loaded from [ESP], then ESP increases by 4</code></pre>
+
+<pre><code class="language-plaintext">STACK LAYOUT (after some operations)
+═══════════════════════════════════════════════════════════════
+                    High Memory
+    0x90000     ┌─────────────────────┐ ← Initial ESP, EBP
+                │ (unused)            │
+    0x8FFFC     ├─────────────────────┤ ← ESP after PUSH dword
+                │ Pushed Value        │
+    0x8FFF8     ├─────────────────────┤ ← ESP after CALL
+                │ Return Address      │
+                ├─────────────────────┤
+                │ Function's locals   │
+                ├─────────────────────┤ ← Current ESP in function
+                │ ...                 │
+                    Low Memory</code></pre>
+                </div>
+
+                <!-- A20 Line Section -->
+                <div id="a20-line" class="blog-content mt-5">
+                    <h2><i class="fas fa-key me-2 text-teal"></i>The A20 Line Gate</h2>
+                    
+                    <p>Before you can access memory above 1MB, you must enable the <strong>A20 line</strong>. This is one of the strangest quirks in x86 history!</p>
+                    
+                    <h3 id="a20-history">Historical Context: A Compatibility Hack</h3>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-history me-2"></i>The Story of A20</h4>
+                        <div class="content">
+                            <p>In the early 1980s, some DOS programs relied on a <strong>bug</strong> in the 8086:</p>
+                            <ul>
+                                <li>The 8086 had 20 address lines (A0-A19) = 1MB addressable</li>
+                                <li>Addresses that wrapped around (e.g., 0xFFFF:0x0010 = 0x100000) would wrap to 0x00000</li>
+                                <li>Some programs <em>depended</em> on this wraparound behavior!</li>
+                            </ul>
+                            <p class="mb-0">When the 80286 introduced 24 address lines (A0-A23), IBM couldn't break old software. Their solution? <strong>A physical gate on the A20 line</strong> that could force address bit 20 to zero, preserving the wraparound behavior. This gate was controlled through... the keyboard controller! 🤦</p>
+                        </div>
+                    </div>
+
+<pre><code class="language-plaintext">A20 LINE EFFECT
+═══════════════════════════════════════════════════════════════
+Memory Address      With A20 Disabled    With A20 Enabled
+───────────────────────────────────────────────────────────────
+0x000000-0x0FFFFF   Normal access        Normal access
+0x100000            Wraps to 0x000000!   Accesses 0x100000
+0x100001            Wraps to 0x000001!   Accesses 0x100001
+0x1FFFFF            Wraps to 0x0FFFFF!   Accesses 0x1FFFFF
+
+Without A20 enabled, you can only use odd megabytes:
+0-1MB, 2-3MB, 4-5MB... (even megabytes wrap to 0-1MB)</code></pre>
+                    
+                    <h3 id="a20-methods">Methods to Enable A20</h3>
+                    
+                    <p>There are several ways to enable A20. You should try them in order of speed/reliability:</p>
+
+                    <p><strong>Method 1: BIOS Function (Simplest)</strong></p>
+
+<pre><code class="language-nasm">; Try BIOS INT 15h first (fastest if supported)
+enable_a20_bios:
+    mov ax, 0x2401          ; A20 enable function
+    int 0x15
+    jnc .success            ; CF=0 means success
+    ; Fall through to next method if failed
+.success:
+    ret</code></pre>
+
+                    <p><strong>Method 2: Fast A20 (System Port - Works on Most Systems)</strong></p>
+
+<pre><code class="language-nasm">; Fast A20 via System Control Port A (0x92)
+; WARNING: Can cause crashes on some older systems
+enable_a20_fast:
+    in al, 0x92             ; Read System Control Port A
+    test al, 2              ; Check if A20 already enabled
+    jnz .done               ; Skip if already enabled
+    or al, 2                ; Set A20 bit
+    and al, 0xFE            ; Clear bit 0 (avoid system reset!)
+    out 0x92, al            ; Write back
+.done:
+    ret</code></pre>
+
+                    <p><strong>Method 3: Keyboard Controller (Most Compatible)</strong></p>
+
+                    <pre><code class="language-nasm">; Enable A20 via keyboard controller (8042)
+; This is the original method - works on everything
+enable_a20_keyboard:
+    cli                         ; Disable interrupts
+    
+    call .wait_input            ; Wait for controller ready
+    mov al, 0xAD                ; Disable keyboard
+    out 0x64, al
+    
+    call .wait_input
+    mov al, 0xD0                ; Read output port command
+    out 0x64, al
+    
+    call .wait_output           ; Wait for data available
+    in al, 0x60                 ; Read output port value
+    push eax                    ; Save it
+    
+    call .wait_input
+    mov al, 0xD1                ; Write output port command
+    out 0x64, al
+    
+    call .wait_input
+    pop eax                     ; Restore output port value
+    or al, 2                    ; Set A20 gate bit
+    out 0x60, al                ; Write to output port
+    
+    call .wait_input
+    mov al, 0xAE                ; Re-enable keyboard
+    out 0x64, al
+    
+    call .wait_input
+    sti                         ; Re-enable interrupts
+    ret
+
+; Wait for keyboard controller input buffer to be empty
+.wait_input:
+    in al, 0x64
+    test al, 2
+    jnz .wait_input
+    ret
+
+; Wait for keyboard controller output buffer to have data
+.wait_output:
+    in al, 0x64
+    test al, 1
+    jz .wait_output
+    ret
+</code></pre>
+
+                    <p><strong>Testing if A20 is Enabled:</strong></p>
+
+<pre><code class="language-nasm">; Check if A20 is enabled by comparing wrapped addresses
+check_a20:
+    pushad
+    
+    ; Write different values to 0x007C00 and 0x107C00
+    ; If A20 is disabled, these are the same physical address!
+    
+    mov edi, 0x007C00           ; Low address
+    mov esi, 0x107C00           ; High address (would wrap if A20 off)
+    
+    mov [edi], dword 0x12345678
+    mov [esi], dword 0x87654321
+    
+    cmp dword [edi], 0x12345678 ; Check if it was overwritten
+    
+    popad
+    je .a20_enabled             ; Values different = A20 enabled
+    ret                         ; Return (A20 disabled)
+.a20_enabled:
+    stc                         ; Set carry flag = enabled
+    ret</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Important:</strong> Always test if A20 is enabled after attempting to enable it. Some systems need multiple attempts, and the fast method can fail silently. A robust bootloader tries all methods in sequence.
+                    </div>
+                </div>
+
+                <!-- Mode Switch Section -->
+                <div id="mode-switch" class="blog-content mt-5">
+                    <h2><i class="fas fa-exchange-alt me-2 text-teal"></i>Switching to 32-Bit Protected Mode</h2>
+                    
+                    <p>Now we're ready for the big moment - the actual mode switch! This is accomplished by modifying the CR0 control register and performing a far jump.</p>
+                    
+                    <h3 id="cr0-register">CR0 Control Register</h3>
+
+<pre><code class="language-plaintext">CR0 REGISTER (Control Register 0)
+═══════════════════════════════════════════════════════════════
+Bit   Name   Description
+───────────────────────────────────────────────────────────────
+0     PE     Protection Enable - SET THIS TO ENTER PROTECTED MODE
+1     MP     Monitor Coprocessor
+2     EM     Emulate FPU
+3     TS     Task Switched
+4     ET     Extension Type (486+: hardwired to 1)
+5     NE     Numeric Error
+16    WP     Write Protect (prevent kernel writing read-only pages)
+18    AM     Alignment Mask
+29    NW     Not Write-through (cache)
+30    CD     Cache Disable
+31    PG     Paging Enable (for virtual memory, Phase 6)
+═══════════════════════════════════════════════════════════════
+
+To enter protected mode: Set bit 0 (PE)
+To enable paging later: Set bit 31 (PG) - requires page tables first!</code></pre>
+                    
+                    <h3 id="far-jump">The Far Jump: Why It's Critical</h3>
+                    
+                    <p>After setting PE in CR0, you <strong>must</strong> perform a far jump. Here's why:</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-cpu me-2"></i>
+                        <strong>CPU Pipeline & Prefetch Queue:</strong> The CPU prefetches and decodes instructions ahead of time. After changing to protected mode, these prefetched instructions are still decoded as 16-bit real mode instructions! A far jump flushes the pipeline and prefetch queue, forcing the CPU to fetch and decode new instructions in 32-bit mode.
+                    </div>
+
+<pre><code class="language-nasm">; ═══════════════════════════════════════════════════════════════
+; THE COMPLETE MODE SWITCH SEQUENCE
+; ═══════════════════════════════════════════════════════════════
+
+[bits 16]
+switch_to_protected_mode:
+    ; Step 1: Disable interrupts
+    ; We can't handle interrupts during mode transition!
+    cli
+    
+    ; Step 2: Enable A20 line (already covered above)
+    call enable_a20_fast
+    
+    ; Step 3: Load the GDT
+    lgdt [gdt_descriptor]
+    
+    ; Step 4: Set PE (Protection Enable) bit in CR0
+    mov eax, cr0
+    or eax, 1               ; Set bit 0 (PE)
+    mov cr0, eax
+    
+    ; Step 5: FAR JUMP to load CS with protected mode selector
+    ; This flushes the prefetch queue and enters 32-bit mode
+    jmp CODE_SEG:protected_mode_start
+
+; ═══════════════════════════════════════════════════════════════
+; 32-BIT PROTECTED MODE CODE
+; ═══════════════════════════════════════════════════════════════
+[bits 32]
+protected_mode_start:
+    ; Step 6: Load all data segment registers
+    mov ax, DATA_SEG        ; DATA_SEG = 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+    
+    ; Step 7: Set up the stack
+    mov esp, 0x90000        ; Stack at 576KB
+    mov ebp, esp
+    
+    ; Step 8: Jump to kernel!
+    ; At this point:
+    ; - We're in 32-bit protected mode
+    ; - GDT is loaded with flat segments
+    ; - Stack is set up
+    ; - A20 is enabled
+    ; - Interrupts are disabled (we'll set up IDT in Phase 5)
+    
+    call kernel_main        ; Call our C kernel!
+    
+    ; If kernel returns (shouldn't happen), halt
+    jmp $
+</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-exclamation-circle me-2"></i>Common Mode Switch Bugs</h4>
+                        <div class="content">
+                            <table class="table table-bordered mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Symptom</th>
+                                        <th>Likely Cause</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Triple fault / reboot</td>
+                                        <td>GDT not set up correctly, null descriptor accessed</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Hangs after mode switch</td>
+                                        <td>Missing far jump, data segments not loaded</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Random memory corruption</td>
+                                        <td>A20 not enabled, stack in wrong location</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Works in QEMU, not real hardware</td>
+                                        <td>Fast A20 method not supported, use keyboard controller</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- C Runtime Section -->
+                <div id="c-runtime" class="blog-content mt-5">
+                    <h2><i class="fas fa-code me-2 text-teal"></i>C Runtime Setup: From Assembly to C</h2>
+                    
+                    <p>Now the exciting part - calling C code from your bootloader! To do this properly, you need a linker script, proper compilation flags, and understanding of the C calling convention.</p>
+                    
+                    <h3 id="linker-script">Linker Script</h3>
+                    
+                    <p>The linker script tells the linker how to arrange your code in memory:</p>
+
+                    <pre><code class="language-bash">/* linker.ld - Kernel Linker Script */
+
+/* Entry point - the symbol the bootloader will jump to */
+ENTRY(kernel_main)
+
+/* Memory layout */
+SECTIONS {
+    /* Kernel loads at 1MB mark (0x100000) - above real mode area */
+    . = 0x100000;
+    
+    /* Code section - executable instructions */
+    .text BLOCK(4K) : ALIGN(4K) {
+        *(.multiboot)       /* Multiboot header (if used) */
+        *(.text)            /* All .text sections from all objects */
+    }
+    
+    /* Read-only data - string literals, const variables */
+    .rodata BLOCK(4K) : ALIGN(4K) {
+        *(.rodata)
+        *(.rodata.*)
+    }
+    
+    /* Initialized data - global variables with initial values */
+    .data BLOCK(4K) : ALIGN(4K) {
+        *(.data)
+    }
+    
+    /* Uninitialized data - global variables without initial values */
+    .bss BLOCK(4K) : ALIGN(4K) {
+        *(COMMON)
+        *(.bss)
+        /* Reserve space for kernel stack */
+        . = ALIGN(16);
+        _stack_bottom = .;
+        . += 16K;           /* 16KB stack */
+        _stack_top = .;
+    }
+    
+    /* End of kernel - useful for memory management later */
+    _kernel_end = .;
+}
+</code></pre>
+                    
+                    <h3 id="calling-c">Writing Your First C Kernel Code</h3>
+                    
+                    <p>Here's a complete, working C kernel that displays colored text:</p>
+
+                    <pre><code class="language-c">/* kernel.c - First C Kernel Code */
+
+/* VGA text mode constants */
+#define VGA_WIDTH  80
+#define VGA_HEIGHT 25
+#define VGA_MEMORY ((volatile char*)0xB8000)
+
+/* VGA colors */
+enum vga_color {
+    VGA_BLACK = 0,
+    VGA_BLUE = 1,
+    VGA_GREEN = 2,
+    VGA_CYAN = 3,
+    VGA_RED = 4,
+    VGA_MAGENTA = 5,
+    VGA_BROWN = 6,
+    VGA_LIGHT_GREY = 7,
+    VGA_DARK_GREY = 8,
+    VGA_LIGHT_BLUE = 9,
+    VGA_LIGHT_GREEN = 10,
+    VGA_LIGHT_CYAN = 11,
+    VGA_LIGHT_RED = 12,
+    VGA_LIGHT_MAGENTA = 13,
+    VGA_YELLOW = 14,
+    VGA_WHITE = 15
+};
+
+/* Current cursor position */
+static int cursor_x = 0;
+static int cursor_y = 0;
+static char current_color = 0x0F; /* White on black */
+
+/* Helper: create VGA color byte */
+static inline char make_color(enum vga_color fg, enum vga_color bg) {
+    return fg | (bg << 4);
+}
+
+/* Helper: create VGA entry (character + color) */
+static inline short make_vga_entry(char c, char color) {
+    return (short)c | ((short)color << 8);
+}
+
+/* Clear the screen */
+void clear_screen(void) {
+    short* video = (short*)VGA_MEMORY;
+    short blank = make_vga_entry(' ', current_color);
+    
+    for (int i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
+        video[i] = blank;
+    }
+    cursor_x = 0;
+    cursor_y = 0;
+}
+
+/* Print a single character */
+void putchar(char c) {
+    short* video = (short*)VGA_MEMORY;
+    
+    if (c == '\n') {
+        cursor_x = 0;
+        cursor_y++;
+    } else if (c == '\r') {
+        cursor_x = 0;
+    } else if (c == '\t') {
+        cursor_x = (cursor_x + 8) & ~7; /* Tab to next 8-column boundary */
+    } else {
+        video[cursor_y * VGA_WIDTH + cursor_x] = make_vga_entry(c, current_color);
+        cursor_x++;
+    }
+    
+    /* Handle line wrap */
+    if (cursor_x >= VGA_WIDTH) {
+        cursor_x = 0;
+        cursor_y++;
+    }
+    
+    /* Handle scroll (simple: just wrap for now) */
+    if (cursor_y >= VGA_HEIGHT) {
+        /* TODO: Implement scrolling in Phase 4 */
+        cursor_y = 0; /* Wrap around for now */
+    }
+}
+
+/* Print a null-terminated string */
+void print(const char* str) {
+    while (*str) {
+        putchar(*str++);
+    }
+}
+
+/* Set the text color */
+void set_color(enum vga_color fg, enum vga_color bg) {
+    current_color = make_color(fg, bg);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * KERNEL ENTRY POINT - Called from bootloader assembly
+ * ═══════════════════════════════════════════════════════════════ */
+void kernel_main(void) {
+    /* Clear screen and set up display */
+    clear_screen();
+    
+    /* Print welcome banner in cyan */
+    set_color(VGA_LIGHT_CYAN, VGA_BLACK);
+    print("===============================================\n");
+    print("      Welcome to MyOS - Phase 3 Complete!      \n");
+    print("===============================================\n\n");
+    
+    /* Print system info in white */
+    set_color(VGA_WHITE, VGA_BLACK);
+    print("Status: Running in 32-bit Protected Mode\n");
+    print("Memory: 4GB address space available\n");
+    print("Stack:  Set up at 0x90000\n\n");
+    
+    /* Print next steps in yellow */
+    set_color(VGA_YELLOW, VGA_BLACK);
+    print("Next: Phase 4 - Proper display drivers!\n");
+    
+    /* Print footer in green */
+    set_color(VGA_LIGHT_GREEN, VGA_BLACK);
+    print("\nKernel halted. System stable.\n");
+    
+    /* Halt the CPU - never return from kernel_main */
+    while (1) {
+        __asm__ volatile ("hlt");
+    }
+}
+</code></pre>
+                    
+                    <h3 id="stack-setup">Building the Complete System</h3>
+                    
+                    <p>Here's a complete Makefile to build everything:</p>
+
+<pre><code class="language-bash"># Makefile for Phase 3 Kernel
+
+# Toolchain
+CC = i686-elf-gcc
+AS = nasm
+LD = i686-elf-ld
+
+# Flags
+CFLAGS = -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti
+ASFLAGS = -f elf32
+LDFLAGS = -T linker.ld -nostdlib
+
+# Source files
+BOOT_SRC = boot.asm
+KERNEL_SRC = kernel.c
+ENTRY_SRC = kernel_entry.asm
+
+# Output
+KERNEL = myos.bin
+ISO = myos.iso
+
+# Build all
+all: $(KERNEL)
+
+# Assemble bootloader
+boot.o: boot.asm
+	$(AS) -f bin $< -o boot.bin
+
+# Assemble kernel entry (calls kernel_main)
+kernel_entry.o: kernel_entry.asm
+	$(AS) $(ASFLAGS) $< -o $@
+
+# Compile C kernel
+kernel.o: kernel.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Link kernel
+kernel.bin: kernel_entry.o kernel.o
+	$(LD) $(LDFLAGS) $^ -o $@
+
+# Create final image
+$(KERNEL): boot.bin kernel.bin
+	cat boot.bin kernel.bin > $@
+	# Pad to floppy size
+	truncate -s 1440K $@
+
+# Run in QEMU
+run: $(KERNEL)
+	qemu-system-i386 -fda $(KERNEL)
+
+# Debug with GDB
+debug: $(KERNEL)
+	qemu-system-i386 -fda $(KERNEL) -s -S &
+	gdb -ex "target remote localhost:1234" \
+	    -ex "symbol-file kernel.bin" \
+	    -ex "break kernel_main" \
+	    -ex "continue"
+
+# Clean build files
+clean:
+	rm -f *.o *.bin $(KERNEL)
+
+.PHONY: all run debug clean
+</code></pre>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Cross-Compiler Required:</strong> You need an <code>i686-elf-gcc</code> cross-compiler. A host GCC might produce code that depends on your OS! See Phase 1 for setup instructions.
+                    </div>
+                </div>
+
+                <!-- What You Can Build Section -->
+                <div id="build" class="blog-content mt-5">
+                    <h2><i class="fas fa-hammer me-2 text-teal"></i>Exercises & What You Can Build</h2>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Phase 3 Achievement:</strong> You've built a minimal kernel that boots through your bootloader, transitions to protected mode, and executes C code that writes directly to video memory!
+                    </div>
+                    
+                    <p><strong>Your complete boot chain is now:</strong></p>
+<pre><code class="language-plaintext">BOOT CHAIN
+═══════════════════════════════════════════════════════════════
+BIOS → Boot Sector (512 bytes, assembly)
+         ↓
+    Stage 2 Loader (assembly)
+         ↓
+    Enable A20 + Load GDT
+         ↓
+    Switch to Protected Mode (set CR0.PE, far jump)
+         ↓
+    Kernel Entry (assembly stub)
+         ↓
+    kernel_main() in C!</code></pre>
+                    
+                    <div class="experiment-card">
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal text-white">Hands-On Project</span>
+                        </div>
+                        <h4>Phase 3 Deliverables</h4>
+                        <ul>
+                            <li>A working GDT with code and data segments</li>
+                            <li>Reliable A20 gate enabling (multiple methods)</li>
+                            <li>Successful transition from 16-bit to 32-bit mode</li>
+                            <li>C code running in kernel space</li>
+                            <li>Basic VGA text output from C</li>
+                        </ul>
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-pencil-alt me-2"></i>Exercise 1: Add More Colors</h4>
+                        <div class="content">
+                            <p>Modify <code>kernel.c</code> to:</p>
+                            <ol>
+                                <li>Create a function <code>print_colored(const char* str, vga_color fg, vga_color bg)</code></li>
+                                <li>Print a colorful "rainbow" message using all 16 VGA colors</li>
+                                <li>Create a simple progress bar using block characters</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-pencil-alt me-2"></i>Exercise 2: Print Numbers</h4>
+                        <div class="content">
+                            <p>Implement these functions in C:</p>
+<pre><code class="language-c">void print_int(int value);        // Print decimal integer
+void print_hex(unsigned int value); // Print as 0xABCD
+void print_binary(unsigned int value); // Print as binary</code></pre>
+                            <p class="mb-0">Hint: Use modulo and division for decimal; bit shifting for hex and binary.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-pencil-alt me-2"></i>Exercise 3: Memory Dump</h4>
+                        <div class="content">
+                            <p>Create a function that displays a hex dump of memory:</p>
+<pre><code class="language-c">void memory_dump(void* address, int bytes);
+// Output: Address | Hex bytes | ASCII characters
+// 0x100000 | 48 45 4C 4C 4F 00 ... | HELLO.</code></pre>
+                            <p class="mb-0">This is invaluable for debugging your kernel!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Next Steps Section -->
+                <div id="next-steps" class="blog-content mt-5">
+                    <h2><i class="fas fa-arrow-right me-2 text-teal"></i>Next Steps</h2>
+                    
+                    <p>You've successfully escaped real mode's constraints. Your kernel is now running in 32-bit protected mode with:</p>
+                    
+                    <ul>
+                        <li>✅ 4GB address space (via flat memory model)</li>
+                        <li>✅ Hardware segment protection</li>
+                        <li>✅ 32-bit registers and instructions</li>
+                        <li>✅ C code execution</li>
+                        <li>✅ Basic VGA text output</li>
+                    </ul>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-forward me-2"></i>
+                        <strong>Coming Up in Phase 4:</strong> While we can write to video memory, it's primitive. In Phase 4, we'll build a proper display driver with scrolling, cursor management, and implement keyboard input so users can actually interact with our kernel. We'll also create a flexible <code>kprintf()</code> function for debugging.</div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 2: Real Mode - First Steps Near Hardware</h5>
+                            <p class="text-muted small mb-2">Review real mode programming, bootloader writing, and BIOS interrupts.</p>
+                            <a href="kernel-dev-phase-02-real-mode.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 4: Display, Input & Output</h5>
+                            <p class="text-muted small mb-2">Implement VGA text mode output, keyboard input, and build a basic printf function.</p>
+                            <a href="kernel-dev-phase-04-display-input.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 5: Interrupts & CPU Control</h5>
+                            <p class="text-muted small mb-2">Set up the IDT, handle hardware interrupts, and implement a timer.</p>
+                            <a href="kernel-dev-phase-05-interrupts.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook">
+                            <i class="fab fa-facebook-f"></i>
+                        </a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter">
+                            <i class="fab fa-twitter"></i>
+                        </a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn">
+                            <i class="fab fa-linkedin-in"></i>
+                        </a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube">
+                            <i class="fab fa-youtube"></i>
+                        </a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram">
+                            <i class="fab fa-instagram"></i>
+                        </a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest">
+                            <i class="fab fa-pinterest-p"></i>
+                        </a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email">
+                            <i class="fas fa-envelope"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="bg-secondary">
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+    
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+    
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>

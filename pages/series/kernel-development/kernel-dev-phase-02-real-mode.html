@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, archive" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Write your first bootloader in x86 real mode. Master real mode memory addressing, BIOS interrupts, boot sector structure, MBR/GPT, and direct hardware interaction without an operating system." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="Real Mode, Bootloader, BIOS Interrupts, Boot Sector, MBR, GPT, x86 Assembly, OS Development, Kernel Development, Systems Programming" />
+    <meta property="og:title" content="Kernel Development Series Phase 2: Real Mode - First Steps Near Hardware" />
+    <meta property="og:description" content="Write your first bootloader in x86 real mode. Master memory addressing, BIOS interrupts, and direct hardware interaction." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-02-06" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    
+    <title>Kernel Development Series Phase 2: Real Mode - First Steps Near Hardware - Wasil Zafar</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'ad_user_data': 'granted',
+            'ad_personalization': 'granted',
+            'analytics_storage': 'granted'
+        });
+        
+        gtag('set', 'url_passthrough', true);
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({
+                'gtm.start': new Date().getTime(),
+                event: 'gtm.js'
+            });
+            var f = d.getElementsByTagName(s)[0],
+                j = d.createElement(s),
+                dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. 
+                    By clicking "Accept All", you consent to our use of cookies. See our 
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a> 
+                    for more information.
+                </p>
+                
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#about">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#skills">Skills</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#certifications">Certifications</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#interests">Interests</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">Kernel Development Series Phase 2: Real Mode - First Steps Near Hardware</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>February 6, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>30 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Write your first bootloader in x86 real mode. Master real mode memory addressing, BIOS interrupts, boot sector structure, and interact directly with hardware without any operating system.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation Overlay -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#introduction" onclick="closeNav()">Introduction</a>
+                <ul>
+                    <li><a href="#introduction" onclick="closeNav()">What is Real Mode?</a></li>
+                    <li><a href="#why-real-mode" onclick="closeNav()">Why Start Here?</a></li>
+                    <li><a href="#limitations" onclick="closeNav()">Real Mode Limitations</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#memory-addressing" onclick="closeNav()">Memory Addressing</a>
+                <ul>
+                    <li><a href="#segmentation" onclick="closeNav()">Segmentation Model</a></li>
+                    <li><a href="#segment-registers" onclick="closeNav()">Segment Registers</a></li>
+                    <li><a href="#address-calculation" onclick="closeNav()">Address Calculation</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#bios-interrupts" onclick="closeNav()">BIOS Interrupts</a>
+                <ul>
+                    <li><a href="#interrupt-table" onclick="closeNav()">Interrupt Vector Table</a></li>
+                    <li><a href="#video-services" onclick="closeNav()">Video Services (INT 10h)</a></li>
+                    <li><a href="#disk-services" onclick="closeNav()">Disk Services (INT 13h)</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#boot-sector" onclick="closeNav()">Boot Sector Structure</a>
+                <ul>
+                    <li><a href="#mbr" onclick="closeNav()">Master Boot Record (MBR)</a></li>
+                    <li><a href="#gpt" onclick="closeNav()">GUID Partition Table (GPT)</a></li>
+                    <li><a href="#boot-signature" onclick="closeNav()">Boot Signature</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#bootloader" onclick="closeNav()">Writing a Bootloader</a>
+                <ul>
+                    <li><a href="#hello-world" onclick="closeNav()">Hello World Bootloader</a></li>
+                    <li><a href="#disk-read" onclick="closeNav()">Reading from Disk</a></li>
+                    <li><a href="#chain-loading" onclick="closeNav()">Chain Loading</a></li>
+                </ul>
+            </li>
+            <li><a href="#build" onclick="closeNav()">What You Can Build</a></li>
+            <li><a href="#next-steps" onclick="closeNav()">Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- Introduction -->
+                <div id="introduction" class="blog-content">
+                    <h2><i class="fas fa-terminal me-2 text-teal"></i>Introduction: What is Real Mode?</h2>
+                    
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-flag me-2"></i>
+                        <strong>Phase 2 Goals:</strong> By the end of this phase, you'll have written your own bootloader that runs on bare metal, understands x86 real mode memory addressing, and can interact with hardware through BIOS interrupts.
+                    </div>
+                    
+                    <p>When an x86 CPU powers on, it doesn't start in 64-bit mode with gigabytes of memory. Instead, it wakes up in <strong>Real Mode</strong> - a 16-bit operating mode that dates back to the original Intel 8086 processor from 1978. This might seem like ancient history, but understanding real mode is essential because it's where every x86 computer begins.</p>
+
+                    <p>Think of real mode as "training wheels mode" for the CPU. It's simple, direct, and gives you complete access to hardware - but with significant limitations that made sense for <span title="640KB ought to be enough for anybody - Bill Gates (allegedly)">computers with 640KB of RAM</span>.</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-car me-2"></i>Real Mode Analogy: Driving a Classic Car</h4>
+                        <div class="content">
+                            <p>Modern CPUs in protected/long mode are like modern cars with:</p>
+                            <ul>
+                                <li>Power steering (memory management hardware)</li>
+                                <li>Airbags (memory protection)</li>
+                                <li>GPS navigation (virtual memory)</li>
+                                <li>Speed limiters (privilege levels)</li>
+                            </ul>
+                            <p class="mb-0">Real mode is like a 1970s muscle car - <strong>no safety features, but complete control</strong>. You feel every bump in the road (every hardware quirk), and a crash means real damage (no protection mechanisms).</p>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Key Insight:</strong> Real mode is the CPU's initial state after power-on. It's a 16-bit mode with direct hardware access but limited memory (1MB) and no protection. All x86 processors start here for backward compatibility.
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-map-signs me-2"></i>Complete Series Navigation</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-2">18-Part Series</span>
+                            <span class="badge bg-crimson">OS Development Mastery</span>
+                        </div>
+                        <div class="content">
+                            <ol>
+                                <li><a href="kernel-dev-phase-00-orientation.html">Phase 0: Orientation & Big Picture</a> - OS fundamentals, kernel architectures, learning path</li>
+                                <li><a href="kernel-dev-phase-01-boot-process.html">Phase 1: How a Computer Starts</a> - BIOS/UEFI, boot sequence, dev environment</li>
+                                <li><strong>Phase 2: Real Mode - First Steps (This Guide)</strong> - Real mode, bootloader, BIOS interrupts</li>
+                                <li><a href="kernel-dev-phase-03-protected-mode.html">Phase 3: Entering Protected Mode</a> - GDT, 32-bit mode, C code execution</li>
+                                <li><a href="kernel-dev-phase-04-display-input.html">Phase 4: Display, Input & Output</a> - VGA text mode, keyboard handling</li>
+                                <li><a href="kernel-dev-phase-05-interrupts.html">Phase 5: Interrupts & CPU Control</a> - IDT, ISRs, PIC programming</li>
+                                <li><a href="kernel-dev-phase-06-memory.html">Phase 6: Memory Management</a> - Paging, virtual memory, heap allocator</li>
+                                <li><a href="kernel-dev-phase-07-filesystem.html">Phase 7: Disk Access & Filesystems</a> - Block devices, FAT, VFS layer</li>
+                                <li><a href="kernel-dev-phase-08-processes.html">Phase 8: Processes & User Mode</a> - Task switching, system calls, user space</li>
+                                <li><a href="kernel-dev-phase-09-elf.html">Phase 9: ELF Loading & Executables</a> - ELF format, program loading</li>
+                                <li><a href="kernel-dev-phase-10-stdlib-shell.html">Phase 10: Standard Library & Shell</a> - C library, command-line shell</li>
+                                <li><a href="kernel-dev-phase-11-long-mode.html">Phase 11: 64-Bit Long Mode</a> - x86-64, 64-bit paging, modern architecture</li>
+                                <li><a href="kernel-dev-phase-12-uefi.html">Phase 12: Modern Booting with UEFI</a> - UEFI boot services, memory maps</li>
+                                <li><a href="kernel-dev-phase-13-graphics.html">Phase 13: Graphics & GUI Systems</a> - Framebuffer, windowing, drawing</li>
+                                <li><a href="kernel-dev-phase-14-input-timing.html">Phase 14: Advanced Input & Timing</a> - Mouse, high-precision timers</li>
+                                <li><a href="kernel-dev-phase-15-hardware-drivers.html">Phase 15: Hardware Discovery & Drivers</a> - PCI, device drivers, NVMe</li>
+                                <li><a href="kernel-dev-phase-16-performance.html">Phase 16: Performance & Optimization</a> - Caching, scheduler tuning</li>
+                                <li><a href="kernel-dev-phase-17-security.html">Phase 17: Stability, Security & Finishing</a> - Debugging, hardening, completion</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <h3 id="why-real-mode">Why Start in Real Mode?</h3>
+                    
+                    <p>Even though we'll quickly move to protected mode (Phase 3), learning real mode is valuable:</p>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="highlight-box">
+                                <h5><i class="fas fa-check-circle me-2 text-teal"></i>Practical Reasons</h5>
+                                <ul class="mb-0">
+                                    <li>BIOS services only work in real mode</li>
+                                    <li>Must initialize hardware before switching modes</li>
+                                    <li>Boot sector code runs in real mode</li>
+                                    <li>Many bootloaders stay in real mode initially</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="highlight-box">
+                                <h5><i class="fas fa-graduation-cap me-2 text-teal"></i>Educational Reasons</h5>
+                                <ul class="mb-0">
+                                    <li>Simpler model - great for learning</li>
+                                    <li>Direct hardware access - see how things work</li>
+                                    <li>Understand x86 history and compatibility</li>
+                                    <li>Appreciate why protected mode was invented</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h3 id="limitations">Real Mode Limitations</h3>
+
+                    <table class="table table-bordered mt-3">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Limitation</th>
+                                <th>Real Mode Constraint</th>
+                                <th>Modern Capabilities</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Memory Access</strong></td>
+                                <td>1MB (20-bit addresses)</td>
+                                <td>Terabytes (64-bit addresses)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Instruction Width</strong></td>
+                                <td>16-bit</td>
+                                <td>64-bit</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Memory Protection</strong></td>
+                                <td>None - any code can overwrite anything</td>
+                                <td>Full isolation between processes</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Multitasking Support</strong></td>
+                                <td>None - manual saving/restoring</td>
+                                <td>Hardware task switching</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Privilege Levels</strong></td>
+                                <td>One level - everything has full access</td>
+                                <td>4 rings (Ring 0-3)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Memory Addressing Section -->
+                <div id="memory-addressing" class="blog-content mt-5">
+                    <h2><i class="fas fa-memory me-2 text-teal"></i>Real Mode Memory Addressing</h2>
+                    
+                    <p>Real mode's most distinctive feature is its <strong>segmented memory model</strong>. This is where many beginners get confused, so let's break it down completely.</p>
+
+                    <h3 id="segmentation">The Segmentation Model</h3>
+
+                    <p>The Intel 8086 had a problem: it wanted to address 1MB of memory, but its registers were only 16 bits (max value: 65,535 = 64KB). The solution? <strong>Segmentation</strong>.</p>
+
+<pre><code class="language-plaintext">THE PROBLEM:
+═══════════════════════════════════════════════════════════════
+16-bit register → Maximum value: 65,535 (0xFFFF)
+But we want to address: 1,048,576 bytes (0xFFFFF) = 1MB
+
+That requires 20 bits!
+
+THE SOLUTION: Segment:Offset Addressing
+═══════════════════════════════════════════════════════════════
+Combine TWO 16-bit values to create a 20-bit address:
+
+    Segment Register (16-bit)   ×16   =  20-bit base
+  +        Offset (16-bit)            =  16-bit offset
+  ────────────────────────────────────────────────────
+                                      =  20-bit physical address
+
+Formula: Physical Address = (Segment × 16) + Offset
+         Physical Address = (Segment << 4) + Offset</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-calculator me-2"></i>Address Calculation Examples</h4>
+                        <div class="content">
+<pre><code class="language-plaintext">Example 1: Address 0x1234:0x5678
+    Segment: 0x1234 × 16 = 0x12340
+  + Offset:  0x5678
+  ─────────────────────────────────
+  Physical:  0x179B8
+
+Example 2: Boot sector location 0x0000:0x7C00
+    Segment: 0x0000 × 16 = 0x00000
+  + Offset:  0x7C00
+  ─────────────────────────────────
+  Physical:  0x07C00  (31,744 in decimal)
+
+Example 3: Video memory 0xB800:0x0000
+    Segment: 0xB800 × 16 = 0xB8000
+  + Offset:  0x0000
+  ─────────────────────────────────
+  Physical:  0xB8000  (VGA text mode buffer)</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Overlapping Segments:</strong> Multiple segment:offset pairs can point to the same physical address! <code>0x0000:0x7C00</code>, <code>0x07C0:0x0000</code>, and <code>0x0100:0x6C00</code> all refer to physical address <code>0x7C00</code>. This is a common source of bugs.
+                    </div>
+
+                    <h3 id="segment-registers">Segment Registers</h3>
+
+                    <p>The CPU has dedicated registers for holding segment values:</p>
+
+<pre><code class="language-plaintext">SEGMENT REGISTERS
+═══════════════════════════════════════════════════════════════
+Register    Name                Primary Use
+──────────────────────────────────────────────────────────────
+CS          Code Segment        Where instructions are fetched from
+                                (Used with IP: CS:IP = next instruction)
+
+DS          Data Segment        Default segment for data access
+                                (mov ax, [variable] uses DS)
+
+SS          Stack Segment       Where the stack lives
+                                (Used with SP: SS:SP = stack top)
+
+ES          Extra Segment       Additional data segment
+                                (Often used with string operations)
+
+FS, GS      Extra Segments      Added in 386 (not available in 8086)
+═══════════════════════════════════════════════════════════════</code></pre>
+
+                    <p><strong>Code to initialize segment registers:</strong></p>
+
+<pre><code class="language-nasm">; Standard bootloader segment initialization
+; BIOS loads us at 0x0000:0x7C00, but we want clear segments
+[BITS 16]
+[ORG 0x7C00]
+
+start:
+    ; Clear interrupts during segment setup
+    cli
+    
+    ; Initialize all segment registers to 0
+    xor ax, ax      ; AX = 0
+    mov ds, ax      ; Data segment = 0
+    mov es, ax      ; Extra segment = 0
+    mov ss, ax      ; Stack segment = 0
+    mov sp, 0x7C00  ; Stack pointer just below our code
+                    ; Stack grows DOWN from 0x7C00 to 0x0500
+    
+    ; Re-enable interrupts
+    sti
+    
+    ; Now DS:variable refers to physical address 0x0000 + variable
+    ; SS:SP points to physical address 0x7C00 (grows down)</code></pre>
+                    
+                    <h3 id="address-calculation">Memory Map with Segments</h3>
+
+                    <p>Here's how to think about the standard real mode memory layout with segments:</p>
+
+<pre><code class="language-plaintext">REAL MODE MEMORY WITH COMMON SEGMENTS
+═══════════════════════════════════════════════════════════════
+
+Physical     Segment:Offset    Description
+Address      Address
+──────────────────────────────────────────────────────────────
+0xFFFFF      N/A              ← Top of 1MB (limit of real mode)
+   │
+0xF0000      0xF000:0x0000    ← BIOS ROM area begins
+   │         ...
+0xC0000      0xC000:0x0000    ← Video BIOS, Option ROMs
+   │
+0xB8000      0xB800:0x0000    ← VGA Text Mode Video Memory
+   │                            (Write here to display text!)
+0xA0000      0xA000:0x0000    ← VGA Graphics Mode Memory
+   │
+   │         Free conventional memory (~638KB)
+   │         Load your kernel somewhere in here
+   │
+0x10000      0x1000:0x0000    ← Common kernel load point (64KB boundary)
+   │
+0x07E00      0x0000:0x7E00    ← End of boot sector
+0x07C00      0x0000:0x7C00    ← Boot sector loaded here by BIOS
+   │                            (Your bootloader code starts here)
+0x00500      0x0000:0x0500    ← End of BIOS Data Area
+   │                            Stack typically lives between
+   │                            0x0500 and 0x7C00
+0x00400      0x0040:0x0000    ← BIOS Data Area (256 bytes)
+0x00000      0x0000:0x0000    ← Interrupt Vector Table (1KB)
+═══════════════════════════════════════════════════════════════</code></pre>
+                </div>
+
+                <!-- BIOS Interrupts Section -->
+                <div id="bios-interrupts" class="blog-content mt-5">
+                    <h2><i class="fas fa-bolt me-2 text-teal"></i>BIOS Interrupt Services</h2>
+                    
+                    <p>Without an operating system, how do you print to the screen or read from a disk? You use <strong>BIOS interrupts</strong> - a collection of pre-written functions stored in your motherboard's firmware.</p>
+                    
+                    <h3 id="interrupt-table">Interrupt Vector Table (IVT)</h3>
+
+                    <p>The first 1KB of memory (addresses 0x0000-0x03FF) contains the <strong>Interrupt Vector Table</strong>: 256 entries, each pointing to an interrupt handler:</p>
+
+<pre><code class="language-plaintext">INTERRUPT VECTOR TABLE (IVT) LAYOUT
+═══════════════════════════════════════════════════════════════
+Address         Interrupt    Description
+──────────────────────────────────────────────────────────────
+0x0000-0x0003   INT 0        Divide by zero handler
+0x0004-0x0007   INT 1        Single step (debug)
+0x0008-0x000B   INT 2        NMI (Non-Maskable Interrupt)
+0x000C-0x000F   INT 3        Breakpoint
+...
+0x0040-0x0043   INT 0x10     Video services (BIOS)
+0x0044-0x0047   INT 0x11     Equipment list
+0x0048-0x004B   INT 0x12     Memory size
+0x004C-0x004F   INT 0x13     Disk services (BIOS)
+...
+0x0080-0x0083   INT 0x20     DOS terminate program
+0x0084-0x0087   INT 0x21     DOS services
+...
+
+Each entry is 4 bytes: Offset (2 bytes) + Segment (2 bytes)
+═══════════════════════════════════════════════════════════════</code></pre>
+                    
+                    <h3 id="video-services">Video Services (INT 10h)</h3>
+
+                    <p>The most commonly used BIOS interrupt for output is <code>INT 10h</code>:</p>
+
+<pre><code class="language-nasm">; ═══════════════════════════════════════════════════════════════
+; INT 10h - VIDEO BIOS SERVICES
+; ═══════════════════════════════════════════════════════════════
+
+; ─────────────────────────────────────────────────────────────────
+; Function 0Eh: Teletype Output (print one character)
+; ─────────────────────────────────────────────────────────────────
+; Input:  AH = 0Eh (function number)
+;         AL = character to print
+;         BH = page number (usually 0)
+;         BL = foreground color (graphics mode only)
+; Output: None
+; ─────────────────────────────────────────────────────────────────
+
+print_char:
+    mov ah, 0x0E        ; Teletype function
+    mov al, 'A'         ; Character to print
+    mov bh, 0           ; Page 0
+    int 0x10            ; Call BIOS
+    ret
+
+; ─────────────────────────────────────────────────────────────────
+; Function 00h: Set Video Mode
+; ─────────────────────────────────────────────────────────────────
+; Input:  AH = 00h
+;         AL = mode number
+;              03h = 80x25 text mode, 16 colors
+;              13h = 320x200 graphics, 256 colors
+; Output: None
+; ─────────────────────────────────────────────────────────────────
+
+set_video_mode:
+    mov ah, 0x00
+    mov al, 0x03        ; 80x25 text mode
+    int 0x10
+    ret
+
+; ─────────────────────────────────────────────────────────────────
+; Function 02h: Set Cursor Position
+; ─────────────────────────────────────────────────────────────────
+; Input:  AH = 02h
+;         BH = page number
+;         DH = row (0-24)
+;         DL = column (0-79)
+; Output: None
+; ─────────────────────────────────────────────────────────────────
+
+move_cursor:
+    mov ah, 0x02
+    mov bh, 0           ; Page 0
+    mov dh, 10          ; Row 10
+    mov dl, 20          ; Column 20
+    int 0x10
+    ret</code></pre>
+
+                    <p><strong>Complete Print String Function:</strong></p>
+
+<pre><code class="language-nasm">; Print a null-terminated string
+; Input: SI = pointer to string
+print_string:
+    pusha                   ; Save all registers
+    mov ah, 0x0E            ; Teletype function
+.loop:
+    lodsb                   ; Load next byte from [SI] into AL, increment SI
+    test al, al             ; Check if AL is zero (null terminator)
+    jz .done                ; If zero, we're done
+    int 0x10                ; Print the character
+    jmp .loop               ; Continue with next character
+.done:
+    popa                    ; Restore all registers
+    ret
+
+; Print a newline (carriage return + line feed)
+print_newline:
+    pusha
+    mov ah, 0x0E
+    mov al, 0x0D            ; Carriage return
+    int 0x10
+    mov al, 0x0A            ; Line feed
+    int 0x10
+    popa
+    ret</code></pre>
+                    
+                    <h3 id="disk-services">Disk Services (INT 13h)</h3>
+
+                    <p>To load more code beyond the 512-byte boot sector, you need disk access:</p>
+
+<pre><code class="language-nasm">; ═══════════════════════════════════════════════════════════════
+; INT 13h - DISK BIOS SERVICES
+; ═══════════════════════════════════════════════════════════════
+
+; ─────────────────────────────────────────────────────────────────
+; Function 02h: Read Sectors (CHS addressing)
+; ─────────────────────────────────────────────────────────────────
+; Input:  AH = 02h
+;         AL = number of sectors to read (1-128)
+;         CH = cylinder number (0-1023, low 8 bits)
+;         CL = sector number (1-63, bits 0-5)
+;              high cylinder bits (bits 6-7)
+;         DH = head number (0-255)
+;         DL = drive number (0x00=floppy A, 0x80=first HDD)
+;         ES:BX = destination buffer address
+;
+; Output: CF = 0 if successful, 1 if error
+;         AH = status code
+;         AL = number of sectors actually read
+; ─────────────────────────────────────────────────────────────────
+
+read_sectors_chs:
+    mov ah, 0x02        ; Read sectors function
+    mov al, 5           ; Read 5 sectors
+    mov ch, 0           ; Cylinder 0
+    mov cl, 2           ; Start at sector 2 (sector 1 is boot sector)
+    mov dh, 0           ; Head 0
+    mov dl, 0x80        ; First hard disk (use 0x00 for floppy)
+    
+    ; Set destination buffer at 0x1000:0x0000 = physical 0x10000
+    mov bx, 0x1000
+    mov es, bx
+    xor bx, bx          ; ES:BX = 0x1000:0x0000
+    
+    int 0x13            ; Call BIOS
+    jc disk_error       ; Jump if carry flag set (error)
+    ret
+
+; ─────────────────────────────────────────────────────────────────
+; Function 42h: Extended Read (LBA addressing) - modern disks
+; ─────────────────────────────────────────────────────────────────
+; Input:  AH = 42h
+;         DL = drive number
+;         DS:SI = pointer to Disk Address Packet (DAP)
+;
+; Disk Address Packet structure:
+;   Offset  Size   Description
+;   0       1      Size of packet (16 bytes)
+;   1       1      Reserved (0)
+;   2       2      Number of sectors to read
+;   4       4      Transfer buffer (segment:offset)
+;   8       8      Starting LBA (64-bit)
+; ─────────────────────────────────────────────────────────────────
+
+read_sectors_lba:
+    mov ah, 0x42        ; Extended read function
+    mov dl, 0x80        ; First hard disk
+    mov si, dap         ; Point to Disk Address Packet
+    int 0x13
+    jc disk_error
+    ret
+
+dap:
+    db 0x10             ; Size of DAP (16 bytes)
+    db 0                ; Reserved
+    dw 5                ; Number of sectors to read
+    dw 0x0000           ; Offset of buffer
+    dw 0x1000           ; Segment of buffer (0x1000:0x0000)
+    dq 1                ; Starting LBA (sector 1 = after boot sector)</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-history me-2"></i>
+                        <strong>CHS vs LBA:</strong> CHS (Cylinder-Head-Sector) is the old addressing method limited to 8GB. LBA (Logical Block Addressing) uses a simple sector number and supports modern large drives. Always check for LBA support with INT 13h function 41h before using function 42h.
+                    </div>
+                </div>
+
+                <!-- Boot Sector Section -->
+                <div id="boot-sector" class="blog-content mt-5">
+                    <h2><i class="fas fa-hdd me-2 text-teal"></i>Boot Sector Structure</h2>
+                    
+                    <p>The boot sector is the first 512 bytes of your bootable disk. Understanding its structure is essential for writing a bootloader.</p>
+
+                    <h3 id="mbr">Master Boot Record (MBR)</h3>
+
+<pre><code class="language-plaintext">MASTER BOOT RECORD STRUCTURE (512 bytes)
+═══════════════════════════════════════════════════════════════
+Offset  Size   Field
+──────────────────────────────────────────────────────────────
+0x000   446    Bootstrap code (your bootloader!)
+0x1BE   16     Partition Entry #1
+0x1CE   16     Partition Entry #2
+0x1DE   16     Partition Entry #3
+0x1EE   16     Partition Entry #4
+0x1FE   2      Boot Signature: 0x55, 0xAA
+═══════════════════════════════════════════════════════════════
+
+PARTITION ENTRY STRUCTURE (16 bytes each)
+───────────────────────────────────────────────────────────────
+Offset  Size   Field
+───────────────────────────────────────────────────────────────
+0x00    1      Boot indicator (0x80 = bootable, 0x00 = not)
+0x01    3      Starting CHS address
+0x04    1      Partition type (0x83 = Linux, 0x07 = NTFS, etc.)
+0x05    3      Ending CHS address
+0x08    4      Starting LBA address
+0x0C    4      Number of sectors in partition
+═══════════════════════════════════════════════════════════════</code></pre>
+                    
+                    <h3 id="gpt">GUID Partition Table (GPT)</h3>
+
+                    <p>Modern systems use GPT instead of MBR. GPT still has a "protective MBR" in sector 0 for backward compatibility, but the real partition table is in sectors 1-33:</p>
+
+<pre><code class="language-plaintext">GPT DISK LAYOUT
+═══════════════════════════════════════════════════════════════
+Sector    Contents
+───────────────────────────────────────────────────────────────
+0         Protective MBR (for legacy BIOS compatibility)
+1         Primary GPT Header
+2-33      Partition entries (128 bytes each, 128 max)
+...       Actual partitions (your data)
+-33 to -2 Backup partition entries
+-1        Backup GPT Header
+═══════════════════════════════════════════════════════════════
+
+For UEFI boot (Phase 12), we'll create a proper GPT disk with an
+EFI System Partition. For now with BIOS, we use MBR.</code></pre>
+                    
+                    <h3 id="boot-signature">Boot Signature (0x55AA)</h3>
+
+                    <p>The BIOS checks for the boot signature at offset 510-511. Without it, the BIOS won't recognize your disk as bootable:</p>
+
+<pre><code class="language-nasm">; The boot signature must be at bytes 510-511 of the boot sector
+; BIOS checks for 0x55 at offset 510 and 0xAA at offset 511
+
+; Method 1: Using times directive
+times 510-($-$$) db 0    ; Pad with zeros until offset 510
+dw 0xAA55                ; Boot signature (note: little-endian!)
+
+; Method 2: Explicit positioning
+SECTION .text
+; ... your bootloader code ...
+
+; At the end of the file:
+SECTION .bootsig start=510
+    db 0x55
+    db 0xAA</code></pre>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        <strong>Little-Endian Alert:</strong> x86 is little-endian, so <code>dw 0xAA55</code> stores bytes as <code>0x55, 0xAA</code> in memory - which is exactly what BIOS expects!
+                    </div>
+                </div>
+
+                <!-- Bootloader Section -->
+                <div id="bootloader" class="blog-content mt-5">
+                    <h2><i class="fas fa-code me-2 text-teal"></i>Writing Your First Bootloader</h2>
+                    
+                    <p>Now let's write a real, working bootloader from scratch!</p>
+
+                    <h3 id="hello-world">Complete Hello World Bootloader</h3>
+
+                    <div class="experiment-card">
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal text-white">Complete Working Code</span>
+                        </div>
+                        <h4>boot.asm - Your First Bootloader</h4>
+<pre><code class="language-nasm">; ═══════════════════════════════════════════════════════════════
+; boot.asm - Complete Hello World Bootloader
+; Assemble: nasm -f bin boot.asm -o boot.img
+; Run:      qemu-system-i386 -fda boot.img
+; ═══════════════════════════════════════════════════════════════
+
+[BITS 16]               ; We're in 16-bit real mode
+[ORG 0x7C00]            ; BIOS loads us at this address
+
+; ─────────────────────────────────────────────────────────────────
+; ENTRY POINT
+; ─────────────────────────────────────────────────────────────────
+start:
+    ; Disable interrupts while setting up segments
+    cli
+    
+    ; Initialize segment registers
+    xor ax, ax          ; AX = 0
+    mov ds, ax          ; Data segment = 0
+    mov es, ax          ; Extra segment = 0
+    mov ss, ax          ; Stack segment = 0
+    mov sp, 0x7C00      ; Stack grows down from 0x7C00
+    
+    ; Re-enable interrupts
+    sti
+    
+    ; Clear screen
+    call clear_screen
+    
+    ; Print welcome message
+    mov si, msg_welcome
+    call print_string
+    
+    ; Print system info
+    mov si, msg_info
+    call print_string
+    
+    ; Display available memory
+    call print_memory_size
+    
+    ; Print prompt
+    mov si, msg_prompt
+    call print_string
+    
+    ; Wait for keypress then reboot
+    call wait_keypress
+    
+    ; Reboot (jump to reset vector)
+    jmp 0xFFFF:0x0000
+
+; ─────────────────────────────────────────────────────────────────
+; FUNCTIONS
+; ─────────────────────────────────────────────────────────────────
+
+; Clear the screen and set cursor to top-left
+clear_screen:
+    pusha
+    mov ah, 0x00        ; Set video mode
+    mov al, 0x03        ; 80x25 text mode
+    int 0x10
+    popa
+    ret
+
+; Print null-terminated string
+; Input: SI = pointer to string
+print_string:
+    pusha
+    mov ah, 0x0E        ; Teletype output
+.loop:
+    lodsb               ; Load byte from SI into AL, increment SI
+    test al, al         ; Is it null?
+    jz .done
+    int 0x10            ; Print character
+    jmp .loop
+.done:
+    popa
+    ret
+
+; Print hexadecimal number
+; Input: AX = number to print
+print_hex:
+    pusha
+    mov cx, 4           ; 4 hex digits
+    mov bx, hex_chars   ; Lookup table
+.loop:
+    rol ax, 4           ; Rotate left 4 bits
+    push ax
+    and al, 0x0F        ; Mask lower 4 bits
+    xlat                ; AL = [BX + AL]
+    mov ah, 0x0E
+    int 0x10
+    pop ax
+    loop .loop
+    popa
+    ret
+
+hex_chars: db '0123456789ABCDEF'
+
+; Print memory size in KB
+print_memory_size:
+    pusha
+    
+    ; INT 12h returns memory size in KB in AX
+    int 0x12            ; Get conventional memory size
+    
+    ; Print the number
+    mov si, msg_memory
+    call print_string
+    call print_hex
+    
+    mov si, msg_kb
+    call print_string
+    
+    popa
+    ret
+
+; Wait for any keypress
+wait_keypress:
+    pusha
+    mov ah, 0x00        ; Wait for keypress
+    int 0x16            ; Keyboard BIOS service
+    popa
+    ret
+
+; ─────────────────────────────────────────────────────────────────
+; DATA
+; ─────────────────────────────────────────────────────────────────
+msg_welcome:  db '=================================', 13, 10
+              db '  My First Bootloader!', 13, 10
+              db '  Running on bare metal x86', 13, 10
+              db '=================================', 13, 10, 0
+
+msg_info:     db 13, 10
+              db 'CPU is in 16-bit Real Mode', 13, 10
+              db 'Segment registers initialized', 13, 10
+              db 'BIOS interrupts available', 13, 10, 0
+
+msg_memory:   db 13, 10, 'Conventional memory: 0x', 0
+msg_kb:       db ' KB', 13, 10, 0
+
+msg_prompt:   db 13, 10, 'Press any key to reboot...', 0
+
+; ─────────────────────────────────────────────────────────────────
+; BOOT SECTOR PADDING AND SIGNATURE
+; ─────────────────────────────────────────────────────────────────
+times 510-($-$$) db 0   ; Pad to 510 bytes
+dw 0xAA55               ; Boot signature</code></pre>
+                    </div>
+                    
+                    <h3 id="disk-read">Reading Additional Sectors from Disk</h3>
+
+                    <p>512 bytes isn't enough for a real bootloader. Here's how to load more code:</p>
+
+<pre><code class="language-nasm">; ═══════════════════════════════════════════════════════════════
+; boot_stage1.asm - Loads additional code from disk
+; This boot sector loads 'stage2' from sectors 2-6 to 0x1000
+; ═══════════════════════════════════════════════════════════════
+
+[BITS 16]
+[ORG 0x7C00]
+
+STAGE2_SEGMENT  equ 0x1000
+STAGE2_OFFSET   equ 0x0000
+SECTORS_TO_READ equ 5
+
+start:
+    cli
+    xor ax, ax
+    mov ds, ax
+    mov es, ax
+    mov ss, ax
+    mov sp, 0x7C00
+    sti
+    
+    ; Save boot drive number (BIOS passes it in DL)
+    mov [boot_drive], dl
+    
+    ; Print loading message
+    mov si, msg_loading
+    call print_string
+    
+    ; Load stage 2 from disk
+    call load_stage2
+    jc .disk_error
+    
+    ; Jump to stage 2
+    mov si, msg_jumping
+    call print_string
+    
+    ; Far jump to stage 2 at 0x1000:0x0000
+    jmp STAGE2_SEGMENT:STAGE2_OFFSET
+
+.disk_error:
+    mov si, msg_error
+    call print_string
+    jmp $               ; Hang on error
+
+load_stage2:
+    ; Try up to 3 times
+    mov di, 3
+    
+.retry:
+    ; Reset disk system
+    xor ah, ah
+    mov dl, [boot_drive]
+    int 0x13
+    
+    ; Set up read parameters
+    mov ah, 0x02                ; Read sectors
+    mov al, SECTORS_TO_READ     ; Number of sectors
+    mov ch, 0                   ; Cylinder 0
+    mov cl, 2                   ; Start at sector 2
+    mov dh, 0                   ; Head 0
+    mov dl, [boot_drive]        ; Drive number
+    
+    ; Set destination buffer
+    mov bx, STAGE2_SEGMENT
+    mov es, bx
+    mov bx, STAGE2_OFFSET
+    
+    ; Perform read
+    int 0x13
+    jnc .success        ; No carry = success
+    
+    ; Retry on failure
+    dec di
+    jnz .retry
+    
+    ; All retries failed
+    stc                 ; Set carry flag (error)
+    ret
+    
+.success:
+    clc                 ; Clear carry flag (success)
+    ret
+
+print_string:
+    pusha
+    mov ah, 0x0E
+.loop:
+    lodsb
+    test al, al
+    jz .done
+    int 0x10
+    jmp .loop
+.done:
+    popa
+    ret
+
+; Data
+boot_drive:  db 0
+msg_loading: db 'Loading stage 2...', 13, 10, 0
+msg_jumping: db 'Jumping to stage 2!', 13, 10, 0
+msg_error:   db 'Disk read error!', 0
+
+times 510-($-$$) db 0
+dw 0xAA55</code></pre>
+                    
+                    <h3 id="chain-loading">Chain Loading: Building a Two-Stage Bootloader</h3>
+
+                    <p>Stage 2 runs at address 0x10000 and has room for more complex code:</p>
+
+<pre><code class="language-nasm">; ═══════════════════════════════════════════════════════════════
+; stage2.asm - Second stage bootloader
+; Loaded at 0x1000:0x0000 (physical address 0x10000)
+; ═══════════════════════════════════════════════════════════════
+
+[BITS 16]
+[ORG 0x0000]            ; Loaded at offset 0 within segment 0x1000
+
+stage2_start:
+    ; Set up segments for Stage 2
+    mov ax, 0x1000
+    mov ds, ax
+    mov es, ax
+    
+    ; Print stage 2 message
+    mov si, msg_stage2
+    call print_string
+    
+    ; Enable A20 line (required to access memory above 1MB)
+    call enable_a20
+    
+    ; From here, you would:
+    ; 1. Load the kernel from disk
+    ; 2. Set up the GDT
+    ; 3. Switch to protected mode
+    ; 4. Jump to kernel
+    
+    ; For now, just hang
+    mov si, msg_ready
+    call print_string
+    jmp $
+
+enable_a20:
+    ; Fast A20 gate method (works on most systems)
+    in al, 0x92
+    or al, 2
+    out 0x92, al
+    ret
+
+print_string:
+    pusha
+    mov ah, 0x0E
+.loop:
+    lodsb
+    test al, al
+    jz .done
+    int 0x10
+    jmp .loop
+.done:
+    popa
+    ret
+
+msg_stage2: db 'Stage 2 loaded successfully!', 13, 10, 0
+msg_ready:  db 'Ready for protected mode...', 13, 10, 0
+
+; Pad to fill entire 5 sectors (2560 bytes)
+times 2560-($-$$) db 0</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-wrench me-2"></i>Building and Running the Two-Stage Bootloader</h4>
+                        <div class="content">
+<pre><code class="language-bash"># Assemble both stages
+nasm -f bin boot_stage1.asm -o stage1.bin
+nasm -f bin stage2.asm -o stage2.bin
+
+# Combine into disk image
+cat stage1.bin stage2.bin > bootloader.img
+
+# Pad to floppy size (optional, for some emulators)
+truncate -s 1440K bootloader.img
+
+# Run in QEMU
+qemu-system-i386 -fda bootloader.img
+
+# Debug with GDB
+qemu-system-i386 -fda bootloader.img -s -S &
+gdb -ex "target remote localhost:1234" \
+    -ex "set architecture i8086" \
+    -ex "break *0x7c00" \
+    -ex "continue"</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- What You Can Build Section -->
+                <div id="build" class="blog-content mt-5">
+                    <h2><i class="fas fa-hammer me-2 text-teal"></i>Exercises & What You Can Build</h2>
+                    
+                    <div class="experiment-card">
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal text-white">Hands-On Project</span>
+                        </div>
+                        <h4>Phase 2 Deliverables</h4>
+                        <ul>
+                            <li>A custom bootloader that runs on real hardware</li>
+                            <li>Low-level disk reading logic using BIOS INT 13h</li>
+                            <li>Hardware interaction without any operating system</li>
+                            <li>Understanding of the first 1MB of memory layout</li>
+                        </ul>
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-pencil-alt me-2"></i>Exercise 1: Enhanced Hello World</h4>
+                        <div class="content">
+                            <p>Modify the hello world bootloader to:</p>
+                            <ol>
+                                <li>Print in different colors (use attribute bytes at 0xB8000)</li>
+                                <li>Draw a simple border around the message</li>
+                                <li>Display the current time (INT 1Ah)</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-pencil-alt me-2"></i>Exercise 2: Simple Menu</h4>
+                        <div class="content">
+                            <p>Create a bootloader with a simple text menu:</p>
+                            <ul>
+                                <li>Display options: "1. Boot OS" "2. Reboot" "3. Memory Info"</li>
+                                <li>Read keyboard input (INT 16h)</li>
+                                <li>Execute the selected option</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-pencil-alt me-2"></i>Exercise 3: Direct Video Memory</h4>
+                        <div class="content">
+                            <p>Instead of using INT 10h, write directly to video memory:</p>
+<pre><code class="language-nasm">; Write 'A' with white-on-blue attribute at position (0,0)
+mov ax, 0xB800
+mov es, ax
+mov word [es:0], 0x1F41    ; 0x1F = white on blue, 0x41 = 'A'</code></pre>
+                            <p class="mb-0">Challenge: Create a function that can print at any (x,y) position with any color.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Next Steps Section -->
+                <div id="next-steps" class="blog-content mt-5">
+                    <h2><i class="fas fa-arrow-right me-2 text-teal"></i>Next Steps</h2>
+                    
+                    <p>You've now mastered the fundamentals:</p>
+                    <ul>
+                        <li>Real mode segmented memory addressing</li>
+                        <li>BIOS interrupts for screen and disk I/O</li>
+                        <li>Boot sector structure and the 0x55AA signature</li>
+                        <li>Two-stage bootloader architecture</li>
+                        <li>A20 gate and preparing for extended memory</li>
+                    </ul>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-forward me-2"></i>
+                        <strong>Coming Up in Phase 3:</strong> We'll escape real mode's 1MB prison! You'll learn about the Global Descriptor Table (GDT), transition to 32-bit protected mode, and finally start writing your kernel in C. Protected mode gives us memory protection, 4GB address space, and modern CPU features.</div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 1: How a Computer Starts</h5>
+                            <p class="text-muted small mb-2">Review the boot process, CPU reset state, and your development environment setup.</p>
+                            <a href="kernel-dev-phase-01-boot-process.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 3: Entering Protected Mode</h5>
+                            <p class="text-muted small mb-2">Transition to 32-bit protected mode, set up the GDT, and start running C code in your kernel.</p>
+                            <a href="kernel-dev-phase-03-protected-mode.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 4: Display, Input & Output</h5>
+                            <p class="text-muted small mb-2">Implement VGA text mode output and keyboard input handling for your kernel.</p>
+                            <a href="kernel-dev-phase-04-display-input.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook">
+                            <i class="fab fa-facebook-f"></i>
+                        </a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter">
+                            <i class="fab fa-twitter"></i>
+                        </a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn">
+                            <i class="fab fa-linkedin-in"></i>
+                        </a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube">
+                            <i class="fab fa-youtube"></i>
+                        </a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram">
+                            <i class="fab fa-instagram"></i>
+                        </a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest">
+                            <i class="fab fa-pinterest-p"></i>
+                        </a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email">
+                            <i class="fas fa-envelope"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="bg-secondary">
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+    
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+    
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>

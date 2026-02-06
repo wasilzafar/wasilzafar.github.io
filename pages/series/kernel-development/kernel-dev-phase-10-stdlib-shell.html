@@ -1,0 +1,2089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kernel Development Series - Phase 10: Standard Library & Shell | Wasil Zafar</title>
+    <meta name="description" content="Build a minimal C standard library (libc) and implement a command-line shell for your operating system kernel.">
+    <meta name="keywords" content="kernel development, libc, standard library, shell, command line, user programs, OS development">
+    <meta name="author" content="Wasil Zafar">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Kernel Development Series - Phase 10: Standard Library & Shell">
+    <meta property="og:description" content="Build a minimal C standard library (libc) and implement a command-line shell for your operating system kernel.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://wasilzafar.com/pages/series/kernel-development/kernel-dev-phase-10-stdlib-shell.html">
+    <meta property="og:image" content="https://wasilzafar.com/images/og-kernel-dev.png">
+    <meta property="article:published_time" content="2026-02-06">
+    <meta property="article:author" content="Wasil Zafar">
+    <meta property="article:section" content="Technology">
+
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+    
+    <!-- Google Consent Mode v2 -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('consent', 'default', {
+        'ad_storage': 'denied',
+        'ad_user_data': 'denied',
+        'ad_personalization': 'denied',
+        'analytics_storage': 'denied',
+        'wait_for_update': 500
+      });
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="../../../images/favicon_io/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="../../../css/main.css">
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. 
+                    By clicking "Accept All", you consent to our use of cookies. See our 
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a> 
+                    for more information.
+                </p>
+                
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#about">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#skills">Skills</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#certifications">Certifications</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#interests">Interests</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">Phase 10: Standard Library & Shell</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>February 6, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>30 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Build a minimal C standard library for user programs and implement a command-line shell that ties your entire operating system together.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation Overlay -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#introduction" onclick="closeNav()">Introduction</a>
+                <ul>
+                    <li><a href="#libc-overview" onclick="closeNav()">libc Overview</a></li>
+                    <li><a href="#shell-purpose" onclick="closeNav()">Shell Purpose</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#libc" onclick="closeNav()">Building libc</a>
+                <ul>
+                    <li><a href="#string-functions" onclick="closeNav()">String Functions</a></li>
+                    <li><a href="#memory-functions" onclick="closeNav()">Memory Functions</a></li>
+                    <li><a href="#stdio" onclick="closeNav()">Standard I/O</a></li>
+                    <li><a href="#stdlib" onclick="closeNav()">stdlib Functions</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#crt" onclick="closeNav()">C Runtime (crt0)</a>
+                <ul>
+                    <li><a href="#startup" onclick="closeNav()">Program Startup</a></li>
+                    <li><a href="#exit-handling" onclick="closeNav()">Exit Handling</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#shell" onclick="closeNav()">Building a Shell</a>
+                <ul>
+                    <li><a href="#shell-loop" onclick="closeNav()">Command Loop</a></li>
+                    <li><a href="#parsing" onclick="closeNav()">Command Parsing</a></li>
+                    <li><a href="#builtins" onclick="closeNav()">Builtin Commands</a></li>
+                    <li><a href="#execution" onclick="closeNav()">Program Execution</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#utilities" onclick="closeNav()">Basic Utilities</a>
+                <ul>
+                    <li><a href="#cat" onclick="closeNav()">cat</a></li>
+                    <li><a href="#ls" onclick="closeNav()">ls</a></li>
+                    <li><a href="#echo" onclick="closeNav()">echo</a></li>
+                </ul>
+            </li>
+            <li><a href="#build" onclick="closeNav()">What You Can Build</a></li>
+            <li><a href="#next-steps" onclick="closeNav()">Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- Introduction -->
+                <div id="introduction" class="blog-content">
+                    <h2><i class="fas fa-book me-2 text-teal"></i>Introduction: User-Space Foundation</h2>
+                    
+                    <div class="highlight-box crimson">
+                        <i class="fas fa-flag me-2"></i>
+                        <strong>Phase 10 Goals:</strong> By the end of this phase, your OS will have a working shell and C library. User programs can use standard C functions, and you'll have an interactive command line to run them.
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-map-signs me-2"></i>Complete Series Navigation</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-2">18-Part Series</span>
+                            <span class="badge bg-crimson">OS Development Mastery</span>
+                        </div>
+                        <div class="content">
+                            <ol>
+                                <li><a href="kernel-dev-phase-00-orientation.html">Phase 0: Orientation & Big Picture</a> - OS fundamentals, kernel architectures, learning path</li>
+                                <li><a href="kernel-dev-phase-01-boot-process.html">Phase 1: How a Computer Starts</a> - BIOS/UEFI, boot sequence, dev environment</li>
+                                <li><a href="kernel-dev-phase-02-real-mode.html">Phase 2: Real Mode - First Steps</a> - Real mode, bootloader, BIOS interrupts</li>
+                                <li><a href="kernel-dev-phase-03-protected-mode.html">Phase 3: Entering Protected Mode</a> - GDT, 32-bit mode, C code execution</li>
+                                <li><a href="kernel-dev-phase-04-display-input.html">Phase 4: Display, Input & Output</a> - VGA text mode, keyboard handling</li>
+                                <li><a href="kernel-dev-phase-05-interrupts.html">Phase 5: Interrupts & CPU Control</a> - IDT, ISRs, PIC programming</li>
+                                <li><a href="kernel-dev-phase-06-memory.html">Phase 6: Memory Management</a> - Paging, virtual memory, heap allocator</li>
+                                <li><a href="kernel-dev-phase-07-filesystem.html">Phase 7: Disk Access & Filesystems</a> - Block devices, FAT, VFS layer</li>
+                                <li><a href="kernel-dev-phase-08-processes.html">Phase 8: Processes & User Mode</a> - Task switching, system calls, user space</li>
+                                <li><a href="kernel-dev-phase-09-elf.html">Phase 9: ELF Loading & Executables</a> - ELF format, program loading</li>
+                                <li><strong>Phase 10: Standard Library & Shell (This Guide)</strong> - C library, command-line shell</li>
+                                <li><a href="kernel-dev-phase-11-long-mode.html">Phase 11: 64-Bit Long Mode</a> - x86-64, 64-bit paging, modern architecture</li>
+                                <li><a href="kernel-dev-phase-12-uefi.html">Phase 12: Modern Booting with UEFI</a> - UEFI boot services, memory maps</li>
+                                <li><a href="kernel-dev-phase-13-graphics.html">Phase 13: Graphics & GUI Systems</a> - Framebuffer, windowing, drawing</li>
+                                <li><a href="kernel-dev-phase-14-input-timing.html">Phase 14: Advanced Input & Timing</a> - Mouse, high-precision timers</li>
+                                <li><a href="kernel-dev-phase-15-hardware-drivers.html">Phase 15: Hardware Discovery & Drivers</a> - PCI, device drivers, NVMe</li>
+                                <li><a href="kernel-dev-phase-16-performance.html">Phase 16: Performance & Optimization</a> - Caching, scheduler tuning</li>
+                                <li><a href="kernel-dev-phase-17-security.html">Phase 17: Stability, Security & Finishing</a> - Debugging, hardening, completion</li>
+                            </ol>
+                        </div>
+                    </div>
+                    
+                    <p>In Phase 9, we loaded and ran ELF programs, but those programs had to make raw system calls. That's like giving someone a car without a steering wheel—technically it moves, but it's not very usable. Now we'll add the <strong>standard C library</strong> (libc) so programs can use familiar functions like <code>printf()</code>, <code>malloc()</code>, and <code>strlen()</code>. Then we'll build a <strong>shell</strong>—the program that lets users type commands and run programs interactively.</p>
+
+                    <pre><code class="language-c">/*
+ * THE USER-SPACE STACK
+ * =====================
+ * 
+ * User Programs (hello.c, cat.c, ls.c, shell.c)
+ *          │
+ *          │ calls printf("Hello %s", name)
+ *          ▼
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │           LIBC (C Standard Library)                         │
+ * │                                                             │
+ * │  stdio.h    stdlib.h   string.h   unistd.h                  │
+ * │  ┌───────┐  ┌───────┐  ┌───────┐  ┌───────┐                 │
+ * │  │printf │  │malloc │  │strlen │  │fork   │                 │
+ * │  │scanf  │  │free   │  │strcpy │  │exec   │                 │
+ * │  │fopen  │  │exit   │  │memcpy │  │read   │                 │
+ * │  │fclose │  │atoi   │  │strcmp │  │write  │                 │
+ * │  └───────┘  └───────┘  └───────┘  └───────┘                 │
+ * └─────────────────────────────────────────────────────────────┘
+ *          │
+ *          │ translates to write(1, "Hello Bob", 9)
+ *          ▼
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │              SYSCALL INTERFACE (int 0x80)                   │
+ * └─────────────────────────────────────────────────────────────┘
+ *          │
+ *          ▼
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │                         KERNEL                              │
+ * └─────────────────────────────────────────────────────────────┘
+ */</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Key Insight:</strong> The C standard library bridges applications and the kernel. Your shell brings everything together—it's the first program most users interact with and demonstrates your entire OS working.
+                    </div>
+
+                    <h3 id="libc-overview">libc Overview</h3>
+                    
+                    <p>GNU's glibc is 1.5 million lines of code—too complex for a hobby OS. We'll build a <strong>minimal libc</strong> with just the essential functions. Think of it as the difference between a Swiss Army knife and a chef's knife—we want something sharp and simple.</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-list me-2"></i>Our Minimal libc</h4>
+                        <div class="content">
+                            <table class="table table-bordered table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Header</th>
+                                        <th>Functions</th>
+                                        <th>Purpose</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>string.h</code></td>
+                                        <td><code>strlen, strcpy, strcmp, strcat, strchr, memcpy, memset, memcmp</code></td>
+                                        <td>String/memory manipulation</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>stdio.h</code></td>
+                                        <td><code>printf, puts, putchar, getchar, gets, sprintf</code></td>
+                                        <td>Formatted I/O</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>stdlib.h</code></td>
+                                        <td><code>malloc, free, exit, atoi, abs</code></td>
+                                        <td>Memory, conversion, control</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>unistd.h</code></td>
+                                        <td><code>read, write, fork, exec, chdir, getcwd</code></td>
+                                        <td>POSIX syscall wrappers</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>ctype.h</code></td>
+                                        <td><code>isalpha, isdigit, isspace, tolower, toupper</code></td>
+                                        <td>Character classification</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <p><strong>Real-World Analogy:</strong> libc is like a translator between you and a foreign country. You speak C (<code>printf("hello")</code>), and libc translates that into the local language (<code>write(1, "hello", 5)</code> syscall). Different countries (OSes) speak different dialects, but C programs work everywhere because libc handles the translation.</p>
+
+                    <h3 id="shell-purpose">Shell Purpose</h3>
+                    
+                    <p>The shell is the user's gateway to your operating system. It's a program that:</p>
+                    
+                    <ol>
+                        <li><strong>Reads</strong> commands from the user (or a script)</li>
+                        <li><strong>Parses</strong> the command and arguments</li>
+                        <li><strong>Executes</strong> the command (builtin or external program)</li>
+                        <li><strong>Waits</strong> for completion and displays results</li>
+                        <li><strong>Repeats</strong> (the "read-eval-print loop" or REPL)</li>
+                    </ol>
+
+                    <pre><code class="language-c">/*
+ * SHELL: THE USER INTERFACE
+ * ==========================
+ * 
+ * ╔════════════════════════════════════════════════════════════════╗
+ * ║  MyOS Shell v1.0                                               ║
+ * ║  $ ls                                                          ║
+ * ║  bin/  home/  etc/  dev/  tmp/                                 ║
+ * ║  $ cat /etc/motd                                               ║
+ * ║  Welcome to MyOS!                                              ║
+ * ║  $ echo Hello World                                            ║
+ * ║  Hello World                                                   ║
+ * ║  $ ./hello                                                     ║
+ * ║  Hello from C!                                                 ║
+ * ║  $ cd /home                                                    ║
+ * ║  $ pwd                                                         ║
+ * ║  /home                                                         ║
+ * ║  $ exit                                                        ║
+ * ╚════════════════════════════════════════════════════════════════╝
+ * 
+ * Shell Types:
+ *   - sh        (Bourne Shell - simple, POSIX standard)
+ *   - bash      (Bourne Again Shell - most popular on Linux)
+ *   - zsh       (Z Shell - powerful features, macOS default)
+ *   - fish      (Friendly Interactive Shell - user-friendly)
+ * 
+ * Our shell will be closest to sh - simple but functional.
+ */</code></pre>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Historical Note:</strong> The original Unix shell (1971) was written by Ken Thompson. The Bourne shell (sh) came in 1979 and became the standard. Bash ("Bourne Again Shell") arrived in 1989 and is still the default on most Linux systems. We'll build something simpler but follow the same principles.
+                    </div>
+                </div>
+
+                <!-- libc Section -->
+                <div id="libc" class="blog-content mt-5">
+                    <h2><i class="fas fa-code me-2 text-teal"></i>Building libc</h2>
+                    
+                    <p>We'll build libc as a static library (<code>libc.a</code>) that gets linked into every program. User programs include our headers and link against our library—they never know they're not using GNU libc!</p>
+
+                    <pre><code class="language-c">/*
+ * LIBC PROJECT STRUCTURE
+ * =======================
+ * 
+ * libc/
+ * ├── include/                 # Header files
+ * │   ├── stdio.h
+ * │   ├── stdlib.h
+ * │   ├── string.h
+ * │   ├── unistd.h
+ * │   ├── ctype.h
+ * │   └── sys/
+ * │       └── types.h
+ * ├── src/
+ * │   ├── string/              # String functions
+ * │   │   ├── strlen.c
+ * │   │   ├── strcpy.c
+ * │   │   ├── strcmp.c
+ * │   │   └── ...
+ * │   ├── stdio/               # I/O functions  
+ * │   │   ├── printf.c
+ * │   │   ├── puts.c
+ * │   │   └── ...
+ * │   ├── stdlib/              # General utilities
+ * │   │   ├── malloc.c
+ * │   │   ├── exit.c
+ * │   │   └── ...
+ * │   └── syscalls/            # Syscall wrappers
+ * │       ├── read.c
+ * │       ├── write.c
+ * │       └── ...
+ * ├── crt0.S                   # Runtime startup
+ * └── Makefile
+ */</code></pre>
+                    
+                    <h3 id="string-functions">String Functions</h3>
+                    
+                    <p>String functions are the workhorses of C programming. These are simple but must be correct—bugs here affect every program. Here's our implementation:</p>
+
+                    <pre><code class="language-c">/* String functions for user-space libc */
+
+size_t strlen(const char* str) {
+    size_t len = 0;
+    while (str[len]) len++;
+    return len;
+}
+
+char* strcpy(char* dest, const char* src) {
+    char* ret = dest;
+    while ((*dest++ = *src++));
+    return ret;
+}
+
+int strcmp(const char* s1, const char* s2) {
+    while (*s1 && (*s1 == *s2)) {
+        s1++;
+        s2++;
+    }
+    return *(unsigned char*)s1 - *(unsigned char*)s2;
+}
+
+char* strcat(char* dest, const char* src) {
+    char* ret = dest;
+    while (*dest) dest++;
+    while ((*dest++ = *src++));
+    return ret;
+}
+
+char* strchr(const char* s, int c) {
+    while (*s != (char)c) {
+        if (!*s) return NULL;
+        s++;
+    }
+    return (char*)s;
+}
+</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Warning:</strong> <code>gets()</code> is dangerous because it doesn't check buffer size—it's been removed from C11. We include it for simplicity, but real code should use <code>fgets()</code> instead. Never use <code>gets()</code> in production!
+                    </div>
+                    
+                    <h3 id="memory-functions">Memory Functions</h3>
+                    
+                    <p>Memory functions operate on raw bytes regardless of type. Unlike string functions, they don't stop at null bytes—they work with exact byte counts. These are used everywhere, including inside other libc functions.</p>
+
+                    <pre><code class="language-c">/* Memory functions */
+
+void* memcpy(void* dest, const void* src, size_t n) {
+    uint8_t* d = dest;
+    const uint8_t* s = src;
+    while (n--) *d++ = *s++;
+    return dest;
+}
+
+void* memset(void* s, int c, size_t n) {
+    uint8_t* p = s;
+    while (n--) *p++ = (uint8_t)c;
+    return s;
+}
+
+int memcmp(const void* s1, const void* s2, size_t n) {
+    const uint8_t* p1 = s1;
+    const uint8_t* p2 = s2;
+    while (n--) {
+        if (*p1 != *p2) return *p1 - *p2;
+        p1++;
+        p2++;
+    }
+    return 0;
+}
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Optimization Tip:</strong> Real libc implementations use SIMD instructions (SSE/AVX) to process 16-32 bytes at once. Our simple byte-by-byte version is correct but slow. Add optimizations later once everything works!
+                    </div>
+                    
+                    <h3 id="stdio">Standard I/O</h3>
+                    
+                    <p>Standard I/O functions provide formatted input/output. <code>printf()</code> is the most complex—it must parse format strings and handle multiple data types. We'll implement a simplified version that handles the most common cases:</p>
+
+                    <pre><code class="language-c">/* Standard I/O using system calls */
+
+int putchar(int c) {
+    char ch = c;
+    write(1, &ch, 1);  // fd 1 = stdout
+    return c;
+}
+
+int puts(const char* s) {
+    while (*s) putchar(*s++);
+    putchar('\n');
+    return 0;
+}
+
+int getchar(void) {
+    char c;
+    if (read(0, &c, 1) <= 0) return EOF;  // fd 0 = stdin
+    return (unsigned char)c;
+}
+
+char* gets(char* s) {
+    char* p = s;
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF) {
+        *p++ = c;
+    }
+    *p = '\0';
+    return s;
+}
+
+// Simple printf (integer and string only)
+int printf(const char* fmt, ...) {
+    // Implement using va_args
+    // Handle %d, %s, %c, %x
+    // Content will be expanded
+    return 0;
+}
+</code></pre>
+
+                    <p>Here's a working <code>printf()</code> implementation that handles the common format specifiers:</p>
+
+                    <pre><code class="language-c">/* Complete printf implementation */
+#include &lt;stdarg.h&gt;
+
+// Helper: Print unsigned integer in given base
+static int print_num(unsigned int num, int base, int is_signed, int width, char pad) {
+    char buf[32];
+    char* digits = "0123456789abcdef";
+    int count = 0;
+    int negative = 0;
+    
+    // Handle negative numbers for signed decimal
+    if (is_signed && (int)num < 0) {
+        negative = 1;
+        num = -num;
+    }
+    
+    // Convert to string (reversed)
+    int i = 0;
+    do {
+        buf[i++] = digits[num % base];
+        num /= base;
+    } while (num > 0);
+    
+    // Add negative sign
+    if (negative) buf[i++] = '-';
+    
+    // Pad if needed
+    while (i < width) {
+        buf[i++] = pad;
+    }
+    
+    // Print in reverse
+    while (i > 0) {
+        putchar(buf[--i]);
+        count++;
+    }
+    
+    return count;
+}
+
+int printf(const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    
+    int count = 0;
+    char c;
+    
+    while ((c = *fmt++)) {
+        if (c != '%') {
+            putchar(c);
+            count++;
+            continue;
+        }
+        
+        // Parse width
+        int width = 0;
+        char pad = ' ';
+        if (*fmt == '0') {
+            pad = '0';
+            fmt++;
+        }
+        while (*fmt >= '0' && *fmt <= '9') {
+            width = width * 10 + (*fmt++ - '0');
+        }
+        
+        // Handle format specifier
+        c = *fmt++;
+        switch (c) {
+            case 'd':
+            case 'i':
+                count += print_num(va_arg(args, int), 10, 1, width, pad);
+                break;
+            case 'u':
+                count += print_num(va_arg(args, unsigned), 10, 0, width, pad);
+                break;
+            case 'x':
+                count += print_num(va_arg(args, unsigned), 16, 0, width, pad);
+                break;
+            case 'p': {
+                putchar('0'); putchar('x'); count += 2;
+                count += print_num(va_arg(args, unsigned), 16, 0, 8, '0');
+                break;
+            }
+            case 'c':
+                putchar(va_arg(args, int));
+                count++;
+                break;
+            case 's': {
+                char* s = va_arg(args, char*);
+                if (!s) s = "(null)";
+                while (*s) {
+                    putchar(*s++);
+                    count++;
+                }
+                break;
+            }
+            case '%':
+                putchar('%');
+                count++;
+                break;
+            default:
+                putchar('%');
+                putchar(c);
+                count += 2;
+        }
+    }
+    
+    va_end(args);
+    return count;
+}
+</code></pre>
+                    
+                    <h3 id="stdlib">stdlib Functions</h3>
+                    
+                    <p>The stdlib functions provide memory allocation, program termination, and utility functions. The most important is <code>malloc()</code>—dynamic memory allocation for user programs.</p>
+
+                    <pre><code class="language-c">/* stdlib implementation */
+
+// Simple sbrk-based memory allocator
+static uint8_t* heap_start = NULL;
+static uint8_t* heap_end = NULL;
+static uint8_t* heap_current = NULL;
+
+// Block header for malloc
+typedef struct block_header {
+    size_t size;
+    int free;
+    struct block_header* next;
+} block_header_t;
+
+static block_header_t* free_list = NULL;
+
+void* malloc(size_t size) {
+    // Initialize heap on first call
+    if (!heap_start) {
+        heap_start = (uint8_t*)sbrk(0);
+        heap_end = heap_start;
+        heap_current = heap_start;
+    }
+    
+    // Align to 8 bytes
+    size = (size + 7) & ~7;
+    
+    // First-fit search in free list
+    block_header_t* block = free_list;
+    block_header_t* prev = NULL;
+    
+    while (block) {
+        if (block->free && block->size >= size) {
+            block->free = 0;
+            return (void*)(block + 1);
+        }
+        prev = block;
+        block = block->next;
+    }
+    
+    // No suitable free block, allocate new one
+    size_t total = sizeof(block_header_t) + size;
+    
+    if (heap_current + total > heap_end) {
+        // Grow heap
+        if (sbrk(total + 4096) == (void*)-1) {
+            return NULL;  // Out of memory
+        }
+        heap_end += total + 4096;
+    }
+    
+    block = (block_header_t*)heap_current;
+    block->size = size;
+    block->free = 0;
+    block->next = NULL;
+    
+    if (prev) {
+        prev->next = block;
+    } else {
+        free_list = block;
+    }
+    
+    heap_current += total;
+    
+    return (void*)(block + 1);
+}
+
+void free(void* ptr) {
+    if (!ptr) return;
+    
+    block_header_t* block = (block_header_t*)ptr - 1;
+    block->free = 1;
+    
+    // TODO: Coalesce adjacent free blocks
+}
+
+void* calloc(size_t nmemb, size_t size) {
+    size_t total = nmemb * size;
+    void* ptr = malloc(total);
+    if (ptr) {
+        memset(ptr, 0, total);
+    }
+    return ptr;
+}
+
+void* realloc(void* ptr, size_t size) {
+    if (!ptr) return malloc(size);
+    if (size == 0) {
+        free(ptr);
+        return NULL;
+    }
+    
+    block_header_t* block = (block_header_t*)ptr - 1;
+    if (block->size >= size) {
+        return ptr;  // Current block is big enough
+    }
+    
+    void* new_ptr = malloc(size);
+    if (new_ptr) {
+        memcpy(new_ptr, ptr, block->size);
+        free(ptr);
+    }
+    return new_ptr;
+}
+
+// Exit function
+void exit(int status) {
+    // TODO: Call atexit() handlers
+    // TODO: Flush stdio buffers
+    _exit(status);  // Syscall
+}
+
+// String to integer
+int atoi(const char* str) {
+    int result = 0;
+    int sign = 1;
+    
+    // Skip whitespace
+    while (*str == ' ' || *str == '\t') str++;
+    
+    // Handle sign
+    if (*str == '-') { sign = -1; str++; }
+    else if (*str == '+') { str++; }
+    
+    // Convert digits
+    while (*str >= '0' && *str <= '9') {
+        result = result * 10 + (*str - '0');
+        str++;
+    }
+    
+    return sign * result;
+}
+
+int abs(int n) {
+    return n < 0 ? -n : n;
+}
+</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-exclamation-circle me-2"></i>malloc() Caveats</h4>
+                        <div class="content">
+                            <p>Our simple malloc has limitations:</p>
+                            <ul>
+                                <li><strong>No coalescing:</strong> Adjacent free blocks aren't merged, causing fragmentation</li>
+                                <li><strong>First-fit:</strong> May not find the best block, wastes memory</li>
+                                <li><strong>No thread safety:</strong> Multiple threads could corrupt the heap</li>
+                                <li><strong>No reuse:</strong> Free blocks are marked but never returned to OS</li>
+                            </ul>
+                            <p>Production allocators (jemalloc, ptmalloc, mimalloc) use sophisticated techniques to address these issues.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CRT Section -->
+                <div id="crt" class="blog-content mt-5">
+                    <h2><i class="fas fa-play-circle me-2 text-teal"></i>C Runtime (crt0)</h2>
+                    
+                    <p>The C runtime is the glue between the OS loader and your <code>main()</code> function. When the kernel loads a program, it doesn't call <code>main()</code> directly—it jumps to <code>_start</code> in crt0, which sets things up properly.</p>
+
+                    <pre><code class="language-c">/*
+ * PROGRAM STARTUP SEQUENCE
+ * =========================
+ * 
+ * Kernel loads ELF
+ *         │
+ *         ▼ Jump to e_entry (_start)
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │                    _start (crt0.S)                          │
+ * │  1. Clear frame pointer (ebp = 0)                           │
+ * │  2. Extract argc, argv, envp from stack                     │
+ * │  3. Initialize libc (__libc_init)                           │
+ * │  4. Call constructors (__init_array)                        │
+ * │  5. call main(argc, argv, envp)                             │
+ * │  6. Call exit(return value)                                 │
+ * └─────────────────────────────────────────────────────────────┘
+ *         │
+ *         ▼
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │                       main()                                │
+ * │  Your program runs here                                     │
+ * │  return 0;  // or whatever                                  │
+ * └─────────────────────────────────────────────────────────────┘
+ *         │
+ *         ▼
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │                      exit()                                 │
+ * │  1. Call atexit() handlers (in reverse order)               │
+ * │  2. Flush and close stdio streams                           │
+ * │  3. Call destructors (__fini_array)                         │
+ * │  4. _exit() syscall → kernel terminates process             │
+ * └─────────────────────────────────────────────────────────────┘
+ */</code></pre>
+                    
+                    <h3 id="startup">Program Startup</h3>
+                    
+                    <p>The startup code must handle the exact stack layout the kernel provides. Here's our complete crt0:</p>
+
+                    <pre><code class="language-nasm">; crt0.asm - C runtime startup code
+section .text
+global _start
+extern main
+extern exit
+
+_start:
+    ; Stack layout from kernel:
+    ; [esp+0]  = argc
+    ; [esp+4]  = argv[0]
+    ; [esp+8]  = argv[1]
+    ; ...
+    
+    ; Get argc
+    mov eax, [esp]
+    
+    ; Calculate argv pointer
+    lea ebx, [esp + 4]
+    
+    ; Call main(argc, argv)
+    push ebx    ; argv
+    push eax    ; argc
+    call main
+    add esp, 8
+    
+    ; Call exit with return value
+    push eax
+    call exit
+    
+    ; Should never reach here
+    jmp $
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Why clear EBP?</strong> Setting EBP to 0 marks the end of the call stack. Debuggers use EBP to walk the stack and print backtraces—a zero EBP tells them to stop. Without it, stack traces would contain garbage.
+                    </div>
+                    
+                    <h3 id="exit-handling">Exit Handling</h3>
+                    
+                    <p>The <code>exit()</code> function does cleanup before terminating. This ensures files are flushed and resources are released:</p>
+
+                    <pre><code class="language-c">/* Exit handling with atexit() support */
+
+#define MAX_ATEXIT_FUNCS 32
+
+static void (*atexit_funcs[MAX_ATEXIT_FUNCS])(void);
+static int atexit_count = 0;
+
+// Register a function to call at exit
+int atexit(void (*func)(void)) {
+    if (atexit_count >= MAX_ATEXIT_FUNCS) {
+        return -1;
+    }
+    atexit_funcs[atexit_count++] = func;
+    return 0;
+}
+
+// Clean exit with cleanup
+void exit(int status) {
+    // Call atexit handlers in reverse order
+    while (atexit_count > 0) {
+        atexit_funcs[--atexit_count]();
+    }
+    
+    // Flush stdio buffers
+    fflush(stdout);
+    fflush(stderr);
+    
+    // Close all open files
+    // for (int fd = 0; fd &lt; MAX_FDS; fd++) {
+    //     close(fd);
+    // }
+    
+    // Terminate process
+    _exit(status);
+}
+
+// Example usage
+void cleanup_temp_files(void) {
+    printf("Cleaning up temporary files...\n");
+    unlink("/tmp/myapp.tmp");
+}
+
+int main() {
+    atexit(cleanup_temp_files);  // Will be called when exit() runs
+    
+    printf("Doing work...\n");
+    
+    return 0;  // exit(0) called by crt0
+}
+</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-code me-2"></i>Complete libc Header</h4>
+                        <div class="content">
+                            <pre><code class="language-c">/* libc/include/stdlib.h */
+#ifndef _STDLIB_H
+#define _STDLIB_H
+
+#include &lt;stddef.h&gt;  // size_t, NULL
+
+#define EXIT_SUCCESS 0
+#define EXIT_FAILURE 1
+
+// Memory allocation
+void* malloc(size_t size);
+void* calloc(size_t nmemb, size_t size);
+void* realloc(void* ptr, size_t size);
+void free(void* ptr);
+
+// Process control
+void exit(int status) __attribute__((noreturn));
+void _exit(int status) __attribute__((noreturn));
+int atexit(void (*func)(void));
+void abort(void) __attribute__((noreturn));
+
+// String conversion
+int atoi(const char* str);
+long atol(const char* str);
+long strtol(const char* str, char** endptr, int base);
+
+// Math
+int abs(int n);
+long labs(long n);
+
+// Random numbers
+int rand(void);
+void srand(unsigned int seed);
+#define RAND_MAX 32767
+
+// Environment
+char* getenv(const char* name);
+int setenv(const char* name, const char* value, int overwrite);
+
+#endif /* _STDLIB_H */</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shell Section -->
+                <div id="shell" class="blog-content mt-5">
+                    <h2><i class="fas fa-terminal me-2 text-teal"></i>Building a Shell</h2>
+                    
+                    <p>The shell is the user's interface to your operating system. It combines everything we've built: file I/O, process creation, program execution, and our C library. Let's build a working shell step by step.</p>
+
+                    <pre><code class="language-c">/*
+ * SHELL ARCHITECTURE
+ * ===================
+ * 
+ *         User types "ls -l /home"
+ *                    │
+ *                    ▼
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │  1. READ: gets(line) → "ls -l /home"                        │
+ * └─────────────────────────────────────────────────────────────┘
+ *                    │
+ *                    ▼
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │  2. PARSE: split into tokens                                │
+ * │     argv[0] = "ls"                                          │
+ * │     argv[1] = "-l"                                          │
+ * │     argv[2] = "/home"                                       │
+ * │     argv[3] = NULL                                          │
+ * └─────────────────────────────────────────────────────────────┘
+ *                    │
+ *                    ▼
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │  3. CHECK: Is it a builtin command?                         │
+ * │     builtins: cd, exit, help, export, pwd, history          │
+ * └─────────────────────────────────────────────────────────────┘
+ *                    │
+ *             ┌──────┴──────┐
+ *             ▼             ▼
+ *   ┌─────────────┐  ┌─────────────────────────────────────────┐
+ *   │ YES: Run    │  │ NO: External program                    │
+ *   │ builtin     │  │  4. fork() → child process              │
+ *   │ directly    │  │  5. Child: exec("/bin/ls", argv)        │
+ *   └─────────────┘  │  6. Parent: wait() for child            │
+ *         │         └─────────────────────────────────────────┘
+ *         │                            │
+ *         └────────────────────────────┘
+ *                    │
+ *                    ▼
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │  7. LOOP: Print prompt, repeat                              │
+ * └─────────────────────────────────────────────────────────────┘
+ */</code></pre>
+                    
+                    <h3 id="shell-loop">Command Loop</h3>
+                    
+                    <p>The main loop is simple: prompt → read → parse → execute → repeat. This is the heart of the shell:</p>
+
+                    <pre><code class="language-c">/* Simple shell main loop */
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+
+#define MAX_LINE 256
+#define MAX_ARGS 32
+
+char* prompt = "myos> ";
+
+int main(void) {
+    char line[MAX_LINE];
+    char* args[MAX_ARGS];
+    
+    while (1) {
+        // Print prompt
+        printf("%s", prompt);
+        
+        // Read command
+        if (gets(line) == NULL) {
+            break;
+        }
+        
+        // Skip empty lines
+        if (line[0] == '\0') {
+            continue;
+        }
+        
+        // Parse and execute
+        int argc = parse_line(line, args);
+        if (argc > 0) {
+            execute(argc, args);
+        }
+    }
+    
+    return 0;
+}
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Line Editing:</strong> Our simple shell uses <code>gets()</code> which has no editing capability. Real shells support left/right arrows, history (up/down), tab completion, and more. These features require raw terminal mode and are complex to implement properly.
+                    </div>
+                    
+                    <h3 id="parsing">Command Parsing</h3>
+                    
+                    <p>Parsing splits the command line into individual arguments. This simple tokenizer handles spaces and tabs:</p>
+
+                    <pre><code class="language-c">/* Parse command line into arguments */
+int parse_line(char* line, char* args[]) {
+    int argc = 0;
+    char* p = line;
+    
+    while (*p && argc < MAX_ARGS - 1) {
+        // Skip whitespace
+        while (*p == ' ' || *p == '\t') p++;
+        
+        if (*p == '\0') break;
+        
+        // Found argument
+        args[argc++] = p;
+        
+        // Find end of argument
+        while (*p && *p != ' ' && *p != '\t') p++;
+        
+        if (*p) {
+            *p++ = '\0';  // Null terminate
+        }
+    }
+    
+    args[argc] = NULL;
+    return argc;
+}
+</code></pre>
+
+                    <p><strong>How parsing works:</strong></p>
+                    <ul>
+                        <li><strong>Skip whitespace</strong> - Move past spaces/tabs between arguments</li>
+                        <li><strong>Mark start</strong> - Store pointer to beginning of each word</li>
+                        <li><strong>Find end</strong> - Scan to next whitespace or end of line</li>
+                        <li><strong>Terminate</strong> - Replace whitespace with null byte to create separate strings</li>
+                    </ul>
+                    
+<pre style="background: #1e1e1e; padding: 1rem; border-radius: 8px; color: #dcdcaa; overflow-x: auto; font-size: 0.85rem;">
+<span style="color: #6a9955;">Input:      "ls -la /home"</span>
+                           
+<span style="color: #dcdcaa;">    ┌───────────────────────────────┐</span>
+<span style="color: #dcdcaa;">    │ l │ s │   │ - │ l │ a │   │ / │ h │ o │ m │ e │ \0│</span>
+<span style="color: #dcdcaa;">    └───────────────────────────────┘</span>
+
+<span style="color: #6a9955;">After parsing:</span>
+    
+<span style="color: #dcdcaa;">    ┌───────────────────────────────┐</span>
+<span style="color: #dcdcaa;">    │ l │ s │\0│ - │ l │ a │\0│ / │ h │ o │ m │ e │ \0│</span>
+<span style="color: #dcdcaa;">    └───────────────────────────────┘</span>
+<span style="color: #dcdcaa;">      ↑            ↑            ↑</span>
+<span style="color: #9cdcfe;">    args[0]     args[1]     args[2]</span>
+</pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Production shells handle much more:</strong> Quoted strings (<code>"hello world"</code>), escape sequences (<code>\n</code>), variable expansion (<code>$HOME</code>), pipes (<code>|</code>), redirects (<code>></code> <code><</code>), and more. Our parser is minimal but demonstrates the core idea.
+                    </div>
+                    
+                    <h3 id="builtins">Builtin Commands</h3>
+                    
+                    <p>Builtins are commands that <strong>must</strong> run inside the shell process itself, not as separate programs. Why? Some operations only make sense in the current process:</p>
+                    
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Builtin</th>
+                                <th>Why It Must Be Builtin</th>
+                                <th>What Happens Otherwise</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>cd</code></td>
+                                <td>Changes shell's working directory</td>
+                                <td>Child would change its own directory, parent unchanged</td>
+                            </tr>
+                            <tr>
+                                <td><code>exit</code></td>
+                                <td>Terminates shell process</td>
+                                <td>Child would exit, parent keeps running</td>
+                            </tr>
+                            <tr>
+                                <td><code>export</code></td>
+                                <td>Sets environment variables</td>
+                                <td>Child's environment doesn't affect parent</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <pre><code class="language-c">/* Builtin shell commands */
+typedef struct {
+    char* name;
+    int (*func)(int argc, char* argv[]);
+} builtin_t;
+
+int builtin_cd(int argc, char* argv[]) {
+    if (argc < 2) {
+        printf("cd: missing argument\n");
+        return 1;
+    }
+    if (chdir(argv[1]) != 0) {
+        printf("cd: %s: No such directory\n", argv[1]);
+        return 1;
+    }
+    return 0;
+}
+
+int builtin_exit(int argc, char* argv[]) {
+    exit(0);
+    return 0;  // Never reached
+}
+
+int builtin_help(int argc, char* argv[]) {
+    printf("Available commands:\n");
+    printf("  cd <dir>  - Change directory\n");
+    printf("  exit      - Exit shell\n");
+    printf("  help      - Show this help\n");
+    return 0;
+}
+
+builtin_t builtins[] = {
+    {"cd", builtin_cd},
+    {"exit", builtin_exit},
+    {"help", builtin_help},
+    {NULL, NULL}
+};
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Extending Builtins:</strong> Adding new builtins is easy—just create a function with the signature <code>int func(int argc, char* argv[])</code> and add it to the array. Common additions include <code>pwd</code>, <code>echo</code>, and <code>alias</code>.
+                    </div>
+                    
+                    <h3 id="execution">Program Execution</h3>
+                    
+                    <p>When a command isn't a builtin, the shell must launch an external program. This uses the classic <strong>fork-exec</strong> pattern we learned in Phase 8:</p>
+                    
+<pre style="background: #1e1e1e; padding: 1rem; border-radius: 8px; color: #dcdcaa; overflow-x: auto; font-size: 0.85rem;">
+<span style="color: #6a9955;">Fork-Exec for Command Execution:</span>
+
+<span style="color: #9cdcfe;">┌───────────────────┐</span>
+<span style="color: #9cdcfe;">│    Shell (PID 1)  │</span>
+<span style="color: #9cdcfe;">│ > ls -la          │</span>
+<span style="color: #9cdcfe;">└─────────┬─────────┘</span>
+          <span style="color: #9cdcfe;">│</span>
+          <span style="color: #dcdcaa;">│ fork()</span>
+          <span style="color: #9cdcfe;">▼</span>
+<span style="color: #9cdcfe;">┌─────────────────────────────────────────┐</span>
+<span style="color: #9cdcfe;">│         Shell                Shell      │</span>   
+<span style="color: #9cdcfe;">│         (PID 1)              (PID 2)    │</span>
+<span style="color: #9cdcfe;">│            │                    │       │</span>
+<span style="color: #9cdcfe;">│        waitpid()            exec("ls")  │</span>
+<span style="color: #9cdcfe;">│            │                    │       │</span>
+<span style="color: #9cdcfe;">│            │                    ▼       │</span>
+<span style="color: #9cdcfe;">│            │            ┌───────────┐   │</span>
+<span style="color: #9cdcfe;">│            │            │    ls     │   │</span>
+<span style="color: #9cdcfe;">│            │            │  program  │   │</span>
+<span style="color: #9cdcfe;">│            │            │ (PID 2)   │   │</span>
+<span style="color: #9cdcfe;">│            │            └─────┬─────┘   │</span>
+<span style="color: #9cdcfe;">│            │                  │         │</span>
+<span style="color: #9cdcfe;">│            └───── waits ──────┘         │</span>
+<span style="color: #9cdcfe;">│                                         │</span>
+<span style="color: #9cdcfe;">│         (ls exits, shell continues)     │</span>
+<span style="color: #9cdcfe;">└─────────────────────────────────────────┘</span>
+</pre>
+
+                    <pre><code class="language-c">/* Execute external program */
+void execute(int argc, char* argv[]) {
+    if (argc == 0) return;
+    
+    // Check builtins first
+    for (int i = 0; builtins[i].name; i++) {
+        if (strcmp(argv[0], builtins[i].name) == 0) {
+            builtins[i].func(argc, argv);
+            return;
+        }
+    }
+    
+    // External program - fork and exec
+    pid_t pid = fork();
+    
+    if (pid < 0) {
+        printf("fork failed\n");
+        return;
+    }
+    
+    if (pid == 0) {
+        // Child process - execute command
+        execvp(argv[0], argv);
+        // Only reached if exec fails
+        printf("%s: command not found\n", argv[0]);
+        exit(127);
+    }
+    
+    // Parent process - wait for child
+    int status;
+    waitpid(pid, &status, 0);
+}
+</code></pre>
+
+                    <p><strong>Key execution steps:</strong></p>
+                    <ol>
+                        <li><strong>Check builtins</strong> - Loop through builtin array, call function if name matches</li>
+                        <li><strong>Fork</strong> - Create child process (exact copy of shell)</li>
+                        <li><strong>Child: exec</strong> - Replace child with the requested program</li>
+                        <li><strong>Parent: wait</strong> - Block until child exits, then print next prompt</li>
+                    </ol>
+                    
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span><i class="fas fa-code me-1"></i>Advanced Feature</span>
+                        </div>
+                        <h4><i class="fas fa-terminal me-2"></i>Background Execution</h4>
+                        <div class="content">
+                            <p>Adding <code>&</code> for background jobs requires:</p>
+                            <ul>
+                                <li>Detect <code>&</code> at end of command during parsing</li>
+                                <li>Skip waitpid() for background jobs</li>
+                                <li>Store background PIDs in a job list</li>
+                                <li>Handle SIGCHLD to clean up zombies</li>
+                            </ul>
+                            <pre><code class="language-c">// Background execution (simplified)
+if (background) {
+    printf("[%d] %d\n", job_num++, pid);
+    // Don't wait - return to prompt immediately
+} else {
+    waitpid(pid, &status, 0);
+}</code></pre>
+                        </div>
+                        <div class="tags">
+                            <span class="bias-tag">Advanced</span>
+                            <span class="bias-tag">Job Control</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Utilities Section -->
+                <div id="utilities" class="blog-content mt-5">
+                    <h2><i class="fas fa-tools me-2 text-teal"></i>Basic Utilities</h2>
+                    
+                    <p>With our shell working, we need utilities to run! Let's implement the most fundamental commands. These combine everything we've built: libc functions, file I/O syscalls, and proper command-line handling.</p>
+                    
+<pre style="background: #1e1e1e; padding: 1rem; border-radius: 8px; color: #dcdcaa; overflow-x: auto; font-size: 0.85rem;">
+<span style="color: #6a9955;">Utility Programs Use Everything:</span>
+
+<span style="color: #9cdcfe;">                User-Space Utilities</span>
+<span style="color: #9cdcfe;">┌─────────────────────────────────────────────┐</span>
+<span style="color: #9cdcfe;">│          cat         ls          echo       │</span>
+<span style="color: #9cdcfe;">├─────────────────────────────────────────────┤</span>
+<span style="color: #9cdcfe;">│              Standard Library (libc)        │</span>
+<span style="color: #9cdcfe;">│   printf()  strlen()  malloc()  getchar()   │</span>
+<span style="color: #9cdcfe;">├─────────────────────────────────────────────┤</span>
+<span style="color: #9cdcfe;">│              System Call Interface          │</span>
+<span style="color: #9cdcfe;">│   read()    write()   open()    close()     │</span>
+<span style="color: #9cdcfe;">├─────────────────────────────────────────────┤</span>
+<span style="color: #9cdcfe;">│                   Kernel                    │</span>
+<span style="color: #9cdcfe;">│    VFS       Filesystem      Drivers        │</span>
+<span style="color: #9cdcfe;">└─────────────────────────────────────────────┘</span>
+</pre>
+                    
+                    <h3 id="cat">cat - File Display</h3>
+                    
+                    <p><code>cat</code> (concatenate) displays file contents. It's deceptively simple but demonstrates proper file handling:</p>
+
+                    <pre><code class="language-c">/* cat.c - Display file contents */
+#include "libc.h"
+
+#define BUF_SIZE 1024
+
+int cat_file(const char* filename) {
+    int fd;
+    
+    if (filename == NULL || strcmp(filename, "-") == 0) {
+        fd = 0;  // stdin
+    } else {
+        fd = open(filename, O_RDONLY);
+        if (fd < 0) {
+            printf("cat: %s: No such file\n", filename);
+            return 1;
+        }
+    }
+    
+    char buf[BUF_SIZE];
+    ssize_t n;
+    
+    while ((n = read(fd, buf, BUF_SIZE)) > 0) {
+        write(1, buf, n);  // stdout
+    }
+    
+    if (fd != 0) close(fd);
+    return 0;
+}
+
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        // No args = read from stdin
+        return cat_file(NULL);
+    }
+    
+    int ret = 0;
+    for (int i = 1; i < argc; i++) {
+        ret |= cat_file(argv[i]);
+    }
+    return ret;
+}
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Why use <code>read()</code>/<code>write()</code> instead of <code>printf()</code>?</strong> For efficient binary-safe output. <code>printf()</code> processes format strings and stops at null bytes. Direct syscalls copy exactly what's in the file—binary data, null bytes, everything.
+                    </div>
+                    
+                    <h3 id="ls">ls - Directory Listing</h3>
+                    
+                    <p><code>ls</code> lists directory contents. This requires the <code>readdir()</code> syscall we implemented in Phase 7. The simplest version just prints names:</p>
+
+                    <pre><code class="language-c">/* ls.c - List directory contents */
+#include "libc.h"
+
+int list_dir(const char* path) {
+    DIR* dir = opendir(path);
+    if (!dir) {
+        printf("ls: cannot access '%s'\n", path);
+        return 1;
+    }
+    
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL) {
+        // Skip . and .. for cleaner output
+        if (entry->d_name[0] == '.' && 
+            (entry->d_name[1] == '\0' || 
+             (entry->d_name[1] == '.' && entry->d_name[2] == '\0'))) {
+            continue;
+        }
+        
+        // Show type indicator
+        char type = ' ';
+        if (entry->d_type == DT_DIR) type = '/';
+        else if (entry->d_type == DT_LNK) type = '@';
+        
+        printf("%s%c  ", entry->d_name, type);
+    }
+    printf("\n");
+    
+    closedir(dir);
+    return 0;
+}
+
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        return list_dir(".");
+    }
+    
+    for (int i = 1; i < argc; i++) {
+        if (argc > 2) printf("%s:\n", argv[i]);
+        list_dir(argv[i]);
+    }
+    return 0;
+}
+</code></pre>
+
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span><i class="fas fa-code me-1"></i>Enhancement</span>
+                        </div>
+                        <h4><i class="fas fa-list me-2"></i>Adding <code>ls -la</code> Support</h4>
+                        <div class="content">
+                            <p>A full ls implementation adds stat() calls for each entry:</p>
+                            <pre><code class="language-c">// Extended listing with -l flag
+struct stat st;
+stat(fullpath, &st);
+printf("%c%s %4d %s %8ld %s\n",
+    S_ISDIR(st.st_mode) ? 'd' : '-',
+    mode_string(st.st_mode),  // rwxr-xr-x
+    st.st_nlink,
+    uid_to_name(st.st_uid),
+    st.st_size,
+    entry->d_name);</code></pre>
+                        </div>
+                        <div class="tags">
+                            <span class="bias-tag">Enhancement</span>
+                            <span class="bias-tag">stat()</span>
+                        </div>
+                    </div>
+                    
+                    <h3 id="echo">echo - Print Arguments</h3>
+                    
+                    <p><code>echo</code> is the simplest utility—it just prints its arguments. But even simple tools need proper option handling:</p>
+
+                    <pre><code class="language-c">/* echo.c - Print arguments */
+#include "libc.h"
+
+int main(int argc, char* argv[]) {
+    int newline = 1;  // Print trailing newline by default
+    int start = 1;
+    
+    // Handle -n flag (no newline)
+    if (argc > 1 && strcmp(argv[1], "-n") == 0) {
+        newline = 0;
+        start = 2;
+    }
+    
+    // Print arguments separated by spaces
+    for (int i = start; i < argc; i++) {
+        if (i > start) putchar(' ');
+        
+        char* p = argv[i];
+        while (*p) {
+            // Handle escape sequences
+            if (*p == '\\' && *(p+1)) {
+                p++;
+                switch (*p) {
+                    case 'n': putchar('\n'); break;
+                    case 't': putchar('\t'); break;
+                    case '\\': putchar('\\'); break;
+                    default: putchar(*p);
+                }
+            } else {
+                putchar(*p);
+            }
+            p++;
+        }
+    }
+    
+    if (newline) putchar('\n');
+    return 0;
+}
+</code></pre>
+
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Command</th>
+                                <th>Syscalls Used</th>
+                                <th>libc Functions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>cat</code></td>
+                                <td>open, read, write, close</td>
+                                <td>printf, strcmp</td>
+                            </tr>
+                            <tr>
+                                <td><code>ls</code></td>
+                                <td>open, getdents, close</td>
+                                <td>printf, opendir, readdir</td>
+                            </tr>
+                            <tr>
+                                <td><code>echo</code></td>
+                                <td>write (via putchar)</td>
+                                <td>putchar, strcmp</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- What You Can Build Section -->
+                <div id="build" class="blog-content mt-5">
+                    <h2><i class="fas fa-hammer me-2 text-teal"></i>What You Can Build</h2>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Phase 10 Milestone:</strong> A complete user-space environment! Your OS now has a working shell, standard C library, and basic utilities. Users can type commands and run programs. This is a <em>usable</em> operating system!
+                    </div>
+                    
+                    <h3>Complete libc Header</h3>
+                    <p>Combine all our functions into a single header:</p>
+                    
+                    <pre><code class="language-c">/* libc.h - Complete minimal C library */
+#ifndef _LIBC_H
+#define _LIBC_H
+
+#include <stdint.h>
+#include <stddef.h>
+#include <stdarg.h>
+
+/* System calls */
+int sys_exit(int status);
+ssize_t sys_read(int fd, void* buf, size_t count);
+ssize_t sys_write(int fd, const void* buf, size_t count);
+int sys_open(const char* path, int flags);
+int sys_close(int fd);
+pid_t sys_fork(void);
+int sys_exec(const char* path, char* const argv[]);
+pid_t sys_waitpid(pid_t pid, int* status, int options);
+void* sys_sbrk(intptr_t increment);
+int sys_chdir(const char* path);
+
+/* Wrappers */
+#define exit(s)         sys_exit(s)
+#define read(f,b,n)     sys_read(f,b,n)
+#define write(f,b,n)    sys_write(f,b,n)
+#define open(p,f)       sys_open(p,f)
+#define close(f)        sys_close(f)
+#define fork()          sys_fork()
+#define execvp(p,a)     sys_exec(p,a)
+#define waitpid(p,s,o)  sys_waitpid(p,s,o)
+#define chdir(p)        sys_chdir(p)
+
+/* String functions */
+size_t strlen(const char* s);
+char* strcpy(char* dest, const char* src);
+int strcmp(const char* s1, const char* s2);
+char* strcat(char* dest, const char* src);
+char* strchr(const char* s, int c);
+
+/* Memory functions */
+void* memcpy(void* dest, const void* src, size_t n);
+void* memset(void* s, int c, size_t n);
+int memcmp(const void* s1, const void* s2, size_t n);
+
+/* Heap */
+void* malloc(size_t size);
+void free(void* ptr);
+void* calloc(size_t nmemb, size_t size);
+
+/* I/O */
+int putchar(int c);
+int puts(const char* s);
+int getchar(void);
+char* gets(char* s);
+int printf(const char* fmt, ...);
+
+/* Utilities */
+int atoi(const char* s);
+int abs(int n);
+
+/* Constants */
+#define NULL ((void*)0)
+#define EOF (-1)
+#define O_RDONLY 0
+#define O_WRONLY 1
+#define O_RDWR   2
+#define O_CREAT  0x100
+
+#endif /* _LIBC_H */
+</code></pre>
+
+                    <h3>Additional Utilities to Implement</h3>
+                    <p>Extend your system with more common commands:</p>
+                    
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Utility</th>
+                                <th>Syscalls</th>
+                                <th>Difficulty</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>cp</code></td>
+                                <td>open, read, write, close</td>
+                                <td>Easy</td>
+                                <td>Copy bytes from source to dest</td>
+                            </tr>
+                            <tr>
+                                <td><code>mv</code></td>
+                                <td>rename (or cp + unlink)</td>
+                                <td>Easy</td>
+                                <td>Add rename syscall or copy then delete</td>
+                            </tr>
+                            <tr>
+                                <td><code>rm</code></td>
+                                <td>unlink</td>
+                                <td>Easy</td>
+                                <td>Add unlink syscall</td>
+                            </tr>
+                            <tr>
+                                <td><code>mkdir</code></td>
+                                <td>mkdir</td>
+                                <td>Easy</td>
+                                <td>Add mkdir syscall</td>
+                            </tr>
+                            <tr>
+                                <td><code>pwd</code></td>
+                                <td>getcwd</td>
+                                <td>Medium</td>
+                                <td>Track current dir or walk .. links</td>
+                            </tr>
+                            <tr>
+                                <td><code>grep</code></td>
+                                <td>open, read, write</td>
+                                <td>Medium</td>
+                                <td>Simple substring matching first</td>
+                            </tr>
+                            <tr>
+                                <td><code>wc</code></td>
+                                <td>open, read</td>
+                                <td>Easy</td>
+                                <td>Count lines, words, bytes</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <h3>Exercises</h3>
+                    
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span><i class="fas fa-code me-1"></i>Exercise 1</span>
+                        </div>
+                        <h4><i class="fas fa-keyboard me-2"></i>Line Editor</h4>
+                        <div class="content">
+                            <p>Improve the shell's input handling:</p>
+                            <ol>
+                                <li>Switch terminal to raw mode (no cooked input)</li>
+                                <li>Handle left/right arrow keys to move cursor</li>
+                                <li>Handle backspace properly with cursor position</li>
+                                <li>Implement home/end keys</li>
+                            </ol>
+                            <pre><code class="language-c">// Hint: Arrow keys send escape sequences
+// ESC [ A = Up, ESC [ B = Down
+// ESC [ C = Right, ESC [ D = Left
+if (c == 27 && getchar() == '[') {
+    switch (getchar()) {
+        case 'C': cursor_right(); break;
+        case 'D': cursor_left(); break;
+    }
+}</code></pre>
+                        </div>
+                        <div class="tags">
+                            <span class="bias-tag">Terminal</span>
+                            <span class="bias-tag">Input</span>
+                        </div>
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span><i class="fas fa-code me-1"></i>Exercise 2</span>
+                        </div>
+                        <h4><i class="fas fa-history me-2"></i>Command History</h4>
+                        <div class="content">
+                            <p>Add shell history with up/down arrows:</p>
+                            <ol>
+                                <li>Store last N commands in circular buffer</li>
+                                <li>Up arrow shows previous command</li>
+                                <li>Down arrow shows next command</li>
+                                <li>Save history to file on exit</li>
+                            </ol>
+                            <pre><code class="language-c">// Simple history buffer
+#define HISTORY_SIZE 100
+char* history[HISTORY_SIZE];
+int history_pos = 0;
+int history_count = 0;
+
+void add_history(const char* cmd) {
+    history[history_count % HISTORY_SIZE] = strdup(cmd);
+    history_count++;
+}</code></pre>
+                        </div>
+                        <div class="tags">
+                            <span class="bias-tag">Shell</span>
+                            <span class="bias-tag">UX</span>
+                        </div>
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span><i class="fas fa-code me-1"></i>Exercise 3</span>
+                        </div>
+                        <h4><i class="fas fa-code-branch me-2"></i>Pipes</h4>
+                        <div class="content">
+                            <p>Implement the pipe operator (<code>|</code>):</p>
+                            <ol>
+                                <li>Parse command to find pipe characters</li>
+                                <li>Create pipe with pipe() syscall</li>
+                                <li>Fork for each command in pipeline</li>
+                                <li>Redirect stdout/stdin using dup2()</li>
+                            </ol>
+                            <pre><code class="language-c">// Pipeline: ls | grep foo
+int pipefd[2];
+pipe(pipefd);
+
+if (fork() == 0) {
+    // First command - redirect stdout to pipe
+    close(pipefd[0]);
+    dup2(pipefd[1], 1);  // stdout -> pipe write
+    exec("ls");
+}
+
+if (fork() == 0) {
+    // Second command - redirect stdin from pipe
+    close(pipefd[1]);
+    dup2(pipefd[0], 0);  // stdin <- pipe read
+    exec("grep", "foo");
+}</code></pre>
+                        </div>
+                        <div class="tags">
+                            <span class="bias-tag">IPC</span>
+                            <span class="bias-tag">Advanced</span>
+                        </div>
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span><i class="fas fa-code me-1"></i>Exercise 4</span>
+                        </div>
+                        <h4><i class="fas fa-file-export me-2"></i>I/O Redirection</h4>
+                        <div class="content">
+                            <p>Add <code>></code>, <code>>></code>, and <code><</code> operators:</p>
+                            <ol>
+                                <li>Parse redirect operators and filenames</li>
+                                <li>Open file with appropriate flags</li>
+                                <li>Use dup2() to redirect stdin/stdout</li>
+                                <li>Handle append mode (<code>>></code>)</li>
+                            </ol>
+                            <pre><code class="language-c">// Redirect: ls > output.txt
+if (redirect_output) {
+    int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC);
+    dup2(fd, 1);  // stdout -> file
+    close(fd);
+}
+exec(command);</code></pre>
+                        </div>
+                        <div class="tags">
+                            <span class="bias-tag">File I/O</span>
+                            <span class="bias-tag">Shell</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Next Steps Section -->
+                <div id="next-steps" class="blog-content mt-5">
+                    <h2><i class="fas fa-arrow-right me-2 text-teal"></i>Next Steps</h2>
+                    
+                    <p>Congratulations! You've built a <strong>complete 32-bit operating system</strong> with user-space support! Let's recap everything you've created:</p>
+                    
+<pre style="background: #1e1e1e; padding: 1rem; border-radius: 8px; color: #dcdcaa; overflow-x: auto; font-size: 0.85rem;">
+<span style="color: #6a9955;">Your Complete OS Stack (Phases 0-10):</span>
+
+<span style="color: #9cdcfe;">┌─────────────────────────────────────────────────────┐</span>
+<span style="color: #9cdcfe;">│  ┌─────────┐  ┌─────────┐  ┌────────┐  ┌─────────┐  │</span>
+<span style="color: #9cdcfe;">│  │  cat    │  │   ls    │  │  echo  │  │  shell  │  │</span> <span style="color: #ce9178;">User Programs</span>
+<span style="color: #9cdcfe;">│  └────┬────┘  └────┬────┘  └───┬────┘  └────┬────┘  │</span>
+<span style="color: #9cdcfe;">│       │            │           │            │       │</span>
+<span style="color: #9cdcfe;">│  ┌────┴────────────┴───────────┴────────────┴────┐  │</span>
+<span style="color: #9cdcfe;">│  │            C Library (libc)                   │  │</span> <span style="color: #ce9178;">Phase 10</span>
+<span style="color: #9cdcfe;">│  │  printf  malloc  string  memory  stdio  crt   │  │</span>
+<span style="color: #9cdcfe;">│  └──────────────────────┬────────────────────────┘  │</span>
+<span style="color: #9cdcfe;">├─────────────────────────┼───────────────────────────┤</span>
+<span style="color: #9cdcfe;">│  ┌──────────────────────┴────────────────────────┐  │</span>
+<span style="color: #9cdcfe;">│  │         System Call Interface                 │  │</span> <span style="color: #ce9178;">Phase 5</span>
+<span style="color: #9cdcfe;">│  │  read  write  open  fork  exec  exit  wait   │  │</span>
+<span style="color: #9cdcfe;">│  └──────────────────────┬────────────────────────┘  │</span>
+<span style="color: #9cdcfe;">│                         │                           │</span>
+<span style="color: #9cdcfe;">│  ┌──────────────────────┴────────────────────────┐  │</span>
+<span style="color: #9cdcfe;">│  │              Kernel Services                  │  │</span>
+<span style="color: #9cdcfe;">│  │  ┌─────────┐  ┌─────────┐  ┌─────────────┐    │  │</span>
+<span style="color: #9cdcfe;">│  │  │   VFS   │  │ Process │  │   Memory    │    │  │</span> <span style="color: #ce9178;">Phases 6-9</span>
+<span style="color: #9cdcfe;">│  │  │ Files   │  │ Sched   │  │   Paging    │    │  │</span>
+<span style="color: #9cdcfe;">│  │  └─────────┘  └─────────┘  └─────────────┘    │  │</span>
+<span style="color: #9cdcfe;">│  └───────────────────────────────────────────────┘  │</span>
+<span style="color: #9cdcfe;">│                                                     │</span>
+<span style="color: #9cdcfe;">│  ┌───────────────────────────────────────────────┐  │</span>
+<span style="color: #9cdcfe;">│  │         Interrupts  Timer  Keyboard           │  │</span> <span style="color: #ce9178;">Phases 3-4</span>
+<span style="color: #9cdcfe;">│  └───────────────────────────────────────────────┘  │</span>
+<span style="color: #9cdcfe;">│                                                     │</span>
+<span style="color: #9cdcfe;">│  ┌───────────────────────────────────────────────┐  │</span>
+<span style="color: #9cdcfe;">│  │              GDT  IDT  PIC  PIT               │  │</span> <span style="color: #ce9178;">Phases 1-2</span>
+<span style="color: #9cdcfe;">│  └───────────────────────────────────────────────┘  │</span>
+<span style="color: #9cdcfe;">│                                                     │</span>
+<span style="color: #9cdcfe;">│  ┌───────────────────────────────────────────────┐  │</span>
+<span style="color: #9cdcfe;">│  │              BIOS  Bootloader                 │  │</span> <span style="color: #ce9178;">Phase 0</span>
+<span style="color: #9cdcfe;">│  └───────────────────────────────────────────────┘  │</span>
+<span style="color: #9cdcfe;">└─────────────────────────────────────────────────────┘</span>
+</pre>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-trophy me-2"></i>
+                        <strong>Major Milestone!</strong> You now have a working operating system. Users can boot it, get a shell prompt, run commands, execute programs—just like "real" operating systems. Everything from here builds on this foundation.
+                    </div>
+                    
+                    <h3>What's Next: 64-Bit Long Mode</h3>
+                    
+                    <p>In <strong>Phase 11</strong>, we'll upgrade from 32-bit protected mode to 64-bit long mode. This unlocks modern hardware capabilities:</p>
+                    
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Feature</th>
+                                <th>32-bit Mode</th>
+                                <th>64-bit Mode</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Address Space</td>
+                                <td>4 GB max</td>
+                                <td>256 TB virtual</td>
+                            </tr>
+                            <tr>
+                                <td>Registers</td>
+                                <td>8 (EAX-EDI)</td>
+                                <td>16 (RAX-R15)</td>
+                            </tr>
+                            <tr>
+                                <td>Paging</td>
+                                <td>2-level (PD+PT)</td>
+                                <td>4-level (PML4)</td>
+                            </tr>
+                            <tr>
+                                <td>Calling Convention</td>
+                                <td>Stack-based</td>
+                                <td>Register-based (faster)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <h3>Key Takeaways</h3>
+                    <ul>
+                        <li><strong>libc bridges user/kernel</strong> - Provides portable API over raw syscalls</li>
+                        <li><strong>String functions are fundamental</strong> - Nearly every program uses them</li>
+                        <li><strong>Heap management is complex</strong> - Real allocators are highly optimized</li>
+                        <li><strong>CRT handles startup/exit</strong> - Programs don't start at main()</li>
+                        <li><strong>Shells are surprisingly simple</strong> - Read-parse-execute loop is the core</li>
+                        <li><strong>Builtins must run in-process</strong> - cd, exit can't be external programs</li>
+                    </ul>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 9: ELF Loading & Executables</h5>
+                            <p class="text-muted small mb-2">Review ELF format parsing and program loading.</p>
+                            <a href="kernel-dev-phase-09-elf.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 11: 64-Bit Long Mode</h5>
+                            <p class="text-muted small mb-2">Upgrade to x86-64 architecture with 64-bit paging.</p>
+                            <a href="kernel-dev-phase-11-long-mode.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 12: Modern Booting with UEFI</h5>
+                            <p class="text-muted small mb-2">Replace BIOS booting with modern UEFI firmware.</p>
+                            <a href="kernel-dev-phase-12-uefi.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook">
+                            <i class="fab fa-facebook-f"></i>
+                        </a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter">
+                            <i class="fab fa-twitter"></i>
+                        </a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn">
+                            <i class="fab fa-linkedin-in"></i>
+                        </a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube">
+                            <i class="fab fa-youtube"></i>
+                        </a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram">
+                            <i class="fab fa-instagram"></i>
+                        </a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest">
+                            <i class="fab fa-pinterest-p"></i>
+                        </a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email">
+                            <i class="fas fa-envelope"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="bg-secondary">
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+    
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+    
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>

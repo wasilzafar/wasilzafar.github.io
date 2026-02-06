@@ -1,0 +1,2453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kernel Development Series - Phase 12: Modern Booting with UEFI | Wasil Zafar</title>
+    <meta name="description" content="Replace BIOS booting with UEFI for modern firmware services, memory maps, and Graphics Output Protocol framebuffers.">
+    <meta name="keywords" content="kernel development, UEFI, boot services, GOP, framebuffer, modern booting, OS development">
+    <meta name="author" content="Wasil Zafar">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Kernel Development Series - Phase 12: Modern Booting with UEFI">
+    <meta property="og:description" content="Replace BIOS booting with UEFI for modern firmware services, memory maps, and Graphics Output Protocol framebuffers.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://wasilzafar.com/pages/series/kernel-development/kernel-dev-phase-12-uefi.html">
+    <meta property="og:image" content="https://wasilzafar.com/images/og-kernel-dev.png">
+    <meta property="article:published_time" content="2026-02-06">
+    <meta property="article:author" content="Wasil Zafar">
+    <meta property="article:section" content="Technology">
+
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+    
+    <!-- Google Consent Mode v2 -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('consent', 'default', {
+        'ad_storage': 'denied',
+        'ad_user_data': 'denied',
+        'ad_personalization': 'denied',
+        'analytics_storage': 'denied',
+        'wait_for_update': 500
+      });
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="../../../images/favicon_io/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="../../../css/main.css">
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. 
+                    By clicking "Accept All", you consent to our use of cookies. See our 
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a> 
+                    for more information.
+                </p>
+                
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#about">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#skills">Skills</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#certifications">Certifications</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#interests">Interests</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">Phase 12: Modern Booting with UEFI</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>February 6, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>32 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Replace legacy BIOS booting with UEFI firmware services, get accurate memory maps, and use GOP for graphical framebuffers.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation Overlay -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#introduction" onclick="closeNav()">Introduction</a>
+                <ul>
+                    <li><a href="#uefi-vs-bios" onclick="closeNav()">UEFI vs BIOS</a></li>
+                    <li><a href="#uefi-benefits" onclick="closeNav()">UEFI Benefits</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#uefi-app" onclick="closeNav()">UEFI Application</a>
+                <ul>
+                    <li><a href="#entry-point" onclick="closeNav()">Entry Point</a></li>
+                    <li><a href="#system-table" onclick="closeNav()">System Table</a></li>
+                    <li><a href="#protocols" onclick="closeNav()">Protocols</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#boot-services" onclick="closeNav()">Boot Services</a>
+                <ul>
+                    <li><a href="#memory-map" onclick="closeNav()">Memory Map</a></li>
+                    <li><a href="#allocation" onclick="closeNav()">Memory Allocation</a></li>
+                    <li><a href="#exit-boot" onclick="closeNav()">ExitBootServices</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#gop" onclick="closeNav()">Graphics Output Protocol</a>
+                <ul>
+                    <li><a href="#gop-modes" onclick="closeNav()">Video Modes</a></li>
+                    <li><a href="#framebuffer" onclick="closeNav()">Framebuffer Access</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#loading-kernel" onclick="closeNav()">Loading the Kernel</a>
+                <ul>
+                    <li><a href="#file-protocol" onclick="closeNav()">File Protocol</a></li>
+                    <li><a href="#kernel-transfer" onclick="closeNav()">Transfer to Kernel</a></li>
+                </ul>
+            </li>
+            <li><a href="#build" onclick="closeNav()">What You Can Build</a></li>
+            <li><a href="#next-steps" onclick="closeNav()">Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- Introduction -->
+                <div id="introduction" class="blog-content">
+                    <h2><i class="fas fa-power-off me-2 text-teal"></i>Introduction: Modern Firmware</h2>
+                    
+                    <div class="highlight-box crimson">
+                        <i class="fas fa-flag me-2"></i>
+                        <strong>Phase 12 Goals:</strong> By the end of this phase, your OS will boot via UEFI. You'll have accurate memory maps, direct framebuffer access via GOP, and a modern boot process that works on current hardware.
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-map-signs me-2"></i>Complete Series Navigation</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-2">18-Part Series</span>
+                            <span class="badge bg-crimson">OS Development Mastery</span>
+                        </div>
+                        <div class="content">
+                            <ol>
+                                <li><a href="kernel-dev-phase-00-orientation.html">Phase 0: Orientation & Big Picture</a> - OS fundamentals, kernel architectures, learning path</li>
+                                <li><a href="kernel-dev-phase-01-boot-process.html">Phase 1: How a Computer Starts</a> - BIOS/UEFI, boot sequence, dev environment</li>
+                                <li><a href="kernel-dev-phase-02-real-mode.html">Phase 2: Real Mode - First Steps</a> - Real mode, bootloader, BIOS interrupts</li>
+                                <li><a href="kernel-dev-phase-03-protected-mode.html">Phase 3: Entering Protected Mode</a> - GDT, 32-bit mode, C code execution</li>
+                                <li><a href="kernel-dev-phase-04-display-input.html">Phase 4: Display, Input & Output</a> - VGA text mode, keyboard handling</li>
+                                <li><a href="kernel-dev-phase-05-interrupts.html">Phase 5: Interrupts & CPU Control</a> - IDT, ISRs, PIC programming</li>
+                                <li><a href="kernel-dev-phase-06-memory.html">Phase 6: Memory Management</a> - Paging, virtual memory, heap allocator</li>
+                                <li><a href="kernel-dev-phase-07-filesystem.html">Phase 7: Disk Access & Filesystems</a> - Block devices, FAT, VFS layer</li>
+                                <li><a href="kernel-dev-phase-08-processes.html">Phase 8: Processes & User Mode</a> - Task switching, system calls, user space</li>
+                                <li><a href="kernel-dev-phase-09-elf.html">Phase 9: ELF Loading & Executables</a> - ELF format, program loading</li>
+                                <li><a href="kernel-dev-phase-10-stdlib-shell.html">Phase 10: Standard Library & Shell</a> - C library, command-line shell</li>
+                                <li><a href="kernel-dev-phase-11-long-mode.html">Phase 11: 64-Bit Long Mode</a> - x86-64, 64-bit paging, modern architecture</li>
+                                <li><strong>Phase 12: Modern Booting with UEFI (This Guide)</strong> - UEFI boot services, memory maps</li>
+                                <li><a href="kernel-dev-phase-13-graphics.html">Phase 13: Graphics & GUI Systems</a> - Framebuffer, windowing, drawing</li>
+                                <li><a href="kernel-dev-phase-14-input-timing.html">Phase 14: Advanced Input & Timing</a> - Mouse, high-precision timers</li>
+                                <li><a href="kernel-dev-phase-15-hardware-drivers.html">Phase 15: Hardware Discovery & Drivers</a> - PCI, device drivers, NVMe</li>
+                                <li><a href="kernel-dev-phase-16-performance.html">Phase 16: Performance & Optimization</a> - Caching, scheduler tuning</li>
+                                <li><a href="kernel-dev-phase-17-security.html">Phase 17: Stability, Security & Finishing</a> - Debugging, hardening, completion</li>
+                            </ol>
+                        </div>
+                    </div>
+                    
+                    <p>Throughout this series, we've used <strong>BIOS</strong> (Basic Input/Output System) to boot our kernel. BIOS has served the PC industry since 1981, but it was designed for 16-bit CPUs and 1MB of memory. Modern systems need something better.</p>
+                    
+                    <p><strong>UEFI</strong> (Unified Extensible Firmware Interface) is that something better. Originally developed by Intel as EFI, it became an industry standard and now ships on virtually every PC manufactured since 2010. UEFI isn't just "better BIOS"—it's a complete reimagining of how firmware should work.</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Key Insight:</strong> UEFI replaces the ancient BIOS with a modern firmware interface. It provides 64-bit operation from the start, standardized protocols for hardware access, and eliminates many legacy headaches.
+                    </div>
+                    
+                    <p>Think of the difference like this: BIOS is like a 1980s calculator—it can do basic math, but you have to handle everything yourself. UEFI is like a modern smartphone—it provides sophisticated services, handles complex tasks, and speaks your language (literally, via Unicode).</p>
+
+                    <h3 id="uefi-vs-bios">UEFI vs BIOS</h3>
+                    
+                    <p>Let's visualize the fundamental architectural differences:</p>
+                    
+<pre class="ascii-diagram">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    BIOS Boot vs UEFI Boot Comparison                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   BIOS Boot (Legacy):                                                       │
+│   ══════════════════                                                        │
+│                                                                             │
+│   ┌──────────┐     ┌────────────┐     ┌────────────┐     ┌──────────┐      │
+│   │  Power   │────▶│  16-bit    │────▶│  Stage 1   │────▶│  Stage 2 │      │
+│   │    On    │     │  Real Mode │     │  512 bytes │     │ Bootloader│      │
+│   └──────────┘     └────────────┘     └────────────┘     └──────────┘      │
+│                           │                                      │          │
+│                           ▼                                      ▼          │
+│                    ┌────────────┐                         ┌──────────┐      │
+│                    │ INT 0x13   │                         │ Protected│      │
+│                    │ Disk BIOS  │                         │   Mode   │      │
+│                    └────────────┘                         └──────────┘      │
+│                                                                  │          │
+│                                                                  ▼          │
+│                                                           ┌──────────┐      │
+│                                                           │  Kernel  │      │
+│                                                           └──────────┘      │
+│                                                                             │
+│   UEFI Boot (Modern):                                                       │
+│   ═══════════════════                                                       │
+│                                                                             │
+│   ┌──────────┐     ┌────────────┐     ┌────────────┐     ┌──────────┐      │
+│   │  Power   │────▶│  64-bit    │────▶│ UEFI Boot  │────▶│  Kernel  │      │
+│   │    On    │     │  Long Mode │     │   Loader   │     │ (64-bit) │      │
+│   └──────────┘     └────────────┘     └────────────┘     └──────────┘      │
+│                           │                  │                              │
+│                           ▼                  ▼                              │
+│                    ┌────────────────────────────────────────────┐           │
+│                    │           UEFI Services                    │           │
+│                    │  ┌────────┐ ┌────────┐ ┌────────┐          │           │
+│                    │  │  Boot  │ │Runtime │ │  GOP   │   ...    │           │
+│                    │  │Services│ │Services│ │Graphics│          │           │
+│                    │  └────────┘ └────────┘ └────────┘          │           │
+│                    └────────────────────────────────────────────┘           │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</pre>
+                    
+                    <p>Here's a detailed feature comparison:</p>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Feature</th>
+                                    <th>BIOS (Legacy)</th>
+                                    <th>UEFI (Modern)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>CPU Mode at Boot</strong></td>
+                                    <td>16-bit Real Mode</td>
+                                    <td>32-bit or 64-bit</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Boot Sector Size</strong></td>
+                                    <td>512 bytes (MBR)</td>
+                                    <td>No limit (PE/COFF executables)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Max Disk Size</strong></td>
+                                    <td>2 TB (MBR limit)</td>
+                                    <td>9.4 ZB (GPT)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Memory Map</strong></td>
+                                    <td>INT 0x15 E820 (unreliable)</td>
+                                    <td>GetMemoryMap() (precise)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Graphics</strong></td>
+                                    <td>VGA BIOS, mode switching</td>
+                                    <td>GOP protocol (direct framebuffer)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Character Set</strong></td>
+                                    <td>ASCII only</td>
+                                    <td>Full Unicode (UCS-2)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Driver Model</strong></td>
+                                    <td>ROM-based, hardware-specific</td>
+                                    <td>Portable EFI drivers</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Secure Boot</strong></td>
+                                    <td>Not supported</td>
+                                    <td>Built-in signature verification</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Networking</strong></td>
+                                    <td>PXE only (INT 0x18)</td>
+                                    <td>Full TCP/IP stack available</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Partitioning</strong></td>
+                                    <td>MBR (4 primary partitions)</td>
+                                    <td>GPT (128+ partitions)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-history me-2"></i>The Legacy Boot Problem</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-blue me-1">Real-World</span>
+                            <span class="badge bg-crimson">Why Change?</span>
+                        </div>
+                        <div class="content">
+                            <p>Consider what we had to do with BIOS boot:</p>
+                            <ul>
+                                <li><strong>Stage 1 bootloader:</strong> Squeeze into 446 bytes of MBR, load Stage 2</li>
+                                <li><strong>A20 line:</strong> Enable archaic memory gate from 1981</li>
+                                <li><strong>Real Mode assembly:</strong> Write 16-bit code to load anything</li>
+                                <li><strong>Mode switching:</strong> Jump from Real → Protected → Long mode manually</li>
+                                <li><strong>Memory detection:</strong> Call multiple BIOS functions, results often lie</li>
+                                <li><strong>VGA setup:</strong> Set mode via INT 0x10, or hack VBE for higher resolution</li>
+                            </ul>
+                            <p>With UEFI, we write a C program that receives a framebuffer and accurate memory map directly. The firmware has already done the hard work.</p>
+                        </div>
+                    </div>
+
+                    <h3 id="uefi-benefits">UEFI Benefits for OS Developers</h3>
+                    
+                    <p>Why should you embrace UEFI for your OS? Here are the key advantages:</p>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <strong>64-Bit From the Start:</strong> UEFI boots directly into 64-bit long mode. No more Real Mode assembly, no mode transitions, no segment limits. Your boot loader can be pure C code.
+                    </div>
+                    
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-memory me-2"></i>
+                        <strong>Accurate Memory Maps:</strong> UEFI's GetMemoryMap() returns a precise list of all memory regions with their types. No more hoping BIOS E820 tells the truth about your hardware.
+                    </div>
+                    
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-desktop me-2"></i>
+                        <strong>Graphics Output Protocol:</strong> GOP gives you direct access to a linear framebuffer. Set resolution, get the address, and start drawing pixels. No VGA registers, no VESA headaches.
+                    </div>
+                    
+                    <p>Additional benefits include:</p>
+                    
+                    <ul>
+                        <li><strong>File system support:</strong> UEFI reads FAT partitions natively—load files without writing a FAT driver</li>
+                        <li><strong>Modern interfaces:</strong> Standard protocols for keyboard, mouse, networking, USB, and more</li>
+                        <li><strong>Larger bootloader:</strong> No 512-byte limit—your boot code can be megabytes if needed</li>
+                        <li><strong>Runtime services:</strong> Access NVRAM variables, RTC, and system reset after boot</li>
+                        <li><strong>Secure Boot:</strong> Cryptographic verification chain from firmware to kernel</li>
+                    </ul>
+                    
+<pre class="ascii-diagram">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     UEFI Service Architecture                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                        EFI System Table                             │   │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐   │   │
+│  │  │  ConIn       │  │  ConOut      │  │  RuntimeServices         │   │   │
+│  │  │  (Keyboard)  │  │  (Display)   │  │  (Persist after boot)    │   │   │
+│  │  └──────────────┘  └──────────────┘  └──────────────────────────┘   │   │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐   │   │
+│  │  │  StdErr      │  │  BootServices│  │  ConfigurationTable      │   │   │
+│  │  │  (Errors)    │  │  (Pre-boot)  │  │  (ACPI, SMBIOS, etc.)    │   │   │
+│  │  └──────────────┘  └──────────────┘  └──────────────────────────┘   │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                │                                            │
+│                                ▼                                            │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                       Boot Services                                 │   │
+│  │   GetMemoryMap()    AllocatePages()    LoadImage()                  │   │
+│  │   ExitBootServices() LocateProtocol()  SetWatchdog()                │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                │                                            │
+│                                ▼                                            │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                         Protocols                                   │   │
+│  │  ┌──────┐ ┌──────┐ ┌──────┐ ┌────────┐ ┌────────┐ ┌──────────┐     │   │
+│  │  │ GOP  │ │ File │ │Block │ │Network │ │ Simple │ │ USB Host │     │   │
+│  │  │      │ │System│ │  IO  │ │        │ │Pointer │ │          │     │   │
+│  │  └──────┘ └──────┘ └──────┘ └────────┘ └────────┘ └──────────┘     │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</pre>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>CSM (Compatibility Support Module):</strong> Many UEFI systems include CSM for legacy BIOS compatibility. However, CSM is being phased out—Windows 11 requires UEFI, and many manufacturers are removing CSM entirely. Future-proof your OS by supporting native UEFI boot.
+                    </div>
+                </div>
+
+                <!-- UEFI Application Section -->
+                <div id="uefi-app" class="blog-content mt-5">
+                    <h2><i class="fas fa-rocket me-2 text-teal"></i>UEFI Application Structure</h2>
+                    
+                    <p>A UEFI application is fundamentally different from a BIOS bootloader. It's a proper PE/COFF executable (the same format Windows uses) that receives rich context from the firmware. Let's understand the anatomy of a UEFI boot loader.</p>
+                    
+                    <h3 id="entry-point">Entry Point: Where It All Begins</h3>
+                    
+                    <p>Every UEFI application starts with a standardized entry point. The firmware passes two critical arguments:</p>
+                    
+<pre class="ascii-diagram">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    UEFI Application Entry Point                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Firmware calls:                                                           │
+│   ═══════════════                                                           │
+│                                                                             │
+│   EFI_STATUS EFIAPI efi_main(                                               │
+│       EFI_HANDLE       ImageHandle,    ─── Identity of this application     │
+│       EFI_SYSTEM_TABLE *SystemTable    ─── Gateway to all UEFI services     │
+│   );                                                                        │
+│                                                                             │
+│   ┌─────────────────┐              ┌────────────────────────────────────┐   │
+│   │  ImageHandle    │              │      EFI_SYSTEM_TABLE              │   │
+│   │  ═════════════  │              │  ════════════════════              │   │
+│   │                 │              │                                    │   │
+│   │  • Your app's   │              │  • Firmware Vendor                 │   │
+│   │    identity     │              │  • Firmware Revision               │   │
+│   │  • Used to      │              │  • Console I/O pointers            │   │
+│   │    load images  │              │  • BootServices table              │   │
+│   │  • Query info   │              │  • RuntimeServices table           │   │
+│   │    about self   │              │  • Config tables (ACPI, SMBIOS)    │   │
+│   │                 │              │                                    │   │
+│   └─────────────────┘              └────────────────────────────────────┘   │
+│                                                                             │
+│   Return Value (EFI_STATUS):                                                │
+│   ──────────────────────────                                                │
+│   EFI_SUCCESS       = 0          Operation completed successfully           │
+│   EFI_ERROR(x)      > 0          Error occurred, check specific code       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</pre>
+
+                    <pre><code class="language-c">/* UEFI Application Entry Point */
+#include <efi.h>
+#include <efilib.h>
+
+EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle, 
+                           EFI_SYSTEM_TABLE* SystemTable) {
+    EFI_STATUS status;
+    
+    // Initialize library
+    InitializeLib(ImageHandle, SystemTable);
+    
+    // Clear screen
+    SystemTable->ConOut->ClearScreen(SystemTable->ConOut);
+    
+    // Print welcome message
+    Print(L"Hello from UEFI!\r\n");
+    
+    // Get graphics output
+    EFI_GRAPHICS_OUTPUT_PROTOCOL* gop;
+    status = get_gop(&gop);
+    if (EFI_ERROR(status)) {
+        Print(L"Failed to get GOP\r\n");
+        return status;
+    }
+    
+    // Get memory map and exit boot services
+    // Load kernel
+    // Jump to kernel
+    
+    return EFI_SUCCESS;
+}
+</code></pre>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-code me-2"></i>
+                        <strong>Code Breakdown:</strong><br>
+                        • <code>EFI_HANDLE ImageHandle</code> - Opaque identifier for this loaded image; pass it to functions that need to know "who's asking"<br>
+                        • <code>EFI_SYSTEM_TABLE* SystemTable</code> - The master pointer; everything else is accessible through this<br>
+                        • <code>InitializeLib()</code> - gnu-efi helper that sets up global variables like gBS (BootServices) and gST (SystemTable)<br>
+                        • <code>Print(L"...")</code> - UEFI uses wide strings (UCS-2 Unicode), hence the L prefix<br>
+                        • <code>\r\n</code> - UEFI console requires both carriage return and newline
+                    </div>
+                    
+                    <h3 id="system-table">System Table: The Master Index</h3>
+                    
+                    <p>The EFI System Table is like the table of contents for all UEFI functionality. Here's its structure:</p>
+                    
+                    <pre><code class="language-c">/* EFI System Table Structure */
+typedef struct {
+    EFI_TABLE_HEADER                Hdr;
+    CHAR16*                         FirmwareVendor;
+    UINT32                          FirmwareRevision;
+    
+    EFI_HANDLE                      ConsoleInHandle;
+    EFI_SIMPLE_TEXT_INPUT_PROTOCOL* ConIn;      // Keyboard input
+    
+    EFI_HANDLE                      ConsoleOutHandle;
+    EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL*ConOut;     // Screen output
+    
+    EFI_HANDLE                      StandardErrorHandle;
+    EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL*StdErr;     // Error output
+    
+    EFI_RUNTIME_SERVICES*           RuntimeServices;  // Persist after boot
+    EFI_BOOT_SERVICES*              BootServices;     // Available until ExitBootServices
+    
+    UINTN                           NumberOfTableEntries;
+    EFI_CONFIGURATION_TABLE*        ConfigurationTable;  // ACPI, SMBIOS, etc.
+} EFI_SYSTEM_TABLE;
+
+/* Common usage patterns */
+void uefi_examples(EFI_SYSTEM_TABLE* ST) {
+    // Print to screen
+    ST->ConOut->OutputString(ST->ConOut, L"Message\r\n");
+    
+    // Clear screen
+    ST->ConOut->ClearScreen(ST->ConOut);
+    
+    // Get key press
+    EFI_INPUT_KEY key;
+    ST->ConIn->ReadKeyStroke(ST->ConIn, &key);
+    
+    // Access Boot Services
+    EFI_BOOT_SERVICES* BS = ST->BootServices;
+    
+    // Find ACPI table
+    for (UINTN i = 0; i < ST->NumberOfTableEntries; i++) {
+        if (CompareGuid(&ST->ConfigurationTable[i].VendorGuid, 
+                        &gEfiAcpi20TableGuid)) {
+            void* acpi_rsdp = ST->ConfigurationTable[i].VendorTable;
+            // RSDP found!
+        }
+    }
+}
+</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-lightbulb me-2"></i>Understanding gBS, gST, and gRT</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-1">gnu-efi Convention</span>
+                            <span class="badge bg-navy">Global Variables</span>
+                        </div>
+                        <div class="content">
+                            <p>When using gnu-efi library, <code>InitializeLib()</code> sets up these global pointers:</p>
+                            <ul>
+                                <li><strong>gST</strong> - Global System Table pointer (EFI_SYSTEM_TABLE*)</li>
+                                <li><strong>gBS</strong> - Global Boot Services pointer (EFI_BOOT_SERVICES*)</li>
+                                <li><strong>gRT</strong> - Global Runtime Services pointer (EFI_RUNTIME_SERVICES*)</li>
+                            </ul>
+                            <p>This lets you write <code>gBS->AllocatePool(...)</code> instead of <code>SystemTable->BootServices->AllocatePool(...)</code></p>
+                        </div>
+                    </div>
+                    
+                    <h3 id="protocols">Protocols: UEFI's Interface System</h3>
+                    
+                    <p>UEFI protocols are like interfaces in object-oriented programming. Each protocol is identified by a GUID (Globally Unique Identifier) and provides a specific set of functions. Here's how they work:</p>
+                    
+<pre class="ascii-diagram">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    UEFI Protocol System                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Protocol = Interface identified by GUID                                   │
+│   ═══════════════════════════════════════                                   │
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                     EFI_BOOT_SERVICES                               │   │
+│   │                                                                     │   │
+│   │   LocateProtocol(GUID, NULL, &Interface)                            │   │
+│   │         │                                                           │   │
+│   │         │   Search for protocol by GUID                             │   │
+│   │         ▼                                                           │   │
+│   │   ┌─────────────────────────────────────────────────────────────┐   │   │
+│   │   │  Protocol Handles                                           │   │   │
+│   │   │  ═══════════════════                                        │   │   │
+│   │   │                                                             │   │   │
+│   │   │  Handle 1: GOP_GUID ──────▶ Graphics functions              │   │   │
+│   │   │  Handle 2: FILE_GUID ─────▶ File system functions           │   │   │
+│   │   │  Handle 3: BLOCK_GUID ────▶ Block I/O functions             │   │   │
+│   │   │  Handle 4: POINTER_GUID ──▶ Mouse functions                 │   │   │
+│   │   │                                                             │   │   │
+│   │   └─────────────────────────────────────────────────────────────┘   │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│   Common Protocol GUIDs:                                                    │
+│   ──────────────────────                                                    │
+│   GOP:    {9042a9de-23dc-4a38-96fb-7aded080516a}                            │
+│   FILE:   {09576e91-6d3f-11d2-8e39-00a0c969723b}                            │
+│   BLOCK:  {00112233-4455-6677-8899-aabbccddeeff}                            │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</pre>
+                    
+                    <pre><code class="language-c">/* Locating and Using Protocols */
+
+/* Each protocol has a GUID */
+#define EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID \
+    { 0x9042a9de, 0x23dc, 0x4a38, \
+      {0x96, 0xfb, 0x7a, 0xde, 0xd0, 0x80, 0x51, 0x6a} }
+
+/* Locate a protocol - simplest method */
+EFI_STATUS get_gop(EFI_GRAPHICS_OUTPUT_PROTOCOL** gop) {
+    EFI_GUID gop_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+    
+    // LocateProtocol finds first instance of protocol
+    return gBS->LocateProtocol(&gop_guid, NULL, (void**)gop);
+}
+
+/* Locate all handles supporting a protocol */
+EFI_STATUS enumerate_block_devices(void) {
+    EFI_GUID block_guid = EFI_BLOCK_IO_PROTOCOL_GUID;
+    EFI_HANDLE* handles;
+    UINTN handle_count;
+    
+    // Get all handles that support Block I/O
+    EFI_STATUS status = gBS->LocateHandleBuffer(
+        ByProtocol,           // Search method
+        &block_guid,          // Protocol GUID
+        NULL,                 // Optional search key
+        &handle_count,        // Number of handles found
+        &handles              // Array of handles
+    );
+    
+    if (EFI_ERROR(status)) return status;
+    
+    Print(L"Found %d block devices\r\n", handle_count);
+    
+    // Query each handle's Block I/O protocol
+    for (UINTN i = 0; i < handle_count; i++) {
+        EFI_BLOCK_IO_PROTOCOL* block_io;
+        status = gBS->HandleProtocol(
+            handles[i],
+            &block_guid,
+            (void**)&block_io
+        );
+        
+        if (!EFI_ERROR(status)) {
+            Print(L"  Device %d: %d bytes/block, %ld blocks\r\n",
+                  i,
+                  block_io->Media->BlockSize,
+                  block_io->Media->LastBlock + 1);
+        }
+    }
+    
+    gBS->FreePool(handles);
+    return EFI_SUCCESS;
+}
+</code></pre>
+                    
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-puzzle-piece me-2"></i>
+                        <strong>Protocol Discovery Pattern:</strong><br>
+                        1. <code>LocateProtocol()</code> - Find first instance of a protocol (e.g., "give me a graphics adapter")<br>
+                        2. <code>LocateHandleBuffer()</code> - Find ALL handles supporting a protocol (e.g., "list all disks")<br>
+                        3. <code>HandleProtocol()</code> - Get specific protocol from a known handle<br>
+                        4. <code>OpenProtocol()</code> - Advanced: explicit open with access control
+                    </div>
+
+                <!-- Boot Services Section -->
+                <div id="boot-services" class="blog-content mt-5">
+                    <h2><i class="fas fa-cogs me-2 text-teal"></i>Boot Services</h2>
+                    
+                    <p>Boot Services are UEFI functions available <em>only during boot time</em>. Once your OS calls <code>ExitBootServices()</code>, these functions become unavailable—the firmware releases its resources for your kernel to use. Think of them as the scaffolding you use while building; it comes down when construction is complete.</p>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Critical Understanding:</strong> Boot Services are <strong>temporary</strong>. You must extract all needed information (memory map, framebuffer address) BEFORE calling ExitBootServices(). After that call, the firmware's Boot Services are gone forever.
+                    </div>
+                    
+                    <h3 id="memory-map">Memory Map: The Critical Resource</h3>
+                    
+                    <p>The most important Boot Service for any serious OS is <code>GetMemoryMap()</code>. Unlike BIOS's inconsistent INT 0x15-E820, UEFI provides a precise, standardized memory layout:</p>
+                    
+<pre class="ascii-diagram">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    UEFI Memory Map Structure                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   GetMemoryMap() returns an array of descriptors:                           │
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │  Memory Descriptor                                                  │   │
+│   │  ═══════════════════                                                │   │
+│   │                                                                     │   │
+│   │  Type           ─── What kind of memory (free, ACPI, reserved...)   │   │
+│   │  PhysicalStart  ─── Where this region begins                        │   │
+│   │  VirtualStart   ─── For SetVirtualAddressMap (usually 0)            │   │
+│   │  NumberOfPages  ─── Size in 4KB pages                               │   │
+│   │  Attribute      ─── Cacheability, permissions, etc.                 │   │
+│   │                                                                     │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│   Example memory map output:                                                │
+│   ──────────────────────────                                                │
+│                                                                             │
+│   Type                    Physical Start      Pages      Size               │
+│   ──────────────────────────────────────────────────────────────────────    │
+│   EfiConventionalMemory   0x0000000000001000    159     636 KB    ◄─ FREE   │
+│   EfiBootServicesData     0x0000000000100000    256       1 MB              │
+│   EfiConventionalMemory   0x0000000000200000  32000     128 MB   ◄─ FREE    │
+│   EfiLoaderData           0x0000000008000000    512       2 MB              │
+│   EfiACPIReclaimMemory    0x00000000FFFE0000      4      16 KB              │
+│   EfiACPIMemoryNVS        0x00000000FFFF0000      4      16 KB              │
+│   EfiMemoryMappedIO       0x00000000FEC00000      1       4 KB              │
+│                                                                             │
+│   Your kernel can use: EfiConventionalMemory, EfiBootServicesCode,          │
+│                        EfiBootServicesData, EfiLoaderCode, EfiLoaderData    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</pre>
+
+                    <pre><code class="language-c">/* Get UEFI Memory Map */
+EFI_STATUS get_memory_map(EFI_MEMORY_DESCRIPTOR** map,
+                          UINTN* map_size,
+                          UINTN* map_key,
+                          UINTN* desc_size,
+                          UINT32* desc_version) {
+    EFI_STATUS status;
+    
+    *map_size = 0;
+    status = gBS->GetMemoryMap(map_size, NULL, map_key, 
+                                desc_size, desc_version);
+    
+    // Allocate buffer (add extra space)
+    *map_size += 2 * *desc_size;
+    status = gBS->AllocatePool(EfiLoaderData, *map_size, (void**)map);
+    
+    // Get actual memory map
+    status = gBS->GetMemoryMap(map_size, *map, map_key,
+                                desc_size, desc_version);
+    
+    return status;
+}
+</code></pre>
+                    
+                    <p>Let's understand each step:</p>
+                    
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-question-circle me-2"></i>
+                        <strong>Why Call GetMemoryMap() Twice?</strong><br>
+                        First call with NULL buffer returns the required buffer size. We then allocate that size (plus a safety margin) and call again. This pattern is common in UEFI—sizes are queried before data is retrieved.
+                    </div>
+                    
+                    <pre><code class="language-c">/* Memory Type Definitions */
+typedef enum {
+    EfiReservedMemoryType,      // Firmware-reserved, don't touch
+    EfiLoaderCode,              // Your boot loader code (reclaimable)
+    EfiLoaderData,              // Your boot loader data (reclaimable)
+    EfiBootServicesCode,        // UEFI boot services (reclaimable after exit)
+    EfiBootServicesData,        // UEFI boot services data (reclaimable)
+    EfiRuntimeServicesCode,     // Must preserve for runtime services
+    EfiRuntimeServicesData,     // Must preserve for runtime services
+    EfiConventionalMemory,      // Free, usable memory
+    EfiUnusableMemory,          // Hardware errors, don't use
+    EfiACPIReclaimMemory,       // ACPI tables (can reclaim after parsing)
+    EfiACPIMemoryNVS,           // ACPI NVS memory (firmware needs this)
+    EfiMemoryMappedIO,          // Hardware MMIO regions
+    EfiMemoryMappedIOPortSpace, // Port I/O space
+    EfiPalCode,                 // IA-64 only
+    EfiPersistentMemory,        // Non-volatile memory (NVDIMM)
+    EfiMaxMemoryType
+} EFI_MEMORY_TYPE;
+
+/* Print memory map for debugging */
+void print_memory_map(EFI_MEMORY_DESCRIPTOR* map, 
+                      UINTN map_size, 
+                      UINTN desc_size) {
+    CHAR16* type_names[] = {
+        L"Reserved", L"LoaderCode", L"LoaderData", L"BSCode",
+        L"BSData", L"RTCode", L"RTData", L"Conventional",
+        L"Unusable", L"ACPIReclaim", L"ACPINVS", L"MMIO",
+        L"MMIOPort", L"PalCode", L"Persistent"
+    };
+    
+    Print(L"Type                 Physical           Pages\r\n");
+    Print(L"───────────────────────────────────────────────\r\n");
+    
+    UINT8* ptr = (UINT8*)map;
+    UINT8* end = ptr + map_size;
+    UINT64 total_usable = 0;
+    
+    while (ptr < end) {
+        EFI_MEMORY_DESCRIPTOR* desc = (EFI_MEMORY_DESCRIPTOR*)ptr;
+        
+        CHAR16* name = (desc->Type < 15) ? type_names[desc->Type] : L"Unknown";
+        Print(L"%-18s   0x%016lx   %8lu\r\n",
+              name, desc->PhysicalStart, desc->NumberOfPages);
+        
+        // Count usable memory
+        if (desc->Type == EfiConventionalMemory ||
+            desc->Type == EfiBootServicesCode ||
+            desc->Type == EfiBootServicesData) {
+            total_usable += desc->NumberOfPages * 4096;
+        }
+        
+        ptr += desc_size;
+    }
+    
+    Print(L"\r\nTotal usable memory: %lu MB\r\n", 
+          total_usable / (1024 * 1024));
+}
+</code></pre>
+                    
+                    <h3 id="allocation">Memory Allocation</h3>
+                    
+                    <p>UEFI provides several allocation functions for different needs:</p>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Function</th>
+                                    <th>Unit</th>
+                                    <th>Use Case</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>AllocatePool()</code></td>
+                                    <td>Bytes</td>
+                                    <td>Small allocations (like malloc)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>AllocatePages()</code></td>
+                                    <td>4KB pages</td>
+                                    <td>Page-aligned allocations, kernel loading</td>
+                                </tr>
+                                <tr>
+                                    <td><code>FreePool()</code></td>
+                                    <td>-</td>
+                                    <td>Free pool memory</td>
+                                </tr>
+                                <tr>
+                                    <td><code>FreePages()</code></td>
+                                    <td>-</td>
+                                    <td>Free page-aligned memory</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <pre><code class="language-c">/* Memory Allocation Examples */
+
+/* Allocate pool memory (like malloc) */
+void* buffer;
+EFI_STATUS status = gBS->AllocatePool(
+    EfiLoaderData,        // Memory type
+    1024,                 // Size in bytes
+    &buffer               // Output pointer
+);
+if (!EFI_ERROR(status)) {
+    // Use buffer...
+    gBS->FreePool(buffer);
+}
+
+/* Allocate pages for kernel loading */
+EFI_PHYSICAL_ADDRESS kernel_base = 0x100000;  // Where we want it
+UINTN kernel_pages = 256;                     // 1 MB
+
+status = gBS->AllocatePages(
+    AllocateAddress,      // Allocation type
+    EfiLoaderData,        // Memory type  
+    kernel_pages,         // Number of 4KB pages
+    &kernel_base          // Physical address (in/out)
+);
+
+/* Allocation types:
+   AllocateAnyPages  - UEFI picks the address
+   AllocateMaxAddress - Below a maximum address
+   AllocateAddress   - At a specific address
+*/
+
+/* Allocating at any location */
+EFI_PHYSICAL_ADDRESS any_location;
+status = gBS->AllocatePages(
+    AllocateAnyPages,     // Let firmware choose
+    EfiLoaderData,
+    64,                   // 256 KB
+    &any_location         // Output address
+);
+
+/* Allocating below a limit (e.g., for 32-bit pointers) */
+EFI_PHYSICAL_ADDRESS below_4gb = 0xFFFFFFFF;
+status = gBS->AllocatePages(
+    AllocateMaxAddress,   // At or below given address
+    EfiLoaderData,
+    32,
+    &below_4gb            // Updated to actual address
+);
+</code></pre>
+                    
+                    <h3 id="exit-boot">ExitBootServices: The Point of No Return</h3>
+                    
+                    <p><code>ExitBootServices()</code> is the most critical—and most error-prone—Boot Service call. It tells UEFI: "I'm done, shut down your services, I'm taking over." After this call succeeds:</p>
+                    
+                    <ul>
+                        <li><strong>Boot Services gone</strong> - No more AllocatePool, LocateProtocol, etc.</li>
+                        <li><strong>Timer gone</strong> - UEFI's event system stops</li>
+                        <li><strong>Console gone</strong> - ConOut stops working (but GOP framebuffer remains)</li>
+                        <li><strong>Your kernel owns everything</strong> - Boot services memory is yours to use</li>
+                    </ul>
+                    
+<pre class="ascii-diagram">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    ExitBootServices Sequence                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌──────────────────────────────────────────────────────────────────────┐  │
+│   │                        Before ExitBootServices                       │  │
+│   │                                                                      │  │
+│   │   Boot Services: ✓ Available                                         │  │
+│   │   Runtime Services: ✓ Available                                      │  │
+│   │   Console Output: ✓ Working                                          │  │
+│   │   Memory Map Key: ABC123                                             │  │
+│   │                                                                      │  │
+│   └────────────────────────────────────┬─────────────────────────────────┘  │
+│                                        │                                    │
+│                                        ▼ ExitBootServices(ImageHandle,      │
+│                                          MemoryMapKey)                      │
+│                                        │                                    │
+│           ┌────────────────────────────┼─────────────────────────┐          │
+│           │                            │                         │          │
+│           ▼                            ▼                         ▼          │
+│   Key Matches?                  Key Changed?              Error?            │
+│        │                             │                       │              │
+│        │ YES                         │ YES                   │              │
+│        ▼                             ▼                       ▼              │
+│   ┌─────────────┐           ┌─────────────────┐      ┌──────────────┐       │
+│   │   SUCCESS   │           │ EFI_INVALID_    │      │   Handle     │       │
+│   │   ═════════ │           │ PARAMETER       │      │   Error      │       │
+│   │             │           │ ═══════════════ │      └──────────────┘       │
+│   │ Boot Svcs   │           │                 │                             │
+│   │   GONE      │           │ Memory map      │                             │
+│   │             │           │ changed! Get    │                             │
+│   │ You own     │           │ new map and     │                             │
+│   │ everything  │           │ try again       │                             │
+│   └─────────────┘           └─────────────────┘                             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</pre>
+                    
+                    <pre><code class="language-c">/* Robust ExitBootServices Implementation */
+EFI_STATUS exit_boot_services_safe(EFI_HANDLE image, 
+                                    boot_info_t* boot_info) {
+    EFI_STATUS status;
+    EFI_MEMORY_DESCRIPTOR* memory_map = NULL;
+    UINTN map_size = 0;
+    UINTN map_key = 0;
+    UINTN desc_size = 0;
+    UINT32 desc_version = 0;
+    
+    // Get memory map (may need to retry)
+    int retries = 3;
+    while (retries--) {
+        // Get required size
+        status = gBS->GetMemoryMap(&map_size, NULL, &map_key,
+                                   &desc_size, &desc_version);
+        
+        // Add safety margin (allocation might change map)
+        map_size += 2 * desc_size;
+        
+        // Allocate buffer
+        status = gBS->AllocatePool(EfiLoaderData, map_size, 
+                                   (void**)&memory_map);
+        if (EFI_ERROR(status)) {
+            Print(L"Failed to allocate memory map buffer\r\n");
+            return status;
+        }
+        
+        // Get actual memory map
+        status = gBS->GetMemoryMap(&map_size, memory_map, &map_key,
+                                   &desc_size, &desc_version);
+        if (EFI_ERROR(status)) {
+            gBS->FreePool(memory_map);
+            memory_map = NULL;
+            continue;
+        }
+        
+        // Try to exit boot services with this map_key
+        status = gBS->ExitBootServices(image, map_key);
+        if (status == EFI_SUCCESS) {
+            // Success! Save everything to boot_info for kernel
+            boot_info->memory_map = memory_map;
+            boot_info->memory_map_size = map_size;
+            boot_info->memory_map_desc_size = desc_size;
+            return EFI_SUCCESS;
+        }
+        
+        // Map key changed between GetMemoryMap and ExitBootServices
+        // The AllocatePool call may have modified the memory map!
+        // Free and retry
+        gBS->FreePool(memory_map);
+        memory_map = NULL;
+        map_size = 0;  // Reset size to query again
+    }
+    
+    Print(L"ExitBootServices failed after retries\r\n");
+    return EFI_ABORTED;
+}
+</code></pre>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-exclamation-circle me-2"></i>The Map Key Race Condition</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-crimson me-1">Common Bug</span>
+                            <span class="badge bg-blue">Must Understand</span>
+                        </div>
+                        <div class="content">
+                            <p>The most common ExitBootServices bug:</p>
+                            <ol>
+                                <li>You call <code>GetMemoryMap()</code> - returns map_key = 0x1234</li>
+                                <li>You call <code>AllocatePool()</code> for something - this changes the memory map!</li>
+                                <li>You call <code>ExitBootServices(image, 0x1234)</code> - FAILS because map changed</li>
+                            </ol>
+                            <p><strong>Solution:</strong> Always get the memory map, then <em>immediately</em> call ExitBootServices without any allocations in between. If it fails, get a fresh map and retry.</p>
+                        </div>
+                    </div>
+
+                <!-- GOP Section -->
+                <div id="gop" class="blog-content mt-5">
+                    <h2><i class="fas fa-tv me-2 text-teal"></i>Graphics Output Protocol (GOP)</h2>
+                    
+                    <p>One of UEFI's biggest improvements over BIOS is graphics handling. Gone are the days of VGA registers and VESA BIOS Extensions. GOP provides direct access to a linear framebuffer—a simple array of pixels you can write to directly.</p>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-image me-2"></i>
+                        <strong>GOP vs VGA/VESA:</strong> With BIOS, you had to set video modes via INT 0x10 (limited) or VBE (complex real-mode calls). GOP gives you the framebuffer address directly in 64-bit mode. No mode switching, no real mode calls, just pixels in memory.
+                    </div>
+                    
+                    <h3 id="gop-modes">Video Modes: Finding the Right Resolution</h3>
+                    
+                    <p>GOP supports multiple video modes. Let's explore how to enumerate and select them:</p>
+                    
+<pre class="ascii-diagram">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    GOP Mode Information Structure                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   EFI_GRAPHICS_OUTPUT_PROTOCOL                                              │
+│   ════════════════════════════════                                          │
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │  Mode (EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE)                           │   │
+│   │  ─────────────────────────────────────────                          │   │
+│   │                                                                     │   │
+│   │  MaxMode           ─── Total number of supported modes              │   │
+│   │  Mode              ─── Currently active mode number                 │   │
+│   │  SizeOfInfo        ─── Size of Info structure                       │   │
+│   │  FrameBufferBase   ─── Physical address of framebuffer ◄────────    │   │
+│   │  FrameBufferSize   ─── Size in bytes                     KEY DATA   │   │
+│   │                                                                     │   │
+│   │  Info (EFI_GRAPHICS_OUTPUT_MODE_INFORMATION)                        │   │
+│   │  ─────────────────────────────────────────────                      │   │
+│   │    Version                                                          │   │
+│   │    HorizontalResolution ─── Width in pixels (e.g., 1920)            │   │
+│   │    VerticalResolution   ─── Height in pixels (e.g., 1080)           │   │
+│   │    PixelFormat          ─── How pixels are laid out                 │   │
+│   │    PixelInformation     ─── Bit masks for RGB (if applicable)       │   │
+│   │    PixelsPerScanLine    ─── May be >= HorizontalResolution          │   │
+│   │                                                                     │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│   Pixel Formats:                                                            │
+│   ───────────────                                                           │
+│   PixelRedGreenBlueReserved8BitPerColor ─── 32bpp RGBX (common)            │
+│   PixelBlueGreenRedReserved8BitPerColor ─── 32bpp BGRX (common)            │
+│   PixelBitMask                          ─── Custom, check masks            │
+│   PixelBltOnly                          ─── No direct framebuffer access!  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</pre>
+
+                    <pre><code class="language-c">/* Set up GOP Framebuffer */
+EFI_STATUS setup_gop(framebuffer_t* fb) {
+    EFI_STATUS status;
+    EFI_GRAPHICS_OUTPUT_PROTOCOL* gop;
+    EFI_GUID gopGuid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+    
+    status = gBS->LocateProtocol(&gopGuid, NULL, (void**)&gop);
+    if (EFI_ERROR(status)) {
+        return status;
+    }
+    
+    // Find best mode (1920x1080 preferred)
+    UINT32 best_mode = gop->Mode->Mode;
+    for (UINT32 i = 0; i < gop->Mode->MaxMode; i++) {
+        EFI_GRAPHICS_OUTPUT_MODE_INFORMATION* info;
+        UINTN size;
+        gop->QueryMode(gop, i, &size, &info);
+        
+        if (info->HorizontalResolution == 1920 &&
+            info->VerticalResolution == 1080) {
+            best_mode = i;
+            break;
+        }
+    }
+    
+    // Set mode
+    gop->SetMode(gop, best_mode);
+    
+    // Fill framebuffer info for kernel
+    fb->base = (void*)gop->Mode->FrameBufferBase;
+    fb->size = gop->Mode->FrameBufferSize;
+    fb->width = gop->Mode->Info->HorizontalResolution;
+    fb->height = gop->Mode->Info->VerticalResolution;
+    fb->pitch = gop->Mode->Info->PixelsPerScanLine * 4;
+    
+    return EFI_SUCCESS;
+}
+</code></pre>
+                    
+                    <p>Let's look at a more robust mode selection that considers multiple preferred resolutions:</p>
+                    
+                    <pre><code class="language-c">/* Advanced GOP Mode Selection */
+typedef struct {
+    UINT32 width;
+    UINT32 height;
+} resolution_t;
+
+// Preferred resolutions in order
+static resolution_t preferred[] = {
+    {1920, 1080},  // Full HD
+    {1280, 720},   // HD
+    {1024, 768},   // XGA
+    {800, 600},    // SVGA fallback
+    {0, 0}         // End marker
+};
+
+EFI_STATUS setup_gop_best(framebuffer_t* fb) {
+    EFI_STATUS status;
+    EFI_GRAPHICS_OUTPUT_PROTOCOL* gop;
+    EFI_GUID gop_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+    
+    status = gBS->LocateProtocol(&gop_guid, NULL, (void**)&gop);
+    if (EFI_ERROR(status)) {
+        Print(L"GOP not found!\r\n");
+        return status;
+    }
+    
+    Print(L"GOP Found: %d modes available\r\n", gop->Mode->MaxMode);
+    
+    // Try each preferred resolution
+    for (int p = 0; preferred[p].width != 0; p++) {
+        for (UINT32 i = 0; i < gop->Mode->MaxMode; i++) {
+            EFI_GRAPHICS_OUTPUT_MODE_INFORMATION* info;
+            UINTN info_size;
+            
+            status = gop->QueryMode(gop, i, &info_size, &info);
+            if (EFI_ERROR(status)) continue;
+            
+            // Check if mode matches preferred resolution
+            if (info->HorizontalResolution == preferred[p].width &&
+                info->VerticalResolution == preferred[p].height) {
+                
+                // Check pixel format is usable
+                if (info->PixelFormat == PixelBltOnly) {
+                    continue;  // No direct framebuffer access
+                }
+                
+                Print(L"Setting mode %d: %dx%d\r\n", i,
+                      info->HorizontalResolution,
+                      info->VerticalResolution);
+                
+                status = gop->SetMode(gop, i);
+                if (!EFI_ERROR(status)) {
+                    goto mode_set;
+                }
+            }
+        }
+    }
+    
+    // No preferred resolution found, use current mode
+    Print(L"Using default mode\r\n");
+    
+mode_set:
+    // Export framebuffer info
+    fb->base = (uint32_t*)gop->Mode->FrameBufferBase;
+    fb->size = gop->Mode->FrameBufferSize;
+    fb->width = gop->Mode->Info->HorizontalResolution;
+    fb->height = gop->Mode->Info->VerticalResolution;
+    fb->pitch = gop->Mode->Info->PixelsPerScanLine;  // In pixels
+    
+    // Determine pixel format
+    switch (gop->Mode->Info->PixelFormat) {
+        case PixelRedGreenBlueReserved8BitPerColor:
+            fb->pixel_format = PIXEL_RGBX;
+            break;
+        case PixelBlueGreenRedReserved8BitPerColor:
+            fb->pixel_format = PIXEL_BGRX;
+            break;
+        case PixelBitMask:
+            // Extract bit positions from masks
+            fb->red_mask = gop->Mode->Info->PixelInformation.RedMask;
+            fb->green_mask = gop->Mode->Info->PixelInformation.GreenMask;
+            fb->blue_mask = gop->Mode->Info->PixelInformation.BlueMask;
+            fb->pixel_format = PIXEL_BITMASK;
+            break;
+        default:
+            fb->pixel_format = PIXEL_UNKNOWN;
+    }
+    
+    Print(L"Framebuffer at 0x%lx, %dx%d, pitch=%d\r\n",
+          fb->base, fb->width, fb->height, fb->pitch);
+    
+    return EFI_SUCCESS;
+}
+</code></pre>
+                    
+                    <h3 id="framebuffer">Framebuffer Access: Drawing Pixels</h3>
+                    
+                    <p>Once you have the framebuffer, drawing is straightforward. Here's how pixels are arranged:</p>
+                    
+<pre class="ascii-diagram">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Linear Framebuffer Layout                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Memory Layout (1920x1080 example):                                        │
+│   ═══════════════════════════════════                                       │
+│                                                                             │
+│   FrameBufferBase                                                           │
+│        │                                                                    │
+│        ▼                                                                    │
+│   ┌────┬────┬────┬────┬ ─ ─ ─ ┬────┬─────────────────┐                      │
+│   │P(0,0)│P(1,0)│P(2,0)│ ...   │P(1919,0)│ padding    │  ◄── Row 0          │
+│   └────┴────┴────┴────┴ ─ ─ ─ ┴────┴─────────────────┘                      │
+│   │                                       │                                 │
+│   │◄─────────── PixelsPerScanLine ───────▶│                                 │
+│   │      (may be > 1920 for alignment)    │                                 │
+│   │                                                                         │
+│   ┌────┬────┬────┬────┬ ─ ─ ─ ┬────┬─────────────────┐                      │
+│   │P(0,1)│P(1,1)│P(2,1)│ ...   │P(1919,1)│ padding    │  ◄── Row 1          │
+│   └────┴────┴────┴────┴ ─ ─ ─ ┴────┴─────────────────┘                      │
+│           .                                                                 │
+│           .  (1078 more rows)                                               │
+│           .                                                                 │
+│   ┌────┬────┬────┬────┬ ─ ─ ─ ┬────┬─────────────────┐                      │
+│   │P(0,1079)│... │    │       │P(1919,1079)│padding │  ◄── Row 1079        │
+│   └────┴────┴────┴────┴ ─ ─ ─ ┴────┴─────────────────┘                      │
+│                                                                             │
+│   Pixel address formula:                                                    │
+│   ──────────────────────                                                    │
+│   pixel_addr = fb_base + (y * pitch_in_bytes) + (x * bytes_per_pixel)       │
+│                                                                             │
+│   For 32bpp BGRX:                                                           │
+│   pixel_addr = fb_base + (y * pitch * 4) + (x * 4)                          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</pre>
+                    
+                    <pre><code class="language-c">/* Framebuffer Structure for Kernel */
+typedef enum {
+    PIXEL_RGBX,      // Red, Green, Blue, Reserved
+    PIXEL_BGRX,      // Blue, Green, Red, Reserved
+    PIXEL_BITMASK,   // Use masks to extract colors
+    PIXEL_UNKNOWN
+} pixel_format_t;
+
+typedef struct {
+    uint32_t*      base;          // Framebuffer address
+    uint64_t       size;          // Total size in bytes
+    uint32_t       width;         // Horizontal resolution
+    uint32_t       height;        // Vertical resolution
+    uint32_t       pitch;         // Pixels per scan line
+    pixel_format_t pixel_format;  // Pixel layout
+    uint32_t       red_mask;      // For BITMASK format
+    uint32_t       green_mask;
+    uint32_t       blue_mask;
+} framebuffer_t;
+
+/* Basic pixel drawing operations */
+static inline void fb_put_pixel(framebuffer_t* fb, 
+                                 int x, int y, 
+                                 uint32_t color) {
+    if (x < 0 || x >= (int)fb->width || 
+        y < 0 || y >= (int)fb->height) {
+        return;  // Bounds check
+    }
+    
+    // Calculate pixel address: base + (y * pitch) + x
+    uint32_t* pixel = fb->base + (y * fb->pitch) + x;
+    *pixel = color;
+}
+
+/* Color conversion based on pixel format */
+static inline uint32_t fb_make_color(framebuffer_t* fb,
+                                      uint8_t r, uint8_t g, uint8_t b) {
+    switch (fb->pixel_format) {
+        case PIXEL_RGBX:  // 0xRRGGBBXX
+            return (r << 24) | (g << 16) | (b << 8);
+            
+        case PIXEL_BGRX:  // 0xBBGGRRXX (most common!)
+            return (b << 24) | (g << 16) | (r << 8);
+            
+        default:
+            return (r << 16) | (g << 8) | b;  // Guess
+    }
+}
+
+/* Fill rectangle */
+void fb_fill_rect(framebuffer_t* fb,
+                  int x, int y, int w, int h,
+                  uint32_t color) {
+    for (int row = y; row < y + h && row < (int)fb->height; row++) {
+        uint32_t* line = fb->base + (row * fb->pitch) + x;
+        for (int col = 0; col < w && (x + col) < (int)fb->width; col++) {
+            line[col] = color;
+        }
+    }
+}
+
+/* Clear screen to a color */
+void fb_clear(framebuffer_t* fb, uint32_t color) {
+    fb_fill_rect(fb, 0, 0, fb->width, fb->height, color);
+}
+
+/* Example: Draw colorful test pattern */
+void fb_test_pattern(framebuffer_t* fb) {
+    uint32_t red   = fb_make_color(fb, 255, 0, 0);
+    uint32_t green = fb_make_color(fb, 0, 255, 0);
+    uint32_t blue  = fb_make_color(fb, 0, 0, 255);
+    uint32_t white = fb_make_color(fb, 255, 255, 255);
+    
+    int w = fb->width / 4;
+    int h = fb->height;
+    
+    fb_fill_rect(fb, 0*w, 0, w, h, red);
+    fb_fill_rect(fb, 1*w, 0, w, h, green);
+    fb_fill_rect(fb, 2*w, 0, w, h, blue);
+    fb_fill_rect(fb, 3*w, 0, w, h, white);
+}
+</code></pre>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-exclamation-triangle me-2"></i>Pitch vs Width: A Common Trap</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-crimson me-1">Critical</span>
+                            <span class="badge bg-navy">Graphics Bug</span>
+                        </div>
+                        <div class="content">
+                            <p><strong>PixelsPerScanLine (pitch) is NOT always equal to HorizontalResolution!</strong></p>
+                            <p>For memory alignment, the framebuffer may have extra padding at the end of each row:</p>
+                            <ul>
+                                <li>1920x1080 might have pitch = 2048 (for power-of-2 alignment)</li>
+                                <li>1366x768 might have pitch = 1376 (for 64-byte cache line alignment)</li>
+                            </ul>
+                            <p>Always use <code>pitch</code> for row calculations, never <code>width</code>!</p>
+                        </div>
+                    </div>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>GOP Survives ExitBootServices:</strong> Unlike Boot Services, the framebuffer remains accessible after ExitBootServices(). The graphics hardware keeps displaying whatever you write to the framebuffer address. Your kernel just needs to preserve this memory region and keep drawing.
+                    </div>
+
+                <!-- Loading Kernel Section -->
+                <div id="loading-kernel" class="blog-content mt-5">
+                    <h2><i class="fas fa-download me-2 text-teal"></i>Loading the Kernel</h2>
+                    
+                    <p>With BIOS booting, we had to write FAT drivers in Assembly to load our kernel. UEFI firmware already knows how to read FAT filesystems! We can use the File Protocol to load files directly—no filesystem code required in the bootloader.</p>
+                    
+                    <h3 id="file-protocol">File Protocol: Reading Files from Disk</h3>
+                    
+                    <p>The Simple File System Protocol lets you open volumes, browse directories, and read files. Here's the architecture:</p>
+                    
+<pre class="ascii-diagram">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    UEFI File System Stack                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌───────────────────────────────────────────────────────────────────┐     │
+│   │              Your UEFI Boot Loader (.efi file)                    │     │
+│   └────────────────────────────┬──────────────────────────────────────┘     │
+│                                │                                            │
+│                                ▼ LocateProtocol                             │
+│   ┌───────────────────────────────────────────────────────────────────┐     │
+│   │         EFI_SIMPLE_FILE_SYSTEM_PROTOCOL                           │     │
+│   │  ─────────────────────────────────────────                        │     │
+│   │                                                                   │     │
+│   │  OpenVolume() ──▶ Returns root directory handle                   │     │
+│   │                                                                   │     │
+│   └────────────────────────────┬──────────────────────────────────────┘     │
+│                                │                                            │
+│                                ▼ OpenVolume                                 │
+│   ┌───────────────────────────────────────────────────────────────────┐     │
+│   │              EFI_FILE_PROTOCOL (Root Directory)                   │     │
+│   │  ─────────────────────────────────────────────                    │     │
+│   │                                                                   │     │
+│   │  Open()    ──▶ Open file or subdirectory                          │     │
+│   │  Read()    ──▶ Read file contents                                 │     │
+│   │  Write()   ──▶ Write to file                                      │     │
+│   │  Close()   ──▶ Close handle                                       │     │
+│   │  GetInfo() ──▶ Get file size, attributes                          │     │
+│   │  SetInfo() ──▶ Rename, change attributes                          │     │
+│   │                                                                   │     │
+│   └───────────────────────────────────────────────────────────────────┘     │
+│                                                                             │
+│   Directory Structure (ESP - EFI System Partition):                         │
+│   ═══════════════════════════════════════════════                           │
+│                                                                             │
+│   /                           ◄── Root of FAT partition                     │
+│   ├── EFI/                                                                  │
+│   │   ├── BOOT/                                                             │
+│   │   │   └── BOOTX64.EFI     ◄── Default 64-bit boot loader               │
+│   │   └── MYOS/                                                             │
+│   │       └── boot.efi        ◄── Your custom boot loader                   │
+│   └── kernel.elf              ◄── Your kernel file                          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</pre>
+                    
+                    <pre><code class="language-c">/* Load a File from the Boot Volume */
+EFI_STATUS load_file(EFI_HANDLE image, 
+                     CHAR16* filename, 
+                     void** buffer, 
+                     UINTN* size) {
+    EFI_STATUS status;
+    EFI_GUID lipGuid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
+    EFI_GUID fsGuid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
+    EFI_GUID fileInfoGuid = EFI_FILE_INFO_ID;
+    
+    // Get the loaded image protocol (to find boot volume)
+    EFI_LOADED_IMAGE_PROTOCOL* loaded_image;
+    status = gBS->HandleProtocol(image, &lipGuid, (void**)&loaded_image);
+    if (EFI_ERROR(status)) return status;
+    
+    // Get file system protocol from the boot device
+    EFI_SIMPLE_FILE_SYSTEM_PROTOCOL* fs;
+    status = gBS->HandleProtocol(loaded_image->DeviceHandle, 
+                                  &fsGuid, (void**)&fs);
+    if (EFI_ERROR(status)) return status;
+    
+    // Open the root directory
+    EFI_FILE_PROTOCOL* root;
+    status = fs->OpenVolume(fs, &root);
+    if (EFI_ERROR(status)) return status;
+    
+    // Open the kernel file
+    EFI_FILE_PROTOCOL* file;
+    status = root->Open(root, &file, filename, 
+                        EFI_FILE_MODE_READ, 0);
+    if (EFI_ERROR(status)) {
+        Print(L"Failed to open %s\r\n", filename);
+        root->Close(root);
+        return status;
+    }
+    
+    // Get file size
+    EFI_FILE_INFO* info;
+    UINTN info_size = sizeof(EFI_FILE_INFO) + 256;
+    status = gBS->AllocatePool(EfiLoaderData, info_size, (void**)&info);
+    if (EFI_ERROR(status)) {
+        file->Close(file);
+        root->Close(root);
+        return status;
+    }
+    
+    status = file->GetInfo(file, &fileInfoGuid, &info_size, info);
+    if (EFI_ERROR(status)) {
+        gBS->FreePool(info);
+        file->Close(file);
+        root->Close(root);
+        return status;
+    }
+    
+    *size = info->FileSize;
+    gBS->FreePool(info);
+    
+    // Allocate memory for file contents
+    status = gBS->AllocatePool(EfiLoaderData, *size, buffer);
+    if (EFI_ERROR(status)) {
+        file->Close(file);
+        root->Close(root);
+        return status;
+    }
+    
+    // Read the entire file
+    status = file->Read(file, size, *buffer);
+    
+    file->Close(file);
+    root->Close(root);
+    
+    return status;
+}
+
+/* Usage example */
+void* kernel_data;
+UINTN kernel_size;
+status = load_file(ImageHandle, L"\\kernel.elf", &kernel_data, &kernel_size);
+if (!EFI_ERROR(status)) {
+    Print(L"Loaded kernel: %lu bytes\r\n", kernel_size);
+}
+</code></pre>
+                    
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-folder me-2"></i>
+                        <strong>Path Convention:</strong> UEFI uses backslashes for paths (like Windows). The root is <code>L"\\"</code>. For a kernel at <code>/EFI/MYOS/kernel.elf</code>, use <code>L"\\EFI\\MYOS\\kernel.elf"</code>.
+                    </div>
+                    
+                    <h3 id="kernel-transfer">Transfer to Kernel: The Final Handoff</h3>
+                    
+                    <p>After loading the kernel ELF, we need to:</p>
+                    <ol>
+                        <li>Parse the ELF headers (we learned this in Phase 9)</li>
+                        <li>Load program segments to their correct addresses</li>
+                        <li>Gather all boot information for the kernel</li>
+                        <li>Exit Boot Services</li>
+                        <li>Jump to the kernel entry point</li>
+                    </ol>
+                    
+<pre class="ascii-diagram">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Boot Information Handoff                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Things kernel needs from bootloader:                                      │
+│   ════════════════════════════════════                                      │
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                     boot_info_t Structure                           │   │
+│   │                                                                     │   │
+│   │   Magic Signature         ─── Verify boot info is valid             │   │
+│   │                                                                     │   │
+│   │   ┌─────────────────┐                                               │   │
+│   │   │ Memory Map      │     ─── Where usable RAM is                   │   │
+│   │   │  • map pointer  │                                               │   │
+│   │   │  • map size     │                                               │   │
+│   │   │  • desc size    │                                               │   │
+│   │   └─────────────────┘                                               │   │
+│   │                                                                     │   │
+│   │   ┌─────────────────┐                                               │   │
+│   │   │ Framebuffer     │     ─── GOP graphics info                     │   │
+│   │   │  • base address │                                               │   │
+│   │   │  • width/height │                                               │   │
+│   │   │  • pitch/format │                                               │   │
+│   │   └─────────────────┘                                               │   │
+│   │                                                                     │   │
+│   │   ┌─────────────────┐                                               │   │
+│   │   │ ACPI Tables     │     ─── Hardware configuration                │   │
+│   │   │  • RSDP address │                                               │   │
+│   │   └─────────────────┘                                               │   │
+│   │                                                                     │   │
+│   │   ┌─────────────────┐                                               │   │
+│   │   │ Runtime Svc     │     ─── For NVRAM, time, reset                │   │
+│   │   │  • RT pointer   │                                               │   │
+│   │   └─────────────────┘                                               │   │
+│   │                                                                     │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</pre>
+                    
+                    <pre><code class="language-c">/* Boot Information Structure Passed to Kernel */
+#define BOOT_MAGIC 0xB00710AD  // "BOOTLOAD" in hex-speak
+
+typedef struct {
+    uint32_t           magic;              // Verify structure validity
+    
+    // Memory map from UEFI
+    void*              memory_map;         // EFI_MEMORY_DESCRIPTOR array
+    uint64_t           memory_map_size;    // Total size of map
+    uint64_t           memory_map_desc_size; // Size of each descriptor
+    
+    // Framebuffer info from GOP
+    framebuffer_t      framebuffer;
+    
+    // ACPI RSDP pointer
+    void*              acpi_rsdp;
+    
+    // UEFI Runtime Services (remain valid after ExitBootServices)
+    EFI_RUNTIME_SERVICES* runtime_services;
+    
+} boot_info_t;
+
+/* Main Boot Loader Logic */
+EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle, 
+                           EFI_SYSTEM_TABLE* SystemTable) {
+    EFI_STATUS status;
+    InitializeLib(ImageHandle, SystemTable);
+    
+    Print(L"MyOS UEFI Bootloader v1.0\r\n");
+    Print(L"══════════════════════════\r\n\r\n");
+    
+    // Allocate boot_info in a safe location
+    boot_info_t* boot_info;
+    status = gBS->AllocatePool(EfiLoaderData, sizeof(boot_info_t),
+                               (void**)&boot_info);
+    if (EFI_ERROR(status)) {
+        Print(L"Failed to allocate boot_info\r\n");
+        return status;
+    }
+    boot_info->magic = BOOT_MAGIC;
+    
+    // 1. Set up graphics (before any errors might occur)
+    Print(L"[1/5] Setting up GOP...\r\n");
+    status = setup_gop_best(&boot_info->framebuffer);
+    if (EFI_ERROR(status)) {
+        Print(L"GOP setup failed\r\n");
+        return status;
+    }
+    
+    // 2. Load kernel ELF file
+    Print(L"[2/5] Loading kernel...\r\n");
+    void* kernel_data;
+    UINTN kernel_size;
+    status = load_file(ImageHandle, L"\\kernel.elf", 
+                       &kernel_data, &kernel_size);
+    if (EFI_ERROR(status)) {
+        Print(L"Failed to load kernel\r\n");
+        return status;
+    }
+    Print(L"  Loaded %lu bytes\r\n", kernel_size);
+    
+    // 3. Parse and load ELF (from Phase 9)
+    Print(L"[3/5] Parsing ELF...\r\n");
+    uint64_t kernel_entry;
+    status = load_elf64(kernel_data, &kernel_entry);
+    if (EFI_ERROR(status)) {
+        Print(L"ELF parsing failed\r\n");
+        return status;
+    }
+    Print(L"  Entry point: 0x%lx\r\n", kernel_entry);
+    
+    // 4. Find ACPI tables
+    Print(L"[4/5] Finding ACPI...\r\n");
+    boot_info->acpi_rsdp = find_acpi_rsdp();
+    boot_info->runtime_services = gRT;
+    
+    // 5. Exit boot services and jump to kernel
+    Print(L"[5/5] Exiting boot services...\r\n");
+    Print(L"\r\nPress any key to continue...\r\n");
+    wait_for_key();
+    
+    status = exit_boot_services_safe(ImageHandle, boot_info);
+    if (EFI_ERROR(status)) {
+        // Can't print anymore if ExitBootServices partially succeeded!
+        return status;
+    }
+    
+    // Jump to kernel! (No return)
+    typedef void (*kernel_entry_t)(boot_info_t*);
+    kernel_entry_t kernel = (kernel_entry_t)kernel_entry;
+    kernel(boot_info);
+    
+    // Should never reach here
+    while(1) __asm__("hlt");
+    return EFI_SUCCESS;
+}
+</code></pre>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-lightbulb me-2"></i>Finding ACPI Tables</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-1">Configuration</span>
+                            <span class="badge bg-blue">Hardware Info</span>
+                        </div>
+                        <div class="content">
+                            <p>ACPI tables contain crucial hardware information. UEFI makes them easy to find via the Configuration Table:</p>
+                            <pre><code class="language-c">/* Find ACPI RSDP from Configuration Table */
+void* find_acpi_rsdp(void) {
+    EFI_GUID acpi2_guid = EFI_ACPI_20_TABLE_GUID;
+    EFI_GUID acpi1_guid = ACPI_TABLE_GUID;
+    
+    // Prefer ACPI 2.0 (XSDT with 64-bit pointers)
+    for (UINTN i = 0; i < gST->NumberOfTableEntries; i++) {
+        if (CompareGuid(&gST->ConfigurationTable[i].VendorGuid, 
+                        &acpi2_guid)) {
+            return gST->ConfigurationTable[i].VendorTable;
+        }
+    }
+    
+    // Fall back to ACPI 1.0 (RSDT with 32-bit pointers)
+    for (UINTN i = 0; i < gST->NumberOfTableEntries; i++) {
+        if (CompareGuid(&gST->ConfigurationTable[i].VendorGuid, 
+                        &acpi1_guid)) {
+            return gST->ConfigurationTable[i].VendorTable;
+        }
+    }
+    
+    return NULL;  // No ACPI found
+}</code></pre>
+                        </div>
+                    </div>
+                    
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>After ExitBootServices:</strong> Once you call ExitBootServices successfully, you cannot use Print(), AllocatePool(), or any Boot Service. Interrupts are disabled by default. Your kernel must set up its own IDT, GDT, and memory management before anything complex can happen.
+                    </div>
+
+                <!-- What You Can Build Section -->
+                <div id="build" class="blog-content mt-5">
+                    <h2><i class="fas fa-hammer me-2 text-teal"></i>What You Can Build</h2>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Phase 12 Project:</strong> A UEFI-bootable OS! Your kernel now boots on modern hardware via UEFI, has accurate memory maps, and direct framebuffer access. No more legacy BIOS limitations.
+                    </div>
+                    
+                    <p>Let's bring everything together into a complete, buildable UEFI boot loader:</p>
+                    
+                    <h4>Complete UEFI Bootloader</h4>
+                    
+                    <pre><code class="language-c">/* bootloader.c - Complete UEFI Boot Loader */
+#include <efi.h>
+#include <efilib.h>
+
+#define BOOT_MAGIC 0xB00710AD
+
+/*==========================================================
+ * Data Structures
+ *=========================================================*/
+ 
+typedef enum {
+    PIXEL_RGBX,
+    PIXEL_BGRX,
+    PIXEL_BITMASK,
+    PIXEL_UNKNOWN
+} pixel_format_t;
+
+typedef struct {
+    uint32_t*      base;
+    uint64_t       size;
+    uint32_t       width;
+    uint32_t       height;
+    uint32_t       pitch;
+    pixel_format_t pixel_format;
+} framebuffer_t;
+
+typedef struct {
+    uint32_t             magic;
+    void*                memory_map;
+    uint64_t             memory_map_size;
+    uint64_t             memory_map_desc_size;
+    framebuffer_t        framebuffer;
+    void*                acpi_rsdp;
+    EFI_RUNTIME_SERVICES* runtime_services;
+} boot_info_t;
+
+/*==========================================================
+ * GOP Setup
+ *=========================================================*/
+
+EFI_STATUS setup_gop(framebuffer_t* fb) {
+    EFI_STATUS status;
+    EFI_GRAPHICS_OUTPUT_PROTOCOL* gop;
+    EFI_GUID gop_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+    
+    status = gBS->LocateProtocol(&gop_guid, NULL, (void**)&gop);
+    if (EFI_ERROR(status)) {
+        return status;
+    }
+    
+    // Try to find 1920x1080, otherwise use default
+    UINT32 best_mode = gop->Mode->Mode;
+    for (UINT32 i = 0; i < gop->Mode->MaxMode; i++) {
+        EFI_GRAPHICS_OUTPUT_MODE_INFORMATION* info;
+        UINTN info_size;
+        if (!EFI_ERROR(gop->QueryMode(gop, i, &info_size, &info))) {
+            if (info->HorizontalResolution == 1920 &&
+                info->VerticalResolution == 1080 &&
+                info->PixelFormat != PixelBltOnly) {
+                best_mode = i;
+                break;
+            }
+        }
+    }
+    
+    gop->SetMode(gop, best_mode);
+    
+    fb->base = (uint32_t*)gop->Mode->FrameBufferBase;
+    fb->size = gop->Mode->FrameBufferSize;
+    fb->width = gop->Mode->Info->HorizontalResolution;
+    fb->height = gop->Mode->Info->VerticalResolution;
+    fb->pitch = gop->Mode->Info->PixelsPerScanLine;
+    
+    switch (gop->Mode->Info->PixelFormat) {
+        case PixelRedGreenBlueReserved8BitPerColor:
+            fb->pixel_format = PIXEL_RGBX;
+            break;
+        case PixelBlueGreenRedReserved8BitPerColor:
+            fb->pixel_format = PIXEL_BGRX;
+            break;
+        default:
+            fb->pixel_format = PIXEL_UNKNOWN;
+    }
+    
+    return EFI_SUCCESS;
+}
+
+/*==========================================================
+ * File Loading
+ *=========================================================*/
+
+EFI_STATUS load_file(EFI_HANDLE image, CHAR16* path,
+                     void** data, UINTN* size) {
+    EFI_STATUS status;
+    EFI_LOADED_IMAGE_PROTOCOL* lip;
+    EFI_SIMPLE_FILE_SYSTEM_PROTOCOL* fs;
+    EFI_FILE_PROTOCOL* root;
+    EFI_FILE_PROTOCOL* file;
+    
+    // Get loaded image -> device -> filesystem
+    EFI_GUID lip_guid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
+    EFI_GUID fs_guid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
+    
+    status = gBS->HandleProtocol(image, &lip_guid, (void**)&lip);
+    if (EFI_ERROR(status)) return status;
+    
+    status = gBS->HandleProtocol(lip->DeviceHandle, &fs_guid, (void**)&fs);
+    if (EFI_ERROR(status)) return status;
+    
+    status = fs->OpenVolume(fs, &root);
+    if (EFI_ERROR(status)) return status;
+    
+    status = root->Open(root, &file, path, EFI_FILE_MODE_READ, 0);
+    if (EFI_ERROR(status)) {
+        root->Close(root);
+        return status;
+    }
+    
+    // Get file size
+    EFI_GUID info_guid = EFI_FILE_INFO_ID;
+    UINTN info_size = sizeof(EFI_FILE_INFO) + 256;
+    EFI_FILE_INFO* info;
+    gBS->AllocatePool(EfiLoaderData, info_size, (void**)&info);
+    file->GetInfo(file, &info_guid, &info_size, info);
+    *size = info->FileSize;
+    gBS->FreePool(info);
+    
+    // Read file
+    gBS->AllocatePool(EfiLoaderData, *size, data);
+    file->Read(file, size, *data);
+    
+    file->Close(file);
+    root->Close(root);
+    return EFI_SUCCESS;
+}
+
+/*==========================================================
+ * ACPI Discovery
+ *=========================================================*/
+
+void* find_acpi_rsdp(void) {
+    EFI_GUID acpi20 = EFI_ACPI_20_TABLE_GUID;
+    EFI_GUID acpi10 = ACPI_TABLE_GUID;
+    
+    for (UINTN i = 0; i < gST->NumberOfTableEntries; i++) {
+        if (CompareGuid(&gST->ConfigurationTable[i].VendorGuid, &acpi20) ||
+            CompareGuid(&gST->ConfigurationTable[i].VendorGuid, &acpi10)) {
+            return gST->ConfigurationTable[i].VendorTable;
+        }
+    }
+    return NULL;
+}
+
+/*==========================================================
+ * Memory Map & Exit Boot Services
+ *=========================================================*/
+
+EFI_STATUS exit_boot_services_safe(EFI_HANDLE image, boot_info_t* bi) {
+    EFI_STATUS status;
+    UINTN map_size = 0, map_key, desc_size;
+    UINT32 desc_ver;
+    
+    for (int retry = 0; retry < 3; retry++) {
+        // Query size
+        gBS->GetMemoryMap(&map_size, NULL, &map_key, &desc_size, &desc_ver);
+        map_size += 2 * desc_size;
+        
+        // Allocate
+        gBS->AllocatePool(EfiLoaderData, map_size, &bi->memory_map);
+        
+        // Get map
+        status = gBS->GetMemoryMap(&map_size, bi->memory_map,
+                                   &map_key, &desc_size, &desc_ver);
+        if (EFI_ERROR(status)) {
+            gBS->FreePool(bi->memory_map);
+            continue;
+        }
+        
+        bi->memory_map_size = map_size;
+        bi->memory_map_desc_size = desc_size;
+        
+        // Exit boot services immediately!
+        status = gBS->ExitBootServices(image, map_key);
+        if (status == EFI_SUCCESS) {
+            return EFI_SUCCESS;
+        }
+        
+        gBS->FreePool(bi->memory_map);
+        map_size = 0;
+    }
+    return EFI_LOAD_ERROR;
+}
+
+/*==========================================================
+ * Entry Point
+ *=========================================================*/
+
+EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle,
+                           EFI_SYSTEM_TABLE* SystemTable) {
+    EFI_STATUS status;
+    InitializeLib(ImageHandle, SystemTable);
+    
+    gST->ConOut->ClearScreen(gST->ConOut);
+    Print(L"╔══════════════════════════════════════╗\r\n");
+    Print(L"║     MyOS UEFI Bootloader v1.0        ║\r\n");
+    Print(L"╚══════════════════════════════════════╝\r\n\r\n");
+    
+    // Allocate boot info
+    boot_info_t* boot_info;
+    gBS->AllocatePool(EfiLoaderData, sizeof(boot_info_t), (void**)&boot_info);
+    boot_info->magic = BOOT_MAGIC;
+    
+    // Setup GOP
+    Print(L"[1] Setting up graphics... ");
+    status = setup_gop(&boot_info->framebuffer);
+    Print(EFI_ERROR(status) ? L"FAILED\r\n" : L"OK (%dx%d)\r\n",
+          boot_info->framebuffer.width, boot_info->framebuffer.height);
+    
+    // Load kernel
+    Print(L"[2] Loading kernel.elf... ");
+    void* kernel_data;
+    UINTN kernel_size;
+    status = load_file(ImageHandle, L"\\kernel.elf", &kernel_data, &kernel_size);
+    Print(EFI_ERROR(status) ? L"FAILED\r\n" : L"OK (%lu bytes)\r\n", kernel_size);
+    if (EFI_ERROR(status)) return status;
+    
+    // Find ACPI
+    Print(L"[3] Finding ACPI tables... ");
+    boot_info->acpi_rsdp = find_acpi_rsdp();
+    Print(boot_info->acpi_rsdp ? L"OK\r\n" : L"Not found\r\n");
+    
+    // Save runtime services pointer
+    boot_info->runtime_services = gRT;
+    
+    // Wait for user
+    Print(L"\r\nReady to boot. Press any key...\r\n");
+    EFI_INPUT_KEY key;
+    gST->ConIn->Reset(gST->ConIn, FALSE);
+    while (gST->ConIn->ReadKeyStroke(gST->ConIn, &key) == EFI_NOT_READY);
+    
+    // Exit boot services
+    Print(L"[4] Exiting boot services...\r\n");
+    status = exit_boot_services_safe(ImageHandle, boot_info);
+    if (EFI_ERROR(status)) {
+        return status;  // Can't print anymore!
+    }
+    
+    // For now, just draw a test pattern to prove GOP works
+    // (Real OS would parse ELF and jump to kernel)
+    uint32_t* fb = boot_info->framebuffer.base;
+    uint32_t pitch = boot_info->framebuffer.pitch;
+    uint32_t height = boot_info->framebuffer.height;
+    
+    // Draw gradient
+    for (uint32_t y = 0; y < height; y++) {
+        for (uint32_t x = 0; x < boot_info->framebuffer.width; x++) {
+            uint8_t r = (x * 255) / boot_info->framebuffer.width;
+            uint8_t b = (y * 255) / height;
+            fb[y * pitch + x] = (b << 16) | (128 << 8) | r;
+        }
+    }
+    
+    // Halt (kernel would take over here)
+    while (1) __asm__ volatile("hlt");
+    
+    return EFI_SUCCESS;
+}
+</code></pre>
+                    
+                    <h4>Building with gnu-efi</h4>
+                    
+                    <pre><code class="language-bash"># Makefile for UEFI bootloader (using gnu-efi)
+
+CC = gcc
+OBJCOPY = objcopy
+ARCH = x86_64
+
+# gnu-efi paths (adjust for your system)
+GNUEFI = /usr/include/efi
+GNUEFI_LIB = /usr/lib
+
+CFLAGS = -I$(GNUEFI) -I$(GNUEFI)/$(ARCH) -I$(GNUEFI)/protocol \
+         -fno-stack-protector -fpic -fshort-wchar -mno-red-zone \
+         -Wall -DEFI_FUNCTION_WRAPPER
+
+LDFLAGS = -nostdlib -znocombreloc -T $(GNUEFI_LIB)/elf_$(ARCH)_efi.lds \
+          -shared -Bsymbolic \
+          -L$(GNUEFI_LIB) $(GNUEFI_LIB)/crt0-efi-$(ARCH).o
+
+LIBS = -lefi -lgnuefi
+
+all: BOOTX64.EFI
+
+bootloader.o: bootloader.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+bootloader.so: bootloader.o
+	ld $(LDFLAGS) $< -o $@ $(LIBS)
+
+BOOTX64.EFI: bootloader.so
+	$(OBJCOPY) -j .text -j .sdata -j .data -j .dynamic \
+	           -j .dynsym -j .rel -j .rela -j .reloc \
+	           --target=efi-app-$(ARCH) $< $@
+	@echo "Built $@"
+
+# Create disk image
+disk.img: BOOTX64.EFI kernel.elf
+	# Create FAT32 image
+	dd if=/dev/zero of=$@ bs=1M count=64
+	mkfs.fat -F 32 $@
+	
+	# Mount and copy files
+	mkdir -p mnt
+	sudo mount $@ mnt
+	sudo mkdir -p mnt/EFI/BOOT
+	sudo cp BOOTX64.EFI mnt/EFI/BOOT/
+	sudo cp kernel.elf mnt/
+	sudo umount mnt
+	rmdir mnt
+
+# Run in QEMU with UEFI
+run: disk.img
+	qemu-system-x86_64 \
+	    -bios /usr/share/OVMF/OVMF_CODE.fd \
+	    -drive file=disk.img,format=raw \
+	    -m 256M
+
+clean:
+	rm -f *.o *.so *.EFI disk.img
+</code></pre>
+                    
+                    <h4>Exercises</h4>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-code me-2"></i>Exercise 1: Memory Map Display</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-1">Difficulty: Easy</span>
+                            <span class="badge bg-navy">Foundation</span>
+                        </div>
+                        <div class="content">
+                            <p><strong>Task:</strong> Before ExitBootServices, display the complete memory map with human-readable type names and calculate total usable RAM.</p>
+                            <p><strong>Hints:</strong></p>
+                            <ul>
+                                <li>Use Print() with format specifiers for addresses</li>
+                                <li>Iterate through descriptors using desc_size</li>
+                                <li>Sum EfiConventionalMemory + EfiBootServices* pages</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-code me-2"></i>Exercise 2: Boot Menu</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-blue me-1">Difficulty: Medium</span>
+                            <span class="badge bg-crimson">Interactive</span>
+                        </div>
+                        <div class="content">
+                            <p><strong>Task:</strong> Create a simple boot menu that lists available .ELF files in /kernels/ and lets the user select which one to boot.</p>
+                            <p><strong>Hints:</strong></p>
+                            <ul>
+                                <li>Use File Protocol's Read() on a directory to enumerate files</li>
+                                <li>Filter for .elf extension</li>
+                                <li>Display numbered list, read key 1-9 for selection</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-code me-2"></i>Exercise 3: Secure Boot Info</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-crimson me-1">Difficulty: Medium</span>
+                            <span class="badge bg-teal">Security</span>
+                        </div>
+                        <div class="content">
+                            <p><strong>Task:</strong> Query the EFI_SECURITY_PROTOCOL or check UEFI variables to determine if Secure Boot is enabled, and display the status.</p>
+                            <p><strong>Hints:</strong></p>
+                            <ul>
+                                <li>Read SecureBoot variable using GetVariable()</li>
+                                <li>Check EFI_VARIABLE_BOOTSERVICE_ACCESS attribute</li>
+                                <li>Value of 1 = enabled, 0 = disabled</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-code me-2"></i>Exercise 4: Network Boot Option</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-navy me-1">Difficulty: Hard</span>
+                            <span class="badge bg-blue">Advanced</span>
+                        </div>
+                        <div class="content">
+                            <p><strong>Task:</strong> Extend your bootloader to check if an EFI_SIMPLE_NETWORK_PROTOCOL is available, and if so, display network information (MAC address, link status).</p>
+                            <p><strong>Hints:</strong></p>
+                            <ul>
+                                <li>LocateHandleBuffer for SNP_GUID</li>
+                                <li>Query Mode->CurrentAddress for MAC</li>
+                                <li>Check MediaPresent for cable connection</li>
+                                <li>Foundation for future TFTP boot support</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                <!-- Next Steps Section -->
+                <div id="next-steps" class="blog-content mt-5">
+                    <h2><i class="fas fa-arrow-right me-2 text-teal"></i>Next Steps</h2>
+                    
+                    <p>With GOP framebuffer access, it's time to build a real graphical system. In Phase 13, we'll implement drawing primitives, font rendering, and the foundation for a windowed GUI.</p>
+                    
+<pre class="ascii-diagram">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    UEFI Boot → Graphics Path                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Phase 12 (Complete)              Phase 13 (Next)                          │
+│   ═══════════════════════          ══════════════════════════════           │
+│                                                                             │
+│   ┌─────────────────────┐          ┌─────────────────────────────┐          │
+│   │ UEFI Boot Services  │          │    Framebuffer Graphics     │          │
+│   │   • GetMemoryMap    │          │    • Pixel drawing          │          │
+│   │   • GOP setup       │          │    • Line/rectangle/circle  │          │
+│   │   • File loading    │          │    • PSF font rendering     │          │
+│   │   • ExitBootServices│    ───▶  │    • Double buffering       │          │
+│   │                     │          │    • Dirty rectangles       │          │
+│   │   Framebuffer       │          │    • Window compositing     │          │
+│   │   acquired: ✓       │          │                             │          │
+│   └─────────────────────┘          └─────────────────────────────┘          │
+│                                                                             │
+│   Key Achievements:                 Coming Attractions:                     │
+│   • Boot on modern UEFI hardware   • Font rendering (PSF/BDF)               │
+│   • Accurate memory map            • Text console on framebuffer            │
+│   • Direct framebuffer access      • Basic windowing system                 │
+│   • 64-bit operation throughout    • Mouse cursor rendering                 │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</pre>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-trophy me-2"></i>
+                        <strong>Milestone Achieved:</strong> Your OS now boots via UEFI! You've eliminated hundreds of lines of legacy BIOS code, gained a reliable memory map, and have direct access to high-resolution graphics. This is how modern operating systems boot.
+                    </div>
+                    
+                    <h4>Key Takeaways</h4>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Concept</th>
+                                    <th>What You Learned</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>UEFI vs BIOS</strong></td>
+                                    <td>UEFI provides 64-bit boot, standardized APIs, GPT partition support, and eliminates legacy constraints</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>System Table</strong></td>
+                                    <td>EFI_SYSTEM_TABLE is the gateway to all UEFI services—console I/O, boot services, runtime services, configuration tables</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Protocols</strong></td>
+                                    <td>UEFI uses GUID-identified protocols for hardware abstraction; LocateProtocol and HandleProtocol are key APIs</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Boot Services</strong></td>
+                                    <td>Temporary services available during boot; GetMemoryMap and ExitBootServices are critical for kernel handoff</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>GOP</strong></td>
+                                    <td>Graphics Output Protocol provides direct framebuffer access; survives ExitBootServices</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Memory Map</strong></td>
+                                    <td>Precise list of memory regions with types; essential for knowing where kernel can allocate RAM</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>File Protocol</strong></td>
+                                    <td>UEFI firmware reads FAT natively; no filesystem driver needed in bootloader</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>ExitBootServices</strong></td>
+                                    <td>Point of no return; must have all needed data before calling; map_key race condition is common bug</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <h4>Development Tooling</h4>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-tools me-2"></i>UEFI Development Options</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-1">EDK2</span>
+                            <span class="badge bg-blue me-1">gnu-efi</span>
+                            <span class="badge bg-navy">POSIX-UEFI</span>
+                        </div>
+                        <div class="content">
+                            <ul>
+                                <li><strong>gnu-efi:</strong> Lightweight, GCC-based, great for learning. Used in this guide.</li>
+                                <li><strong>TianoCore EDK2:</strong> Intel's full UEFI development kit. More complex but supports all features.</li>
+                                <li><strong>POSIX-UEFI:</strong> Wrapper providing POSIX-like API. Good for porting existing code.</li>
+                            </ul>
+                            <p><strong>Testing:</strong> QEMU with OVMF firmware is essential. OVMF is open-source UEFI firmware that runs in virtual machines.</p>
+                            <pre><code class="language-bash"># Install OVMF on Ubuntu/Debian
+sudo apt install ovmf
+
+# OVMF firmware files
+# /usr/share/OVMF/OVMF_CODE.fd  - Firmware code
+# /usr/share/OVMF/OVMF_VARS.fd  - NVRAM variables</code></pre>
+                        </div>
+                    </div>
+                    
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-book-open me-2"></i>
+                        <strong>Recommended Reading:</strong><br>
+                        • <a href="https://uefi.org/specifications" target="_blank">UEFI Specification</a> - Official spec (dry but authoritative)<br>
+                        • <a href="https://wiki.osdev.org/UEFI" target="_blank">OSDev UEFI Wiki</a> - Practical tutorials<br>
+                        • <a href="https://github.com/tianocore/edk2" target="_blank">TianoCore EDK2</a> - Full UEFI implementation source
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 11: 64-Bit Long Mode</h5>
+                            <p class="text-muted small mb-2">Review x86-64 architecture and 4-level paging.</p>
+                            <a href="kernel-dev-phase-11-long-mode.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 13: Graphics & GUI Systems</h5>
+                            <p class="text-muted small mb-2">Implement framebuffer graphics, fonts, and windowing.</p>
+                            <a href="kernel-dev-phase-13-graphics.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 14: Advanced Input & Timing</h5>
+                            <p class="text-muted small mb-2">Add mouse support and high-precision timers.</p>
+                            <a href="kernel-dev-phase-14-input-timing.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook">
+                            <i class="fab fa-facebook-f"></i>
+                        </a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter">
+                            <i class="fab fa-twitter"></i>
+                        </a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn">
+                            <i class="fab fa-linkedin-in"></i>
+                        </a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube">
+                            <i class="fab fa-youtube"></i>
+                        </a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram">
+                            <i class="fab fa-instagram"></i>
+                        </a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest">
+                            <i class="fab fa-pinterest-p"></i>
+                        </a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email">
+                            <i class="fas fa-envelope"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="bg-secondary">
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+    
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+    
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>
