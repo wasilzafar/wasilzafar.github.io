@@ -1,0 +1,1844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kernel Development Series - Phase 4: Display, Input & Output | Wasil Zafar</title>
+    <meta name="description" content="Implement VGA text mode output, keyboard input handling, and build printf/putc functions for your operating system kernel.">
+    <meta name="keywords" content="kernel development, VGA text mode, keyboard input, PS/2, printf, OS development, screen output, 0xB8000, video memory">
+    <meta name="author" content="Wasil Zafar">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Kernel Development Series - Phase 4: Display, Input & Output">
+    <meta property="og:description" content="Implement VGA text mode output, keyboard input handling, and build printf/putc functions for your operating system kernel.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://wasilzafar.com/pages/series/kernel-development/kernel-dev-phase-04-display-input.html">
+    <meta property="og:image" content="https://wasilzafar.com/images/og-kernel-dev.png">
+    <meta property="article:published_time" content="2026-02-06">
+    <meta property="article:author" content="Wasil Zafar">
+    <meta property="article:section" content="Technology">
+
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+    
+    <!-- Google Consent Mode v2 -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('consent', 'default', {
+        'ad_storage': 'denied',
+        'ad_user_data': 'denied',
+        'ad_personalization': 'denied',
+        'analytics_storage': 'denied',
+        'wait_for_update': 500
+      });
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="../../../images/favicon_io/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="../../../css/main.css">
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. 
+                    By clicking "Accept All", you consent to our use of cookies. See our 
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a> 
+                    for more information.
+                </p>
+                
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#about">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#skills">Skills</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#certifications">Certifications</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#interests">Interests</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">Phase 4: Display, Input & Output</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>February 6, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>22 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Implement VGA text mode for screen output, handle keyboard input via PS/2, and build the printf/putc functions that let your kernel communicate with users.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation Overlay -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#introduction" onclick="closeNav()">Introduction</a>
+                <ul>
+                    <li><a href="#why-io" onclick="closeNav()">Why I/O Matters</a></li>
+                    <li><a href="#io-overview" onclick="closeNav()">I/O Architecture Overview</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#vga-text" onclick="closeNav()">VGA Text Mode</a>
+                <ul>
+                    <li><a href="#video-memory" onclick="closeNav()">Video Memory (0xB8000)</a></li>
+                    <li><a href="#character-format" onclick="closeNav()">Character Format</a></li>
+                    <li><a href="#colors" onclick="closeNav()">Colors & Attributes</a></li>
+                    <li><a href="#cursor" onclick="closeNav()">Cursor Control</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#screen-functions" onclick="closeNav()">Screen Functions</a>
+                <ul>
+                    <li><a href="#putc" onclick="closeNav()">putc Implementation</a></li>
+                    <li><a href="#puts" onclick="closeNav()">puts Implementation</a></li>
+                    <li><a href="#printf" onclick="closeNav()">printf Implementation</a></li>
+                    <li><a href="#scrolling" onclick="closeNav()">Screen Scrolling</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#keyboard" onclick="closeNav()">Keyboard Input</a>
+                <ul>
+                    <li><a href="#ps2-controller" onclick="closeNav()">PS/2 Controller</a></li>
+                    <li><a href="#scan-codes" onclick="closeNav()">Scan Codes</a></li>
+                    <li><a href="#polling" onclick="closeNav()">Polling Input</a></li>
+                    <li><a href="#key-mapping" onclick="closeNav()">Key Mapping</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#getc" onclick="closeNav()">Input Functions</a>
+                <ul>
+                    <li><a href="#getchar" onclick="closeNav()">getchar Implementation</a></li>
+                    <li><a href="#gets" onclick="closeNav()">gets Implementation</a></li>
+                </ul>
+            </li>
+            <li><a href="#build" onclick="closeNav()">What You Can Build</a></li>
+            <li><a href="#next-steps" onclick="closeNav()">Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- Introduction -->
+                <div id="introduction" class="blog-content">
+                    <h2><i class="fas fa-desktop me-2 text-teal"></i>Introduction: Making Your Kernel Talk</h2>
+                    
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-flag me-2"></i>
+                        <strong>Phase 4 Goals:</strong> By the end of this phase, your kernel will have a working text display with colors, a cursor, scrolling, and keyboard input. You'll have printf() for output and getchar() for input—the basic tools for user interaction.
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-map-signs me-2"></i>Complete Series Navigation</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-2">18-Part Series</span>
+                            <span class="badge bg-crimson">OS Development Mastery</span>
+                        </div>
+                        <div class="content">
+                            <ol>
+                                <li><a href="kernel-dev-phase-00-orientation.html">Phase 0: Orientation & Big Picture</a> - OS fundamentals, kernel architectures, learning path</li>
+                                <li><a href="kernel-dev-phase-01-boot-process.html">Phase 1: How a Computer Starts</a> - BIOS/UEFI, boot sequence, dev environment</li>
+                                <li><a href="kernel-dev-phase-02-real-mode.html">Phase 2: Real Mode - First Steps</a> - Real mode, bootloader, BIOS interrupts</li>
+                                <li><a href="kernel-dev-phase-03-protected-mode.html">Phase 3: Entering Protected Mode</a> - GDT, 32-bit mode, C code execution</li>
+                                <li><strong>Phase 4: Display, Input & Output (This Guide)</strong> - VGA text mode, keyboard handling</li>
+                                <li><a href="kernel-dev-phase-05-interrupts.html">Phase 5: Interrupts & CPU Control</a> - IDT, ISRs, PIC programming</li>
+                                <li><a href="kernel-dev-phase-06-memory.html">Phase 6: Memory Management</a> - Paging, virtual memory, heap allocator</li>
+                                <li><a href="kernel-dev-phase-07-filesystem.html">Phase 7: Disk Access & Filesystems</a> - Block devices, FAT, VFS layer</li>
+                                <li><a href="kernel-dev-phase-08-processes.html">Phase 8: Processes & User Mode</a> - Task switching, system calls, user space</li>
+                                <li><a href="kernel-dev-phase-09-elf.html">Phase 9: ELF Loading & Executables</a> - ELF format, program loading</li>
+                                <li><a href="kernel-dev-phase-10-stdlib-shell.html">Phase 10: Standard Library & Shell</a> - C library, command-line shell</li>
+                                <li><a href="kernel-dev-phase-11-long-mode.html">Phase 11: 64-Bit Long Mode</a> - x86-64, 64-bit paging, modern architecture</li>
+                                <li><a href="kernel-dev-phase-12-uefi.html">Phase 12: Modern Booting with UEFI</a> - UEFI boot services, memory maps</li>
+                                <li><a href="kernel-dev-phase-13-graphics.html">Phase 13: Graphics & GUI Systems</a> - Framebuffer, windowing, drawing</li>
+                                <li><a href="kernel-dev-phase-14-input-timing.html">Phase 14: Advanced Input & Timing</a> - Mouse, high-precision timers</li>
+                                <li><a href="kernel-dev-phase-15-hardware-drivers.html">Phase 15: Hardware Discovery & Drivers</a> - PCI, device drivers, NVMe</li>
+                                <li><a href="kernel-dev-phase-16-performance.html">Phase 16: Performance & Optimization</a> - Caching, scheduler tuning</li>
+                                <li><a href="kernel-dev-phase-17-security.html">Phase 17: Stability, Security & Finishing</a> - Debugging, hardening, completion</li>
+                            </ol>
+                        </div>
+                    </div>
+                    
+                    <p>Your kernel can now execute C code in protected mode - but it's silent. A kernel that can't communicate with users isn't very useful! In this phase, we'll build the fundamental I/O layer that every operating system needs: text display and keyboard input.</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-history me-2"></i>A Brief History of Text Mode</h4>
+                        <div class="content">
+                            <p>VGA (Video Graphics Array) was introduced by IBM in 1987 and became the standard PC display interface. Its text mode (Mode 3) provides:</p>
+                            <ul class="mb-0">
+                                <li><strong>80 columns × 25 rows</strong> = 2000 characters</li>
+                                <li><strong>16 colors</strong> for foreground and background</li>
+                                <li><strong>256 characters</strong> (extended ASCII/Code Page 437)</li>
+                                <li><strong>Memory-mapped I/O</strong> at 0xB8000 for instant updates</li>
+                            </ul>
+                            <p class="mt-2 mb-0">Even today, most BIOS/UEFI setups default to VGA-compatible text mode before loading a graphical OS!</p>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Key Insight:</strong> VGA text mode is elegant in its simplicity: each character on screen is just two bytes in memory—one for the character, one for the color. Direct memory access means instant updates without any driver complexity.
+                    </div>
+
+                    <h3 id="why-io">Why I/O Matters</h3>
+                    
+                    <p>Without input and output, your kernel is a black box. Proper I/O allows you to:</p>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="highlight-box">
+                                <h5><i class="fas fa-bug me-2 text-teal"></i>Debugging</h5>
+                                <ul class="mb-0">
+                                    <li>Print variable values and addresses</li>
+                                    <li>Trace function calls and execution flow</li>
+                                    <li>Display error messages and stack traces</li>
+                                    <li>Inspect memory contents visually</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="highlight-box">
+                                <h5><i class="fas fa-terminal me-2 text-teal"></i>User Interaction</h5>
+                                <ul class="mb-0">
+                                    <li>Accept commands and input</li>
+                                    <li>Display status and progress</li>
+                                    <li>Build a command-line interface</li>
+                                    <li>Enable interactive testing</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h3 id="io-overview">I/O Architecture Overview</h3>
+
+<pre><code class="language-plaintext">I/O LAYER ARCHITECTURE
+═══════════════════════════════════════════════════════════════
+
+   User Level (printf, scanf)
+          ↓
+   Kernel I/O Library (kprintf, kgetchar)
+          ↓
+   Device Drivers
+   ├── VGA Driver (vga.c) ─────→ Video Memory (0xB8000)
+   │                              │
+   │                              ↓
+   │                         ┌─────────────┐
+   │                         │  MONITOR    │
+   │                         └─────────────┘
+   │
+   └── Keyboard Driver (kbd.c) ─→ PS/2 Controller (ports 0x60, 0x64)
+                                  │
+                                  ↓
+                             ┌─────────────┐
+                             │  KEYBOARD   │
+                             └─────────────┘</code></pre>
+                </div>
+
+                <!-- VGA Text Mode Section -->
+                <div id="vga-text" class="blog-content mt-5">
+                    <h2><i class="fas fa-tv me-2 text-teal"></i>VGA Text Mode Deep Dive</h2>
+                    
+                    <h3 id="video-memory">Video Memory (0xB8000)</h3>
+                    
+                    <p>VGA text mode uses <strong>memory-mapped I/O</strong>. The video buffer lives at physical address <code>0xB8000</code>, and any writes to this memory instantly appear on screen!</p>
+
+<pre><code class="language-plaintext">VGA TEXT MODE MEMORY LAYOUT
+═══════════════════════════════════════════════════════════════
+
+Address Range: 0xB8000 - 0xB8F9F (80×25×2 = 4000 bytes)
+
+Screen Position → Memory Address:
+┌────────────────────────────────────────────────────────────┐
+│ (0,0)      (1,0)      (2,0)  ...              (79,0)      │
+│ 0xB8000    0xB8002    0xB8004                 0xB809E     │
+├────────────────────────────────────────────────────────────┤
+│ (0,1)      (1,1)                              (79,1)      │
+│ 0xB80A0    0xB80A2                            0xB813E     │
+├────────────────────────────────────────────────────────────┤
+│            ... (rows 2-23) ...                             │
+├────────────────────────────────────────────────────────────┤
+│ (0,24)     (1,24)                             (79,24)     │
+│ 0xB8F00    0xB8F02                            0xB8F9E     │
+└────────────────────────────────────────────────────────────┘
+
+Formula: address = 0xB8000 + (y × 80 + x) × 2</code></pre>
+                    
+                    <h3 id="character-format">Character Format</h3>
+                    
+                    <p>Each screen position takes 2 bytes (a word):</p>
+
+<pre><code class="language-plaintext">CHARACTER CELL FORMAT (2 bytes)
+═══════════════════════════════════════════════════════════════
+
+     Byte 1 (Even address)       Byte 0 (Odd address)
+   ┌───────────────────────┐   ┌───────────────────────┐
+   │    Character Code     │   │  Attribute (Color)    │
+   │     (ASCII/CP437)     │   │   FG + BG + Blink     │
+   └───────────────────────┘   └───────────────────────┘
+
+   Example: 'A' in white on blue
+   Character: 0x41 (ASCII 'A')
+   Attribute: 0x1F (white foreground, blue background)
+   
+   Full word (little-endian): 0x1F41</code></pre>
+
+                    <pre><code class="language-c">/* vga.h - VGA text mode definitions */
+#ifndef VGA_H
+#define VGA_H
+
+#include &lt;stdint.h&gt;
+
+/* VGA constants */
+#define VGA_ADDRESS     0xB8000
+#define VGA_WIDTH       80
+#define VGA_HEIGHT      25
+#define VGA_SIZE        (VGA_WIDTH * VGA_HEIGHT)
+
+/* VGA character structure */
+typedef struct {
+    uint8_t character;      /* ASCII/CP437 character code */
+    uint8_t attribute;      /* Color attribute byte */
+} __attribute__((packed)) vga_char_t;
+
+/* Pointer to VGA buffer */
+extern volatile vga_char_t* const vga_buffer;
+
+/* Make a VGA entry from character and color */
+static inline uint16_t vga_entry(char c, uint8_t color) {
+    return (uint16_t)c | ((uint16_t)color << 8);
+}
+
+#endif
+</code></pre>
+                    
+                    <h3 id="colors">Colors & Attributes</h3>
+                    
+                    <p>The attribute byte packs foreground, background, and blink into 8 bits:</p>
+
+<pre><code class="language-plaintext">ATTRIBUTE BYTE FORMAT
+═══════════════════════════════════════════════════════════════
+
+Bit:  7     6  5  4     3     2  1  0
+    ┌─────┬────────────┬─────┬────────────┐
+    │BLINK│  BG COLOR  │ INT │  FG COLOR  │
+    └─────┴────────────┴─────┴────────────┘
+
+BLINK: 1 = Blinking text (or bright background if disabled)
+BG:    Background color (0-7, 3 bits)
+INT:   Intensity/bright (foreground becomes bright)
+FG:    Foreground color (0-7, 3 bits)
+
+STANDARD VGA COLORS (16 total)
+═══════════════════════════════════════════════════════════════
+ 0 = Black           8 = Dark Gray (bright black)
+ 1 = Blue            9 = Light Blue
+ 2 = Green          10 = Light Green
+ 3 = Cyan           11 = Light Cyan
+ 4 = Red            12 = Light Red
+ 5 = Magenta        13 = Light Magenta
+ 6 = Brown          14 = Yellow (bright brown)
+ 7 = Light Gray     15 = White (bright light gray)</code></pre>
+
+                    <pre><code class="language-c">/* vga_colors.h - VGA color definitions */
+
+/* VGA color enumeration */
+typedef enum {
+    VGA_BLACK         = 0,
+    VGA_BLUE          = 1,
+    VGA_GREEN         = 2,
+    VGA_CYAN          = 3,
+    VGA_RED           = 4,
+    VGA_MAGENTA       = 5,
+    VGA_BROWN         = 6,
+    VGA_LIGHT_GREY    = 7,
+    VGA_DARK_GREY     = 8,
+    VGA_LIGHT_BLUE    = 9,
+    VGA_LIGHT_GREEN   = 10,
+    VGA_LIGHT_CYAN    = 11,
+    VGA_LIGHT_RED     = 12,
+    VGA_LIGHT_MAGENTA = 13,
+    VGA_YELLOW        = 14,
+    VGA_WHITE         = 15
+} vga_color_t;
+
+/* Create color attribute from foreground and background */
+static inline uint8_t vga_make_color(vga_color_t fg, vga_color_t bg) {
+    return (uint8_t)(fg | (bg << 4));
+}
+
+/* Common color combinations */
+#define COLOR_DEFAULT    vga_make_color(VGA_LIGHT_GREY, VGA_BLACK)
+#define COLOR_ERROR      vga_make_color(VGA_LIGHT_RED, VGA_BLACK)
+#define COLOR_SUCCESS    vga_make_color(VGA_LIGHT_GREEN, VGA_BLACK)
+#define COLOR_WARNING    vga_make_color(VGA_YELLOW, VGA_BLACK)
+#define COLOR_INFO       vga_make_color(VGA_LIGHT_CYAN, VGA_BLACK)
+</code></pre>
+                    
+                    <h3 id="cursor">Hardware Cursor Control</h3>
+                    
+                    <p>The blinking hardware cursor is controlled through VGA I/O ports (not memory):</p>
+
+                    <pre><code class="language-c">/* vga_cursor.c - Hardware cursor control */
+
+#include "io.h"  /* inb(), outb() functions */
+
+/* VGA CRTC registers */
+#define VGA_CRTC_ADDR   0x3D4   /* Index register */
+#define VGA_CRTC_DATA   0x3D5   /* Data register */
+
+/* Cursor location registers */
+#define VGA_CURSOR_HIGH 0x0E    /* Cursor location high byte */
+#define VGA_CURSOR_LOW  0x0F    /* Cursor location low byte */
+
+/* Cursor shape registers */
+#define VGA_CURSOR_START 0x0A   /* Cursor start scanline */
+#define VGA_CURSOR_END   0x0B   /* Cursor end scanline */
+
+/* Move hardware cursor to (x, y) */
+void vga_set_cursor(int x, int y) {
+    uint16_t pos = y * VGA_WIDTH + x;
+    
+    /* Set cursor position low byte */
+    outb(VGA_CRTC_ADDR, VGA_CURSOR_LOW);
+    outb(VGA_CRTC_DATA, (uint8_t)(pos & 0xFF));
+    
+    /* Set cursor position high byte */
+    outb(VGA_CRTC_ADDR, VGA_CURSOR_HIGH);
+    outb(VGA_CRTC_DATA, (uint8_t)((pos >> 8) & 0xFF));
+}
+
+/* Get current cursor position */
+uint16_t vga_get_cursor(void) {
+    uint16_t pos = 0;
+    
+    outb(VGA_CRTC_ADDR, VGA_CURSOR_LOW);
+    pos |= inb(VGA_CRTC_DATA);
+    
+    outb(VGA_CRTC_ADDR, VGA_CURSOR_HIGH);
+    pos |= ((uint16_t)inb(VGA_CRTC_DATA)) << 8;
+    
+    return pos;
+}
+
+/* Enable cursor with specified shape (start/end scanlines 0-15) */
+void vga_enable_cursor(uint8_t start, uint8_t end) {
+    outb(VGA_CRTC_ADDR, VGA_CURSOR_START);
+    outb(VGA_CRTC_DATA, (inb(VGA_CRTC_DATA) & 0xC0) | start);
+    
+    outb(VGA_CRTC_ADDR, VGA_CURSOR_END);
+    outb(VGA_CRTC_DATA, (inb(VGA_CRTC_DATA) & 0xE0) | end);
+}
+
+/* Disable cursor (hide it) */
+void vga_disable_cursor(void) {
+    outb(VGA_CRTC_ADDR, VGA_CURSOR_START);
+    outb(VGA_CRTC_DATA, 0x20);  /* Bit 5 disables cursor */
+}
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Cursor Shapes:</strong> The cursor is drawn between scanlines. Standard text mode has 16 scanlines per character cell. <code>enable_cursor(13, 15)</code> gives an underline cursor; <code>enable_cursor(0, 15)</code> gives a block cursor.
+                    </div>
+                </div>
+
+                <!-- Screen Functions Section -->
+                <div id="screen-functions" class="blog-content mt-5">
+                    <h2><i class="fas fa-print me-2 text-teal"></i>Screen Output Functions</h2>
+                    
+                    <p>Now we'll build a complete terminal-style output system. We'll create layered functions: <code>putc</code> for single characters, <code>puts</code> for strings, and <code>kprintf</code> for formatted output—the foundation of all kernel debugging!</p>
+
+                    <h3 id="putc">putc Implementation</h3>
+                    
+                    <p>The <code>putc</code> function is the lowest-level output primitive. It handles every character including special control characters:</p>
+
+<pre><code class="language-plaintext">CONTROL CHARACTERS FOR TERMINAL OUTPUT
+═══════════════════════════════════════════════════════════════
+
+Character     Code    Effect
+─────────────────────────────────────────────────────────────
+'\n' (LF)     0x0A    Move to start of next line (newline)
+'\r' (CR)     0x0D    Move to start of current line
+'\t' (TAB)    0x09    Move to next 8-column boundary
+'\b' (BS)     0x08    Move cursor back, erase character
+'\f' (FF)     0x0C    Clear screen (form feed)
+Printable    0x20-7E  Display character at cursor position</code></pre>
+
+                    <pre><code class="language-c">/* terminal.c - Complete terminal output implementation */
+
+#include "vga.h"
+#include "io.h"
+#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+/* Terminal state */
+static int term_col = 0;           /* Current column (0-79) */
+static int term_row = 0;           /* Current row (0-24) */
+static uint8_t term_color = 0x0F;  /* White on black default */
+
+/* VGA buffer pointer */
+static volatile vga_char_t* const VGA_BUFFER = (vga_char_t*)VGA_ADDRESS;
+
+/* Forward declarations */
+static void terminal_scroll(void);
+static void terminal_newline(void);
+static void terminal_update_cursor(void);
+
+/* Set terminal color */
+void terminal_set_color(uint8_t color) {
+    term_color = color;
+}
+
+/* Clear the entire screen */
+void terminal_clear(void) {
+    for (int i = 0; i < VGA_SIZE; i++) {
+        VGA_BUFFER[i].character = ' ';
+        VGA_BUFFER[i].attribute = term_color;
+    }
+    term_col = 0;
+    term_row = 0;
+    terminal_update_cursor();
+}
+
+/* Print a single character */
+void putc(char c) {
+    switch (c) {
+        case '\n':  /* Newline - move to next line, column 0 */
+            terminal_newline();
+            break;
+            
+        case '\r':  /* Carriage return - column 0 */
+            term_col = 0;
+            break;
+            
+        case '\t':  /* Tab - advance to next 8-column boundary */
+            term_col = (term_col + 8) & ~7;
+            if (term_col >= VGA_WIDTH) {
+                terminal_newline();
+            }
+            break;
+            
+        case '\b':  /* Backspace - erase previous character */
+            if (term_col > 0) {
+                term_col--;
+                int idx = term_row * VGA_WIDTH + term_col;
+                VGA_BUFFER[idx].character = ' ';
+                VGA_BUFFER[idx].attribute = term_color;
+            }
+            break;
+            
+        case '\f':  /* Form feed - clear screen */
+            terminal_clear();
+            break;
+            
+        default:    /* Printable character */
+            if (c >= ' ' && c <= '~') {
+                int idx = term_row * VGA_WIDTH + term_col;
+                VGA_BUFFER[idx].character = c;
+                VGA_BUFFER[idx].attribute = term_color;
+                term_col++;
+                
+                if (term_col >= VGA_WIDTH) {
+                    terminal_newline();
+                }
+            }
+            break;
+    }
+    
+    terminal_update_cursor();
+}
+
+/* Move to next line, scrolling if necessary */
+static void terminal_newline(void) {
+    term_col = 0;
+    term_row++;
+    
+    if (term_row >= VGA_HEIGHT) {
+        terminal_scroll();
+        term_row = VGA_HEIGHT - 1;
+    }
+}
+
+/* Update hardware cursor to match terminal position */
+static void terminal_update_cursor(void) {
+    vga_set_cursor(term_col, term_row);
+}
+</code></pre>
+                    
+                    <h3 id="puts">puts Implementation</h3>
+                    
+                    <p>Building on <code>putc</code>, <code>puts</code> prints entire strings at once:</p>
+
+                    <pre><code class="language-c">/* Print a null-terminated string */
+void puts(const char* str) {
+    while (*str) {
+        putc(*str++);
+    }
+}
+
+/* Print a string with newline */
+void puts_nl(const char* str) {
+    puts(str);
+    putc('\n');
+}
+
+/* Print a string at specific position with color */
+void puts_at(const char* str, int x, int y, uint8_t color) {
+    uint8_t old_color = term_color;
+    int old_col = term_col;
+    int old_row = term_row;
+    
+    term_col = x;
+    term_row = y;
+    term_color = color;
+    
+    puts(str);
+    
+    term_color = old_color;
+    term_col = old_col;
+    term_row = old_row;
+    terminal_update_cursor();
+}
+</code></pre>
+                    
+                    <h3 id="printf">kprintf Implementation</h3>
+                    
+                    <p>A kernel-mode <code>printf</code> is essential for debugging. Here's a complete implementation supporting common format specifiers:</p>
+
+<pre><code class="language-plaintext">KPRINTF FORMAT SPECIFIERS
+═══════════════════════════════════════════════════════════════
+
+Specifier   Type               Example           Output
+─────────────────────────────────────────────────────────────
+%c          char               kprintf("%c", 'A')    A
+%s          string             kprintf("%s", "hi")   hi
+%d          signed int         kprintf("%d", -42)    -42
+%u          unsigned int       kprintf("%u", 42)     42
+%x          hex (lowercase)    kprintf("%x", 255)    ff
+%X          hex (uppercase)    kprintf("%X", 255)    FF
+%p          pointer            kprintf("%p", ptr)    0x00102030
+%%          literal %          kprintf("%%")         %</code></pre>
+
+                    <pre><code class="language-c">/* kprintf - kernel printf implementation */
+
+#include &lt;stdarg.h&gt;
+
+/* Helper: print unsigned integer in given base */
+static void print_uint(unsigned int value, int base, bool uppercase) {
+    static const char digits_lower[] = "0123456789abcdef";
+    static const char digits_upper[] = "0123456789ABCDEF";
+    const char* digits = uppercase ? digits_upper : digits_lower;
+    
+    char buffer[32];
+    int pos = 0;
+    
+    /* Special case for zero */
+    if (value == 0) {
+        putc('0');
+        return;
+    }
+    
+    /* Build digits in reverse */
+    while (value > 0) {
+        buffer[pos++] = digits[value % base];
+        value /= base;
+    }
+    
+    /* Print in correct order */
+    while (pos > 0) {
+        putc(buffer[--pos]);
+    }
+}
+
+/* Helper: print signed integer */
+static void print_int(int value) {
+    if (value < 0) {
+        putc('-');
+        /* Handle INT_MIN edge case */
+        if (value == (-2147483647 - 1)) {
+            puts("2147483648");
+            return;
+        }
+        value = -value;
+    }
+    print_uint((unsigned int)value, 10, false);
+}
+
+/* Helper: print pointer */
+static void print_ptr(void* ptr) {
+    puts("0x");
+    unsigned long value = (unsigned long)ptr;
+    /* Print all 8 hex digits (32-bit pointer) */
+    for (int i = 28; i >= 0; i -= 4) {
+        int digit = (value >> i) & 0xF;
+        putc("0123456789ABCDEF"[digit]);
+    }
+}
+
+/* Main kprintf implementation */
+int kprintf(const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    
+    int count = 0;
+    
+    while (*fmt) {
+        if (*fmt != '%') {
+            putc(*fmt++);
+            count++;
+            continue;
+        }
+        
+        fmt++;  /* Skip '%' */
+        
+        switch (*fmt) {
+            case 'c':
+                putc((char)va_arg(args, int));
+                count++;
+                break;
+                
+            case 's': {
+                const char* s = va_arg(args, const char*);
+                while (*s) {
+                    putc(*s++);
+                    count++;
+                }
+                break;
+            }
+            
+            case 'd':
+            case 'i':
+                print_int(va_arg(args, int));
+                count++;
+                break;
+                
+            case 'u':
+                print_uint(va_arg(args, unsigned int), 10, false);
+                count++;
+                break;
+                
+            case 'x':
+                print_uint(va_arg(args, unsigned int), 16, false);
+                count++;
+                break;
+                
+            case 'X':
+                print_uint(va_arg(args, unsigned int), 16, true);
+                count++;
+                break;
+                
+            case 'p':
+                print_ptr(va_arg(args, void*));
+                count++;
+                break;
+                
+            case '%':
+                putc('%');
+                count++;
+                break;
+                
+            default:
+                /* Unknown specifier - print as-is */
+                putc('%');
+                putc(*fmt);
+                count += 2;
+                break;
+        }
+        
+        fmt++;
+    }
+    
+    va_end(args);
+    return count;
+}
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Understanding <code>&lt;stdarg.h&gt;</code>:</strong> The macros <code>va_start</code>, <code>va_arg</code>, and <code>va_end</code> work directly with the CPU stack to access variadic arguments. GCC provides these as builtins, so they work without any standard library!
+                    </div>
+                    
+                    <h3 id="scrolling">Screen Scrolling</h3>
+                    
+                    <p>When text reaches the bottom of the screen, we need to scroll up. This involves copying memory and clearing the last line:</p>
+
+                    <pre><code class="language-c">/* Scroll the screen up by one line */
+static void terminal_scroll(void) {
+    /* Move lines 1-24 up to positions 0-23 */
+    for (int y = 0; y < VGA_HEIGHT - 1; y++) {
+        for (int x = 0; x < VGA_WIDTH; x++) {
+            int dst = y * VGA_WIDTH + x;
+            int src = (y + 1) * VGA_WIDTH + x;
+            VGA_BUFFER[dst] = VGA_BUFFER[src];
+        }
+    }
+    
+    /* Clear the last line */
+    int last_line = (VGA_HEIGHT - 1) * VGA_WIDTH;
+    for (int x = 0; x < VGA_WIDTH; x++) {
+        VGA_BUFFER[last_line + x].character = ' ';
+        VGA_BUFFER[last_line + x].attribute = term_color;
+    }
+}
+
+/* Optimized scroll using memcpy (requires memory functions) */
+void terminal_scroll_fast(void) {
+    /* Move all rows except first up by one row worth of bytes */
+    size_t line_bytes = VGA_WIDTH * sizeof(vga_char_t);
+    size_t copy_bytes = (VGA_HEIGHT - 1) * line_bytes;
+    
+    /* Copy memory up */
+    memcpy((void*)VGA_BUFFER, 
+           (void*)(VGA_BUFFER + VGA_WIDTH), 
+           copy_bytes);
+    
+    /* Clear last line */
+    vga_char_t blank = { .character = ' ', .attribute = term_color };
+    for (int x = 0; x < VGA_WIDTH; x++) {
+        VGA_BUFFER[(VGA_HEIGHT - 1) * VGA_WIDTH + x] = blank;
+    }
+}
+</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-flask me-2"></i>Complete Terminal Demo</h4>
+                        <p>Put it all together in your kernel entry point:</p>
+<pre><code class="language-c">/* kernel.c - Demonstrating terminal functions */
+
+void kernel_main(void) {
+    /* Initialize terminal */
+    terminal_clear();
+    
+    /* Set colors and print welcome message */
+    terminal_set_color(vga_make_color(VGA_LIGHT_GREEN, VGA_BLACK));
+    puts_nl("MiniOS v0.1 - Display System Demo");
+    
+    terminal_set_color(vga_make_color(VGA_WHITE, VGA_BLACK));
+    puts("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+    
+    /* Test kprintf */
+    kprintf("Testing kprintf:\n");
+    kprintf("  Integer: %d\n", -12345);
+    kprintf("  Unsigned: %u\n", 12345);
+    kprintf("  Hex: 0x%X\n", 0xDEADBEEF);
+    kprintf("  String: %s\n", "Hello, kernel!");
+    kprintf("  Pointer: %p\n", (void*)0xB8000);
+    kprintf("  Char: '%c'\n", 'X');
+    
+    /* Test colors */
+    terminal_set_color(vga_make_color(VGA_LIGHT_RED, VGA_BLACK));
+    kprintf("\n[ERROR] ");
+    terminal_set_color(vga_make_color(VGA_WHITE, VGA_BLACK));
+    puts("This is an error message\n");
+    
+    terminal_set_color(vga_make_color(VGA_YELLOW, VGA_BLACK));
+    kprintf("[WARN]  ");
+    terminal_set_color(vga_make_color(VGA_WHITE, VGA_BLACK));
+    puts("This is a warning\n");
+    
+    terminal_set_color(vga_make_color(VGA_LIGHT_CYAN, VGA_BLACK));
+    kprintf("[INFO]  ");
+    terminal_set_color(vga_make_color(VGA_WHITE, VGA_BLACK));
+    puts("This is informational\n");
+    
+    /* Halt */
+    for (;;) {
+        __asm__ volatile ("hlt");
+    }
+}
+</code></pre>
+                        <span class="bias-tag"><i class="fas fa-terminal me-1"></i>Output Demo</span>
+                    </div>
+                </div>
+
+                <!-- Keyboard Input Section -->
+                <div id="keyboard" class="blog-content mt-5">
+                    <h2><i class="fas fa-keyboard me-2 text-teal"></i>Keyboard Input</h2>
+                    
+                    <p>Now let's tackle the input side. Reading from a keyboard is more complex than writing to a screen because keyboards generate <strong>scan codes</strong> that we must translate to characters.</p>
+
+                    <h3 id="ps2-controller">PS/2 Controller</h3>
+                    
+                    <p>The PS/2 controller (Intel 8042) is the traditional keyboard controller. Even modern PCs emulate it for compatibility. It uses two I/O ports:</p>
+
+<pre><code class="language-plaintext">PS/2 CONTROLLER PORTS
+═══════════════════════════════════════════════════════════════
+
+Port 0x60 - Data Port (R/W)
+├── Read:  Get scan code or response from keyboard
+└── Write: Send command to keyboard
+
+Port 0x64 - Status/Command Port
+├── Read:  Get controller status byte
+└── Write: Send command to controller
+
+STATUS REGISTER (Port 0x64, Read)
+┌────┬────┬────┬────┬────┬────┬────┬────┐
+│Bit7│Bit6│Bit5│Bit4│Bit3│Bit2│Bit1│Bit0│
+│PRTY│TMOT│AUX │KLCK│CMD │SYS │IBF │OBF │
+└────┴────┴────┴────┴────┴────┴────┴────┘
+
+OBF (Bit 0): Output Buffer Full - data available to read
+IBF (Bit 1): Input Buffer Full - controller processing command
+SYS (Bit 2): System Flag - 1 after self-test passed
+CMD (Bit 3): Command/Data - 1 = last write was command
+AUX (Bit 5): Auxiliary Output - 1 = mouse data, 0 = keyboard</code></pre>
+
+                    <pre><code class="language-c">/* keyboard.h - PS/2 keyboard interface */
+#ifndef KEYBOARD_H
+#define KEYBOARD_H
+
+#include &lt;stdint.h&gt;
+#include "io.h"
+
+/* PS/2 controller ports */
+#define PS2_DATA_PORT    0x60   /* Read/write keyboard data */
+#define PS2_STATUS_PORT  0x64   /* Read status register */
+#define PS2_COMMAND_PORT 0x64   /* Write commands */
+
+/* Status register bits */
+#define PS2_STATUS_OUTPUT_FULL   0x01  /* Can read from port 0x60 */
+#define PS2_STATUS_INPUT_FULL    0x02  /* Cannot write yet */
+#define PS2_STATUS_SYSTEM        0x04  /* Self-test passed */
+#define PS2_STATUS_COMMAND       0x08  /* Last write was command */
+#define PS2_STATUS_TIMEOUT       0x40  /* Timeout error */
+#define PS2_STATUS_PARITY        0x80  /* Parity error */
+
+/* Wait until we can read from keyboard */
+static inline void ps2_wait_output(void) {
+    while (!(inb(PS2_STATUS_PORT) & PS2_STATUS_OUTPUT_FULL));
+}
+
+/* Wait until we can write to keyboard */
+static inline void ps2_wait_input(void) {
+    while (inb(PS2_STATUS_PORT) & PS2_STATUS_INPUT_FULL);
+}
+
+/* Check if data is available */
+static inline int ps2_data_available(void) {
+    return inb(PS2_STATUS_PORT) & PS2_STATUS_OUTPUT_FULL;
+}
+
+#endif
+</code></pre>
+                    
+                    <h3 id="scan-codes">Scan Codes</h3>
+                    
+                    <p>Keyboards don't send ASCII characters—they send <strong>scan codes</strong> representing physical key positions. Every key press generates a "make" code, and every release generates a "break" code:</p>
+
+<pre><code class="language-plaintext">SCAN CODE SETS
+═══════════════════════════════════════════════════════════════
+
+Scan Code Set 1 (XT) - Legacy, what BIOS emulates
+Scan Code Set 2 (AT) - Most common native keyboard set
+Scan Code Set 3 (PS/2) - Rarely used
+
+SCAN CODE SET 1 EXAMPLES (what we'll use):
+┌────────────────────────────────────────────────────────────┐
+│ Key      │ Make Code │ Break Code │ Notes                 │
+├──────────┼───────────┼────────────┼───────────────────────┤
+│ A        │ 0x1E      │ 0x9E       │ Break = Make + 0x80   │
+│ Enter    │ 0x1C      │ 0x9C       │                       │
+│ Space    │ 0x39      │ 0xB9       │                       │
+│ Escape   │ 0x01      │ 0x81       │                       │
+│ L-Shift  │ 0x2A      │ 0xAA       │ Modifier key          │
+│ L-Ctrl   │ 0x1D      │ 0x9D       │ Modifier key          │
+│ Keypad * │ 0xE0 0x37 │ 0xE0 0xB7  │ Extended (2-byte)     │
+│ Arrow Up │ 0xE0 0x48 │ 0xE0 0xC8  │ Extended (2-byte)     │
+└────────────────────────────────────────────────────────────┘
+
+The 0xE0 prefix indicates extended keys (added with 101-key keyboards)</code></pre>
+
+                    <pre><code class="language-c">/* US QWERTY scan code to ASCII mapping (Set 1) */
+static const char scancode_ascii[128] = {
+    /* 0x00 */  0,   27, '1', '2', '3', '4', '5', '6', 
+    /* 0x08 */ '7', '8', '9', '0', '-', '=', '\b', '\t',
+    /* 0x10 */ 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i',
+    /* 0x18 */ 'o', 'p', '[', ']', '\n',   0, 'a', 's',  /* 0 = Ctrl */
+    /* 0x20 */ 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';',
+    /* 0x28 */'\'', '`',   0,'\\', 'z', 'x', 'c', 'v',  /* 0 = LShift */
+    /* 0x30 */ 'b', 'n', 'm', ',', '.', '/',   0, '*',  /* 0 = RShift */
+    /* 0x38 */   0, ' ',   0,   0,   0,   0,   0,   0,  /* Alt, Space, Caps, F1-F5 */
+    /* 0x40 */   0,   0,   0,   0,   0,   0,   0, '7',  /* F6-F10, NumLock, Scroll, KP7 */
+    /* 0x48 */ '8', '9', '-', '4', '5', '6', '+', '1',  /* KP8-9, KP-, KP4-6, KP+, KP1 */
+    /* 0x50 */ '2', '3', '0', '.',   0,   0,   0,   0,  /* KP2-3, KP0, KP., ?, ?, F11, F12 */
+    /* 0x58-0x7F all zeros for remaining keys */
+};
+
+/* Shifted versions (when Shift is held) */
+static const char scancode_ascii_shift[128] = {
+    /* 0x00 */  0,   27, '!', '@', '#', '$', '%', '^',
+    /* 0x08 */ '&', '*', '(', ')', '_', '+', '\b', '\t',
+    /* 0x10 */ 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I',
+    /* 0x18 */ 'O', 'P', '{', '}', '\n',   0, 'A', 'S',
+    /* 0x20 */ 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':',
+    /* 0x28 */ '"', '~',   0, '|', 'Z', 'X', 'C', 'V',
+    /* 0x30 */ 'B', 'N', 'M', '<', '>', '?',   0, '*',
+    /* Rest same as unshifted... */
+};
+</code></pre>
+                    
+                    <h3 id="polling">Polling Input</h3>
+                    
+                    <p><strong>Polling</strong> means continuously checking if data is available. It's simple but wasteful—later we'll replace this with interrupts:</p>
+
+                    <pre><code class="language-c">/* keyboard.c - Keyboard polling driver */
+
+#include "keyboard.h"
+
+/* Keyboard state */
+static int shift_pressed = 0;
+static int ctrl_pressed = 0;
+static int alt_pressed = 0;
+static int caps_lock = 0;
+
+/* Special scan codes */
+#define KEY_ESCAPE      0x01
+#define KEY_BACKSPACE   0x0E
+#define KEY_TAB         0x0F
+#define KEY_ENTER       0x1C
+#define KEY_CTRL        0x1D
+#define KEY_LSHIFT      0x2A
+#define KEY_RSHIFT      0x36
+#define KEY_ALT         0x38
+#define KEY_SPACE       0x39
+#define KEY_CAPSLOCK    0x3A
+#define KEY_F1          0x3B
+#define KEY_F10         0x44
+#define KEY_NUMLOCK     0x45
+#define KEY_SCROLLLOCK  0x46
+
+/* Read a raw scan code (blocking) */
+uint8_t keyboard_read_scancode(void) {
+    ps2_wait_output();
+    return inb(PS2_DATA_PORT);
+}
+
+/* Read a raw scan code (non-blocking, returns 0 if none) */
+uint8_t keyboard_read_scancode_nowait(void) {
+    if (ps2_data_available()) {
+        return inb(PS2_DATA_PORT);
+    }
+    return 0;
+}
+
+/* Get a character (blocking, handles modifiers) */
+char keyboard_getchar(void) {
+    while (1) {
+        uint8_t scancode = keyboard_read_scancode();
+        
+        /* Handle key release (break code) */
+        if (scancode & 0x80) {
+            uint8_t release = scancode & 0x7F;
+            
+            if (release == KEY_LSHIFT || release == KEY_RSHIFT) {
+                shift_pressed = 0;
+            } else if (release == KEY_CTRL) {
+                ctrl_pressed = 0;
+            } else if (release == KEY_ALT) {
+                alt_pressed = 0;
+            }
+            continue;  /* Keep waiting for a key press */
+        }
+        
+        /* Handle modifier key presses */
+        if (scancode == KEY_LSHIFT || scancode == KEY_RSHIFT) {
+            shift_pressed = 1;
+            continue;
+        }
+        if (scancode == KEY_CTRL) {
+            ctrl_pressed = 1;
+            continue;
+        }
+        if (scancode == KEY_ALT) {
+            alt_pressed = 1;
+            continue;
+        }
+        if (scancode == KEY_CAPSLOCK) {
+            caps_lock = !caps_lock;
+            continue;
+        }
+        
+        /* Look up ASCII value */
+        char c;
+        int use_shift = shift_pressed;
+        
+        /* Caps lock affects only letters */
+        if (scancode >= 0x10 && scancode <= 0x19) {  /* Q-P */
+            use_shift ^= caps_lock;
+        } else if (scancode >= 0x1E && scancode <= 0x26) {  /* A-L */
+            use_shift ^= caps_lock;
+        } else if (scancode >= 0x2C && scancode <= 0x32) {  /* Z-M */
+            use_shift ^= caps_lock;
+        }
+        
+        if (use_shift) {
+            c = scancode_ascii_shift[scancode];
+        } else {
+            c = scancode_ascii[scancode];
+        }
+        
+        /* Return valid characters */
+        if (c != 0) {
+            return c;
+        }
+    }
+}
+</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Polling Wastes CPU!</strong> The <code>keyboard_getchar()</code> function spins in a tight loop, consuming 100% CPU while waiting. In Phase 5, we'll replace this with interrupt-driven input where the CPU sleeps until a key is pressed.
+                    </div>
+                    
+                    <h3 id="key-mapping">Extended Keys & Special Handling</h3>
+                    
+                    <p>Modern keyboards have extended keys (arrows, Insert, Delete, etc.) that send multi-byte scan codes starting with <code>0xE0</code>:</p>
+
+                    <pre><code class="language-c">/* Extended key handling */
+
+/* Extended key codes (after 0xE0 prefix) */
+#define KEY_EXT_UP       0x48
+#define KEY_EXT_DOWN     0x50
+#define KEY_EXT_LEFT     0x4B
+#define KEY_EXT_RIGHT    0x4D
+#define KEY_EXT_INSERT   0x52
+#define KEY_EXT_DELETE   0x53
+#define KEY_EXT_HOME     0x47
+#define KEY_EXT_END      0x4F
+#define KEY_EXT_PAGEUP   0x49
+#define KEY_EXT_PAGEDOWN 0x51
+
+/* Special key result codes (returned instead of ASCII) */
+#define KEYCODE_UP       0x100
+#define KEYCODE_DOWN     0x101
+#define KEYCODE_LEFT     0x102
+#define KEYCODE_RIGHT    0x103
+#define KEYCODE_INSERT   0x104
+#define KEYCODE_DELETE   0x105
+#define KEYCODE_HOME     0x106
+#define KEYCODE_END      0x107
+#define KEYCODE_PAGEUP   0x108
+#define KEYCODE_PAGEDOWN 0x109
+
+/* Get key with extended key support - returns int to allow codes > 255 */
+int keyboard_getkey(void) {
+    uint8_t scancode = keyboard_read_scancode();
+    
+    /* Handle 0xE0 extended keys */
+    if (scancode == 0xE0) {
+        scancode = keyboard_read_scancode();
+        
+        /* Ignore break codes for extended keys */
+        if (scancode & 0x80) {
+            return 0;
+        }
+        
+        switch (scancode) {
+            case KEY_EXT_UP:       return KEYCODE_UP;
+            case KEY_EXT_DOWN:     return KEYCODE_DOWN;
+            case KEY_EXT_LEFT:     return KEYCODE_LEFT;
+            case KEY_EXT_RIGHT:    return KEYCODE_RIGHT;
+            case KEY_EXT_INSERT:   return KEYCODE_INSERT;
+            case KEY_EXT_DELETE:   return KEYCODE_DELETE;
+            case KEY_EXT_HOME:     return KEYCODE_HOME;
+            case KEY_EXT_END:      return KEYCODE_END;
+            case KEY_EXT_PAGEUP:   return KEYCODE_PAGEUP;
+            case KEY_EXT_PAGEDOWN: return KEYCODE_PAGEDOWN;
+            default:               return 0;
+        }
+    }
+    
+    /* Handle regular keys (reuse modifier logic from keyboard_getchar) */
+    /* ... same logic as before ... */
+    
+    return scancode_ascii[scancode];
+}
+</code></pre>
+                </div>
+
+                <!-- Input Functions Section -->
+                <div id="getc" class="blog-content mt-5">
+                    <h2><i class="fas fa-keyboard me-2 text-teal"></i>High-Level Input Functions</h2>
+                    
+                    <p>Let's build user-friendly input functions that combine our keyboard driver with terminal output for proper echoing and line editing.</p>
+
+                    <h3 id="getchar">getchar Implementation</h3>
+                    
+                    <p>A proper <code>getchar</code> echoes the character to the screen so users see what they're typing:</p>
+
+                    <pre><code class="language-c">/* stdio.c - High-level I/O functions */
+
+#include "terminal.h"
+#include "keyboard.h"
+
+/* Get a single character with echo */
+char getchar(void) {
+    char c = keyboard_getchar();
+    
+    /* Echo printable characters */
+    if (c >= ' ' && c <= '~') {
+        putc(c);
+    } else if (c == '\n' || c == '\r') {
+        putc('\n');
+    }
+    
+    return c;
+}
+
+/* Get a single character without echo (for passwords, etc.) */
+char getchar_noecho(void) {
+    return keyboard_getchar();
+}
+
+/* Check if a key is available (non-blocking) */
+int kbhit(void) {
+    return ps2_data_available();
+}
+</code></pre>
+                    
+                    <h3 id="gets">gets Implementation with Line Editing</h3>
+                    
+                    <p>A proper line input function needs to handle backspace, display limits, and buffer overflow protection:</p>
+
+                    <pre><code class="language-c">/* Read a line of input with editing support */
+char* gets(char* buffer, int max_length) {
+    int pos = 0;
+    max_length--;  /* Reserve space for null terminator */
+    
+    while (1) {
+        char c = keyboard_getchar();
+        
+        if (c == '\n' || c == '\r') {
+            /* Enter pressed - complete the line */
+            buffer[pos] = '\0';
+            putc('\n');
+            return buffer;
+        }
+        else if (c == '\b' || c == 127) {  /* Backspace or DEL */
+            if (pos > 0) {
+                pos--;
+                /* Erase character on screen: back, space, back */
+                puts("\b \b");
+            }
+        }
+        else if (c == 0x1B) {  /* Escape - cancel input */
+            buffer[0] = '\0';
+            putc('\n');
+            return NULL;
+        }
+        else if (c == 0x15) {  /* Ctrl+U - clear line */
+            while (pos > 0) {
+                pos--;
+                puts("\b \b");
+            }
+        }
+        else if (c >= ' ' && c <= '~') {  /* Printable character */
+            if (pos < max_length) {
+                buffer[pos++] = c;
+                putc(c);
+            }
+            /* Silently ignore if buffer is full */
+        }
+    }
+}
+
+/* Read a line with a prompt */
+char* prompt(const char* prompt_str, char* buffer, int max_length) {
+    puts(prompt_str);
+    return gets(buffer, max_length);
+}
+
+/* Read a password (no echo) */
+char* getpass(const char* prompt_str, char* buffer, int max_length) {
+    puts(prompt_str);
+    
+    int pos = 0;
+    max_length--;
+    
+    while (1) {
+        char c = keyboard_getchar();
+        
+        if (c == '\n' || c == '\r') {
+            buffer[pos] = '\0';
+            putc('\n');
+            return buffer;
+        }
+        else if (c == '\b' || c == 127) {
+            if (pos > 0) {
+                pos--;
+                /* No visual feedback for password */
+            }
+        }
+        else if (c >= ' ' && c <= '~') {
+            if (pos < max_length) {
+                buffer[pos++] = c;
+                putc('*');  /* Show asterisk instead of actual char */
+            }
+        }
+    }
+}
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-shield-alt me-2"></i>
+                        <strong>Buffer Overflow Protection:</strong> Never use unbounded input functions! Always pass a maximum length. The classic <code>gets()</code> without bounds was so dangerous it was removed from C11.
+                    </div>
+
+                    <h3 id="io-header">Complete I/O Header</h3>
+                    
+                    <p>Here's a complete header file declaring all our I/O functions:</p>
+
+                    <pre><code class="language-c">/* stdio.h - Standard I/O declarations */
+#ifndef STDIO_H
+#define STDIO_H
+
+#include &lt;stdarg.h&gt;
+#include &lt;stdint.h&gt;
+
+/* Output functions */
+void putc(char c);
+void puts(const char* str);
+void puts_nl(const char* str);
+void puts_at(const char* str, int x, int y, uint8_t color);
+int kprintf(const char* fmt, ...);
+
+/* Terminal control */
+void terminal_clear(void);
+void terminal_set_color(uint8_t color);
+
+/* Input functions */
+char getchar(void);
+char getchar_noecho(void);
+int kbhit(void);
+char* gets(char* buf, int maxlen);
+char* prompt(const char* prompt, char* buf, int maxlen);
+char* getpass(const char* prompt, char* buf, int maxlen);
+
+#endif
+</code></pre>
+                </div>
+
+                <!-- What You Can Build Section -->
+                <div id="build" class="blog-content mt-5">
+                    <h2><i class="fas fa-hammer me-2 text-teal"></i>What You Can Build</h2>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Phase 4 Project:</strong> A mini shell UI for your kernel! Your OS can now display colored text, accept keyboard input, and respond to user commands in a basic read-eval-print loop.
+                    </div>
+                    
+                    <h3>Mini Shell Implementation</h3>
+                    
+                    <p>Let's build a basic interactive shell that responds to commands:</p>
+
+                    <pre><code class="language-c">/* shell.c - Mini shell implementation */
+
+#include "stdio.h"
+#include "string.h"  /* We'll need strcmp, etc. */
+
+#define MAX_CMD_LEN 256
+
+/* Simple string comparison (implement yourself or use ours) */
+static int str_equal(const char* a, const char* b) {
+    while (*a && *b) {
+        if (*a++ != *b++) return 0;
+    }
+    return *a == *b;
+}
+
+/* Command handlers */
+static void cmd_help(void) {
+    puts_nl("Available commands:");
+    puts_nl("  help    - Show this help message");
+    puts_nl("  clear   - Clear the screen");
+    puts_nl("  info    - Display system information");
+    puts_nl("  version - Show OS version");
+    puts_nl("  color   - Cycle through colors");
+    puts_nl("  echo    - Echo text back");
+    puts_nl("  reboot  - Restart the system");
+}
+
+static void cmd_info(void) {
+    puts_nl("System Information:");
+    puts_nl("  Architecture: x86 (i386)");
+    puts_nl("  Mode: 32-bit Protected Mode");
+    kprintf("  VGA Buffer: %p\n", (void*)0xB8000);
+    puts_nl("  Display: 80x25 text mode");
+}
+
+static void cmd_version(void) {
+    terminal_set_color(vga_make_color(VGA_LIGHT_CYAN, VGA_BLACK));
+    puts_nl("MiniOS v0.4 - Display & Input");
+    terminal_set_color(vga_make_color(VGA_LIGHT_GREY, VGA_BLACK));
+    puts_nl("Kernel Development Tutorial - Phase 4");
+}
+
+static void cmd_reboot(void) {
+    puts_nl("Rebooting...");
+    
+    /* Triple fault method - CPU resets */
+    /* Load an invalid IDT and trigger interrupt */
+    __asm__ volatile (
+        "lidt (%0)"
+        : : "r" ((void*)0)
+    );
+    __asm__ volatile ("int $0");
+}
+
+/* Color demo */
+static void cmd_color(void) {
+    const char* names[] = {
+        "Black", "Blue", "Green", "Cyan",
+        "Red", "Magenta", "Brown", "Light Grey",
+        "Dark Grey", "Light Blue", "Light Green", "Light Cyan",
+        "Light Red", "Light Magenta", "Yellow", "White"
+    };
+    
+    puts_nl("VGA Colors:");
+    for (int i = 0; i < 16; i++) {
+        terminal_set_color(vga_make_color(i, VGA_BLACK));
+        kprintf("  %d: %s\n", i, names[i]);
+    }
+    terminal_set_color(vga_make_color(VGA_LIGHT_GREY, VGA_BLACK));
+}
+
+/* Parse and execute command */
+static void execute_command(char* cmd) {
+    /* Skip leading whitespace */
+    while (*cmd == ' ') cmd++;
+    
+    /* Empty command */
+    if (*cmd == '\0') return;
+    
+    /* Match commands */
+    if (str_equal(cmd, "help") || str_equal(cmd, "?")) {
+        cmd_help();
+    }
+    else if (str_equal(cmd, "clear") || str_equal(cmd, "cls")) {
+        terminal_clear();
+    }
+    else if (str_equal(cmd, "info")) {
+        cmd_info();
+    }
+    else if (str_equal(cmd, "version") || str_equal(cmd, "ver")) {
+        cmd_version();
+    }
+    else if (str_equal(cmd, "color") || str_equal(cmd, "colors")) {
+        cmd_color();
+    }
+    else if (str_equal(cmd, "reboot")) {
+        cmd_reboot();
+    }
+    else if (cmd[0] == 'e' && cmd[1] == 'c' && cmd[2] == 'h' && 
+             cmd[3] == 'o' && cmd[4] == ' ') {
+        /* echo command with argument */
+        puts_nl(cmd + 5);
+    }
+    else {
+        terminal_set_color(vga_make_color(VGA_LIGHT_RED, VGA_BLACK));
+        kprintf("Unknown command: %s\n", cmd);
+        terminal_set_color(vga_make_color(VGA_LIGHT_GREY, VGA_BLACK));
+        puts_nl("Type 'help' for available commands.");
+    }
+}
+
+/* Main shell loop */
+void shell_run(void) {
+    char buffer[MAX_CMD_LEN];
+    
+    /* Welcome banner */
+    terminal_clear();
+    terminal_set_color(vga_make_color(VGA_LIGHT_GREEN, VGA_BLACK));
+    puts_nl("╔═══════════════════════════════════════════╗");
+    puts_nl("║       MiniOS Shell - Phase 4 Demo         ║");
+    puts_nl("║   Type 'help' for available commands      ║");
+    puts_nl("╚═══════════════════════════════════════════╝");
+    terminal_set_color(vga_make_color(VGA_LIGHT_GREY, VGA_BLACK));
+    putc('\n');
+    
+    /* Read-Eval-Print Loop */
+    while (1) {
+        /* Print prompt */
+        terminal_set_color(vga_make_color(VGA_LIGHT_CYAN, VGA_BLACK));
+        puts("minios");
+        terminal_set_color(vga_make_color(VGA_WHITE, VGA_BLACK));
+        puts("> ");
+        terminal_set_color(vga_make_color(VGA_LIGHT_GREY, VGA_BLACK));
+        
+        /* Get input */
+        if (gets(buffer, MAX_CMD_LEN) != NULL) {
+            execute_command(buffer);
+        }
+    }
+}
+
+/* Kernel entry point */
+void kernel_main(void) {
+    /* Initialize subsystems */
+    terminal_clear();
+    vga_enable_cursor(13, 15);  /* Underline cursor */
+    
+    /* Run interactive shell */
+    shell_run();
+}
+</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-laptop-code me-2"></i>Exercise 1: Add More Commands</h4>
+                        <p>Extend the shell with these commands:</p>
+                        <ul>
+                            <li><code>time</code> - Display uptime (you'll need a tick counter in Phase 5)</li>
+                            <li><code>mem</code> - Display memory information (parse from BIOS)</li>
+                            <li><code>beep</code> - Make the PC speaker beep</li>
+                        </ul>
+                        <span class="bias-tag"><i class="fas fa-code me-1"></i>Implementation</span>
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-laptop-code me-2"></i>Exercise 2: Hex Dump Utility</h4>
+                        <p>Create a <code>hexdump</code> command that displays memory contents:</p>
+<pre><code class="language-c">void cmd_hexdump(uint32_t address, int length) {
+    uint8_t* ptr = (uint8_t*)address;
+    
+    for (int i = 0; i < length; i += 16) {
+        kprintf("%08X: ", address + i);
+        
+        /* Hex bytes */
+        for (int j = 0; j < 16 && (i + j) < length; j++) {
+            kprintf("%02X ", ptr[i + j]);
+        }
+        
+        puts(" |");
+        
+        /* ASCII representation */
+        for (int j = 0; j < 16 && (i + j) < length; j++) {
+            char c = ptr[i + j];
+            putc((c >= 32 && c < 127) ? c : '.');
+        }
+        puts("|\n");
+    }
+}
+/* Usage: hexdump 0xB8000 256 */</code></pre>
+                        <span class="bias-tag"><i class="fas fa-memory me-1"></i>Memory Tools</span>
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-laptop-code me-2"></i>Exercise 3: Text Editor Mode</h4>
+                        <p>Create a simple full-screen text editor:</p>
+                        <ul>
+                            <li>Arrow keys move the cursor (using <code>keyboard_getkey()</code>)</li>
+                            <li>Type anywhere on screen</li>
+                            <li>Escape exits editor mode</li>
+                            <li><strong>Hint:</strong> Store text in a 80×25 character buffer, redraw on changes</li>
+                        </ul>
+                        <span class="bias-tag"><i class="fas fa-edit me-1"></i>Advanced UI</span>
+                    </div>
+                </div>
+
+                <!-- Next Steps Section -->
+                <div id="next-steps" class="blog-content mt-5">
+                    <h2><i class="fas fa-arrow-right me-2 text-teal"></i>Next Steps</h2>
+                    
+                    <p>Your kernel can now communicate with users! But there's a fundamental problem: our keyboard input uses <strong>polling</strong>, constantly checking for keypresses and wasting CPU cycles. And what about handling errors gracefully?</p>
+
+                    <h3>What's Coming in Phase 5: Interrupts</h3>
+                    
+                    <p>In Phase 5, we'll implement proper <strong>interrupt-driven I/O</strong>:</p>
+                    
+                    <ul>
+                        <li><strong>Interrupt Descriptor Table (IDT)</strong> – Tell the CPU where to find handler code</li>
+                        <li><strong>Programmable Interrupt Controllers (PIC)</strong> – Configure hardware interrupt routing</li>
+                        <li><strong>Exception Handlers</strong> – Handle division by zero, page faults, etc.</li>
+                        <li><strong>Keyboard IRQ</strong> – Wake up only when a key is actually pressed</li>
+                        <li><strong>System Timer (PIT)</strong> – Implement scheduling and uptime tracking</li>
+                    </ul>
+
+<pre><code class="language-plaintext">POLLING vs INTERRUPT-DRIVEN I/O
+═══════════════════════════════════════════════════════════════
+
+POLLING (Current - Phase 4):
+┌─────────────────────────────────────────────────────────────┐
+│  CPU → Check keyboard → No key → Check keyboard → No key → │
+│       → Check keyboard → No key → ... → Key! → Process     │
+│                                                             │
+│  Problem: CPU is 100% busy doing nothing useful!            │
+└─────────────────────────────────────────────────────────────┘
+
+INTERRUPT-DRIVEN (Phase 5):
+┌─────────────────────────────────────────────────────────────┐
+│  CPU → Do useful work → HLT (sleep)                         │
+│                           ↑                                 │
+│             Key pressed! ─┘  ← Hardware interrupt           │
+│                           ↓                                 │
+│  CPU → Handle key → Resume work or back to HLT              │
+│                                                             │
+│  Benefit: CPU only wakes when there's actual work!          │
+└─────────────────────────────────────────────────────────────┘</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-graduation-cap me-2"></i>
+                        <strong>Key Takeaways from Phase 4:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>VGA text mode is simply memory-mapped I/O at 0xB8000</li>
+                            <li>Each screen position is 2 bytes: character + attribute</li>
+                            <li>The PS/2 keyboard sends scan codes, not ASCII characters</li>
+                            <li>Polling is simple but inefficient—interrupts are better</li>
+                            <li>Always protect against buffer overflows in input functions</li>
+                        </ul>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 3: Entering Protected Mode</h5>
+                            <p class="text-muted small mb-2">Review the GDT setup, mode switch, and C runtime initialization.</p>
+                            <a href="kernel-dev-phase-03-protected-mode.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 5: Interrupts & CPU Control</h5>
+                            <p class="text-muted small mb-2">Set up the IDT, handle hardware interrupts, and implement a system timer.</p>
+                            <a href="kernel-dev-phase-05-interrupts.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 6: Memory Management</h5>
+                            <p class="text-muted small mb-2">Implement paging, virtual memory, and a heap allocator for dynamic memory.</p>
+                            <a href="kernel-dev-phase-06-memory.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook">
+                            <i class="fab fa-facebook-f"></i>
+                        </a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter">
+                            <i class="fab fa-twitter"></i>
+                        </a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn">
+                            <i class="fab fa-linkedin-in"></i>
+                        </a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube">
+                            <i class="fab fa-youtube"></i>
+                        </a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram">
+                            <i class="fab fa-instagram"></i>
+                        </a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest">
+                            <i class="fab fa-pinterest-p"></i>
+                        </a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email">
+                            <i class="fas fa-envelope"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="bg-secondary">
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+    
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+    
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>

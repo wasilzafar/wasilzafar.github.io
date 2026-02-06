@@ -1,0 +1,1769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kernel Development Series - Phase 15: Hardware Discovery & Drivers | Wasil Zafar</title>
+    <meta name="description" content="Enumerate PCI devices, write device drivers, and implement modern storage interfaces like NVMe for your operating system.">
+    <meta name="keywords" content="kernel development, PCI, device drivers, NVMe, AHCI, hardware enumeration, OS development">
+    <meta name="author" content="Wasil Zafar">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Kernel Development Series - Phase 15: Hardware Discovery & Drivers">
+    <meta property="og:description" content="Enumerate PCI devices, write device drivers, and implement modern storage interfaces like NVMe for your operating system.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://wasilzafar.com/pages/series/kernel-development/kernel-dev-phase-15-hardware-drivers.html">
+    <meta property="og:image" content="https://wasilzafar.com/images/og-kernel-dev.png">
+    <meta property="article:published_time" content="2026-02-06">
+    <meta property="article:author" content="Wasil Zafar">
+    <meta property="article:section" content="Technology">
+
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+    
+    <!-- Google Consent Mode v2 -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('consent', 'default', {
+        'ad_storage': 'denied',
+        'ad_user_data': 'denied',
+        'ad_personalization': 'denied',
+        'analytics_storage': 'denied',
+        'wait_for_update': 500
+      });
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="../../../images/favicon_io/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="../../../css/main.css">
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. 
+                    By clicking "Accept All", you consent to our use of cookies. See our 
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a> 
+                    for more information.
+                </p>
+                
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#about">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#skills">Skills</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#certifications">Certifications</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#interests">Interests</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">Phase 15: Hardware Discovery & Drivers</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>February 6, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>35 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Discover hardware through PCI enumeration, write device drivers, and implement modern storage through AHCI and NVMe interfaces.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation Overlay -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#introduction" onclick="closeNav()">Introduction</a>
+                <ul>
+                    <li><a href="#hardware-landscape" onclick="closeNav()">Hardware Landscape</a></li>
+                    <li><a href="#driver-model" onclick="closeNav()">Driver Model</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#pci" onclick="closeNav()">PCI Enumeration</a>
+                <ul>
+                    <li><a href="#pci-config" onclick="closeNav()">Configuration Space</a></li>
+                    <li><a href="#pci-scan" onclick="closeNav()">Bus Scanning</a></li>
+                    <li><a href="#pci-bars" onclick="closeNav()">BAR Decoding</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#drivers" onclick="closeNav()">Driver Framework</a>
+                <ul>
+                    <li><a href="#driver-interface" onclick="closeNav()">Driver Interface</a></li>
+                    <li><a href="#device-tree" onclick="closeNav()">Device Tree</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#ahci" onclick="closeNav()">AHCI Storage</a>
+                <ul>
+                    <li><a href="#ahci-init" onclick="closeNav()">Initialization</a></li>
+                    <li><a href="#ahci-commands" onclick="closeNav()">Command Structure</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#nvme" onclick="closeNav()">NVMe Storage</a>
+                <ul>
+                    <li><a href="#nvme-queues" onclick="closeNav()">Submission/Completion Queues</a></li>
+                    <li><a href="#nvme-commands" onclick="closeNav()">NVMe Commands</a></li>
+                </ul>
+            </li>
+            <li><a href="#build" onclick="closeNav()">What You Can Build</a></li>
+            <li><a href="#next-steps" onclick="closeNav()">Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- Introduction -->
+                <div id="introduction" class="blog-content">
+                    <h2><i class="fas fa-microchip me-2 text-teal"></i>Introduction: Hardware Discovery</h2>
+                    
+                    <div class="highlight-box crimson">
+                        <i class="fas fa-flag me-2"></i>
+                        <strong>Phase 15 Goals:</strong> By the end of this phase, your OS will discover hardware through PCI enumeration, have a driver framework, and support modern storage via AHCI (SATA) and NVMe.
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-map-signs me-2"></i>Complete Series Navigation</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-2">18-Part Series</span>
+                            <span class="badge bg-crimson">OS Development Mastery</span>
+                        </div>
+                        <div class="content">
+                            <ol>
+                                <li><a href="kernel-dev-phase-00-orientation.html">Phase 0: Orientation & Big Picture</a> - OS fundamentals, kernel architectures, learning path</li>
+                                <li><a href="kernel-dev-phase-01-boot-process.html">Phase 1: How a Computer Starts</a> - BIOS/UEFI, boot sequence, dev environment</li>
+                                <li><a href="kernel-dev-phase-02-real-mode.html">Phase 2: Real Mode - First Steps</a> - Real mode, bootloader, BIOS interrupts</li>
+                                <li><a href="kernel-dev-phase-03-protected-mode.html">Phase 3: Entering Protected Mode</a> - GDT, 32-bit mode, C code execution</li>
+                                <li><a href="kernel-dev-phase-04-display-input.html">Phase 4: Display, Input & Output</a> - VGA text mode, keyboard handling</li>
+                                <li><a href="kernel-dev-phase-05-interrupts.html">Phase 5: Interrupts & CPU Control</a> - IDT, ISRs, PIC programming</li>
+                                <li><a href="kernel-dev-phase-06-memory.html">Phase 6: Memory Management</a> - Paging, virtual memory, heap allocator</li>
+                                <li><a href="kernel-dev-phase-07-filesystem.html">Phase 7: Disk Access & Filesystems</a> - Block devices, FAT, VFS layer</li>
+                                <li><a href="kernel-dev-phase-08-processes.html">Phase 8: Processes & User Mode</a> - Task switching, system calls, user space</li>
+                                <li><a href="kernel-dev-phase-09-elf.html">Phase 9: ELF Loading & Executables</a> - ELF format, program loading</li>
+                                <li><a href="kernel-dev-phase-10-stdlib-shell.html">Phase 10: Standard Library & Shell</a> - C library, command-line shell</li>
+                                <li><a href="kernel-dev-phase-11-long-mode.html">Phase 11: 64-Bit Long Mode</a> - x86-64, 64-bit paging, modern architecture</li>
+                                <li><a href="kernel-dev-phase-12-uefi.html">Phase 12: Modern Booting with UEFI</a> - UEFI boot services, memory maps</li>
+                                <li><a href="kernel-dev-phase-13-graphics.html">Phase 13: Graphics & GUI Systems</a> - Framebuffer, windowing, drawing</li>
+                                <li><a href="kernel-dev-phase-14-input-timing.html">Phase 14: Advanced Input & Timing</a> - Mouse, high-precision timers</li>
+                                <li><strong>Phase 15: Hardware Discovery & Drivers (This Guide)</strong> - PCI, device drivers, NVMe</li>
+                                <li><a href="kernel-dev-phase-16-performance.html">Phase 16: Performance & Optimization</a> - Caching, scheduler tuning</li>
+                                <li><a href="kernel-dev-phase-17-security.html">Phase 17: Stability, Security & Finishing</a> - Debugging, hardening, completion</li>
+                            </ol>
+                        </div>
+                    </div>
+                    
+                    <p>Your OS is now graphical and interactive. But all that software runs on <strong>hardware</strong>—and modern PCs have a lot of it! How does your OS know what devices are connected? How does it talk to an SSD, a network card, or a GPU?</p>
+
+                    <p>The answer is a two-part system: <strong>hardware discovery</strong> (finding what's connected) and <strong>device drivers</strong> (knowing how to talk to each device). This phase covers both.</p>
+
+                    <!-- Hardware Discovery Overview -->
+                    <pre style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 8px; padding: 20px; margin: 24px 0; font-family: 'Courier New', monospace; font-size: 14px; color: #a0a0a0; overflow-x: auto; border: 1px solid #3b9797;">
+<span style="color: #3b9797;">╔═════════════════════════════════════════════════════════════════════════════╗</span>
+<span style="color: #3b9797;">║</span><span style="color: #e94560;">              HARDWARE DISCOVERY & DRIVER ARCHITECTURE                       </span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╠═════════════════════════════════════════════════════════════════════════════╣</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #50fa7b;">Application Layer</span>                                                        <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">┌─────────────┐  ┌─────────────┐  ┌─────────────┐</span>                        <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│ File System │  │  Network    │  │   Graphics  │</span>                        <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│   (VFS)     │  │   Stack     │  │   Subsystem │</span>                        <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">└──────┬──────┘  └──────┬──────┘  └──────┬──────┘</span>                        <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>         │               │               │                                  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #6272a4;">───────┴───────────────┴───────────────┴───────</span>                          <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #bd93f9;">Driver Layer</span>                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span><span style="color: #ff79c6;"> NVMe Driver </span><span style="color: #f8f8f2;">│  │</span><span style="color: #8be9fd;"> AHCI Driver </span><span style="color: #f8f8f2;">│  │</span><span style="color: #50fa7b;"> NIC Driver  </span><span style="color: #f8f8f2;">│  │</span><span style="color: #f1fa8c;"> GPU Driver  </span><span style="color: #f8f8f2;">│</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">└──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>         │               │               │               │                 <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #6272a4;">───────┴───────────────┴───────────────┴───────────────┴─────</span>            <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f1fa8c;">PCI/PCIe Bus Layer</span>                                                       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">┌─────────────────────────────────────────────────────────────────────┐</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  <span style="color: #6272a4;">PCI Enumeration + Configuration</span>                                     <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  • Scan Bus:Slot:Function                                           <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  • Read Vendor/Device IDs                                           <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  • Map BARs (Memory/IO)                                             <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  • Match to Drivers                                                 <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">└─────────────────────────────────────────────────────────────────────┘</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #8be9fd;">Physical Hardware</span>                                                        <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐</span>               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│ NVMe   │  │ SATA   │  │ Intel  │  │ RTX    │  │ USB    │</span>               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│ SSD    │  │ SSD/HD │  │ NIC    │  │ GPU    │  │ Ctrl   │</span>               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">└────────┘  └────────┘  └────────┘  └────────┘  └────────┘</span>               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╚═════════════════════════════════════════════════════════════════════════════╝</span></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Key Insight:</strong> Hardware discovery is the foundation of extensibility. PCI enumeration lets your OS find and configure devices automatically, while a proper driver framework allows modular hardware support.
+                    </div>
+
+                    <h3 id="hardware-landscape">Hardware Landscape</h3>
+                    
+                    <p>Modern PCs communicate with hardware through several interfaces:</p>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Bus</th>
+                                <th>Typical Devices</th>
+                                <th>Speed</th>
+                                <th>Discovery</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>PCI/PCIe</strong></td>
+                                <td>GPUs, NICs, NVMe SSDs, SATA controllers</td>
+                                <td>Up to 64 GB/s (PCIe 5.0 x16)</td>
+                                <td>Configuration Space scan</td>
+                            </tr>
+                            <tr>
+                                <td><strong>USB</strong></td>
+                                <td>Keyboards, mice, storage, cameras</td>
+                                <td>Up to 20 Gbps (USB 3.2)</td>
+                                <td>Hub enumeration</td>
+                            </tr>
+                            <tr>
+                                <td><strong>SATA</strong></td>
+                                <td>HDDs, older SSDs, optical drives</td>
+                                <td>6 Gbps (SATA III)</td>
+                                <td>Port detection via AHCI</td>
+                            </tr>
+                            <tr>
+                                <td><strong>LPC</strong></td>
+                                <td>Legacy devices (PS/2, TPM)</td>
+                                <td>~33 MHz</td>
+                                <td>ACPI/Hardcoded</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p>For this phase, we focus on <strong>PCI/PCIe enumeration</strong>—the primary discovery mechanism for high-performance devices.</p>
+
+                    <h3 id="driver-model">Driver Model</h3>
+                    
+                    <p>A driver is software that knows how to "speak" a specific device's protocol. Good OS design separates:</p>
+
+                    <!-- Driver Model Diagram -->
+                    <pre style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 8px; padding: 20px; margin: 24px 0; font-family: 'Courier New', monospace; font-size: 14px; color: #a0a0a0; overflow-x: auto; border: 1px solid #3b9797;">
+<span style="color: #3b9797;">╔═════════════════════════════════════════════════════════════════════════════╗</span>
+<span style="color: #3b9797;">║</span><span style="color: #e94560;">                         OS DRIVER MODEL                                     </span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╠═════════════════════════════════════════════════════════════════════════════╣</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">┌─────────────────────────────────────────────────────────────────────┐</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>                      <span style="color: #50fa7b;">Generic Block Device API</span>                        <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  read_blocks(), write_blocks(), get_info()                          <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">└─────────────────────────────┬───────────────────────────────────────┘</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                │                                            <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>           ┌───────────────────┼───────────────────┐                        <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>           │                   │                   │                        <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">┌────────┴────────┐  ┌────────┴────────┐  ┌────────┴────────┐</span>            <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> <span style="color: #ff79c6;">NVMe Driver</span>      <span style="color: #f8f8f2;">│  │</span> <span style="color: #8be9fd;">AHCI Driver</span>      <span style="color: #f8f8f2;">│  │</span> <span style="color: #f1fa8c;">IDE Driver</span>       <span style="color: #f8f8f2;">│</span>            <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> Implements API  <span style="color: #f8f8f2;">│  │</span> Implements API  <span style="color: #f8f8f2;">│  │</span> Implements API  <span style="color: #f8f8f2;">│</span>            <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> for NVMe SSDs   <span style="color: #f8f8f2;">│  │</span> for SATA        <span style="color: #f8f8f2;">│  │</span> for legacy IDE  <span style="color: #f8f8f2;">│</span>            <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">└─────────────────┘  └─────────────────┘  └─────────────────┘</span>            <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #6272a4;">Benefits:</span>                                                                <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  • File system doesn't care <span style="color: #f1fa8c;">which</span> storage technology is used              <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  • New drivers can be added without changing upper layers                  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  • Same code works on any hardware that has a driver                       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╚═════════════════════════════════════════════════════════════════════════════╝</span></pre>
+
+                    <p>This abstraction is critical. Your file system calls <code>block_read()</code>, and the driver translates that to the specific commands the hardware understands.</p>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-book me-2"></i>
+                        <strong>Driver Lifecycle:</strong>
+                        <ol class="mb-0 mt-2">
+                            <li><strong>Registration</strong> - Driver tells the kernel what devices it supports</li>
+                            <li><strong>Probe</strong> - Kernel asks "can you handle this device?"</li>
+                            <li><strong>Attach</strong> - Driver initializes the hardware</li>
+                            <li><strong>Operation</strong> - Driver handles requests</li>
+                            <li><strong>Detach</strong> - Cleanup when device removed (hot-unplug)</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <!-- PCI Section -->
+                <div id="pci" class="blog-content mt-5">
+                    <h2><i class="fas fa-plug me-2 text-teal"></i>PCI Enumeration</h2>
+                    
+                    <p><strong>PCI (Peripheral Component Interconnect)</strong> is the standard bus for high-speed devices. Every PCI device has a 256-byte <strong>Configuration Space</strong> that describes what it is and how to talk to it.</p>
+
+                    <!-- PCI Topology Diagram -->
+                    <pre style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 8px; padding: 20px; margin: 24px 0; font-family: 'Courier New', monospace; font-size: 14px; color: #a0a0a0; overflow-x: auto; border: 1px solid #3b9797;">
+<span style="color: #3b9797;">╔═════════════════════════════════════════════════════════════════════════════╗</span>
+<span style="color: #3b9797;">║</span><span style="color: #e94560;">                         PCI BUS TOPOLOGY                                    </span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╠═════════════════════════════════════════════════════════════════════════════╣</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                    <span style="color: #50fa7b;">CPU</span>                                                      <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                     │                                                       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>              <span style="color: #f8f8f2;">┌──────┴──────┐</span>                                                <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>              <span style="color: #f8f8f2;">│</span>  <span style="color: #bd93f9;">Host Bridge</span>  <span style="color: #f8f8f2;">│</span>  <span style="color: #6272a4;">(Root Complex)</span>                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>              <span style="color: #f8f8f2;">└──────┬──────┘</span>                                                <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                     │                                                       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>        <span style="color: #f1fa8c;">═══════════════════════════════════════</span>  <span style="color: #6272a4;">Bus 0</span>                     <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>              │           │           │                                      <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>        <span style="color: #f8f8f2;">┌─────┴────┐ ┌────┴────┐ ┌────┴────┐</span>                                <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>        <span style="color: #f8f8f2;">│</span><span style="color: #ff79c6;">  GPU     </span><span style="color: #f8f8f2;">│ │</span><span style="color: #8be9fd;">PCI-PCI </span><span style="color: #f8f8f2;">│ │</span><span style="color: #50fa7b;"> AHCI    </span><span style="color: #f8f8f2;">│</span>                                <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>        <span style="color: #f8f8f2;">│</span><span style="color: #6272a4;">00:02.0  </span><span style="color: #f8f8f2;">│ │</span><span style="color: #6272a4;"> Bridge </span><span style="color: #f8f8f2;">│ │</span><span style="color: #6272a4;">00:1f.2 </span><span style="color: #f8f8f2;">│</span>                                <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>        <span style="color: #f8f8f2;">└──────────┘ └────┬────┘ └─────────┘</span>                                <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                          │                                                  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                <span style="color: #f1fa8c;">═════════════════════════</span>  <span style="color: #6272a4;">Bus 1</span>                            <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                     │           │                                           <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>               <span style="color: #f8f8f2;">┌─────┴────┐ ┌────┴────┐</span>                                      <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>               <span style="color: #f8f8f2;">│</span><span style="color: #ff79c6;">  NVMe    </span><span style="color: #f8f8f2;">│ │</span><span style="color: #8be9fd;">  NIC    </span><span style="color: #f8f8f2;">│</span>                                      <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>               <span style="color: #f8f8f2;">│</span><span style="color: #6272a4;">01:00.0  </span><span style="color: #f8f8f2;">│ │</span><span style="color: #6272a4;">01:00.1 </span><span style="color: #f8f8f2;">│</span>                                      <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>               <span style="color: #f8f8f2;">└──────────┘ └─────────┘</span>                                      <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #6272a4;">Address Format: Bus:Slot.Function (e.g., 00:1f.2 = Bus 0, Slot 31, Func 2)</span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╚═════════════════════════════════════════════════════════════════════════════╝</span></pre>
+                    
+                    <h3 id="pci-config">Configuration Space</h3>
+
+                    <p>Every PCI device has a 256-byte Configuration Space (4KB for PCIe). The first 64 bytes are standardized:</p>
+
+                    <!-- PCI Config Space Diagram -->
+                    <pre style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 8px; padding: 20px; margin: 24px 0; font-family: 'Courier New', monospace; font-size: 14px; color: #a0a0a0; overflow-x: auto; border: 1px solid #3b9797;">
+<span style="color: #3b9797;">╔═════════════════════════════════════════════════════════════════════════════╗</span>
+<span style="color: #3b9797;">║</span><span style="color: #e94560;">                PCI CONFIGURATION SPACE HEADER (Type 0)                      </span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╠═════════════════════════════════════════════════════════════════════════════╣</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">Offset    31            16 15             0</span>                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">┌────────┬───────────────┬───────────────┐</span>                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> <span style="color: #6272a4;">0x00</span>   <span style="color: #f8f8f2;">│</span>   <span style="color: #ff79c6;">Device ID</span>    <span style="color: #f8f8f2;">│</span>   <span style="color: #50fa7b;">Vendor ID</span>   <span style="color: #f8f8f2;">│</span>  <span style="color: #6272a4;">← Identity</span>              <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">├────────┼───────────────┼───────────────┤</span>                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> <span style="color: #6272a4;">0x04</span>   <span style="color: #f8f8f2;">│</span>    <span style="color: #8be9fd;">Status</span>     <span style="color: #f8f8f2;">│</span>   <span style="color: #f1fa8c;">Command</span>     <span style="color: #f8f8f2;">│</span>  <span style="color: #6272a4;">← Control</span>               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">├────────┼───────────────┴───────────────┤</span>                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> <span style="color: #6272a4;">0x08</span>   <span style="color: #f8f8f2;">│</span><span style="color: #bd93f9;">Class</span><span style="color: #f8f8f2;">│</span><span style="color: #bd93f9;">SubCls</span><span style="color: #f8f8f2;">│</span><span style="color: #bd93f9;">ProgIF</span><span style="color: #f8f8f2;">│</span>   <span style="color: #bd93f9;">Rev ID</span>     <span style="color: #f8f8f2;">│</span>  <span style="color: #6272a4;">← Classification</span>        <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">├────────┼───────────────────────────────┤</span>                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> <span style="color: #6272a4;">0x0C</span>   <span style="color: #f8f8f2;">│</span><span style="color: #f1fa8c;">BIST</span><span style="color: #f8f8f2;">│</span><span style="color: #f1fa8c;">HdrTyp</span><span style="color: #f8f8f2;">│</span><span style="color: #f1fa8c;">Lat</span><span style="color: #f8f8f2;">│</span><span style="color: #f1fa8c;">CacheLine</span>    <span style="color: #f8f8f2;">│</span>  <span style="color: #6272a4;">← Built-in test</span>          <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">├────────┼───────────────────────────────┤</span>                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> <span style="color: #6272a4;">0x10</span>   <span style="color: #f8f8f2;">│</span>          <span style="color: #ff79c6;">BAR0</span>               <span style="color: #f8f8f2;">│</span>  <span style="color: #6272a4;">← Base Address Registers</span> <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">├────────┼───────────────────────────────┤</span>                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> <span style="color: #6272a4;">0x14</span>   <span style="color: #f8f8f2;">│</span>          <span style="color: #ff79c6;">BAR1</span>               <span style="color: #f8f8f2;">│</span>                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">├────────┼───────────────────────────────┤</span>                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> <span style="color: #6272a4;">0x18</span>   <span style="color: #f8f8f2;">│</span>          <span style="color: #ff79c6;">BAR2</span>               <span style="color: #f8f8f2;">│</span>                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">├────────┼───────────────────────────────┤</span>                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> <span style="color: #6272a4;">0x1C</span>   <span style="color: #f8f8f2;">│</span>          <span style="color: #ff79c6;">BAR3</span>               <span style="color: #f8f8f2;">│</span>                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">├────────┼───────────────────────────────┤</span>                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> <span style="color: #6272a4;">0x20</span>   <span style="color: #f8f8f2;">│</span>          <span style="color: #ff79c6;">BAR4</span>               <span style="color: #f8f8f2;">│</span>                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">├────────┼───────────────────────────────┤</span>                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> <span style="color: #6272a4;">0x24</span>   <span style="color: #f8f8f2;">│</span>          <span style="color: #ff79c6;">BAR5</span>               <span style="color: #f8f8f2;">│</span>  <span style="color: #6272a4;">← Total 6 BARs</span>          <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">├────────┼───────────────────────────────┤</span>                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> <span style="color: #6272a4;">...</span>    <span style="color: #f8f8f2;">│</span>          <span style="color: #6272a4;">...</span>                <span style="color: #f8f8f2;">│</span>                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">├────────┼───────────────┬───────────────┤</span>                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> <span style="color: #6272a4;">0x3C</span>   <span style="color: #f8f8f2;">│</span>   <span style="color: #8be9fd;">Max_Lat</span>    <span style="color: #f8f8f2;">│</span>  <span style="color: #8be9fd;">IRQ Line</span>   <span style="color: #f8f8f2;">│</span>  <span style="color: #6272a4;">← Interrupt info</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">└────────┴───────────────┴───────────────┘</span>                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╚═════════════════════════════════════════════════════════════════════════════╝</span></pre>
+
+                    <p>Access Configuration Space via I/O ports on legacy PCI:</p>
+
+                    <pre><code class="language-c">/* PCI Configuration Space Access */
+#define PCI_CONFIG_ADDR 0xCF8
+#define PCI_CONFIG_DATA 0xCFC
+
+/* Read 32-bit value from PCI config space */
+uint32_t pci_read(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset) {
+    uint32_t address = (1U << 31)           // Enable bit
+                     | ((uint32_t)bus << 16)
+                     | ((uint32_t)slot << 11)
+                     | ((uint32_t)func << 8)
+                     | (offset & 0xFC);
+    
+    outl(PCI_CONFIG_ADDR, address);
+    return inl(PCI_CONFIG_DATA);
+}
+
+/* Write 32-bit value to PCI config space */
+void pci_write(uint8_t bus, uint8_t slot, uint8_t func, 
+               uint8_t offset, uint32_t value) {
+    uint32_t address = (1U << 31)
+                     | ((uint32_t)bus << 16)
+                     | ((uint32_t)slot << 11)
+                     | ((uint32_t)func << 8)
+                     | (offset & 0xFC);
+    
+    outl(PCI_CONFIG_ADDR, address);
+    outl(PCI_CONFIG_DATA, value);
+}
+</code></pre>
+
+                    <p>Common <strong>Class Codes</strong> help identify device types:</p>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Class</th>
+                                <th>Subclass</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>0x01</td>
+                                <td>0x06</td>
+                                <td>SATA Controller (AHCI)</td>
+                            </tr>
+                            <tr>
+                                <td>0x01</td>
+                                <td>0x08</td>
+                                <td>Non-Volatile Memory (NVMe)</td>
+                            </tr>
+                            <tr>
+                                <td>0x02</td>
+                                <td>0x00</td>
+                                <td>Ethernet Controller</td>
+                            </tr>
+                            <tr>
+                                <td>0x03</td>
+                                <td>0x00</td>
+                                <td>VGA Compatible Controller</td>
+                            </tr>
+                            <tr>
+                                <td>0x0C</td>
+                                <td>0x03</td>
+                                <td>USB Controller</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <h3 id="pci-scan">Bus Scanning</h3>
+                    
+                    <p>To discover all devices, scan every Bus:Slot:Function combination. If Vendor ID is <code>0xFFFF</code>, no device is present:</p>
+
+                    <pre><code class="language-c">/* PCI Device Structure */
+typedef struct pci_device {
+    uint8_t  bus, slot, func;
+    uint16_t vendor_id;
+    uint16_t device_id;
+    uint8_t  class_code;
+    uint8_t  subclass;
+    uint8_t  prog_if;
+    uint32_t bar[6];
+    uint8_t  interrupt_line;
+    struct pci_device* next;
+} pci_device_t;
+
+pci_device_t* pci_devices = NULL;
+
+/* Scan all PCI buses */
+void pci_scan(void) {
+    for (uint16_t bus = 0; bus < 256; bus++) {
+        for (uint8_t slot = 0; slot < 32; slot++) {
+            for (uint8_t func = 0; func < 8; func++) {
+                uint32_t id = pci_read(bus, slot, func, 0);
+                uint16_t vendor = id & 0xFFFF;
+                
+                if (vendor == 0xFFFF) continue;  // No device
+                
+                // Found device - add to list
+                pci_device_t* dev = kmalloc(sizeof(pci_device_t));
+                dev->bus = bus;
+                dev->slot = slot;
+                dev->func = func;
+                dev->vendor_id = vendor;
+                dev->device_id = id >> 16;
+                
+                // Read class info
+                uint32_t class_reg = pci_read(bus, slot, func, 0x08);
+                dev->class_code = (class_reg >> 24) & 0xFF;
+                dev->subclass = (class_reg >> 16) & 0xFF;
+                dev->prog_if = (class_reg >> 8) & 0xFF;
+                
+                // Read BARs
+                for (int i = 0; i < 6; i++) {
+                    dev->bar[i] = pci_read(bus, slot, func, 0x10 + i * 4);
+                }
+                
+                // Read interrupt line
+                dev->interrupt_line = pci_read(bus, slot, func, 0x3C) & 0xFF;
+                
+                // Add to list
+                dev->next = pci_devices;
+                pci_devices = dev;
+                
+                kprintf("PCI: %02x:%02x.%x - %04x:%04x Class %02x:%02x\n",
+                        bus, slot, func, vendor, dev->device_id,
+                        dev->class_code, dev->subclass);
+                
+                // Check for multi-function device
+                if (func == 0) {
+                    uint32_t header = pci_read(bus, slot, 0, 0x0C);
+                    if (!((header >> 16) & 0x80)) break;
+                }
+            }
+        }
+    }
+}
+</code></pre>
+                    
+                    <h3 id="pci-bars">BAR Decoding</h3>
+                    
+                    <p><strong>BARs (Base Address Registers)</strong> tell us where the device's memory or I/O registers are mapped. But they also encode the region <em>size</em>—with a clever trick:</p>
+
+                    <!-- BAR Decoding Diagram -->
+                    <pre style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 8px; padding: 20px; margin: 24px 0; font-family: 'Courier New', monospace; font-size: 14px; color: #a0a0a0; overflow-x: auto; border: 1px solid #3b9797;">
+<span style="color: #3b9797;">╔═════════════════════════════════════════════════════════════════════════════╗</span>
+<span style="color: #3b9797;">║</span><span style="color: #e94560;">                      BAR FORMAT AND SIZE DETECTION                          </span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╠═════════════════════════════════════════════════════════════════════════════╣</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #50fa7b;">Memory BAR (bit 0 = 0):</span>                                                   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">┌───────────────────────────────────────┬───┬───┬───┐</span>                    <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>         <span style="color: #ff79c6;">Base Address (bits 4-31)</span>       <span style="color: #f8f8f2;">│</span><span style="color: #8be9fd;">Prf</span><span style="color: #f8f8f2;">│</span><span style="color: #f1fa8c;">Typ</span><span style="color: #f8f8f2;">│</span> <span style="color: #50fa7b;">0</span> <span style="color: #f8f8f2;">│</span>                    <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">└───────────────────────────────────────┴───┴───┴───┘</span>                    <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                               <span style="color: #6272a4;">│   │    └─ Memory space</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                               <span style="color: #6272a4;">│   └──── Type: 00=32-bit</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                               <span style="color: #6272a4;">│                10=64-bit</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                               <span style="color: #6272a4;">└───── Prefetchable</span>             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f1fa8c;">I/O BAR (bit 0 = 1):</span>                                                      <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">┌───────────────────────────────────────────────┬───┐</span>                    <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>            <span style="color: #ff79c6;">I/O Port (bits 2-31)</span>               <span style="color: #f8f8f2;">│</span> <span style="color: #f1fa8c;">1</span> <span style="color: #f8f8f2;">│</span>                    <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">└───────────────────────────────────────────────┴───┘</span>                    <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #bd93f9;">Size Detection Algorithm:</span>                                                 <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #6272a4;">1. Save original BAR value</span>                                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #6272a4;">2. Write all 1s (0xFFFFFFFF) to BAR</span>                                      <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #6272a4;">3. Read back - hardware sets writable bits</span>                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #6272a4;">4. Invert, add 1 = region size</span>                                           <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #6272a4;">5. Restore original BAR value</span>                                            <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╚═════════════════════════════════════════════════════════════════════════════╝</span></pre>
+
+                    <pre><code class="language-c">/* Decode a BAR and return its base address and size */
+void pci_decode_bar(uint8_t bus, uint8_t slot, uint8_t func, 
+                    int bar_num, uint64_t* base, uint64_t* size, bool* is_io) {
+    uint8_t offset = 0x10 + bar_num * 4;
+    uint32_t bar = pci_read(bus, slot, func, offset);
+    
+    *is_io = bar & 1;
+    
+    if (*is_io) {
+        // I/O BAR
+        *base = bar & ~0x3;
+        
+        // Get size
+        uint32_t orig = bar;
+        pci_write(bus, slot, func, offset, 0xFFFFFFFF);
+        uint32_t mask = pci_read(bus, slot, func, offset);
+        pci_write(bus, slot, func, offset, orig);
+        
+        *size = ~(mask & ~0x3) + 1;
+    } else {
+        // Memory BAR
+        int type = (bar >> 1) & 0x3;
+        
+        if (type == 0x2) {
+            // 64-bit BAR - uses two consecutive BARs
+            uint32_t bar_hi = pci_read(bus, slot, func, offset + 4);
+            *base = ((uint64_t)bar_hi << 32) | (bar & ~0xF);
+            
+            // Get size (must probe both BARs)
+            uint32_t orig_lo = bar, orig_hi = bar_hi;
+            pci_write(bus, slot, func, offset, 0xFFFFFFFF);
+            pci_write(bus, slot, func, offset + 4, 0xFFFFFFFF);
+            uint32_t mask_lo = pci_read(bus, slot, func, offset);
+            uint32_t mask_hi = pci_read(bus, slot, func, offset + 4);
+            pci_write(bus, slot, func, offset, orig_lo);
+            pci_write(bus, slot, func, offset + 4, orig_hi);
+            
+            uint64_t mask = ((uint64_t)mask_hi << 32) | (mask_lo & ~0xF);
+            *size = ~mask + 1;
+        } else {
+            // 32-bit BAR
+            *base = bar & ~0xF;
+            
+            uint32_t orig = bar;
+            pci_write(bus, slot, func, offset, 0xFFFFFFFF);
+            uint32_t mask = pci_read(bus, slot, func, offset);
+            pci_write(bus, slot, func, offset, orig);
+            
+            *size = ~(mask & ~0xF) + 1;
+        }
+    }
+}
+
+/* Enable device memory/IO and bus mastering */
+void pci_enable_device(uint8_t bus, uint8_t slot, uint8_t func) {
+    uint32_t cmd = pci_read(bus, slot, func, 0x04);
+    cmd |= (1 << 0);  // I/O Space
+    cmd |= (1 << 1);  // Memory Space
+    cmd |= (1 << 2);  // Bus Master (DMA)
+    pci_write(bus, slot, func, 0x04, cmd);
+}
+</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Important:</strong> Modern systems use <strong>PCIe ECAM</strong> (Enhanced Configuration Access Mechanism) instead of I/O ports. ECAM memory-maps the entire configuration space, found via ACPI's MCFG table.
+                    </div>
+                </div>
+
+                <!-- Driver Framework Section -->
+                <div id="drivers" class="blog-content mt-5">
+                    <h2><i class="fas fa-code me-2 text-teal"></i>Driver Framework</h2>
+                    
+                    <p>A <strong>driver framework</strong> is the glue between discovered hardware and the rest of the OS. It defines how drivers register themselves, how they're matched to devices, and how they export functionality.</p>
+
+                    <!-- Driver Framework Diagram -->
+                    <pre style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 8px; padding: 20px; margin: 24px 0; font-family: 'Courier New', monospace; font-size: 14px; color: #a0a0a0; overflow-x: auto; border: 1px solid #3b9797;">
+<span style="color: #3b9797;">╔═════════════════════════════════════════════════════════════════════════════╗</span>
+<span style="color: #3b9797;">║</span><span style="color: #e94560;">                        DRIVER MATCHING FLOW                                 </span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╠═════════════════════════════════════════════════════════════════════════════╣</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">┌─────────────┐           ┌─────────────┐           ┌─────────────┐</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> <span style="color: #50fa7b;">PCI Scan</span>    <span style="color: #f8f8f2;">│</span>           <span style="color: #f8f8f2;">│</span> <span style="color: #ff79c6;">Driver Reg</span>  <span style="color: #f8f8f2;">│</span>           <span style="color: #f8f8f2;">│</span> <span style="color: #8be9fd;">Matching</span>    <span style="color: #f8f8f2;">│</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│ Finds       │</span>           <span style="color: #f8f8f2;">│</span> Drivers     <span style="color: #f8f8f2;">│</span>           <span style="color: #f8f8f2;">│</span> For each    <span style="color: #f8f8f2;">│</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│ devices     ├──────────►│</span> declare     <span style="color: #f8f8f2;">├──────────►│</span> device:     <span style="color: #f8f8f2;">│</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│             │</span>           <span style="color: #f8f8f2;">│</span> supported   <span style="color: #f8f8f2;">│</span>           <span style="color: #f8f8f2;">│</span> call probe  <span style="color: #f8f8f2;">│</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│ ┌─────────┐ │</span>           <span style="color: #f8f8f2;">│</span> devices     <span style="color: #f8f8f2;">│</span>           <span style="color: #f8f8f2;">│</span>             <span style="color: #f8f8f2;">│</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│ │</span><span style="color: #f1fa8c;">NVMe SSD</span><span style="color: #f8f8f2;">│ │</span>           <span style="color: #f8f8f2;">│ ┌─────────┐ │</span>           <span style="color: #f8f8f2;">│</span>             <span style="color: #f8f8f2;">│</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│ │</span><span style="color: #f1fa8c;">01:08:02</span><span style="color: #f8f8f2;">│─┼───────────┼─│</span><span style="color: #50fa7b;">nvme_drv</span><span style="color: #f8f8f2;">│─┼───────────┤</span> <span style="color: #6272a4;">Returns 1</span>   <span style="color: #f8f8f2;">│</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│ └─────────┘ │</span>           <span style="color: #f8f8f2;">│ └─────────┘ │</span>           <span style="color: #f8f8f2;">│</span>      │      <span style="color: #f8f8f2;">│</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│ ┌─────────┐ │</span>           <span style="color: #f8f8f2;">│ ┌─────────┐ │</span>           <span style="color: #f8f8f2;">│</span>      ▼      <span style="color: #f8f8f2;">│</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│ │</span><span style="color: #8be9fd;">AHCI Ctl</span><span style="color: #f8f8f2;">│ │</span>           <span style="color: #f8f8f2;">│ │</span><span style="color: #ff79c6;">ahci_drv</span><span style="color: #f8f8f2;">│ │</span>           <span style="color: #f8f8f2;">│</span>  <span style="color: #50fa7b;">attach()</span>  <span style="color: #f8f8f2;">│</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│ │</span><span style="color: #8be9fd;">00:1f:02</span><span style="color: #f8f8f2;">│ │</span>           <span style="color: #f8f8f2;">│ └─────────┘ │</span>           <span style="color: #f8f8f2;">│</span>             <span style="color: #f8f8f2;">│</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│ └─────────┘ │</span>           <span style="color: #f8f8f2;">│             │</span>           <span style="color: #f8f8f2;">│</span>             <span style="color: #f8f8f2;">│</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">└─────────────┘</span>           <span style="color: #f8f8f2;">└─────────────┘</span>           <span style="color: #f8f8f2;">└─────────────┘</span>       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╚═════════════════════════════════════════════════════════════════════════════╝</span></pre>
+                    
+                    <h3 id="driver-interface">Driver Interface</h3>
+                    
+                    <p>Define a common interface that all drivers implement:</p>
+
+                    <pre><code class="language-c">/* PCI Device ID for matching */
+typedef struct pci_device_id {
+    uint16_t vendor;
+    uint16_t device;
+    uint8_t  class_code;
+    uint8_t  subclass;
+    uint8_t  prog_if;
+    uint32_t driver_data;  // Private data for driver
+} pci_device_id_t;
+
+/* Match any value */
+#define PCI_ANY 0xFFFF
+
+/* Driver Interface */
+typedef struct driver {
+    const char* name;
+    const pci_device_id_t* id_table;    // Supported devices
+    int (*probe)(pci_device_t* dev);     // Check if driver supports device
+    int (*attach)(pci_device_t* dev);    // Initialize device
+    int (*detach)(pci_device_t* dev);    // Cleanup
+    struct driver* next;
+} driver_t;
+
+driver_t* drivers = NULL;
+
+/* Register a driver */
+void driver_register(driver_t* drv) {
+    drv->next = drivers;
+    drivers = drv;
+    kprintf("Driver registered: %s\n", drv->name);
+}
+
+/* Check if driver matches device using ID table */
+static bool driver_match_id(driver_t* drv, pci_device_t* dev) {
+    for (const pci_device_id_t* id = drv->id_table; id->vendor; id++) {
+        if ((id->vendor == PCI_ANY || id->vendor == dev->vendor_id) &&
+            (id->device == PCI_ANY || id->device == dev->device_id) &&
+            (id->class_code == 0xFF || id->class_code == dev->class_code) &&
+            (id->subclass == 0xFF || id->subclass == dev->subclass)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Match drivers to devices */
+void driver_match_all(void) {
+    for (pci_device_t* dev = pci_devices; dev; dev = dev->next) {
+        for (driver_t* drv = drivers; drv; drv = drv->next) {
+            // First check ID table, then call probe
+            if (driver_match_id(drv, dev) && drv->probe(dev)) {
+                if (drv->attach(dev) == 0) {
+                    kprintf("Driver '%s' attached to %02x:%02x.%x\n",
+                            drv->name, dev->bus, dev->slot, dev->func);
+                    break;  // Device claimed
+                }
+            }
+        }
+    }
+}
+</code></pre>
+
+                    <p>Here's how a driver declares its supported devices:</p>
+
+                    <pre><code class="language-c">/* NVMe Driver Example */
+
+/* Devices this driver supports */
+static const pci_device_id_t nvme_ids[] = {
+    { .vendor = PCI_ANY, .device = PCI_ANY, 
+      .class_code = 0x01, .subclass = 0x08 },  // Any NVMe controller
+    { .vendor = 0x8086, .device = 0xF1A5 },    // Intel Optane
+    { .vendor = 0x144D, .device = 0xA808 },    // Samsung PM981
+    {}  // Terminator
+};
+
+int nvme_probe(pci_device_t* dev) {
+    // Additional checks if needed
+    return dev->class_code == 0x01 && dev->subclass == 0x08;
+}
+
+int nvme_attach(pci_device_t* dev) {
+    // Initialize NVMe controller
+    kprintf("NVMe: Initializing %04x:%04x\n", dev->vendor_id, dev->device_id);
+    
+    // Enable bus mastering
+    pci_enable_device(dev->bus, dev->slot, dev->func);
+    
+    // Map BAR0 (controller registers)
+    uint64_t bar_base, bar_size;
+    bool is_io;
+    pci_decode_bar(dev->bus, dev->slot, dev->func, 0, 
+                   &bar_base, &bar_size, &is_io);
+    
+    // Initialize controller...
+    return 0;
+}
+
+int nvme_detach(pci_device_t* dev) {
+    // Cleanup
+    return 0;
+}
+
+static driver_t nvme_driver = {
+    .name = "nvme",
+    .id_table = nvme_ids,
+    .probe = nvme_probe,
+    .attach = nvme_attach,
+    .detach = nvme_detach
+};
+
+/* Called during OS init */
+void nvme_driver_init(void) {
+    driver_register(&nvme_driver);
+}
+</code></pre>
+                    
+                    <h3 id="device-tree">Device Tree</h3>
+                    
+                    <p>A <strong>device tree</strong> tracks the hierarchy of all discovered devices. This is useful for power management, display in <code>lspci</code>-like tools, and hot-plug handling:</p>
+
+                    <!-- Device Tree Diagram -->
+                    <pre style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 8px; padding: 20px; margin: 24px 0; font-family: 'Courier New', monospace; font-size: 14px; color: #a0a0a0; overflow-x: auto; border: 1px solid #3b9797;">
+<span style="color: #3b9797;">╔═════════════════════════════════════════════════════════════════════════════╗</span>
+<span style="color: #3b9797;">║</span><span style="color: #e94560;">                         DEVICE TREE STRUCTURE                               </span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╠═════════════════════════════════════════════════════════════════════════════╣</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #50fa7b;">root</span>                                                                      <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>   <span style="color: #f8f8f2;">├── pci0000:00</span> <span style="color: #6272a4;">(Root Complex)</span>                                            <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>   <span style="color: #f8f8f2;">│   ├── 00:00.0</span> <span style="color: #6272a4;">Host Bridge [8086:9A14]</span>                                  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>   <span style="color: #f8f8f2;">│   ├── 00:02.0</span> <span style="color: #ff79c6;">VGA Controller [8086:9A49]</span> <span style="color: #6272a4;">← Intel UHD</span>                  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>   <span style="color: #f8f8f2;">│   ├── 00:14.0</span> <span style="color: #8be9fd;">USB Controller [8086:A0ED]</span> <span style="color: #6272a4;">← xHCI</span>                       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>   <span style="color: #f8f8f2;">│   ├── 00:17.0</span> <span style="color: #f1fa8c;">SATA Controller [8086:A0D3]</span> <span style="color: #6272a4;">← AHCI</span>                      <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>   <span style="color: #f8f8f2;">│   ├── 00:1c.0</span> <span style="color: #6272a4;">PCI Bridge</span>                                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>   <span style="color: #f8f8f2;">│   │   └── 01:00.0</span> <span style="color: #bd93f9;">NVMe SSD [144D:A808]</span> <span style="color: #6272a4;">← Samsung</span>                     <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>   <span style="color: #f8f8f2;">│   └── 00:1f.0</span> <span style="color: #6272a4;">ISA Bridge</span>                                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>   <span style="color: #f8f8f2;">└── acpi</span>                                                                  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>       <span style="color: #f8f8f2;">├── HPET</span>                                                              <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>       <span style="color: #f8f8f2;">└── APIC</span>                                                              <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╚═════════════════════════════════════════════════════════════════════════════╝</span></pre>
+
+                    <pre><code class="language-c">/* Generic device node */
+typedef struct device {
+    char name[32];
+    struct device* parent;
+    struct device* children;
+    struct device* sibling;
+    driver_t* driver;
+    void* driver_data;          // Driver-specific state
+    
+    enum { DEV_PCI, DEV_USB, DEV_ACPI } bus_type;
+    union {
+        pci_device_t* pci;
+        // usb_device_t* usb;
+    } bus_data;
+} device_t;
+
+device_t* device_root = NULL;
+
+/* Add device to tree */
+void device_add(device_t* dev, device_t* parent) {
+    dev->parent = parent;
+    dev->sibling = parent->children;
+    parent->children = dev;
+}
+
+/* Print device tree (recursive) */
+void device_tree_print(device_t* dev, int depth) {
+    for (int i = 0; i < depth; i++) kprintf("  ");
+    kprintf("├── %s", dev->name);
+    if (dev->driver) kprintf(" [%s]", dev->driver->name);
+    kprintf("\n");
+    
+    for (device_t* child = dev->children; child; child = child->sibling) {
+        device_tree_print(child, depth + 1);
+    }
+}
+
+/* Find device by path (e.g., "pci0000:00/00:1c.0/01:00.0") */
+device_t* device_find(const char* path) {
+    // Parse path and walk tree
+    device_t* current = device_root;
+    // ... implementation
+    return current;
+}
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Real-World Pattern:</strong> Linux's <code>/sys/devices/</code> exposes the device tree to userspace. Your shell can implement <code>lspci</code> and <code>lsusb</code> by walking this tree!
+                    </div>
+                </div>
+
+                <!-- AHCI Section -->
+                <div id="ahci" class="blog-content mt-5">
+                    <h2><i class="fas fa-hard-drive me-2 text-teal"></i>AHCI Storage</h2>
+                    
+                    <p><strong>AHCI (Advanced Host Controller Interface)</strong> is the standard interface for SATA devices—hard drives and older SSDs. It's more complex than legacy IDE but supports NCQ (Native Command Queuing) for better performance.</p>
+
+                    <!-- AHCI Architecture Diagram -->
+                    <pre style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 8px; padding: 20px; margin: 24px 0; font-family: 'Courier New', monospace; font-size: 14px; color: #a0a0a0; overflow-x: auto; border: 1px solid #3b9797;">
+<span style="color: #3b9797;">╔═════════════════════════════════════════════════════════════════════════════╗</span>
+<span style="color: #3b9797;">║</span><span style="color: #e94560;">                         AHCI ARCHITECTURE                                   </span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╠═════════════════════════════════════════════════════════════════════════════╣</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">┌─────────────────────────────────────────────────────────────────────┐</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>                     <span style="color: #50fa7b;">AHCI Controller (HBA)</span>                            <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  <span style="color: #bd93f9;">┌─────────────────────────────────────────────────────────────┐</span>   <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  <span style="color: #bd93f9;">│</span>                    <span style="color: #6272a4;">Generic Host Control</span>                     <span style="color: #bd93f9;">│</span>   <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  <span style="color: #bd93f9;">│</span>  CAP | GHC | PI | IS | Version                              <span style="color: #bd93f9;">│</span>   <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  <span style="color: #bd93f9;">└─────────────────────────────────────────────────────────────┘</span>   <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>                                                                     <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  <span style="color: #ff79c6;">┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐</span>              <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  <span style="color: #ff79c6;">│  Port 0  │ │  Port 1  │ │  Port 2  │ │  Port 3  │</span>  <span style="color: #6272a4;">... up to 32</span>  <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  <span style="color: #ff79c6;">│</span>  PxCLB   <span style="color: #ff79c6;">│ │</span>  PxCLB   <span style="color: #ff79c6;">│ │</span>  PxCLB   <span style="color: #ff79c6;">│ │</span>  PxCLB   <span style="color: #ff79c6;">│</span>              <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  <span style="color: #ff79c6;">│</span>  PxFB    <span style="color: #ff79c6;">│ │</span>  PxFB    <span style="color: #ff79c6;">│ │</span>  PxFB    <span style="color: #ff79c6;">│ │</span>  PxFB    <span style="color: #ff79c6;">│</span>              <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  <span style="color: #ff79c6;">│</span>  PxIS    <span style="color: #ff79c6;">│ │</span>  PxIS    <span style="color: #ff79c6;">│ │</span>  PxIS    <span style="color: #ff79c6;">│ │</span>  PxIS    <span style="color: #ff79c6;">│</span>              <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  <span style="color: #ff79c6;">│</span>  PxCMD   <span style="color: #ff79c6;">│ │</span>  PxCMD   <span style="color: #ff79c6;">│ │</span>  PxCMD   <span style="color: #ff79c6;">│ │</span>  PxCMD   <span style="color: #ff79c6;">│</span>              <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  <span style="color: #ff79c6;">└────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘</span>              <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>        │           │           │           │                      <span style="color: #f8f8f2;">│</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">└────────┼───────────┼───────────┼───────────┼──────────────────────┘</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>           │           │           │           │                          <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>    <span style="color: #f8f8f2;">┌──────┴──────┐ ┌───────┴─────┐</span>  │     <span style="color: #6272a4;">(no device)</span>                   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>    <span style="color: #f8f8f2;">│</span>   <span style="color: #50fa7b;">SATA HD</span>   <span style="color: #f8f8f2;">│ │</span>  <span style="color: #8be9fd;">SATA SSD</span>  <span style="color: #f8f8f2;">│</span>  │                                  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>    <span style="color: #f8f8f2;">│</span>   1TB HDD   <span style="color: #f8f8f2;">│ │</span>  256GB SSD <span style="color: #f8f8f2;">│</span>  │                                  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>    <span style="color: #f8f8f2;">└─────────────┘ └─────────────┘</span>  │                                  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╚═════════════════════════════════════════════════════════════════════════════╝</span></pre>
+                    
+                    <h3 id="ahci-init">Initialization</h3>
+                    
+                    <p>AHCI initialization follows a specific sequence:</p>
+
+                    <pre><code class="language-c">/* AHCI Memory-Mapped Registers */
+typedef volatile struct {
+    // Generic Host Control (offset 0x00)
+    uint32_t cap;       // Host capabilities
+    uint32_t ghc;       // Global host control
+    uint32_t is;        // Interrupt status
+    uint32_t pi;        // Ports implemented
+    uint32_t vs;        // Version
+    uint32_t ccc_ctl;   // Command completion coalescing control
+    uint32_t ccc_ports; // CCC ports
+    uint32_t em_loc;    // Enclosure management location
+    uint32_t em_ctl;    // Enclosure management control
+    uint32_t cap2;      // Extended capabilities
+    uint32_t bohc;      // BIOS/OS handoff control
+    uint8_t  rsv[0xA0 - 0x2C];
+    uint8_t  vendor[0x100 - 0xA0];
+    // Port registers at offset 0x100+
+} ahci_hba_t;
+
+/* Per-Port Registers (one set per port) */
+typedef volatile struct {
+    uint32_t clb;       // Command list base (low)
+    uint32_t clbu;      // Command list base (high)
+    uint32_t fb;        // FIS base (low)
+    uint32_t fbu;       // FIS base (high)
+    uint32_t is;        // Interrupt status
+    uint32_t ie;        // Interrupt enable
+    uint32_t cmd;       // Command and status
+    uint32_t rsv0;
+    uint32_t tfd;       // Task file data
+    uint32_t sig;       // Signature
+    uint32_t ssts;      // SATA status
+    uint32_t sctl;      // SATA control
+    uint32_t serr;      // SATA error
+    uint32_t sact;      // SATA active
+    uint32_t ci;        // Command issue
+    uint32_t sntf;      // SATA notification
+    uint32_t fbs;       // FIS-based switching
+    uint32_t rsv1[11];
+    uint32_t vendor[4];
+} ahci_port_t;
+
+/* Get port registers */
+#define AHCI_PORT(hba, n) ((ahci_port_t*)((uint8_t*)(hba) + 0x100 + (n) * 0x80))
+
+/* Initialize AHCI controller */
+int ahci_init(pci_device_t* pci_dev) {
+    // Map BAR5 (ABAR - AHCI BAR)
+    uint64_t abar_base, abar_size;
+    bool is_io;
+    pci_decode_bar(pci_dev->bus, pci_dev->slot, pci_dev->func, 
+                   5, &abar_base, &abar_size, &is_io);
+    
+    ahci_hba_t* hba = (ahci_hba_t*)vmap(abar_base, abar_size);
+    
+    // Enable AHCI mode and interrupts
+    hba->ghc |= (1 << 31);  // AE (AHCI Enable)
+    hba->ghc |= (1 << 1);   // IE (Interrupt Enable)
+    
+    // Scan ports
+    uint32_t pi = hba->pi;
+    for (int i = 0; i < 32; i++) {
+        if (!(pi & (1 << i))) continue;  // Port not implemented
+        
+        ahci_port_t* port = AHCI_PORT(hba, i);
+        
+        // Check if device connected
+        uint32_t ssts = port->ssts;
+        uint8_t det = ssts & 0x0F;       // Device detection
+        uint8_t ipm = (ssts >> 8) & 0x0F; // Interface power management
+        
+        if (det != 3 || ipm != 1) continue;  // No device or not active
+        
+        // Check signature
+        uint32_t sig = port->sig;
+        if (sig == 0x00000101) {
+            kprintf("AHCI port %d: SATA HDD/SSD\n", i);
+            ahci_port_init(hba, i);
+        } else if (sig == 0xEB140101) {
+            kprintf("AHCI port %d: ATAPI device\n", i);
+        }
+    }
+    
+    return 0;
+}
+</code></pre>
+                    
+                    <h3 id="ahci-commands">Command Structure</h3>
+                    
+                    <p>AHCI uses a <strong>Command List</strong> and <strong>Received FIS</strong> structure per port. Each command slot points to a Command Table with the actual command and data:</p>
+
+                    <!-- Command Structure Diagram -->
+                    <pre style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 8px; padding: 20px; margin: 24px 0; font-family: 'Courier New', monospace; font-size: 14px; color: #a0a0a0; overflow-x: auto; border: 1px solid #3b9797;">
+<span style="color: #3b9797;">╔═════════════════════════════════════════════════════════════════════════════╗</span>
+<span style="color: #3b9797;">║</span><span style="color: #e94560;">                      AHCI COMMAND STRUCTURES                                </span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╠═════════════════════════════════════════════════════════════════════════════╣</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #50fa7b;">Port Registers</span>              <span style="color: #ff79c6;">Command List (1KB)</span>          <span style="color: #8be9fd;">Command Table</span>   <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">┌────────────┐</span>               <span style="color: #f8f8f2;">┌─────────────────┐</span>        <span style="color: #f8f8f2;">┌──────────────┐</span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>   PxCLB    <span style="color: #f8f8f2;">├───────────────►│</span>  <span style="color: #f1fa8c;">Slot 0</span> (32B)  <span style="color: #f8f8f2;">├───────►│</span> CFIS (64B)   <span style="color: #f8f8f2;">│</span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> Cmd List   <span style="color: #f8f8f2;">│</span>               <span style="color: #f8f8f2;">├─────────────────┤</span>        <span style="color: #f8f8f2;">├──────────────┤</span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> Base Addr  <span style="color: #f8f8f2;">│</span>               <span style="color: #f8f8f2;">│</span>  <span style="color: #f1fa8c;">Slot 1</span> (32B)  <span style="color: #f8f8f2;">│</span>        <span style="color: #f8f8f2;">│</span> ACMD (16B)   <span style="color: #f8f8f2;">│</span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">├────────────┤</span>               <span style="color: #f8f8f2;">├─────────────────┤</span>        <span style="color: #f8f8f2;">├──────────────┤</span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>    PxFB    <span style="color: #f8f8f2;">├───────┐</span>       <span style="color: #f8f8f2;">│</span>      ...       <span style="color: #f8f8f2;">│</span>        <span style="color: #f8f8f2;">│</span>  Reserved    <span style="color: #f8f8f2;">│</span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  FIS Base  <span style="color: #f8f8f2;">│</span>       │       <span style="color: #f8f8f2;">├─────────────────┤</span>        <span style="color: #f8f8f2;">├──────────────┤</span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  Address   <span style="color: #f8f8f2;">│</span>       │       <span style="color: #f8f8f2;">│</span>  <span style="color: #f1fa8c;">Slot 31</span>(32B) <span style="color: #f8f8f2;">│</span>        <span style="color: #f8f8f2;">│</span> PRDT Entry 0 <span style="color: #f8f8f2;">│</span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">├────────────┤</span>       │       <span style="color: #f8f8f2;">└─────────────────┘</span>        <span style="color: #f8f8f2;">├──────────────┤</span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>    PxCI    <span style="color: #f8f8f2;">│</span>       │                                  <span style="color: #f8f8f2;">│</span> PRDT Entry 1 <span style="color: #f8f8f2;">│</span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span> Cmd Issue  <span style="color: #f8f8f2;">│</span>       │       <span style="color: #bd93f9;">Received FIS (256B)</span>      <span style="color: #f8f8f2;">├──────────────┤</span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">└────────────┘</span>       │       <span style="color: #f8f8f2;">┌─────────────────┐</span>        <span style="color: #f8f8f2;">│</span>     ...      <span style="color: #f8f8f2;">│</span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                        │       <span style="color: #f8f8f2;">│</span>  DMA Setup FIS  <span style="color: #f8f8f2;">│</span>        <span style="color: #f8f8f2;">├──────────────┤</span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                        <span style="color: #f8f8f2;">└──────►│</span>  PIO Setup FIS  <span style="color: #f8f8f2;">│</span>        <span style="color: #f8f8f2;">│</span> PRDT Entry N <span style="color: #f8f8f2;">│</span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                <span style="color: #f8f8f2;">│</span>  D2H Reg FIS    <span style="color: #f8f8f2;">│</span>        <span style="color: #f8f8f2;">└──────────────┘</span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                <span style="color: #f8f8f2;">└─────────────────┘</span>                          <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╚═════════════════════════════════════════════════════════════════════════════╝</span></pre>
+
+                    <pre><code class="language-c">/* Command Header (32 bytes per slot, 32 slots) */
+typedef struct {
+    uint16_t flags;     // CFL (command FIS length), ATAPI, Write, Prefetch
+    uint16_t prdtl;     // PRDT length (entries)
+    uint32_t prdbc;     // PRD byte count (transferred)
+    uint32_t ctba;      // Command table base (low)
+    uint32_t ctbau;     // Command table base (high)
+    uint32_t rsv[4];
+} __attribute__((packed)) ahci_cmd_header_t;
+
+/* Physical Region Descriptor Table Entry (16 bytes) */
+typedef struct {
+    uint32_t dba;       // Data base address (low)
+    uint32_t dbau;      // Data base address (high)
+    uint32_t rsv;
+    uint32_t dbc;       // Byte count (bit 31 = interrupt on completion)
+} __attribute__((packed)) ahci_prdt_entry_t;
+
+/* Command Table (variable size: 128 bytes + N * 16 bytes for PRDTs) */
+typedef struct {
+    uint8_t cfis[64];   // Command FIS (Host to Device Register FIS)
+    uint8_t acmd[16];   // ATAPI command (if ATAPI bit set)
+    uint8_t rsv[48];
+    ahci_prdt_entry_t prdt[1];  // Flexible array
+} __attribute__((packed)) ahci_cmd_table_t;
+
+/* Read sectors using AHCI */
+int ahci_read(ahci_hba_t* hba, int port, uint64_t lba, 
+              uint16_t count, void* buffer) {
+    ahci_port_t* p = AHCI_PORT(hba, port);
+    
+    // Wait for port ready
+    while (p->tfd & 0x88);  // BSY or DRQ set
+    
+    // Find free command slot
+    int slot = ahci_find_slot(hba, port);
+    if (slot == -1) return -1;
+    
+    // Get command header
+    ahci_cmd_header_t* hdr = &cmd_list[port][slot];
+    hdr->flags = 5;         // FIS length = 5 DWORDs (20 bytes)
+    hdr->flags &= ~0x40;    // Clear Write bit (this is a read)
+    hdr->prdtl = 1;         // 1 PRDT entry
+    
+    // Set up command table
+    ahci_cmd_table_t* tbl = cmd_tables[port][slot];
+    memset(tbl, 0, sizeof(ahci_cmd_table_t));
+    
+    // Build H2D Register FIS
+    tbl->cfis[0] = 0x27;    // FIS type: H2D
+    tbl->cfis[1] = 0x80;    // Command (not control)
+    tbl->cfis[2] = 0x25;    // ATA_CMD_READ_DMA_EXT
+    
+    // LBA (48-bit)
+    tbl->cfis[4] = (lba >> 0) & 0xFF;   // LBA low
+    tbl->cfis[5] = (lba >> 8) & 0xFF;   // LBA mid
+    tbl->cfis[6] = (lba >> 16) & 0xFF;  // LBA high
+    tbl->cfis[7] = 0x40;                // Device: LBA mode
+    tbl->cfis[8] = (lba >> 24) & 0xFF;  // LBA low exp
+    tbl->cfis[9] = (lba >> 32) & 0xFF;  // LBA mid exp
+    tbl->cfis[10] = (lba >> 40) & 0xFF; // LBA high exp
+    tbl->cfis[12] = count & 0xFF;       // Sector count low
+    tbl->cfis[13] = (count >> 8) & 0xFF; // Sector count high
+    
+    // Set up PRDT entry
+    tbl->prdt[0].dba = (uint32_t)(uintptr_t)buffer;
+    tbl->prdt[0].dbau = (uint32_t)((uintptr_t)buffer >> 32);
+    tbl->prdt[0].dbc = (count * 512) - 1;  // 0-based
+    tbl->prdt[0].dbc |= (1 << 31);         // Interrupt on completion
+    
+    // Issue command
+    p->ci = (1 << slot);
+    
+    // Wait for completion
+    while (p->ci & (1 << slot)) {
+        if (p->is & (1 << 30)) {  // Task file error
+            return -1;
+        }
+    }
+    
+    return 0;
+}
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>NCQ (Native Command Queuing):</strong> AHCI supports up to 32 outstanding commands per port. This enables the drive to reorder operations for optimal head movement (HDDs) or parallelism (SSDs).
+                    </div>
+                </div>
+
+                <!-- NVMe Section -->
+                <div id="nvme" class="blog-content mt-5">
+                    <h2><i class="fas fa-bolt me-2 text-teal"></i>NVMe Storage</h2>
+                    
+                    <p><strong>NVMe (Non-Volatile Memory Express)</strong> is the modern interface for SSDs, designed from scratch for flash storage over PCIe. Unlike AHCI (which was designed for spinning disks), NVMe uses multiple parallel queues to achieve incredible performance—millions of IOPS!</p>
+
+                    <!-- NVMe Architecture Diagram -->
+                    <pre style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 8px; padding: 20px; margin: 24px 0; font-family: 'Courier New', monospace; font-size: 14px; color: #a0a0a0; overflow-x: auto; border: 1px solid #3b9797;">
+<span style="color: #3b9797;">╔═════════════════════════════════════════════════════════════════════════════╗</span>
+<span style="color: #3b9797;">║</span><span style="color: #e94560;">                         NVMe ARCHITECTURE                                   </span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╠═════════════════════════════════════════════════════════════════════════════╣</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">┌──────────────────────────────────────────────────────────────────────┐</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>                          <span style="color: #50fa7b;">CPU / Driver</span>                               <span style="color: #f8f8f2;">│</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>                                                                      <span style="color: #f8f8f2;">│</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>    <span style="color: #ff79c6;">Admin Queue</span>                    <span style="color: #8be9fd;">I/O Queues (up to 65535)</span>          <span style="color: #f8f8f2;">│</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>   ┌────┬────┐              ┌────┬────┐ ┌────┬────┐ ┌────┬────┐    <span style="color: #f8f8f2;">│</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>   │<span style="color: #ff79c6;">ASQ</span> │<span style="color: #ff79c6;">ACQ</span> │              │<span style="color: #8be9fd;">SQ1</span> │<span style="color: #8be9fd;">CQ1</span> │ │<span style="color: #f1fa8c;">SQ2</span> │<span style="color: #f1fa8c;">CQ2</span> │ │<span style="color: #bd93f9;">SQ3</span> │<span style="color: #bd93f9;">CQ3</span> │    <span style="color: #f8f8f2;">│</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>   └──┬─┴──┬─┘              └──┬─┴──┬─┘ └──┬─┴──┬─┘ └──┬─┴──┬─┘    <span style="color: #f8f8f2;">│</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">└─────┼────┼──────────────────┼────┼──────┼────┼──────┼────┼───────┘</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>        │    ▲                  │    ▲      │    ▲      │    ▲          <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>        ▼    │                  ▼    │      ▼    │      ▼    │          <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">┌──────────────────────────────────────────────────────────────────────┐</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>                      <span style="color: #bd93f9;">NVMe Controller (PCIe)</span>                         <span style="color: #f8f8f2;">│</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                  <span style="color: #f8f8f2;">│</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  │ <span style="color: #ff79c6;">Doorbell 0</span>  │  │ <span style="color: #8be9fd;">Doorbell 1</span>  │  │ <span style="color: #f1fa8c;">Doorbell N</span>  │ <span style="color: #6272a4;">(ring to submit)</span> <span style="color: #f8f8f2;">│</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>  └─────────────┘  └─────────────┘  └─────────────┘                  <span style="color: #f8f8f2;">│</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>                          │                                          <span style="color: #f8f8f2;">│</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>                    ┌─────┴─────┐                                    <span style="color: #f8f8f2;">│</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>                    │ <span style="color: #50fa7b;">Flash Memory</span> │                                  <span style="color: #f8f8f2;">│</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>                    │   (NAND)   │                                    <span style="color: #f8f8f2;">│</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">│</span>                    └───────────┘                                    <span style="color: #f8f8f2;">│</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f8f8f2;">└──────────────────────────────────────────────────────────────────────┘</span>  <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #6272a4;">SQ = Submission Queue (driver writes commands)</span>                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #6272a4;">CQ = Completion Queue (controller writes results)</span>                          <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╚═════════════════════════════════════════════════════════════════════════════╝</span></pre>
+
+                    <h3 id="nvme-queues">Submission/Completion Queues</h3>
+                    
+                    <p>NVMe's key innovation is the <strong>queue-based command interface</strong>. Instead of one command at a time (like IDE), or 32 commands (like AHCI), NVMe supports up to <strong>65,535 I/O queue pairs</strong>, each with up to 65,536 entries!</p>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Why So Many Queues?</strong> Modern SSDs have massive internal parallelism (hundreds of flash chips). Multiple queues let the OS feed commands from different CPU cores simultaneously, fully saturating the SSD's bandwidth.
+                    </div>
+
+                    <p>Each queue pair consists of:</p>
+                    <ul>
+                        <li><strong>Submission Queue (SQ)</strong> - Driver writes 64-byte command entries</li>
+                        <li><strong>Completion Queue (CQ)</strong> - Controller writes 16-byte completion entries</li>
+                        <li><strong>Doorbell Register</strong> - Driver rings to notify controller of new commands</li>
+                    </ul>
+
+                    <pre><code class="language-c">/* NVMe Submission Queue Entry (64 bytes) */
+typedef struct {
+    uint8_t  opcode;
+    uint8_t  flags;
+    uint16_t cid;           // Command ID
+    uint32_t nsid;          // Namespace ID
+    uint64_t reserved;
+    uint64_t mptr;          // Metadata pointer
+    uint64_t prp1;          // Physical Region Page 1
+    uint64_t prp2;          // Physical Region Page 2
+    uint32_t cdw10;         // Command-specific
+    uint32_t cdw11;
+    uint32_t cdw12;
+    uint32_t cdw13;
+    uint32_t cdw14;
+    uint32_t cdw15;
+} __attribute__((packed)) nvme_sqe_t;
+
+/* NVMe Completion Queue Entry */
+typedef struct {
+    uint32_t result;        // Command-specific result
+    uint32_t reserved;
+    uint16_t sq_head;       // Submission queue head pointer
+    uint16_t sq_id;         // Submission queue ID
+    uint16_t cid;           // Command ID
+    uint16_t status;        // Status field
+} __attribute__((packed)) nvme_cqe_t;
+</code></pre>
+
+                    <p>The <strong>phase bit</strong> in the completion entry is clever: it flips between 0 and 1 each time the queue wraps. This lets the driver detect new completions without needing explicit notifications for each one.</p>
+                    
+                    <h3 id="nvme-commands">NVMe Commands</h3>
+                    
+                    <p>NVMe commands are classified into two types:</p>
+                    
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Type</th>
+                                <th>Queue</th>
+                                <th>Examples</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Admin</strong></td>
+                                <td>Admin SQ/CQ</td>
+                                <td>Create I/O Queue, Identify, Get Log Page, Set Features</td>
+                            </tr>
+                            <tr>
+                                <td><strong>I/O</strong></td>
+                                <td>I/O SQ/CQ pairs</td>
+                                <td>Read, Write, Flush, Dataset Management (TRIM)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p>Before issuing I/O commands, you must use Admin commands to identify the controller and create I/O queues:</p>
+
+                    <pre><code class="language-c">/* NVMe Controller Initialization */
+int nvme_init(pci_device_t* pci_dev) {
+    // Get BAR0 (NVMe registers)
+    uint64_t bar0, bar0_size;
+    bool is_io;
+    pci_decode_bar(pci_dev->bus, pci_dev->slot, pci_dev->func, 
+                   0, &bar0, &bar0_size, &is_io);
+    
+    nvme_regs_t* regs = (nvme_regs_t*)map_physical(bar0, bar0_size);
+    
+    // Disable controller
+    regs->cc &= ~1;  // Clear EN bit
+    while (regs->csts & 1);  // Wait for RDY=0
+    
+    // Configure Admin Queue (AQ)
+    regs->aqa = (ADMIN_QUEUE_SIZE - 1) | ((ADMIN_QUEUE_SIZE - 1) << 16);
+    regs->asq = virt_to_phys(admin_sq);  // Submission queue
+    regs->acq = virt_to_phys(admin_cq);  // Completion queue
+    
+    // Enable controller
+    regs->cc = (0 << 20) |   // I/O CQ entry size = 16 bytes (2^4)
+               (0 << 16) |   // I/O SQ entry size = 64 bytes (2^6)
+               (0 << 14) |   // Shutdown notification = none
+               (0 << 11) |   // Arbitration = round robin
+               (6 << 7)  |   // Memory page size = 4KB (2^12)
+               (0 << 4)  |   // NVM command set
+               1;            // Enable
+    while (!(regs->csts & 1));  // Wait for RDY=1
+    
+    // Issue Identify Controller command
+    nvme_identify(ctrl, 0, 1, &ctrl_info);
+    
+    // Create I/O Completion Queue (Admin cmd 0x05)
+    nvme_create_cq(ctrl, 1, IO_QUEUE_SIZE, io_cq);
+    
+    // Create I/O Submission Queue (Admin cmd 0x01)
+    nvme_create_sq(ctrl, 1, IO_QUEUE_SIZE, io_sq, 1);
+    
+    return 0;
+}
+</code></pre>
+
+                    <p>Now we can issue read/write commands:</p>
+
+                    <pre><code class="language-c">/* NVMe Read Command */
+int nvme_read(nvme_ctrl_t* ctrl, uint32_t nsid, 
+              uint64_t lba, uint32_t blocks, void* buffer) {
+    nvme_sqe_t cmd = {0};
+    
+    cmd.opcode = 0x02;  // Read
+    cmd.cid = alloc_command_id();
+    cmd.nsid = nsid;
+    cmd.prp1 = virt_to_phys(buffer);
+    cmd.cdw10 = lba & 0xFFFFFFFF;
+    cmd.cdw11 = lba >> 32;
+    cmd.cdw12 = blocks - 1;  // Zero-based count
+    
+    // Submit to I/O queue
+    submit_command(ctrl, &cmd);
+    
+    // Wait for completion
+    return wait_completion(ctrl, cmd.cid);
+}
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-bolt me-2"></i>
+                        <strong>NVMe vs AHCI Performance:</strong> While AHCI supports 32 commands with one queue, NVMe can handle 65K commands across 65K queues. This translates to 500K+ IOPS vs AHCI's ~100K IOPS on the same SSD!
+                    </div>
+                </div>
+
+                <!-- What You Can Build Section -->
+                <div id="build" class="blog-content mt-5">
+                    <h2><i class="fas fa-hammer me-2 text-teal"></i>What You Can Build</h2>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Phase 15 Project:</strong> A hardware-aware OS! Your system now discovers PCI devices automatically, has a pluggable driver framework, and can access modern NVMe SSDs at full speed.
+                    </div>
+                    
+                    <p>Let's combine everything into a complete storage subsystem demo:</p>
+
+                    <pre><code class="language-c">/* storage_demo.c - Complete Storage Subsystem */
+#include "pci.h"
+#include "ahci.h"
+#include "nvme.h"
+#include "block.h"
+
+/* Generic Block Device Interface */
+typedef struct block_device {
+    char name[32];
+    uint64_t total_sectors;
+    uint32_t sector_size;
+    
+    int (*read)(struct block_device* dev, uint64_t lba, 
+                uint32_t count, void* buffer);
+    int (*write)(struct block_device* dev, uint64_t lba,
+                 uint32_t count, const void* buffer);
+    void* private;  // Driver-specific data
+} block_device_t;
+
+static block_device_t devices[MAX_BLOCK_DEVICES];
+static int num_devices = 0;
+
+/* Register a block device */
+void block_register(block_device_t* dev) {
+    if (num_devices < MAX_BLOCK_DEVICES) {
+        devices[num_devices++] = *dev;
+        kprintf("Block: Registered %s (%llu MB)\n", 
+                dev->name, 
+                (dev->total_sectors * dev->sector_size) / (1024*1024));
+    }
+}
+
+/* Storage subsystem initialization */
+void storage_init(void) {
+    kprintf("Storage: Scanning for devices...\n");
+    
+    // Scan PCI bus for storage controllers
+    pci_device_t* dev;
+    while ((dev = pci_next_device()) != NULL) {
+        // Check class code
+        if (dev->class_code != 0x01) continue;  // Mass Storage
+        
+        switch (dev->subclass) {
+            case 0x06:  // AHCI (SATA)
+                if (dev->prog_if == 0x01) {
+                    kprintf("Storage: Found AHCI controller at %02x:%02x.%x\n",
+                            dev->bus, dev->slot, dev->func);
+                    ahci_init(dev);
+                }
+                break;
+                
+            case 0x08:  // NVMe
+                if (dev->prog_if == 0x02) {
+                    kprintf("Storage: Found NVMe controller at %02x:%02x.%x\n",
+                            dev->bus, dev->slot, dev->func);
+                    nvme_init(dev);
+                }
+                break;
+                
+            case 0x01:  // IDE (legacy)
+                kprintf("Storage: Found IDE controller (legacy)\n");
+                // ide_init(dev);
+                break;
+        }
+    }
+    
+    kprintf("Storage: Found %d block device(s)\n", num_devices);
+}
+
+/* Read from any block device */
+int block_read(int device_id, uint64_t lba, uint32_t count, void* buffer) {
+    if (device_id >= num_devices) return -1;
+    return devices[device_id].read(&devices[device_id], lba, count, buffer);
+}
+
+/* Demo: Read first sector of each device */
+void storage_demo(void) {
+    uint8_t sector[512];
+    
+    for (int i = 0; i < num_devices; i++) {
+        kprintf("\nReading sector 0 from %s:\n", devices[i].name);
+        
+        if (block_read(i, 0, 1, sector) == 0) {
+            // Check for MBR signature
+            if (sector[510] == 0x55 && sector[511] == 0xAA) {
+                kprintf("  Found MBR partition table\n");
+                
+                // Parse partition entries
+                for (int p = 0; p < 4; p++) {
+                    uint8_t* entry = &sector[446 + p * 16];
+                    uint8_t type = entry[4];
+                    if (type != 0) {
+                        uint32_t start = *(uint32_t*)&entry[8];
+                        uint32_t size = *(uint32_t*)&entry[12];
+                        kprintf("  Partition %d: type=0x%02x, start=%u, size=%u\n",
+                                p, type, start, size);
+                    }
+                }
+            } else if (memcmp(&sector[512-2], "EFI PART", 8) == 0) {
+                kprintf("  Found GPT partition table\n");
+            } else {
+                kprintf("  Unknown partition format\n");
+            }
+        } else {
+            kprintf("  Read failed!\n");
+        }
+    }
+}
+</code></pre>
+
+                    <h3>Exercises</h3>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-code me-2 text-crimson"></i>Exercise 1: Implement lspci</h4>
+                        <p class="text-muted">Create a command that lists all PCI devices with details:</p>
+                        <pre><code class="language-c">void cmd_lspci(void) {
+    // TODO: Enumerate all PCI devices
+    // Print: Bus:Slot.Func VendorID:DeviceID Class Description
+    // Example: 00:1f.2 8086:a102 0106 Intel AHCI Controller
+    // Hint: Create a table of known vendor/device IDs
+}</code></pre>
+                        <span class="bias-tag">PCI</span>
+                        <span class="bias-tag">Enumeration</span>
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-code me-2 text-crimson"></i>Exercise 2: Block Device Cache</h4>
+                        <p class="text-muted">Add a simple block cache to reduce disk reads:</p>
+                        <pre><code class="language-c">typedef struct cache_entry {
+    uint64_t lba;
+    uint8_t  data[512];
+    bool     dirty;
+    uint32_t access_count;
+} cache_entry_t;
+
+// TODO: Implement LRU cache with:
+// - cache_read(device, lba) - check cache first
+// - cache_write(device, lba, data) - write-back caching
+// - cache_flush() - write all dirty entries</code></pre>
+                        <span class="bias-tag">Caching</span>
+                        <span class="bias-tag">Performance</span>
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-code me-2 text-crimson"></i>Exercise 3: Hot-Plug Detection</h4>
+                        <p class="text-muted">Handle AHCI hot-plug events:</p>
+                        <pre><code class="language-c">void ahci_interrupt_handler(int irq) {
+    uint32_t is = hba->is;  // Global interrupt status
+    
+    for (int port = 0; port < 32; port++) {
+        if (!(is & (1 << port))) continue;
+        
+        ahci_port_t* p = get_port(port);
+        uint32_t pis = p->is;  // Port interrupt status
+        
+        // TODO: Handle these events:
+        // - Device connected (PRCS bit)
+        // - Device disconnected  
+        // - Command completion
+        // - Error conditions
+        
+        p->is = pis;  // Clear handled interrupts
+    }
+    
+    hba->is = is;  // Clear global status
+}</code></pre>
+                        <span class="bias-tag">Hot-Plug</span>
+                        <span class="bias-tag">Interrupts</span>
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-code me-2 text-crimson"></i>Exercise 4: NVMe Multiple Queues</h4>
+                        <p class="text-muted">Create per-CPU I/O queues for maximum parallelism:</p>
+                        <pre><code class="language-c">typedef struct nvme_queue_pair {
+    nvme_sqe_t* sq;       // Submission queue
+    nvme_cqe_t* cq;       // Completion queue
+    uint16_t    sq_tail;  // Next slot to write
+    uint16_t    cq_head;  // Next slot to read
+    uint8_t     cq_phase; // Expected phase bit
+    spinlock_t  lock;
+} nvme_queue_pair_t;
+
+// TODO: Create one queue pair per CPU
+// - nvme_init_percpu_queues()
+// - Use current CPU's queue for submissions
+// - No locking needed if each CPU uses its own queue!</code></pre>
+                        <span class="bias-tag">SMP</span>
+                        <span class="bias-tag">NVMe</span>
+                    </div>
+
+                    <!-- Phase Transition Diagram -->
+                    <pre style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 8px; padding: 20px; margin: 24px 0; font-family: 'Courier New', monospace; font-size: 14px; color: #a0a0a0; overflow-x: auto; border: 1px solid #3b9797;">
+<span style="color: #3b9797;">╔═════════════════════════════════════════════════════════════════════════════╗</span>
+<span style="color: #3b9797;">║</span><span style="color: #e94560;">                      PHASE 15 → PHASE 16 TRANSITION                         </span><span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╠═════════════════════════════════════════════════════════════════════════════╣</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #50fa7b;">✓ Phase 15 Complete:</span>                                                      <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>    • PCI bus enumeration and device discovery                               <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>    • Pluggable driver framework with ID matching                            <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>    • AHCI driver for SATA devices                                           <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>    • NVMe driver for modern SSDs                                            <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>    • Generic block device abstraction                                       <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>  <span style="color: #f1fa8c;">→ Phase 16 Preview: Performance & Optimization</span>                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>    • Scheduler tuning (time slice, priority algorithms)                     <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>    • Block cache and buffer management                                      <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>    • Memory allocator optimization                                          <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>    • Profiling and bottleneck identification                                <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">║</span>                                                                             <span style="color: #3b9797;">║</span>
+<span style="color: #3b9797;">╚═════════════════════════════════════════════════════════════════════════════╝</span></pre>
+
+                    <h3>Concepts Covered</h3>
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Concept</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>PCI Configuration Space</td><td>256/4096-byte device descriptor with IDs, BARs, capabilities</td></tr>
+                            <tr><td>BAR Decoding</td><td>Determining memory/IO base addresses and sizes</td></tr>
+                            <tr><td>Driver Matching</td><td>Vendor/Device ID tables for automatic driver selection</td></tr>
+                            <tr><td>Device Tree</td><td>Hierarchical representation of hardware topology</td></tr>
+                            <tr><td>AHCI</td><td>SATA interface with command lists and FIS structures</td></tr>
+                            <tr><td>NVMe Queues</td><td>Submission/Completion queue pairs for parallel I/O</td></tr>
+                            <tr><td>Block Device</td><td>Generic interface abstracting storage hardware</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Next Steps Section -->
+                <div id="next-steps" class="blog-content mt-5">
+                    <h2><i class="fas fa-arrow-right me-2 text-teal"></i>Next Steps</h2>
+                    
+                    <p>With all major subsystems in place, it's time to optimize. In Phase 16, we'll tune the scheduler, implement caching strategies, and profile performance to make the OS fast and responsive.</p>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 14: Advanced Input & Timing</h5>
+                            <p class="text-muted small mb-2">Review mouse drivers and timer implementation.</p>
+                            <a href="kernel-dev-phase-14-input-timing.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 16: Performance & Optimization</h5>
+                            <p class="text-muted small mb-2">Tune the scheduler and implement caching.</p>
+                            <a href="kernel-dev-phase-16-performance.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 17: Stability, Security & Finishing</h5>
+                            <p class="text-muted small mb-2">Debug, harden, and complete the OS.</p>
+                            <a href="kernel-dev-phase-17-security.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook">
+                            <i class="fab fa-facebook-f"></i>
+                        </a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter">
+                            <i class="fab fa-twitter"></i>
+                        </a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn">
+                            <i class="fab fa-linkedin-in"></i>
+                        </a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube">
+                            <i class="fab fa-youtube"></i>
+                        </a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram">
+                            <i class="fab fa-instagram"></i>
+                        </a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest">
+                            <i class="fab fa-pinterest-p"></i>
+                        </a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email">
+                            <i class="fas fa-envelope"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="bg-secondary">
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+    
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+    
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>

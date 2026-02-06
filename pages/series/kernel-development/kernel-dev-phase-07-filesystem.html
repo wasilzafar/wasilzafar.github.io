@@ -1,0 +1,1898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kernel Development Series - Phase 7: Disk Access & Filesystems | Wasil Zafar</title>
+    <meta name="description" content="Implement ATA disk drivers, FAT filesystem support, and a Virtual File System layer for your operating system kernel.">
+    <meta name="keywords" content="kernel development, filesystem, FAT, VFS, disk driver, ATA, block devices, OS development, file operations">
+    <meta name="author" content="Wasil Zafar">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Kernel Development Series - Phase 7: Disk Access & Filesystems">
+    <meta property="og:description" content="Implement ATA disk drivers, FAT filesystem support, and a Virtual File System layer for your operating system kernel.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://wasilzafar.com/pages/series/kernel-development/kernel-dev-phase-07-filesystem.html">
+    <meta property="og:image" content="https://wasilzafar.com/images/og-kernel-dev.png">
+    <meta property="article:published_time" content="2026-02-06">
+    <meta property="article:author" content="Wasil Zafar">
+    <meta property="article:section" content="Technology">
+
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+    
+    <!-- Google Consent Mode v2 -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('consent', 'default', {
+        'ad_storage': 'denied',
+        'ad_user_data': 'denied',
+        'ad_personalization': 'denied',
+        'analytics_storage': 'denied',
+        'wait_for_update': 500
+      });
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="../../../images/favicon_io/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="../../../css/main.css">
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. 
+                    By clicking "Accept All", you consent to our use of cookies. See our 
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a> 
+                    for more information.
+                </p>
+                
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#about">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#skills">Skills</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#certifications">Certifications</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#interests">Interests</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">Phase 7: Disk Access & Filesystems</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>February 6, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>32 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Implement ATA disk drivers for block device access, build FAT filesystem support, and create a Virtual File System (VFS) abstraction layer.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation Overlay -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#introduction" onclick="closeNav()">Introduction</a>
+                <ul>
+                    <li><a href="#storage-overview" onclick="closeNav()">Storage Architecture</a></li>
+                    <li><a href="#block-devices" onclick="closeNav()">Block Devices</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#ata-driver" onclick="closeNav()">ATA Disk Driver</a>
+                <ul>
+                    <li><a href="#ata-overview" onclick="closeNav()">ATA/IDE Overview</a></li>
+                    <li><a href="#pio-mode" onclick="closeNav()">PIO Mode</a></li>
+                    <li><a href="#read-write" onclick="closeNav()">Read/Write Operations</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#partitions" onclick="closeNav()">Partition Tables</a>
+                <ul>
+                    <li><a href="#mbr" onclick="closeNav()">MBR Partitions</a></li>
+                    <li><a href="#gpt" onclick="closeNav()">GPT Partitions</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#fat" onclick="closeNav()">FAT Filesystem</a>
+                <ul>
+                    <li><a href="#fat-overview" onclick="closeNav()">FAT Overview</a></li>
+                    <li><a href="#boot-sector" onclick="closeNav()">Boot Sector</a></li>
+                    <li><a href="#fat-table" onclick="closeNav()">FAT Table</a></li>
+                    <li><a href="#directories" onclick="closeNav()">Directory Entries</a></li>
+                    <li><a href="#file-ops" onclick="closeNav()">File Operations</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#vfs" onclick="closeNav()">Virtual File System</a>
+                <ul>
+                    <li><a href="#vfs-design" onclick="closeNav()">VFS Design</a></li>
+                    <li><a href="#vfs-nodes" onclick="closeNav()">VFS Nodes</a></li>
+                    <li><a href="#mounting" onclick="closeNav()">Mounting</a></li>
+                </ul>
+            </li>
+            <li><a href="#build" onclick="closeNav()">What You Can Build</a></li>
+            <li><a href="#next-steps" onclick="closeNav()">Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- Introduction -->
+                <div id="introduction" class="blog-content">
+                    <h2><i class="fas fa-hdd me-2 text-teal"></i>Introduction: Persistent Storage</h2>
+                    
+                    <div class="highlight-box crimson">
+                        <i class="fas fa-flag me-2"></i>
+                        <strong>Phase 7 Goals:</strong> By the end of this phase, your kernel will read and write files from disk. You'll have an ATA driver for disk access, FAT filesystem support, and a VFS layer that abstracts filesystem differences.
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-map-signs me-2"></i>Complete Series Navigation</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-2">18-Part Series</span>
+                            <span class="badge bg-crimson">OS Development Mastery</span>
+                        </div>
+                        <div class="content">
+                            <ol>
+                                <li><a href="kernel-dev-phase-00-orientation.html">Phase 0: Orientation & Big Picture</a> - OS fundamentals, kernel architectures, learning path</li>
+                                <li><a href="kernel-dev-phase-01-boot-process.html">Phase 1: How a Computer Starts</a> - BIOS/UEFI, boot sequence, dev environment</li>
+                                <li><a href="kernel-dev-phase-02-real-mode.html">Phase 2: Real Mode - First Steps</a> - Real mode, bootloader, BIOS interrupts</li>
+                                <li><a href="kernel-dev-phase-03-protected-mode.html">Phase 3: Entering Protected Mode</a> - GDT, 32-bit mode, C code execution</li>
+                                <li><a href="kernel-dev-phase-04-display-input.html">Phase 4: Display, Input & Output</a> - VGA text mode, keyboard handling</li>
+                                <li><a href="kernel-dev-phase-05-interrupts.html">Phase 5: Interrupts & CPU Control</a> - IDT, ISRs, PIC programming</li>
+                                <li><a href="kernel-dev-phase-06-memory.html">Phase 6: Memory Management</a> - Paging, virtual memory, heap allocator</li>
+                                <li><strong>Phase 7: Disk Access & Filesystems (This Guide)</strong> - Block devices, FAT, VFS layer</li>
+                                <li><a href="kernel-dev-phase-08-processes.html">Phase 8: Processes & User Mode</a> - Task switching, system calls, user space</li>
+                                <li><a href="kernel-dev-phase-09-elf.html">Phase 9: ELF Loading & Executables</a> - ELF format, program loading</li>
+                                <li><a href="kernel-dev-phase-10-stdlib-shell.html">Phase 10: Standard Library & Shell</a> - C library, command-line shell</li>
+                                <li><a href="kernel-dev-phase-11-long-mode.html">Phase 11: 64-Bit Long Mode</a> - x86-64, 64-bit paging, modern architecture</li>
+                                <li><a href="kernel-dev-phase-12-uefi.html">Phase 12: Modern Booting with UEFI</a> - UEFI boot services, memory maps</li>
+                                <li><a href="kernel-dev-phase-13-graphics.html">Phase 13: Graphics & GUI Systems</a> - Framebuffer, windowing, drawing</li>
+                                <li><a href="kernel-dev-phase-14-input-timing.html">Phase 14: Advanced Input & Timing</a> - Mouse, high-precision timers</li>
+                                <li><a href="kernel-dev-phase-15-hardware-drivers.html">Phase 15: Hardware Discovery & Drivers</a> - PCI, device drivers, NVMe</li>
+                                <li><a href="kernel-dev-phase-16-performance.html">Phase 16: Performance & Optimization</a> - Caching, scheduler tuning</li>
+                                <li><a href="kernel-dev-phase-17-security.html">Phase 17: Stability, Security & Finishing</a> - Debugging, hardening, completion</li>
+                            </ol>
+                        </div>
+                    </div>
+                    
+                    <p>Your kernel can allocate memory—but when you reboot, everything is gone. <strong>Persistent storage</strong> is what makes computers useful: saving documents, loading programs, keeping user data between sessions.</p>
+
+<pre><code class="language-plaintext">THE STORAGE LAYER CAKE
+═══════════════════════════════════════════════════════════════
+
+USER PROGRAM
+    ↓  open("/docs/readme.txt", O_RDONLY)
+╔═══════════════════════════════════════════════════════╗
+║  SYSCALL INTERFACE                                    ║
+║  open(), read(), write(), close(), mkdir()            ║
+╚═══════════════════════════════════════════════════════╝
+    ↓
+╔═══════════════════════════════════════════════════════╗
+║  VFS (Virtual File System)                            ║
+║  Unified interface: vfs_read(), vfs_write()           ║
+║  File descriptors, path resolution, mount points      ║
+╠═══════════════════════════════════════════════════════╣
+║  FILESYSTEM DRIVERS                                   ║
+║  ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐     ║
+║  │  FAT   │  │  ext2  │  │ tmpfs  │  │ devfs  │     ║
+║  └───┬────┘  └───┬────┘  └───┬────┘  └───┬────┘     ║
+╚══════╪═══════════╪═══════════╪═══════════╪═══════════╝
+       │           │           │           │
+╔══════╪═══════════╪═══════════╪═══════════════════════╗
+║  BLOCK CACHE                              (RAM)      ║
+║  Caches recently accessed disk sectors               ║
+╠══════╪═══════════╪═══════════════════════════════════╣
+║  BLOCK DEVICE LAYER                                  ║
+║  read_block(), write_block()                         ║
+╚══════╪═══════════╪═══════════════════════════════════╝
+       │           │
+╔══════════════════════════════════════════════════════╗
+║  DEVICE DRIVERS                                      ║
+║  ┌─────────┐  ┌─────────┐  ┌─────────┐             ║
+║  │   ATA   │  │  AHCI   │  │  NVMe   │             ║
+║  │  (IDE)  │  │  (SATA) │  │  (PCIe) │             ║
+║  └────┬────┘  └────┬────┘  └────┬────┘             ║
+╚═══════╪════════════╪════════════╪════════════════════╝
+        │            │            │
+   ┌────▼────┐  ┌────▼────┐  ┌────▼────┐
+   │  DISK   │  │  DISK   │  │   SSD   │
+   │ (HDD)   │  │ (SATA)  │  │ (NVMe)  │
+   └─────────┘  └─────────┘  └─────────┘</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Key Insight:</strong> A filesystem transforms raw disk sectors into a hierarchy of named files and directories. The VFS layer lets your kernel support multiple filesystem types through a unified interface.
+                    </div>
+
+                    <h3 id="storage-overview">Storage Architecture</h3>
+                    
+                    <p>Storage devices communicate in <strong>blocks</strong> (usually 512 bytes). You can't read or write a single byte from disk—you read an entire sector. This is why we need:</p>
+
+                    <ul>
+                        <li><strong>Block device drivers</strong>: Talk to hardware (ATA, SATA, NVMe)</li>
+                        <li><strong>Block cache</strong>: Keep frequently-used sectors in RAM</li>
+                        <li><strong>Filesystems</strong>: Organize blocks into files and directories</li>
+                        <li><strong>VFS</strong>: Abstract away filesystem differences</li>
+                    </ul>
+
+                    <h3 id="block-devices">Block Devices</h3>
+                    
+<pre><code class="language-c">/* block.h - Block device interface */
+
+#define BLOCK_SIZE 512  /* Standard sector size */
+
+typedef struct block_device {
+    char name[32];              /* "hda", "sda", "nvme0n1" */
+    uint32_t block_size;        /* bytes per block */
+    uint64_t total_blocks;      /* device capacity */
+    
+    /* Operations */
+    int (*read)(struct block_device* dev, uint64_t lba, 
+                uint32_t count, void* buffer);
+    int (*write)(struct block_device* dev, uint64_t lba,
+                 uint32_t count, const void* buffer);
+} block_device_t;
+
+/* Example: Read 4 sectors starting at LBA 100 */
+uint8_t buffer[4 * BLOCK_SIZE];
+ata_device.read(&amp;ata_device, 100, 4, buffer);
+</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-history me-2"></i>LBA vs CHS Addressing</h4>
+                        <p>Old hard drives used <strong>CHS</strong> (Cylinder-Head-Sector) addressing—specify physical location on spinning platters. Modern drives use <strong>LBA</strong> (Logical Block Addressing)—just a sector number from 0 to N. The drive controller handles the physical mapping.</p>
+                        <span class="bias-tag"><i class="fas fa-hdd me-1"></i>Historical Context</span>
+                    </div>
+                </div>
+
+                <!-- ATA Driver Section -->
+                <div id="ata-driver" class="blog-content mt-5">
+                    <h2><i class="fas fa-compact-disc me-2 text-teal"></i>ATA Disk Driver</h2>
+                    
+                    <h3 id="ata-overview">ATA/IDE Overview</h3>
+                    
+                    <p><strong>ATA</strong> (AT Attachment), also called IDE, is the classic interface for hard drives. Modern systems use SATA or NVMe, but ATA is simple to program and still supported in emulators—perfect for learning.</p>
+
+<pre><code class="language-plaintext">ATA CONTROLLER ARCHITECTURE
+═══════════════════════════════════════════════════════════════
+
+                    ┌─────────────────────────────────────┐
+                    │          ATA Controller             │
+                    │  (Usually on motherboard chipset)   │
+                    └──────────────┬──────────────────────┘
+                                   │
+           ┌───────────────────────┼───────────────────────┐
+           │                       │                       │
+   ┌───────▼───────┐       ┌───────▼───────┐       Addresses:
+   │   PRIMARY     │       │  SECONDARY    │
+   │   CHANNEL     │       │   CHANNEL     │
+   │   0x1F0-0x1F7 │       │   0x170-0x177 │
+   │   IRQ 14      │       │   IRQ 15      │
+   └───────┬───────┘       └───────┬───────┘
+           │                       │
+   ┌───────┴───────┐       ┌───────┴───────┐
+   │               │       │               │
+┌──▼──┐         ┌──▼──┐ ┌──▼──┐         ┌──▼──┐
+│MASTER│        │SLAVE│ │MASTER│        │SLAVE│
+│ hda │         │ hdb│ │ hdc │         │ hdd │
+└─────┘         └─────┘ └─────┘         └─────┘
+
+Total: Up to 4 drives (2 channels × 2 drives/channel)</code></pre>
+
+                    <p>ATA register ports:</p>
+                    
+                    <table class="table table-bordered table-sm">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Port Offset</th>
+                                <th>Read</th>
+                                <th>Write</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>+0</td><td>Data</td><td>Data</td></tr>
+                            <tr><td>+1</td><td>Error</td><td>Features</td></tr>
+                            <tr><td>+2</td><td>Sector Count</td><td>Sector Count</td></tr>
+                            <tr><td>+3</td><td>LBA Low (0-7)</td><td>LBA Low</td></tr>
+                            <tr><td>+4</td><td>LBA Mid (8-15)</td><td>LBA Mid</td></tr>
+                            <tr><td>+5</td><td>LBA High (16-23)</td><td>LBA High</td></tr>
+                            <tr><td>+6</td><td>Drive/Head</td><td>Drive/Head (bit 4 = drive select)</td></tr>
+                            <tr><td>+7</td><td>Status</td><td>Command</td></tr>
+                        </tbody>
+                    </table>
+                    
+                    <h3 id="pio-mode">PIO Mode</h3>
+                    
+                    <p><strong>PIO</strong> (Programmed I/O) mode is the simplest way to transfer data: the CPU reads/writes each word directly. It's slow but requires no DMA setup—ideal for bootloaders and simple kernels.</p>
+
+                    <pre><code class="language-c">/* ata.h - ATA PIO driver definitions */
+
+#define ATA_PRIMARY_IO      0x1F0
+#define ATA_PRIMARY_CTRL    0x3F6
+#define ATA_SECONDARY_IO    0x170
+#define ATA_SECONDARY_CTRL  0x376
+
+/* ATA Commands */
+#define ATA_CMD_READ_PIO        0x20
+#define ATA_CMD_READ_PIO_EXT    0x24  /* 48-bit LBA */
+#define ATA_CMD_WRITE_PIO       0x30
+#define ATA_CMD_WRITE_PIO_EXT   0x34
+#define ATA_CMD_CACHE_FLUSH     0xE7
+#define ATA_CMD_IDENTIFY        0xEC
+
+/* Status register bits */
+#define ATA_SR_BSY      0x80    /* Busy */
+#define ATA_SR_DRDY     0x40    /* Drive ready */
+#define ATA_SR_DF       0x20    /* Drive fault */
+#define ATA_SR_DSC      0x10    /* Drive seek complete */
+#define ATA_SR_DRQ      0x08    /* Data request ready */
+#define ATA_SR_CORR     0x04    /* Corrected data */
+#define ATA_SR_IDX      0x02    /* Index */
+#define ATA_SR_ERR      0x01    /* Error */
+
+/* Drive/Head register bits */
+#define ATA_DRIVE_MASTER    0x00
+#define ATA_DRIVE_SLAVE     0x10
+#define ATA_MODE_LBA        0xE0    /* LBA mode + bits 4-7 of LBA */
+</code></pre>
+
+                    <pre><code class="language-c">/* ata.c - ATA PIO read sector (complete implementation) */
+
+#include "io.h"
+#include "ata.h"
+
+/**
+ * Wait for drive to be ready (BSY clear)
+ */
+static void ata_wait_bsy(uint16_t io_base) {
+    while (inb(io_base + 7) & ATA_SR_BSY);
+}
+
+/**
+ * Wait for data to be ready (DRQ set)
+ */
+static void ata_wait_drq(uint16_t io_base) {
+    while (!(inb(io_base + 7) & ATA_SR_DRQ));
+}
+
+/**
+ * Check for drive errors
+ * @return 0 if no error, error code otherwise
+ */
+static int ata_check_error(uint16_t io_base) {
+    uint8_t status = inb(io_base + 7);
+    if (status & ATA_SR_ERR) {
+        return inb(io_base + 1);  /* Return error register */
+    }
+    if (status & ATA_SR_DF) {
+        return -1;  /* Drive fault */
+    }
+    return 0;
+}
+
+/**
+ * Read a single sector using PIO mode
+ * @param lba     Logical block address (28-bit)
+ * @param buffer  512-byte buffer for data
+ */
+void ata_read_sector(uint32_t lba, uint8_t* buffer) {
+    uint16_t io_base = ATA_PRIMARY_IO;
+    
+    /* Wait for drive not busy */
+    ata_wait_bsy(io_base);
+    
+    /* Select drive (master) and set LBA mode with bits 24-27 */
+    outb(io_base + 6, ATA_MODE_LBA | ATA_DRIVE_MASTER | 
+                      ((lba >> 24) & 0x0F));
+    
+    /* Set sector count = 1 */
+    outb(io_base + 2, 1);
+    
+    /* Set LBA address (bits 0-23) */
+    outb(io_base + 3, lba & 0xFF);          /* LBA low */
+    outb(io_base + 4, (lba >> 8) & 0xFF);   /* LBA mid */
+    outb(io_base + 5, (lba >> 16) & 0xFF);  /* LBA high */
+    
+    /* Send READ SECTORS command */
+    outb(io_base + 7, ATA_CMD_READ_PIO);
+    
+    /* Wait for data ready */
+    ata_wait_drq(io_base);
+    
+    /* Check for errors */
+    if (ata_check_error(io_base)) {
+        kprintf("ATA: Read error at LBA %d\n", lba);
+        return;
+    }
+    
+    /* Read 256 words (512 bytes) */
+    for (int i = 0; i < 256; i++) {
+        uint16_t data = inw(io_base);         /* Read 16 bits */
+        buffer[i * 2] = data & 0xFF;          /* Low byte */
+        buffer[i * 2 + 1] = (data >> 8);      /* High byte */
+    }
+}
+</code></pre>
+                    
+                    <h3 id="read-write">Read/Write Operations</h3>
+                    
+                    <p>For writing, the process is similar but we send data to the drive:</p>
+
+                    <pre><code class="language-c">/**
+ * Write a single sector using PIO mode
+ * @param lba     Logical block address (28-bit)
+ * @param buffer  512-byte buffer of data to write
+ */
+void ata_write_sector(uint32_t lba, const uint8_t* buffer) {
+    uint16_t io_base = ATA_PRIMARY_IO;
+    
+    /* Wait for drive not busy */
+    ata_wait_bsy(io_base);
+    
+    /* Select drive and set LBA mode */
+    outb(io_base + 6, ATA_MODE_LBA | ATA_DRIVE_MASTER | 
+                      ((lba >> 24) & 0x0F));
+    
+    /* Set sector count = 1 */
+    outb(io_base + 2, 1);
+    
+    /* Set LBA address */
+    outb(io_base + 3, lba & 0xFF);
+    outb(io_base + 4, (lba >> 8) & 0xFF);
+    outb(io_base + 5, (lba >> 16) & 0xFF);
+    
+    /* Send WRITE SECTORS command */
+    outb(io_base + 7, ATA_CMD_WRITE_PIO);
+    
+    /* Wait for drive ready to receive data */
+    ata_wait_drq(io_base);
+    
+    /* Write 256 words (512 bytes) */
+    for (int i = 0; i < 256; i++) {
+        uint16_t data = buffer[i * 2] | (buffer[i * 2 + 1] << 8);
+        outw(io_base, data);
+    }
+    
+    /* Flush cache to ensure data is written */
+    outb(io_base + 7, ATA_CMD_CACHE_FLUSH);
+    ata_wait_bsy(io_base);
+}
+
+/**
+ * Identify drive - get drive information
+ * @param buffer  512-byte buffer for IDENTIFY data
+ * @return 0 on success, -1 if no drive
+ */
+int ata_identify(uint8_t* buffer) {
+    uint16_t io_base = ATA_PRIMARY_IO;
+    
+    /* Select master drive */
+    outb(io_base + 6, ATA_MODE_LBA | ATA_DRIVE_MASTER);
+    
+    /* Zero out sector count and LBA registers */
+    outb(io_base + 2, 0);
+    outb(io_base + 3, 0);
+    outb(io_base + 4, 0);
+    outb(io_base + 5, 0);
+    
+    /* Send IDENTIFY command */
+    outb(io_base + 7, ATA_CMD_IDENTIFY);
+    
+    /* Check if drive exists */
+    if (inb(io_base + 7) == 0) {
+        return -1;  /* No drive */
+    }
+    
+    /* Wait for BSY to clear */
+    ata_wait_bsy(io_base);
+    
+    /* Check for ATAPI or SATA by examining LBA mid/high */
+    if (inb(io_base + 4) != 0 || inb(io_base + 5) != 0) {
+        return -1;  /* Not ATA drive */
+    }
+    
+    /* Wait for DRQ or error */
+    while (1) {
+        uint8_t status = inb(io_base + 7);
+        if (status & ATA_SR_ERR) return -1;
+        if (status & ATA_SR_DRQ) break;
+    }
+    
+    /* Read IDENTIFY data */
+    for (int i = 0; i < 256; i++) {
+        uint16_t data = inw(io_base);
+        buffer[i * 2] = data & 0xFF;
+        buffer[i * 2 + 1] = (data >> 8);
+    }
+    
+    return 0;
+}
+
+/**
+ * Initialize ATA driver and detect drives
+ */
+void ata_init(void) {
+    uint8_t identify[512];
+    
+    kprintf("ATA: Detecting drives...\n");
+    
+    if (ata_identify(identify) == 0) {
+        /* Extract drive info from IDENTIFY data */
+        uint32_t sectors = *(uint32_t*)&identify[120];  /* Total LBA28 sectors */
+        uint32_t size_mb = sectors / 2048;              /* 512 bytes × 2048 = 1 MB */
+        
+        /* Model string is at offset 54, 40 bytes, swapped */
+        char model[41];
+        for (int i = 0; i < 40; i += 2) {
+            model[i] = identify[54 + i + 1];
+            model[i + 1] = identify[54 + i];
+        }
+        model[40] = '\0';
+        
+        kprintf("ATA: Primary Master: %s (%d MB)\n", model, size_mb);
+    } else {
+        kprintf("ATA: No drive detected on Primary Master\n");
+    }
+}
+</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Warning:</strong> Real disk drivers should use <strong>DMA</strong> (Direct Memory Access) for performance—PIO ties up the CPU for every byte. Also implement proper <strong>error handling</strong>, <strong>timeouts</strong>, and <strong>interrupt-driven I/O</strong> for production use.
+                    </div>
+                </div>
+
+                <!-- Partitions Section -->
+                <div id="partitions" class="blog-content mt-5">
+                    <h2><i class="fas fa-th-large me-2 text-teal"></i>Partition Tables</h2>
+                    
+                    <p>Before filesystems, we need to understand how disks are divided. <strong>Partition tables</strong> split a physical disk into logical sections, each with its own filesystem.</p>
+                    
+                    <h3 id="mbr">MBR Partitions</h3>
+                    
+                    <p>The <strong>Master Boot Record</strong> (MBR) partitioning scheme dates back to IBM PC DOS. It lives in sector 0 and supports up to 4 primary partitions (or 3 primary + 1 extended with logical partitions inside).</p>
+
+<pre><code class="language-plaintext">MBR STRUCTURE (SECTOR 0)
+═══════════════════════════════════════════════════════════════
+
+Offset   Size    Description
+──────   ────    ────────────────────────────────
+0x000    446     Bootloader code (Stage 1)
+0x1BE    16      Partition Entry 1
+0x1CE    16      Partition Entry 2
+0x1DE    16      Partition Entry 3
+0x1EE    16      Partition Entry 4
+0x1FE    2       Boot signature (0x55, 0xAA)
+──────   ────
+         512 bytes total
+
+PARTITION ENTRY (16 bytes each):
+┌────────┬──────────────────────────────────────────┐
+│ Offset │ Field                                    │
+├────────┼──────────────────────────────────────────┤
+│  0x00  │ Boot flag (0x80 = bootable)             │
+│  0x01  │ Starting CHS (3 bytes) - legacy         │
+│  0x04  │ Partition type (0x0B = FAT32, etc.)     │
+│  0x05  │ Ending CHS (3 bytes) - legacy           │
+│  0x08  │ Starting LBA (4 bytes) - USE THIS       │
+│  0x0C  │ Sector count (4 bytes)                  │
+└────────┴──────────────────────────────────────────┘</code></pre>
+
+                    <pre><code class="language-c">/* partition.h - MBR partition handling */
+
+/* Common partition types */
+#define PART_TYPE_EMPTY     0x00
+#define PART_TYPE_FAT12     0x01
+#define PART_TYPE_FAT16_S   0x04    /* <32 MB */
+#define PART_TYPE_EXTENDED  0x05
+#define PART_TYPE_FAT16_L   0x06    /* >32 MB */
+#define PART_TYPE_NTFS      0x07
+#define PART_TYPE_FAT32     0x0B
+#define PART_TYPE_FAT32_LBA 0x0C
+#define PART_TYPE_FAT16_LBA 0x0E
+#define PART_TYPE_LINUX     0x83
+#define PART_TYPE_LINUX_LVM 0x8E
+
+typedef struct {
+    uint8_t  boot_flag;
+    uint8_t  start_chs[3];
+    uint8_t  type;
+    uint8_t  end_chs[3];
+    uint32_t start_lba;
+    uint32_t sector_count;
+} __attribute__((packed)) partition_entry_t;
+
+typedef struct {
+    uint8_t bootcode[446];
+    partition_entry_t partitions[4];
+    uint16_t signature;
+} __attribute__((packed)) mbr_t;
+
+/**
+ * Read and parse MBR
+ */
+int mbr_parse(block_device_t* dev) {
+    uint8_t sector[512];
+    
+    if (dev->read(dev, 0, 1, sector) != 0) {
+        return -1;
+    }
+    
+    mbr_t* mbr = (mbr_t*)sector;
+    
+    /* Verify boot signature */
+    if (mbr->signature != 0xAA55) {
+        kprintf("MBR: Invalid signature\n");
+        return -1;
+    }
+    
+    kprintf("MBR: Found partition table\n");
+    
+    for (int i = 0; i < 4; i++) {
+        partition_entry_t* p = &mbr->partitions[i];
+        if (p->type != PART_TYPE_EMPTY) {
+            kprintf("  Partition %d: type=0x%02X, start=%d, size=%d sectors\n",
+                    i + 1, p->type, p->start_lba, p->sector_count);
+        }
+    }
+    
+    return 0;
+}
+</code></pre>
+                    
+                    <h3 id="gpt">GPT Partitions</h3>
+                    
+                    <p><strong>GPT</strong> (GUID Partition Table) is the modern replacement for MBR, required for UEFI boot and disks > 2 TB. It uses GUIDs (128-bit identifiers) for partition types.</p>
+
+<pre><code class="language-plaintext">GPT LAYOUT
+═══════════════════════════════════════════════════════════════
+
+LBA 0:     Protective MBR (for legacy BIOS compatibility)
+LBA 1:     Primary GPT Header
+LBA 2-33:  Partition Entries (128 entries × 128 bytes = 16 KB)
+           ...
+           (Partition data)
+           ...
+LBA -33:   Backup Partition Entries
+LBA -1:    Backup GPT Header
+
+GPT HEADER (92 bytes):
+┌─────────────────────────────────────────────────────────────┐
+│ Signature: "EFI PART" (8 bytes)                            │
+│ Revision: 0x00010000 (4 bytes)                             │
+│ Header Size: 92 (4 bytes)                                  │
+│ CRC32 of header (4 bytes)                                  │
+│ Reserved (4 bytes)                                         │
+│ Current LBA (8 bytes)                                      │
+│ Backup LBA (8 bytes)                                       │
+│ First usable LBA (8 bytes)                                 │
+│ Last usable LBA (8 bytes)                                  │
+│ Disk GUID (16 bytes)                                       │
+│ Partition entry start LBA (8 bytes)                        │
+│ Number of partition entries (4 bytes)                      │
+│ Size of partition entry (4 bytes) - usually 128            │
+│ CRC32 of partition array (4 bytes)                         │
+└─────────────────────────────────────────────────────────────┘
+
+PARTITION ENTRY (128 bytes):
+┌─────────────────────────────────────────────────────────────┐
+│ Partition Type GUID (16 bytes)                             │
+│ Unique Partition GUID (16 bytes)                           │
+│ First LBA (8 bytes)                                        │
+│ Last LBA (8 bytes)                                         │
+│ Attributes (8 bytes)                                       │
+│ Partition Name (72 bytes) - UTF-16LE                       │
+└─────────────────────────────────────────────────────────────┘</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-lightbulb me-2"></i>Common Partition Type GUIDs</h4>
+                        <table class="table table-sm table-bordered">
+                            <tr><td>EFI System</td><td>C12A7328-F81F-11D2-BA4B-00A0C93EC93B</td></tr>
+                            <tr><td>Microsoft Basic Data</td><td>EBD0A0A2-B9E5-4433-87C0-68B6B72699C7</td></tr>
+                            <tr><td>Linux Filesystem</td><td>0FC63DAF-8483-4772-8E79-3D69D8477DE4</td></tr>
+                            <tr><td>Linux Swap</td><td>0657FD6D-A4AB-43C4-84E5-0933C84B4F4F</td></tr>
+                        </table>
+                        <span class="bias-tag"><i class="fas fa-key me-1"></i>Reference</span>
+                    </div>
+                </div>
+
+                <!-- FAT Section -->
+                <div id="fat" class="blog-content mt-5">
+                    <h2><i class="fas fa-folder-tree me-2 text-teal"></i>FAT Filesystem</h2>
+                    
+                    <h3 id="fat-overview">FAT Overview</h3>
+                    
+                    <p><strong>FAT</strong> (File Allocation Table) is the most widely-supported filesystem. Designed by Microsoft in 1977, it's simple enough to implement in a weekend yet used everywhere: USB drives, SD cards, UEFI boot partitions.</p>
+
+<pre><code class="language-plaintext">FAT FILESYSTEM LAYOUT
+═══════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────┐
+│                    BOOT SECTOR (1 sector)                    │
+│  BPB (BIOS Parameter Block) + Boot code                     │
+├──────────────────────────────────────────────────────────────┤
+│                    RESERVED SECTORS                          │
+│  (Usually 1 for FAT12/16, 32 for FAT32)                     │
+├──────────────────────────────────────────────────────────────┤
+│                    FAT #1 (File Allocation Table)            │
+│  Linked list of clusters - one entry per cluster            │
+├──────────────────────────────────────────────────────────────┤
+│                    FAT #2 (Backup copy)                      │
+│  Usually identical to FAT #1                                │
+├──────────────────────────────────────────────────────────────┤
+│                    ROOT DIRECTORY (FAT12/16 only)            │
+│  Fixed size at fixed location                               │
+├──────────────────────────────────────────────────────────────┤
+│                    DATA AREA                                 │
+│  Clusters containing files and directories                  │
+│  (FAT32 root directory is here too)                         │
+└──────────────────────────────────────────────────────────────┘
+
+FAT VARIANTS:
+┌─────────┬───────────────┬─────────────┬───────────────────┐
+│ Variant │ Cluster Entry │ Max Size    │ Use Case          │
+├─────────┼───────────────┼─────────────┼───────────────────┤
+│ FAT12   │ 12 bits       │ 16 MB       │ Floppy disks      │
+│ FAT16   │ 16 bits       │ 2 GB        │ Small drives      │
+│ FAT32   │ 28 bits*      │ 2 TB        │ USB, SD cards     │
+└─────────┴───────────────┴─────────────┴───────────────────┘
+* FAT32 uses only 28 bits; top 4 bits reserved</code></pre>
+                    
+                    <h3 id="boot-sector">Boot Sector</h3>
+                    
+                    <p>The <strong>BIOS Parameter Block</strong> (BPB) in sector 0 describes the filesystem geometry:</p>
+
+                    <pre><code class="language-c">/* fat.h - FAT16/32 structures */
+
+/* FAT16 Boot Sector (BIOS Parameter Block) */
+typedef struct {
+    uint8_t  jmp[3];              /* Jump instruction to boot code */
+    uint8_t  oem_name[8];         /* OEM identifier */
+    uint16_t bytes_per_sector;    /* Usually 512 */
+    uint8_t  sectors_per_cluster; /* 1, 2, 4, 8, 16, 32, 64, or 128 */
+    uint16_t reserved_sectors;    /* Sectors before first FAT */
+    uint8_t  fat_count;           /* Number of FATs (usually 2) */
+    uint16_t root_entry_count;    /* FAT12/16: max root entries */
+    uint16_t total_sectors_16;    /* Total sectors (if < 65536) */
+    uint8_t  media_type;          /* Media descriptor (0xF8 = HDD) */
+    uint16_t fat_size_16;         /* Sectors per FAT (FAT12/16) */
+    uint16_t sectors_per_track;   /* For CHS geometry */
+    uint16_t head_count;          /* For CHS geometry */
+    uint32_t hidden_sectors;      /* Sectors before partition */
+    uint32_t total_sectors_32;    /* Total sectors (if >= 65536) */
+    
+    /* Extended Boot Record (FAT16) */
+    uint8_t  drive_number;        /* BIOS drive number */
+    uint8_t  reserved;
+    uint8_t  boot_signature;      /* 0x29 if following fields valid */
+    uint32_t volume_id;           /* Volume serial number */
+    uint8_t  volume_label[11];    /* Volume name */
+    uint8_t  fs_type[8];          /* "FAT16   " */
+} __attribute__((packed)) fat16_boot_t;
+
+/* FAT32 Extended Boot Record */
+typedef struct {
+    /* First 36 bytes same as FAT16 */
+    uint8_t  jmp[3];
+    uint8_t  oem_name[8];
+    uint16_t bytes_per_sector;
+    uint8_t  sectors_per_cluster;
+    uint16_t reserved_sectors;
+    uint8_t  fat_count;
+    uint16_t root_entry_count;    /* Must be 0 for FAT32 */
+    uint16_t total_sectors_16;
+    uint8_t  media_type;
+    uint16_t fat_size_16;         /* Must be 0 for FAT32 */
+    uint16_t sectors_per_track;
+    uint16_t head_count;
+    uint32_t hidden_sectors;
+    uint32_t total_sectors_32;
+    
+    /* FAT32 specific */
+    uint32_t fat_size_32;         /* Sectors per FAT (FAT32) */
+    uint16_t ext_flags;
+    uint16_t fs_version;
+    uint32_t root_cluster;        /* First cluster of root dir */
+    uint16_t fs_info;             /* FSInfo sector number */
+    uint16_t backup_boot;         /* Backup boot sector */
+    uint8_t  reserved[12];
+    uint8_t  drive_number;
+    uint8_t  reserved2;
+    uint8_t  boot_signature;
+    uint32_t volume_id;
+    uint8_t  volume_label[11];
+    uint8_t  fs_type[8];          /* "FAT32   " */
+} __attribute__((packed)) fat32_boot_t;
+</code></pre>
+                    
+                    <h3 id="fat-table">FAT Table</h3>
+                    
+                    <p>The <strong>File Allocation Table</strong> is essentially a linked list of clusters. Each entry either points to the next cluster in a chain, or marks end-of-file, bad cluster, etc.</p>
+
+<pre><code class="language-plaintext">FAT TABLE: CLUSTER CHAIN EXAMPLE
+═══════════════════════════════════════════════════════════════
+
+Cluster:  2     3     4     5     6     7     8     9    10
+Entry:  [ 3 ] [ 4 ] [EOF] [ 7 ] [FREE] [ 8 ] [EOF] [FREE] [BAD]
+          │     │           │           │
+          └──→──┘           └─────→─────┘
+
+File "README.TXT" (3 clusters): 2 → 3 → 4 → EOF
+File "DATA.BIN" (2 clusters):   5 → 7 → 8 → EOF
+
+SPECIAL FAT ENTRY VALUES:
+┌──────────────┬───────────────┬───────────────┬────────────────┐
+│ Meaning      │ FAT12         │ FAT16         │ FAT32          │
+├──────────────┼───────────────┼───────────────┼────────────────┤
+│ Free cluster │ 0x000         │ 0x0000        │ 0x00000000     │
+│ Reserved     │ 0x001         │ 0x0001        │ 0x00000001     │
+│ Bad cluster  │ 0xFF7         │ 0xFFF7        │ 0x0FFFFFF7     │
+│ End of chain │ 0xFF8-0xFFF   │ 0xFFF8-0xFFFF │ 0x0FFFFFF8+    │
+└──────────────┴───────────────┴───────────────┴────────────────┘</code></pre>
+
+                    <pre><code class="language-c">/* fat.c - FAT table operations */
+
+/**
+ * FAT driver context
+ */
+typedef struct {
+    block_device_t* device;
+    fat32_boot_t bpb;
+    uint32_t fat_start_lba;     /* LBA of first FAT */
+    uint32_t data_start_lba;    /* LBA of first data cluster */
+    uint32_t root_dir_lba;      /* LBA of root directory */
+    uint32_t total_clusters;
+    uint8_t  fat_type;          /* 12, 16, or 32 */
+} fat_fs_t;
+
+/**
+ * Read a FAT entry (get next cluster in chain)
+ */
+uint32_t fat_get_entry(fat_fs_t* fs, uint32_t cluster) {
+    uint32_t fat_offset;
+    uint32_t fat_sector;
+    uint32_t entry_offset;
+    uint8_t sector[512];
+    
+    if (fs->fat_type == 32) {
+        fat_offset = cluster * 4;
+    } else if (fs->fat_type == 16) {
+        fat_offset = cluster * 2;
+    } else {  /* FAT12 */
+        fat_offset = cluster + (cluster / 2);  /* cluster * 1.5 */
+    }
+    
+    fat_sector = fs->fat_start_lba + (fat_offset / 512);
+    entry_offset = fat_offset % 512;
+    
+    /* Read FAT sector */
+    fs->device->read(fs->device, fat_sector, 1, sector);
+    
+    if (fs->fat_type == 32) {
+        return (*(uint32_t*)&sector[entry_offset]) & 0x0FFFFFFF;
+    } else if (fs->fat_type == 16) {
+        return *(uint16_t*)&sector[entry_offset];
+    } else {  /* FAT12 */
+        uint16_t val = *(uint16_t*)&sector[entry_offset];
+        if (cluster & 1) {
+            return val >> 4;      /* Odd cluster: high 12 bits */
+        } else {
+            return val & 0x0FFF;  /* Even cluster: low 12 bits */
+        }
+    }
+}
+
+/**
+ * Check if cluster marks end of chain
+ */
+int fat_is_eof(fat_fs_t* fs, uint32_t cluster) {
+    if (fs->fat_type == 32) return cluster >= 0x0FFFFFF8;
+    if (fs->fat_type == 16) return cluster >= 0xFFF8;
+    return cluster >= 0xFF8;  /* FAT12 */
+}
+
+/**
+ * Convert cluster number to LBA
+ */
+uint32_t fat_cluster_to_lba(fat_fs_t* fs, uint32_t cluster) {
+    return fs->data_start_lba + 
+           (cluster - 2) * fs->bpb.sectors_per_cluster;
+}
+</code></pre>
+                    
+                    <h3 id="directories">Directory Entries</h3>
+                    
+                    <p>Directories are files containing 32-byte entries. Each entry describes a file or subdirectory.</p>
+
+                    <pre><code class="language-c">/* FAT Directory Entry (32 bytes) */
+typedef struct {
+    uint8_t  name[8];           /* 8.3 filename (space padded) */
+    uint8_t  ext[3];            /* Extension */
+    uint8_t  attr;              /* Attributes */
+    uint8_t  reserved;          /* Windows NT: lowercase flags */
+    uint8_t  create_time_ms;    /* Creation time (ms) */
+    uint16_t create_time;       /* Creation time */
+    uint16_t create_date;       /* Creation date */
+    uint16_t access_date;       /* Last access date */
+    uint16_t cluster_high;      /* High 16 bits of cluster (FAT32) */
+    uint16_t modify_time;       /* Last modification time */
+    uint16_t modify_date;       /* Last modification date */
+    uint16_t cluster_low;       /* Low 16 bits of starting cluster */
+    uint32_t file_size;         /* File size in bytes */
+} __attribute__((packed)) fat_dir_entry_t;
+
+/* Attribute flags */
+#define FAT_ATTR_READ_ONLY  0x01
+#define FAT_ATTR_HIDDEN     0x02
+#define FAT_ATTR_SYSTEM     0x04
+#define FAT_ATTR_VOLUME_ID  0x08   /* Volume label entry */
+#define FAT_ATTR_DIRECTORY  0x10
+#define FAT_ATTR_ARCHIVE    0x20
+#define FAT_ATTR_LFN        0x0F   /* Long filename entry */
+
+/* Special first-byte values */
+#define FAT_ENTRY_FREE      0xE5   /* Deleted entry */
+#define FAT_ENTRY_END       0x00   /* End of directory */
+#define FAT_ENTRY_KANJI     0x05   /* Actually 0xE5 (Kanji) */
+
+/**
+ * Get starting cluster from directory entry
+ */
+uint32_t fat_entry_cluster(fat_dir_entry_t* entry) {
+    return ((uint32_t)entry->cluster_high << 16) | entry->cluster_low;
+}
+
+/**
+ * Parse 8.3 filename from directory entry
+ */
+void fat_parse_filename(fat_dir_entry_t* entry, char* out) {
+    int i, j = 0;
+    
+    /* Copy name (remove trailing spaces) */
+    for (i = 0; i < 8 && entry->name[i] != ' '; i++) {
+        out[j++] = entry->name[i];
+    }
+    
+    /* Add dot and extension if present */
+    if (entry->ext[0] != ' ') {
+        out[j++] = '.';
+        for (i = 0; i < 3 && entry->ext[i] != ' '; i++) {
+            out[j++] = entry->ext[i];
+        }
+    }
+    
+    out[j] = '\0';
+}
+</code></pre>
+                    
+                    <h3 id="file-ops">File Operations</h3>
+
+                    <pre><code class="language-c">/**
+ * List directory contents
+ */
+void fat_list_directory(fat_fs_t* fs, uint32_t cluster) {
+    uint8_t sector[512];
+    fat_dir_entry_t* entries;
+    char filename[13];
+    
+    uint32_t lba = fat_cluster_to_lba(fs, cluster);
+    
+    /* Read directory cluster */
+    for (int s = 0; s < fs->bpb.sectors_per_cluster; s++) {
+        fs->device->read(fs->device, lba + s, 1, sector);
+        entries = (fat_dir_entry_t*)sector;
+        
+        for (int i = 0; i < 16; i++) {  /* 16 entries per sector */
+            if (entries[i].name[0] == FAT_ENTRY_END) {
+                return;  /* End of directory */
+            }
+            if (entries[i].name[0] == FAT_ENTRY_FREE) {
+                continue;  /* Deleted entry */
+            }
+            if (entries[i].attr == FAT_ATTR_LFN) {
+                continue;  /* Long filename (skip for now) */
+            }
+            if (entries[i].attr & FAT_ATTR_VOLUME_ID) {
+                continue;  /* Volume label */
+            }
+            
+            fat_parse_filename(&entries[i], filename);
+            
+            if (entries[i].attr & FAT_ATTR_DIRECTORY) {
+                kprintf("  &lt;DIR&gt;  %s\n", filename);
+            } else {
+                kprintf("  %8d  %s\n", entries[i].file_size, filename);
+            }
+        }
+    }
+    
+    /* Follow cluster chain for larger directories */
+    uint32_t next = fat_get_entry(fs, cluster);
+    if (!fat_is_eof(fs, next)) {
+        fat_list_directory(fs, next);
+    }
+}
+
+/**
+ * Find file in directory by name
+ * @return Starting cluster, or 0 if not found
+ */
+uint32_t fat_find_file(fat_fs_t* fs, uint32_t dir_cluster, 
+                       const char* name) {
+    uint8_t sector[512];
+    fat_dir_entry_t* entries;
+    char filename[13];
+    uint32_t cluster = dir_cluster;
+    
+    while (!fat_is_eof(fs, cluster)) {
+        uint32_t lba = fat_cluster_to_lba(fs, cluster);
+        
+        for (int s = 0; s < fs->bpb.sectors_per_cluster; s++) {
+            fs->device->read(fs->device, lba + s, 1, sector);
+            entries = (fat_dir_entry_t*)sector;
+            
+            for (int i = 0; i < 16; i++) {
+                if (entries[i].name[0] == FAT_ENTRY_END) {
+                    return 0;  /* Not found */
+                }
+                if (entries[i].name[0] == FAT_ENTRY_FREE) {
+                    continue;
+                }
+                if (entries[i].attr == FAT_ATTR_LFN) {
+                    continue;
+                }
+                
+                fat_parse_filename(&entries[i], filename);
+                
+                /* Case-insensitive compare */
+                if (strcasecmp(filename, name) == 0) {
+                    return fat_entry_cluster(&entries[i]);
+                }
+            }
+        }
+        
+        cluster = fat_get_entry(fs, cluster);
+    }
+    
+    return 0;  /* Not found */
+}
+
+/**
+ * Read file contents into buffer
+ */
+int fat_read_file(fat_fs_t* fs, uint32_t cluster, 
+                  uint8_t* buffer, uint32_t size) {
+    uint32_t bytes_read = 0;
+    uint32_t cluster_size = fs->bpb.sectors_per_cluster * 512;
+    
+    while (!fat_is_eof(fs, cluster) && bytes_read < size) {
+        uint32_t lba = fat_cluster_to_lba(fs, cluster);
+        uint32_t to_read = (size - bytes_read < cluster_size) ?
+                           (size - bytes_read) : cluster_size;
+        
+        /* Read cluster (may be multiple sectors) */
+        for (int s = 0; s < fs->bpb.sectors_per_cluster; s++) {
+            fs->device->read(fs->device, lba + s, 1, 
+                           buffer + bytes_read + s * 512);
+        }
+        
+        bytes_read += cluster_size;
+        cluster = fat_get_entry(fs, cluster);
+    }
+    
+    return bytes_read;
+}
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Long Filenames (LFN):</strong> FAT supports names longer than 8.3 using special directory entries with attribute 0x0F. These "VFAT" entries store up to 13 UTF-16 characters each, placed before the short name entry. Implementing LFN support is a good exercise!
+                    </div>
+                </div>
+
+                <!-- VFS Section -->
+                <div id="vfs" class="blog-content mt-5">
+                    <h2><i class="fas fa-sitemap me-2 text-teal"></i>Virtual File System (VFS)</h2>
+                    
+                    <h3 id="vfs-design">VFS Design</h3>
+                    
+                    <p>The <strong>Virtual File System</strong> provides a common interface for all filesystems. Programs use the same open(), read(), write() calls whether accessing FAT, ext2, or network files.</p>
+
+<pre><code class="language-plaintext">VFS ABSTRACTION LAYER
+═══════════════════════════════════════════════════════════════
+
+APPLICATION
+    │
+    │   open("/mnt/usb/file.txt", O_RDONLY)
+    │
+    ▼
+╔═══════════════════════════════════════════════════════════╗
+║                       VFS LAYER                            ║
+║                                                            ║
+║   Path resolution:  "/" → root_fs                         ║
+║                     "/mnt/usb" → mounted FAT              ║
+║                                                            ║
+║   File descriptors:  fd 0 = stdin (tty)                   ║
+║                      fd 1 = stdout (tty)                  ║
+║                      fd 3 = /mnt/usb/file.txt (FAT)       ║
+║                                                            ║
+║   Unified operations:                                      ║
+║     vfs_open(), vfs_read(), vfs_write(), vfs_close()      ║
+║     vfs_mkdir(), vfs_readdir(), vfs_stat()                ║
+╚════════════════════════════════════════════════════════════╝
+    │           │           │           │
+    ▼           ▼           ▼           ▼
+┌───────┐  ┌───────┐  ┌───────┐  ┌───────┐
+│  FAT  │  │ ext2  │  │ devfs │  │ procfs│
+│driver │  │driver │  │(devices)│ │(/proc)│
+└───────┘  └───────┘  └───────┘  └───────┘</code></pre>
+
+                    <pre><code class="language-c">/* vfs.h - Virtual File System interface */
+
+#define VFS_NAME_MAX    256
+#define VFS_PATH_MAX    4096
+
+/* File types */
+#define VFS_FILE        0x01
+#define VFS_DIRECTORY   0x02
+#define VFS_CHARDEVICE  0x03
+#define VFS_BLOCKDEVICE 0x04
+#define VFS_PIPE        0x05
+#define VFS_SYMLINK     0x06
+#define VFS_MOUNTPOINT  0x08
+
+/* Forward declarations */
+struct vfs_node;
+struct dirent;
+
+/* VFS operation function types */
+typedef uint32_t (*read_fn)(struct vfs_node*, uint32_t off, 
+                            uint32_t size, uint8_t* buf);
+typedef uint32_t (*write_fn)(struct vfs_node*, uint32_t off,
+                             uint32_t size, const uint8_t* buf);
+typedef void (*open_fn)(struct vfs_node*);
+typedef void (*close_fn)(struct vfs_node*);
+typedef struct dirent* (*readdir_fn)(struct vfs_node*, uint32_t index);
+typedef struct vfs_node* (*finddir_fn)(struct vfs_node*, const char* name);
+
+/* VFS Node - represents a file or directory in the tree */
+typedef struct vfs_node {
+    char name[VFS_NAME_MAX];    /* Node name */
+    uint32_t mask;              /* Permissions */
+    uint32_t uid;               /* Owning user */
+    uint32_t gid;               /* Owning group */
+    uint32_t flags;             /* Node type flags */
+    uint32_t inode;             /* Filesystem-specific inode */
+    uint32_t length;            /* Size in bytes */
+    uint32_t impl;              /* Implementation-specific data */
+    
+    /* Operations - set by filesystem driver */
+    read_fn    read;
+    write_fn   write;
+    open_fn    open;
+    close_fn   close;
+    readdir_fn readdir;
+    finddir_fn finddir;
+    
+    struct vfs_node* ptr;       /* For mountpoints/symlinks */
+} vfs_node_t;
+
+/* Directory entry returned by readdir */
+typedef struct dirent {
+    char name[VFS_NAME_MAX];
+    uint32_t ino;               /* Inode number */
+} dirent_t;
+
+/* The root of the filesystem tree */
+extern vfs_node_t* vfs_root;
+
+/* VFS API */
+vfs_node_t* vfs_open(const char* path, uint32_t flags);
+void vfs_close(vfs_node_t* node);
+uint32_t vfs_read(vfs_node_t* node, uint32_t off, uint32_t size, uint8_t* buf);
+uint32_t vfs_write(vfs_node_t* node, uint32_t off, uint32_t size, const uint8_t* buf);
+dirent_t* vfs_readdir(vfs_node_t* node, uint32_t index);
+vfs_node_t* vfs_finddir(vfs_node_t* node, const char* name);
+</code></pre>
+                    
+                    <h3 id="vfs-nodes">VFS Nodes</h3>
+
+                    <pre><code class="language-c">/* vfs.c - VFS implementation */
+
+#include "vfs.h"
+#include &lt;string.h&gt;
+
+vfs_node_t* vfs_root = NULL;
+
+/**
+ * Read from a file
+ */
+uint32_t vfs_read(vfs_node_t* node, uint32_t offset, 
+                  uint32_t size, uint8_t* buffer) {
+    if (node && node->read) {
+        return node->read(node, offset, size, buffer);
+    }
+    return 0;
+}
+
+/**
+ * Write to a file
+ */
+uint32_t vfs_write(vfs_node_t* node, uint32_t offset,
+                   uint32_t size, const uint8_t* buffer) {
+    if (node && node->write) {
+        return node->write(node, offset, size, buffer);
+    }
+    return 0;
+}
+
+/**
+ * Open a file (increment refcount, etc.)
+ */
+void vfs_open(vfs_node_t* node) {
+    if (node && node->open) {
+        node->open(node);
+    }
+}
+
+/**
+ * Close a file
+ */
+void vfs_close(vfs_node_t* node) {
+    if (node && node->close) {
+        node->close(node);
+    }
+}
+
+/**
+ * Read directory entry at index
+ */
+dirent_t* vfs_readdir(vfs_node_t* node, uint32_t index) {
+    /* Check this is actually a directory */
+    if (node && (node->flags & 0x7) == VFS_DIRECTORY && node->readdir) {
+        return node->readdir(node, index);
+    }
+    return NULL;
+}
+
+/**
+ * Find file in directory by name
+ */
+vfs_node_t* vfs_finddir(vfs_node_t* node, const char* name) {
+    if (node && (node->flags & 0x7) == VFS_DIRECTORY && node->finddir) {
+        return node->finddir(node, name);
+    }
+    return NULL;
+}
+
+/**
+ * Resolve a path to a VFS node
+ * e.g., "/home/user/file.txt" → vfs_node_t*
+ */
+vfs_node_t* vfs_namei(const char* path) {
+    if (!path || path[0] != '/') {
+        return NULL;  /* Must be absolute path */
+    }
+    
+    vfs_node_t* node = vfs_root;
+    char component[VFS_NAME_MAX];
+    int i = 1;  /* Skip leading slash */
+    
+    while (path[i]) {
+        /* Extract path component */
+        int j = 0;
+        while (path[i] && path[i] != '/') {
+            component[j++] = path[i++];
+        }
+        component[j] = '\0';
+        
+        if (j == 0) {
+            i++;  /* Skip consecutive slashes */
+            continue;
+        }
+        
+        /* Handle . and .. */
+        if (strcmp(component, ".") == 0) {
+            if (path[i]) i++;
+            continue;
+        }
+        /* TODO: handle ".." by tracking parent */
+        
+        /* Look up component in current directory */
+        node = vfs_finddir(node, component);
+        if (!node) {
+            return NULL;  /* Not found */
+        }
+        
+        /* Follow mount points */
+        if (node->flags & VFS_MOUNTPOINT) {
+            node = node->ptr;
+        }
+        
+        if (path[i]) i++;  /* Skip slash */
+    }
+    
+    return node;
+}
+</code></pre>
+                    
+                    <h3 id="mounting">Mounting</h3>
+                    
+                    <p><strong>Mounting</strong> attaches a filesystem to a directory in the tree. The mount point becomes the root of the mounted filesystem.</p>
+
+                    <pre><code class="language-c">/* Mount table */
+typedef struct mount_point {
+    char path[VFS_PATH_MAX];
+    vfs_node_t* node;           /* Covering node (mount point) */
+    vfs_node_t* root;           /* Root of mounted filesystem */
+    struct mount_point* next;
+} mount_point_t;
+
+static mount_point_t* mount_table = NULL;
+
+/**
+ * Mount a filesystem
+ * @param path      Mount point (must exist as directory)
+ * @param fs_root   Root node of filesystem to mount
+ */
+int vfs_mount(const char* path, vfs_node_t* fs_root) {
+    /* Find mount point directory */
+    vfs_node_t* mount_node = vfs_namei(path);
+    if (!mount_node || !(mount_node->flags & VFS_DIRECTORY)) {
+        return -1;  /* Mount point must be existing directory */
+    }
+    
+    /* Create mount entry */
+    mount_point_t* mp = kmalloc(sizeof(mount_point_t));
+    strcpy(mp->path, path);
+    mp->node = mount_node;
+    mp->root = fs_root;
+    mp->next = mount_table;
+    mount_table = mp;
+    
+    /* Mark node as mount point */
+    mount_node->flags |= VFS_MOUNTPOINT;
+    mount_node->ptr = fs_root;
+    
+    kprintf("VFS: Mounted filesystem at %s\n", path);
+    return 0;
+}
+
+/**
+ * Unmount a filesystem
+ */
+int vfs_unmount(const char* path) {
+    mount_point_t** pp = &mount_table;
+    
+    while (*pp) {
+        if (strcmp((*pp)->path, path) == 0) {
+            mount_point_t* mp = *pp;
+            
+            /* Clear mount point flag */
+            mp->node->flags &= ~VFS_MOUNTPOINT;
+            mp->node->ptr = NULL;
+            
+            /* Remove from list */
+            *pp = mp->next;
+            kfree(mp);
+            
+            kprintf("VFS: Unmounted %s\n", path);
+            return 0;
+        }
+        pp = &(*pp)->next;
+    }
+    
+    return -1;  /* Not mounted */
+}
+</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-terminal me-2"></i>Example: Initializing the Filesystem</h4>
+                        <pre><code class="language-c">void fs_init(void) {
+    /* Initialize ATA driver */
+    ata_init();
+    
+    /* Initialize VFS with a simple root */
+    vfs_root = initrd_init();  /* Initial ramdisk as root */
+    
+    /* Parse MBR on first ATA drive */
+    mbr_parse(&ata_device);
+    
+    /* Mount FAT partition */
+    fat_fs_t* fat = fat_init(&ata_device, partition_start);
+    if (fat) {
+        vfs_mount("/mnt/disk", fat->root);
+    }
+    
+    /* Now we can access files! */
+    vfs_node_t* file = vfs_namei("/mnt/disk/README.TXT");
+    if (file) {
+        char buffer[512];
+        uint32_t bytes = vfs_read(file, 0, 511, buffer);
+        buffer[bytes] = '\0';
+        kprintf("File contents:\n%s\n", buffer);
+    }
+}</code></pre>
+                        <span class="bias-tag"><i class="fas fa-code me-1"></i>Integration</span>
+                    </div>
+                </div>
+
+                <!-- What You Can Build Section -->
+                <div id="build" class="blog-content mt-5">
+                    <h2><i class="fas fa-hammer me-2 text-teal"></i>What You Can Build</h2>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Phase 7 Project:</strong> A kernel that can read and write files! Your OS now has persistent storage, can access disk drives, navigate directories, and manage files through a unified VFS interface.
+                    </div>
+                    
+                    <h3>Project: File Browser Shell Commands</h3>
+                    
+                    <p>Add these commands to your shell:</p>
+
+                    <pre><code class="language-c">/* shell_fs.c - Filesystem shell commands */
+
+/**
+ * ls - List directory contents
+ */
+void cmd_ls(const char* path) {
+    if (!path) path = ".";
+    
+    vfs_node_t* dir = vfs_namei(path);
+    if (!dir) {
+        kprintf("ls: cannot access '%s': No such file or directory\n", path);
+        return;
+    }
+    
+    if ((dir->flags & 0x7) != VFS_DIRECTORY) {
+        kprintf("ls: '%s': Not a directory\n", path);
+        return;
+    }
+    
+    kprintf("Contents of %s:\n", path);
+    kprintf("%-12s %8s  %s\n", "TYPE", "SIZE", "NAME");
+    kprintf("%-12s %8s  %s\n", "----", "----", "----");
+    
+    uint32_t index = 0;
+    dirent_t* entry;
+    while ((entry = vfs_readdir(dir, index++))) {
+        vfs_node_t* child = vfs_finddir(dir, entry->name);
+        const char* type = "???";
+        
+        if (child) {
+            switch (child->flags & 0x7) {
+                case VFS_FILE:       type = "FILE"; break;
+                case VFS_DIRECTORY:  type = "DIR"; break;
+                case VFS_CHARDEVICE: type = "CHAR"; break;
+                case VFS_BLOCKDEVICE:type = "BLOCK"; break;
+            }
+        }
+        
+        kprintf("%-12s %8d  %s\n", type, 
+                child ? child->length : 0, 
+                entry->name);
+    }
+}
+
+/**
+ * cat - Display file contents
+ */
+void cmd_cat(const char* path) {
+    if (!path) {
+        kprintf("Usage: cat &lt;filename&gt;\n");
+        return;
+    }
+    
+    vfs_node_t* file = vfs_namei(path);
+    if (!file) {
+        kprintf("cat: '%s': No such file\n", path);
+        return;
+    }
+    
+    if ((file->flags & 0x7) != VFS_FILE) {
+        kprintf("cat: '%s': Not a regular file\n", path);
+        return;
+    }
+    
+    uint8_t* buffer = kmalloc(file->length + 1);
+    uint32_t bytes = vfs_read(file, 0, file->length, buffer);
+    buffer[bytes] = '\0';
+    
+    kprintf("%s", buffer);
+    if (bytes > 0 && buffer[bytes-1] != '\n') {
+        kprintf("\n");
+    }
+    
+    kfree(buffer);
+}
+
+/**
+ * hexdump - Display file in hex
+ */
+void cmd_hexdump(const char* path) {
+    vfs_node_t* file = vfs_namei(path);
+    if (!file) {
+        kprintf("hexdump: '%s': No such file\n", path);
+        return;
+    }
+    
+    uint8_t buffer[256];
+    uint32_t offset = 0;
+    uint32_t bytes;
+    
+    while (offset < file->length && offset < 256) {
+        bytes = vfs_read(file, offset, 16, buffer);
+        if (bytes == 0) break;
+        
+        kprintf("%08X: ", offset);
+        
+        /* Hex bytes */
+        for (int i = 0; i < 16; i++) {
+            if (i < bytes) {
+                kprintf("%02X ", buffer[i]);
+            } else {
+                kprintf("   ");
+            }
+            if (i == 7) kprintf(" ");
+        }
+        
+        /* ASCII */
+        kprintf(" |");
+        for (int i = 0; i < bytes; i++) {
+            char c = buffer[i];
+            kprintf("%c", (c >= 32 && c < 127) ? c : '.');
+        }
+        kprintf("|\n");
+        
+        offset += bytes;
+    }
+}
+</code></pre>
+                    
+                    <h3>Exercises</h3>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-dumbbell me-2"></i>Exercise 1: File Write Support</h4>
+                        <p>Implement FAT file writing: find free clusters, update the FAT chain, and write directory entries for new files. Add a <code>echo "text" > file</code> shell command.</p>
+                        <span class="bias-tag"><i class="fas fa-cogs me-1"></i>Intermediate</span>
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-dumbbell me-2"></i>Exercise 2: Block Cache</h4>
+                        <p>Implement a block cache that keeps recently-read sectors in memory. Use a hash table for O(1) lookups and LRU eviction when the cache is full.</p>
+                        <span class="bias-tag"><i class="fas fa-tachometer-alt me-1"></i>Performance</span>
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-dumbbell me-2"></i>Exercise 3: Long Filename Support</h4>
+                        <p>Add VFAT long filename support to the FAT driver. Parse LFN entries (attribute 0x0F) and reconstruct UTF-16 filenames. This lets you access files with names longer than 8.3.</p>
+                        <span class="bias-tag"><i class="fas fa-font me-1"></i>Feature</span>
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-dumbbell me-2"></i>Exercise 4: Initial Ramdisk (initrd)</h4>
+                        <p>Create a simple filesystem in memory (loaded by bootloader). Store essential files like shell and config before real disk is mounted. GRUB's tar-based initrd is a good model.</p>
+                        <span class="bias-tag"><i class="fas fa-archive me-1"></i>Boot</span>
+                    </div>
+                </div>
+
+                <!-- Next Steps Section -->
+                <div id="next-steps" class="blog-content mt-5">
+                    <h2><i class="fas fa-arrow-right me-2 text-teal"></i>Next Steps</h2>
+                    
+                    <p>With memory and files working, it's time for the big one: processes. In Phase 8, we'll implement task switching, system calls, and user mode so programs can run independently.</p>
+
+<pre><code class="language-plaintext">PHASE 8 PREVIEW: PROCESSES & USER MODE
+═══════════════════════════════════════════════════════════════
+
+Your kernel can now:
+  ✓ Read/write disk sectors (ATA driver)
+  ✓ Navigate FAT filesystem
+  ✓ Access files through VFS abstraction
+  ✓ Mount multiple filesystems
+
+Next, you'll build:
+  ┌─────────────────────────────────────────────────────────┐
+  │                   PROCESS MANAGEMENT                    │
+  └─────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────┐
+  │   KERNEL SPACE (Ring 0)                                  │
+  │                                                          │
+  │   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
+  │   │  Scheduler  │  │   Memory    │  │   File      │    │
+  │   │  (picks     │  │   Manager   │  │   System    │    │
+  │   │   next task)│  │  (per-proc) │  │   (VFS)     │    │
+  │   └──────┬──────┘  └──────┬──────┘  └──────┬──────┘    │
+  │          │                │                │            │
+  │   ┌──────▼────────────────▼────────────────▼──────┐    │
+  │   │           SYSTEM CALL INTERFACE               │    │
+  │   │    fork(), exec(), read(), write(), exit()    │    │
+  │   └──────────────────────┬────────────────────────┘    │
+  ╠══════════════════════════╪════════════════════════════╣
+  │   USER SPACE (Ring 3)    │                            │
+  │                          ▼                            │
+  │   ┌──────────┐  ┌──────────┐  ┌──────────┐          │
+  │   │ Process  │  │ Process  │  │ Process  │          │
+  │   │   PID 1  │  │   PID 2  │  │   PID 3  │          │
+  │   │  (init)  │  │  (shell) │  │   (app)  │          │
+  │   └──────────┘  └──────────┘  └──────────┘          │
+  └──────────────────────────────────────────────────────┘
+
+You'll implement:
+• Process Control Block (PCB) - task state
+• Context switching - save/restore registers
+• System calls - int 0x80 or syscall instruction
+• User mode - Ring 3 with memory protection
+• fork() / exec() / exit() / wait()</code></pre>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-graduation-cap me-2"></i>
+                        <strong>Key Takeaways from Phase 7:</strong>
+                        <ol class="mt-2 mb-0">
+                            <li><strong>Block Devices:</strong> Disks are accessed in sectors (512 bytes); you can't read individual bytes directly</li>
+                            <li><strong>ATA PIO:</strong> Simple polling-based I/O; production systems use DMA for performance</li>
+                            <li><strong>Partition Tables:</strong> MBR for legacy (4 partitions, 2TB limit), GPT for modern (128 partitions, huge disks)</li>
+                            <li><strong>FAT Filesystem:</strong> Cluster chains in FAT table, 32-byte directory entries, supports FAT12/16/32</li>
+                            <li><strong>VFS Abstraction:</strong> Unified interface for all filesystems; operations as function pointers</li>
+                            <li><strong>Mounting:</strong> Attaches filesystem to directory, path resolution follows mount points</li>
+                        </ol>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 6: Memory Management</h5>
+                            <p class="text-muted small mb-2">Review paging, virtual memory, and heap allocation.</p>
+                            <a href="kernel-dev-phase-06-memory.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 8: Processes & User Mode</h5>
+                            <p class="text-muted small mb-2">Implement task switching, system calls, and run code in user space.</p>
+                            <a href="kernel-dev-phase-08-processes.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 9: ELF Loading & Executables</h5>
+                            <p class="text-muted small mb-2">Parse ELF files and load executable programs into memory.</p>
+                            <a href="kernel-dev-phase-09-elf.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook">
+                            <i class="fab fa-facebook-f"></i>
+                        </a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter">
+                            <i class="fab fa-twitter"></i>
+                        </a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn">
+                            <i class="fab fa-linkedin-in"></i>
+                        </a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube">
+                            <i class="fab fa-youtube"></i>
+                        </a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram">
+                            <i class="fab fa-instagram"></i>
+                        </a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest">
+                            <i class="fab fa-pinterest-p"></i>
+                        </a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email">
+                            <i class="fas fa-envelope"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="bg-secondary">
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+    
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+    
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,1927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kernel Development Series - Phase 5: Interrupts & CPU Control | Wasil Zafar</title>
+    <meta name="description" content="Set up the Interrupt Descriptor Table (IDT), implement ISRs, program the PIC, and build a timer for your operating system kernel.">
+    <meta name="keywords" content="kernel development, interrupts, IDT, ISR, PIC, PIT, CPU exceptions, OS development, interrupt handler, timer">
+    <meta name="author" content="Wasil Zafar">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Kernel Development Series - Phase 5: Interrupts & CPU Control">
+    <meta property="og:description" content="Set up the Interrupt Descriptor Table (IDT), implement ISRs, program the PIC, and build a timer for your operating system kernel.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://wasilzafar.com/pages/series/kernel-development/kernel-dev-phase-05-interrupts.html">
+    <meta property="og:image" content="https://wasilzafar.com/images/og-kernel-dev.png">
+    <meta property="article:published_time" content="2026-02-06">
+    <meta property="article:author" content="Wasil Zafar">
+    <meta property="article:section" content="Technology">
+
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+    
+    <!-- Google Consent Mode v2 -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('consent', 'default', {
+        'ad_storage': 'denied',
+        'ad_user_data': 'denied',
+        'ad_personalization': 'denied',
+        'analytics_storage': 'denied',
+        'wait_for_update': 500
+      });
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="../../../images/favicon_io/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="../../../css/main.css">
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. 
+                    By clicking "Accept All", you consent to our use of cookies. See our 
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a> 
+                    for more information.
+                </p>
+                
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#about">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#skills">Skills</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#certifications">Certifications</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#interests">Interests</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">Phase 5: Interrupts & CPU Control</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>February 6, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>28 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Set up the Interrupt Descriptor Table (IDT), write Interrupt Service Routines (ISRs), program the PIC, handle CPU exceptions, and implement a system timer.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation Overlay -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#introduction" onclick="closeNav()">Introduction</a>
+                <ul>
+                    <li><a href="#why-interrupts" onclick="closeNav()">Why Interrupts?</a></li>
+                    <li><a href="#interrupt-types" onclick="closeNav()">Types of Interrupts</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#idt" onclick="closeNav()">Interrupt Descriptor Table</a>
+                <ul>
+                    <li><a href="#idt-structure" onclick="closeNav()">IDT Structure</a></li>
+                    <li><a href="#gate-types" onclick="closeNav()">Gate Types</a></li>
+                    <li><a href="#idt-implementation" onclick="closeNav()">IDT Implementation</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#isrs" onclick="closeNav()">Interrupt Service Routines</a>
+                <ul>
+                    <li><a href="#isr-structure" onclick="closeNav()">ISR Structure</a></li>
+                    <li><a href="#context-saving" onclick="closeNav()">Context Saving</a></li>
+                    <li><a href="#common-stub" onclick="closeNav()">Common ISR Stub</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#exceptions" onclick="closeNav()">CPU Exceptions</a>
+                <ul>
+                    <li><a href="#exception-list" onclick="closeNav()">Exception Types</a></li>
+                    <li><a href="#fault-handling" onclick="closeNav()">Fault Handling</a></li>
+                    <li><a href="#error-codes" onclick="closeNav()">Error Codes</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#pic" onclick="closeNav()">PIC Programming</a>
+                <ul>
+                    <li><a href="#pic-overview" onclick="closeNav()">PIC Overview</a></li>
+                    <li><a href="#remapping" onclick="closeNav()">IRQ Remapping</a></li>
+                    <li><a href="#eoi" onclick="closeNav()">End of Interrupt (EOI)</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#timer" onclick="closeNav()">Timer (PIT)</a>
+                <ul>
+                    <li><a href="#pit-overview" onclick="closeNav()">PIT Overview</a></li>
+                    <li><a href="#timer-setup" onclick="closeNav()">Timer Setup</a></li>
+                    <li><a href="#tick-counting" onclick="closeNav()">Tick Counting</a></li>
+                </ul>
+            </li>
+            <li><a href="#keyboard-irq" onclick="closeNav()">Keyboard IRQ Handler</a></li>
+            <li><a href="#build" onclick="closeNav()">What You Can Build</a></li>
+            <li><a href="#next-steps" onclick="closeNav()">Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- Introduction -->
+                <div id="introduction" class="blog-content">
+                    <h2><i class="fas fa-bolt me-2 text-teal"></i>Introduction: Event-Driven Computing</h2>
+                    
+                    <div class="highlight-box crimson">
+                        <i class="fas fa-flag me-2"></i>
+                        <strong>Phase 5 Goals:</strong> By the end of this phase, your kernel will respond to hardware events via interrupts instead of polling. You'll have a working timer, proper exception handling, and interrupt-driven keyboard input. Your OS will tick 100 times per second.
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-map-signs me-2"></i>Complete Series Navigation</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-2">18-Part Series</span>
+                            <span class="badge bg-crimson">OS Development Mastery</span>
+                        </div>
+                        <div class="content">
+                            <ol>
+                                <li><a href="kernel-dev-phase-00-orientation.html">Phase 0: Orientation & Big Picture</a> - OS fundamentals, kernel architectures, learning path</li>
+                                <li><a href="kernel-dev-phase-01-boot-process.html">Phase 1: How a Computer Starts</a> - BIOS/UEFI, boot sequence, dev environment</li>
+                                <li><a href="kernel-dev-phase-02-real-mode.html">Phase 2: Real Mode - First Steps</a> - Real mode, bootloader, BIOS interrupts</li>
+                                <li><a href="kernel-dev-phase-03-protected-mode.html">Phase 3: Entering Protected Mode</a> - GDT, 32-bit mode, C code execution</li>
+                                <li><a href="kernel-dev-phase-04-display-input.html">Phase 4: Display, Input & Output</a> - VGA text mode, keyboard handling</li>
+                                <li><strong>Phase 5: Interrupts & CPU Control (This Guide)</strong> - IDT, ISRs, PIC programming</li>
+                                <li><a href="kernel-dev-phase-06-memory.html">Phase 6: Memory Management</a> - Paging, virtual memory, heap allocator</li>
+                                <li><a href="kernel-dev-phase-07-filesystem.html">Phase 7: Disk Access & Filesystems</a> - Block devices, FAT, VFS layer</li>
+                                <li><a href="kernel-dev-phase-08-processes.html">Phase 8: Processes & User Mode</a> - Task switching, system calls, user space</li>
+                                <li><a href="kernel-dev-phase-09-elf.html">Phase 9: ELF Loading & Executables</a> - ELF format, program loading</li>
+                                <li><a href="kernel-dev-phase-10-stdlib-shell.html">Phase 10: Standard Library & Shell</a> - C library, command-line shell</li>
+                                <li><a href="kernel-dev-phase-11-long-mode.html">Phase 11: 64-Bit Long Mode</a> - x86-64, 64-bit paging, modern architecture</li>
+                                <li><a href="kernel-dev-phase-12-uefi.html">Phase 12: Modern Booting with UEFI</a> - UEFI boot services, memory maps</li>
+                                <li><a href="kernel-dev-phase-13-graphics.html">Phase 13: Graphics & GUI Systems</a> - Framebuffer, windowing, drawing</li>
+                                <li><a href="kernel-dev-phase-14-input-timing.html">Phase 14: Advanced Input & Timing</a> - Mouse, high-precision timers</li>
+                                <li><a href="kernel-dev-phase-15-hardware-drivers.html">Phase 15: Hardware Discovery & Drivers</a> - PCI, device drivers, NVMe</li>
+                                <li><a href="kernel-dev-phase-16-performance.html">Phase 16: Performance & Optimization</a> - Caching, scheduler tuning</li>
+                                <li><a href="kernel-dev-phase-17-security.html">Phase 17: Stability, Security & Finishing</a> - Debugging, hardening, completion</li>
+                            </ol>
+                        </div>
+                    </div>
+                    
+                    <p>In Phase 4, we implemented keyboard input using <strong>polling</strong>—constantly checking if a key was pressed. This works but is incredibly wasteful: the CPU spins in a loop doing nothing useful while waiting. <strong>Interrupts</strong> solve this problem elegantly.</p>
+
+                    <p>Imagine you're waiting for a pizza delivery. You could stand at the door checking every second (polling), or you could do something useful and let the doorbell notify you when it arrives (interrupts). Computers work the same way!</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Key Insight:</strong> Interrupts are the foundation of responsive computing. Instead of constantly checking if something happened (polling), the CPU can do useful work and get notified instantly when an event occurs. This is how modern operating systems achieve multitasking.
+                    </div>
+
+                    <h3 id="why-interrupts">Why Interrupts?</h3>
+                    
+                    <p>Without interrupts, your CPU would need to:</p>
+                    <ul>
+                        <li>Constantly check the keyboard for input (wasting cycles)</li>
+                        <li>Constantly check if disk operations completed</li>
+                        <li>Constantly check if network packets arrived</li>
+                        <li>Constantly check the timer for elapsed time</li>
+                    </ul>
+                    
+                    <p>With interrupts, the CPU can execute your program and be <strong>interrupted</strong> when something happens. It's like the difference between constantly asking "are we there yet?" versus getting a notification when you arrive.</p>
+
+<pre><code class="language-plaintext">THE INTERRUPT WORKFLOW
+═══════════════════════════════════════════════════════════════
+
+1. CPU executes normal code
+           │
+           ▼
+2. Hardware event occurs (key pressed, timer tick, etc.)
+           │
+           ▼
+3. Device sends interrupt signal to CPU
+           │
+           ▼
+4. CPU immediately:
+   ├── Saves current state (registers, flags, return address)
+   ├── Looks up handler address in IDT
+   └── Jumps to interrupt handler
+           │
+           ▼
+5. Interrupt handler runs
+   ├── Handles the event (read key, increment timer, etc.)
+   └── Signals "End of Interrupt" to hardware
+           │
+           ▼
+6. CPU restores state and resumes normal code</code></pre>
+
+                    <h3 id="interrupt-types">Types of Interrupts</h3>
+                    
+                    <p>x86 systems have three categories of interrupts:</p>
+
+<pre><code class="language-plaintext">INTERRUPT CLASSIFICATION
+═══════════════════════════════════════════════════════════════
+
+1. EXCEPTIONS (Vectors 0-31) - Synchronous, generated by CPU
+   ├── FAULTS: Can be corrected (Page Fault #14)
+   │           → Handler runs, then RETRY the instruction
+   ├── TRAPS: Intentional (Breakpoint #3, System Call)
+   │           → Handler runs, then CONTINUE to next instruction
+   └── ABORTS: Unrecoverable (Double Fault #8, Machine Check)
+               → System must be halted/reset
+
+2. HARDWARE INTERRUPTS (IRQs) - Asynchronous, from devices
+   ├── IRQ 0:  Timer (PIT)         → Vector 32 (after remapping)
+   ├── IRQ 1:  Keyboard            → Vector 33
+   ├── IRQ 2:  Cascade (PIC2)      → Vector 34
+   ├── IRQ 3:  COM2                → Vector 35
+   ├── IRQ 4:  COM1                → Vector 36
+   ├── IRQ 5:  LPT2 / Sound        → Vector 37
+   ├── IRQ 6:  Floppy              → Vector 38
+   ├── IRQ 7:  LPT1                → Vector 39
+   ├── IRQ 8:  RTC                 → Vector 40
+   ├── IRQ 9:  ACPI                → Vector 41
+   ├── IRQ 10: Available           → Vector 42
+   ├── IRQ 11: Available           → Vector 43
+   ├── IRQ 12: Mouse               → Vector 44
+   ├── IRQ 13: FPU                 → Vector 45
+   ├── IRQ 14: Primary ATA         → Vector 46
+   └── IRQ 15: Secondary ATA       → Vector 47
+
+3. SOFTWARE INTERRUPTS - Triggered by INT instruction
+   └── INT 0x80: Linux system call convention
+       INT 0x21: DOS function calls (historically)</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Conflict Alert!</strong> By default, the PIC maps IRQs 0-7 to vectors 8-15, which CONFLICT with CPU exception vectors! We must <strong>remap</strong> IRQs to vectors 32-47 before enabling interrupts.
+                    </div>
+                </div>
+
+                <!-- IDT Section -->
+                <div id="idt" class="blog-content mt-5">
+                    <h2><i class="fas fa-table me-2 text-teal"></i>Interrupt Descriptor Table (IDT)</h2>
+                    
+                    <p>The <strong>IDT</strong> is similar to the GDT we set up in Phase 3, but instead of describing memory segments, it describes where to find interrupt handlers. Each entry tells the CPU: "When interrupt N occurs, jump to address X."</p>
+
+                    <h3 id="idt-structure">IDT Structure</h3>
+                    
+                    <p>The IDT can have up to 256 entries (vectors 0-255). Each entry is 8 bytes in 32-bit protected mode:</p>
+
+<pre><code class="language-plaintext">IDT ENTRY FORMAT (32-bit Protected Mode)
+═══════════════════════════════════════════════════════════════
+
+Byte 7-6     Byte 5       Byte 4       Byte 3-2     Byte 1-0
+┌────────────┬────────────┬────────────┬────────────┬────────────┐
+│  Offset    │ Attributes │   Zero     │  Segment   │  Offset    │
+│  31:16     │ (P,DPL,T)  │   (0x00)   │  Selector  │  15:0      │
+└────────────┴────────────┴────────────┴────────────┴────────────┘
+
+Offset: 32-bit address of the interrupt handler (split in two)
+Selector: Code segment selector (usually 0x08 for kernel code)
+Attributes: Present bit, privilege level, gate type
+
+ATTRIBUTE BYTE FORMAT
+┌────┬─────────┬────┬─────────────┐
+│  P │   DPL   │ 0  │  Gate Type  │
+└────┴─────────┴────┴─────────────┘
+Bit   7    6-5    4     3-0
+
+P = Present (1 = valid entry)
+DPL = Descriptor Privilege Level (0-3)
+Gate Type = 0xE (32-bit interrupt gate) or 0xF (32-bit trap gate)</code></pre>
+
+                    <pre><code class="language-c">/* idt.h - IDT structures and declarations */
+#ifndef IDT_H
+#define IDT_H
+
+#include &lt;stdint.h&gt;
+
+/* IDT entry structure (32-bit protected mode) */
+typedef struct {
+    uint16_t offset_low;    /* Offset bits 0-15 of handler address */
+    uint16_t selector;      /* Code segment selector in GDT */
+    uint8_t  zero;          /* Always 0 */
+    uint8_t  type_attr;     /* Type and attributes (P, DPL, type) */
+    uint16_t offset_high;   /* Offset bits 16-31 of handler address */
+} __attribute__((packed)) idt_entry_t;
+
+/* IDTR register structure (loaded via LIDT instruction) */
+typedef struct {
+    uint16_t limit;         /* Table size - 1 */
+    uint32_t base;          /* Table address */
+} __attribute__((packed)) idt_ptr_t;
+
+/* Number of IDT entries (256 possible interrupts) */
+#define IDT_ENTRIES 256
+
+/* Gate type/attribute definitions */
+#define IDT_PRESENT     0x80    /* Present bit */
+#define IDT_DPL_RING0   0x00    /* Kernel privilege */
+#define IDT_DPL_RING3   0x60    /* User privilege */
+#define IDT_INTERRUPT   0x0E    /* 32-bit interrupt gate */
+#define IDT_TRAP        0x0F    /* 32-bit trap gate */
+
+/* Common attribute combinations */
+#define IDT_ATTR_KERNEL (IDT_PRESENT | IDT_DPL_RING0 | IDT_INTERRUPT)  /* 0x8E */
+#define IDT_ATTR_USER   (IDT_PRESENT | IDT_DPL_RING3 | IDT_INTERRUPT)  /* 0xEE */
+#define IDT_ATTR_TRAP   (IDT_PRESENT | IDT_DPL_RING0 | IDT_TRAP)       /* 0x8F */
+
+/* Function declarations */
+void idt_init(void);
+void idt_set_gate(uint8_t num, uint32_t handler, uint16_t selector, uint8_t flags);
+
+#endif
+</code></pre>
+                    
+                    <h3 id="gate-types">Gate Types</h3>
+                    
+                    <p>The IDT supports different gate types that control interrupt behavior:</p>
+
+<pre><code class="language-plaintext">IDT GATE TYPES
+═══════════════════════════════════════════════════════════════
+
+INTERRUPT GATE (0x0E / 0x8E with Present+Ring0):
+├── Automatically clears IF (Interrupt Flag) → disables interrupts
+├── Used for hardware IRQs and most CPU exceptions
+├── Prevents nested interrupts by default
+└── You must re-enable interrupts explicitly with STI
+
+TRAP GATE (0x0F / 0x8F with Present+Ring0):
+├── Does NOT clear IF → interrupts remain enabled
+├── Used for software interrupts (INT instruction)
+├── Allows nested interrupts
+└── Good for system calls (INT 0x80)
+
+TASK GATE (0x05):
+├── Causes a full task switch via TSS
+├── Rarely used in modern OS designs
+└── Can be used for Double Fault handling
+
+What happens when an interrupt fires?
+═══════════════════════════════════════════════════════════════
+1. CPU pushes SS:ESP (if privilege change)
+2. CPU pushes EFLAGS
+3. CPU pushes CS:EIP (return address)
+4. CPU pushes error code (for certain exceptions)
+5. For interrupt gates: CPU clears IF (disables interrupts)
+6. CPU loads new CS:EIP from IDT entry
+7. Handler executes...</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Interrupt vs Trap Gate:</strong> The key difference is whether interrupts are automatically disabled. For hardware IRQs, you usually want interrupt gates (auto-disable) to prevent the same interrupt from firing repeatedly while you're handling it.
+                    </div>
+                    
+                    <h3 id="idt-implementation">IDT Implementation</h3>
+                    
+                    <p>Let's implement the IDT setup:</p>
+
+                    <pre><code class="language-c">/* idt.c - IDT implementation */
+
+#include "idt.h"
+#include "string.h"  /* memset */
+
+/* The actual IDT array */
+static idt_entry_t idt[IDT_ENTRIES];
+
+/* IDTR pointer structure */
+static idt_ptr_t idtp;
+
+/* Set a single IDT entry */
+void idt_set_gate(uint8_t num, uint32_t handler, uint16_t selector, uint8_t flags) {
+    idt[num].offset_low  = handler & 0xFFFF;
+    idt[num].offset_high = (handler >> 16) & 0xFFFF;
+    idt[num].selector    = selector;
+    idt[num].zero        = 0;
+    idt[num].type_attr   = flags;
+}
+
+/* External assembly ISR stubs (defined in isr.asm) */
+extern void isr0(void);   /* Division by Zero */
+extern void isr1(void);   /* Debug */
+extern void isr2(void);   /* NMI */
+extern void isr3(void);   /* Breakpoint */
+extern void isr4(void);   /* Overflow */
+extern void isr5(void);   /* Bounds Check */
+extern void isr6(void);   /* Invalid Opcode */
+extern void isr7(void);   /* No Coprocessor */
+extern void isr8(void);   /* Double Fault */
+extern void isr9(void);   /* Coprocessor Segment Overrun */
+extern void isr10(void);  /* Bad TSS */
+extern void isr11(void);  /* Segment Not Present */
+extern void isr12(void);  /* Stack Fault */
+extern void isr13(void);  /* General Protection Fault */
+extern void isr14(void);  /* Page Fault */
+extern void isr15(void);  /* Reserved */
+extern void isr16(void);  /* x87 FPU Error */
+extern void isr17(void);  /* Alignment Check */
+extern void isr18(void);  /* Machine Check */
+extern void isr19(void);  /* SIMD Exception */
+/* ... isr20-31 are reserved by Intel */
+
+/* External IRQ handlers (after PIC remapping) */
+extern void irq0(void);   /* Timer (PIT) */
+extern void irq1(void);   /* Keyboard */
+extern void irq2(void);   /* Cascade for slave PIC */
+extern void irq3(void);   /* COM2 */
+extern void irq4(void);   /* COM1 */
+extern void irq5(void);   /* LPT2 / Sound card */
+extern void irq6(void);   /* Floppy disk */
+extern void irq7(void);   /* LPT1 / Spurious */
+extern void irq8(void);   /* RTC */
+extern void irq9(void);   /* ACPI */
+extern void irq10(void);  /* Available */
+extern void irq11(void);  /* Available */
+extern void irq12(void);  /* Mouse */
+extern void irq13(void);  /* FPU */
+extern void irq14(void);  /* Primary ATA */
+extern void irq15(void);  /* Secondary ATA */
+
+/* Initialize the IDT */
+void idt_init(void) {
+    /* Set up IDTR */
+    idtp.limit = (sizeof(idt_entry_t) * IDT_ENTRIES) - 1;
+    idtp.base  = (uint32_t)&idt;
+    
+    /* Clear IDT first */
+    memset(&idt, 0, sizeof(idt));
+    
+    /* Install CPU exception handlers (vectors 0-31) */
+    /* Selector 0x08 = kernel code segment from our GDT */
+    idt_set_gate(0,  (uint32_t)isr0,  0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(1,  (uint32_t)isr1,  0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(2,  (uint32_t)isr2,  0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(3,  (uint32_t)isr3,  0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(4,  (uint32_t)isr4,  0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(5,  (uint32_t)isr5,  0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(6,  (uint32_t)isr6,  0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(7,  (uint32_t)isr7,  0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(8,  (uint32_t)isr8,  0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(9,  (uint32_t)isr9,  0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(10, (uint32_t)isr10, 0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(11, (uint32_t)isr11, 0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(12, (uint32_t)isr12, 0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(13, (uint32_t)isr13, 0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(14, (uint32_t)isr14, 0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(15, (uint32_t)isr15, 0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(16, (uint32_t)isr16, 0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(17, (uint32_t)isr17, 0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(18, (uint32_t)isr18, 0x08, IDT_ATTR_KERNEL);
+    idt_set_gate(19, (uint32_t)isr19, 0x08, IDT_ATTR_KERNEL);
+    /* Vectors 20-31 reserved, set to isr_reserved if needed */
+    
+    /* Install IRQ handlers (vectors 32-47 after PIC remapping) */
+    idt_set_gate(32, (uint32_t)irq0,  0x08, IDT_ATTR_KERNEL);  /* Timer */
+    idt_set_gate(33, (uint32_t)irq1,  0x08, IDT_ATTR_KERNEL);  /* Keyboard */
+    idt_set_gate(34, (uint32_t)irq2,  0x08, IDT_ATTR_KERNEL);  /* Cascade */
+    idt_set_gate(35, (uint32_t)irq3,  0x08, IDT_ATTR_KERNEL);  /* COM2 */
+    idt_set_gate(36, (uint32_t)irq4,  0x08, IDT_ATTR_KERNEL);  /* COM1 */
+    idt_set_gate(37, (uint32_t)irq5,  0x08, IDT_ATTR_KERNEL);  /* LPT2 */
+    idt_set_gate(38, (uint32_t)irq6,  0x08, IDT_ATTR_KERNEL);  /* Floppy */
+    idt_set_gate(39, (uint32_t)irq7,  0x08, IDT_ATTR_KERNEL);  /* LPT1 */
+    idt_set_gate(40, (uint32_t)irq8,  0x08, IDT_ATTR_KERNEL);  /* RTC */
+    idt_set_gate(41, (uint32_t)irq9,  0x08, IDT_ATTR_KERNEL);  /* ACPI */
+    idt_set_gate(42, (uint32_t)irq10, 0x08, IDT_ATTR_KERNEL);  /* Available */
+    idt_set_gate(43, (uint32_t)irq11, 0x08, IDT_ATTR_KERNEL);  /* Available */
+    idt_set_gate(44, (uint32_t)irq12, 0x08, IDT_ATTR_KERNEL);  /* Mouse */
+    idt_set_gate(45, (uint32_t)irq13, 0x08, IDT_ATTR_KERNEL);  /* FPU */
+    idt_set_gate(46, (uint32_t)irq14, 0x08, IDT_ATTR_KERNEL);  /* ATA1 */
+    idt_set_gate(47, (uint32_t)irq15, 0x08, IDT_ATTR_KERNEL);  /* ATA2 */
+    
+    /* Load IDT - this makes it active */
+    __asm__ volatile("lidt %0" : : "m"(idtp));
+}
+</code></pre>
+                </div>
+
+                <!-- ISRs Section -->
+                <div id="isrs" class="blog-content mt-5">
+                    <h2><i class="fas fa-code me-2 text-teal"></i>Interrupt Service Routines</h2>
+                    
+                    <p>ISRs (Interrupt Service Routines) are the functions that handle interrupts. They must follow strict rules because they run in a special context—normal code was interrupted mid-execution!</p>
+
+                    <h3 id="isr-structure">ISR Structure</h3>
+                    
+                    <p>Each ISR must:</p>
+                    <ol>
+                        <li><strong>Save</strong> the current CPU state (all registers)</li>
+                        <li><strong>Handle</strong> the interrupt (your actual handler code)</li>
+                        <li><strong>Restore</strong> the CPU state exactly as it was</li>
+                        <li><strong>Return</strong> using IRET instead of normal RET</li>
+                    </ol>
+
+<pre><code class="language-plaintext">STACK STATE WHEN ISR BEGINS
+═══════════════════════════════════════════════════════════════
+
+If interrupt occurred in SAME privilege level (kernel → kernel):
+┌─────────────────────────┐  ← Old ESP
+│      Old EFLAGS         │
+├─────────────────────────┤
+│      Old CS             │
+├─────────────────────────┤
+│      Old EIP            │  ← Return address
+├─────────────────────────┤
+│   Error Code (maybe)    │  ← Only for some exceptions
+└─────────────────────────┘  ← ESP when ISR starts
+
+If interrupt occurred with privilege CHANGE (user → kernel):
+┌─────────────────────────┐
+│      Old SS             │  ← User's stack segment
+├─────────────────────────┤
+│      Old ESP            │  ← User's stack pointer
+├─────────────────────────┤
+│      Old EFLAGS         │
+├─────────────────────────┤
+│      Old CS             │  ← User's code segment
+├─────────────────────────┤
+│      Old EIP            │
+├─────────────────────────┤
+│   Error Code (maybe)    │
+└─────────────────────────┘  ← ESP (now pointing to kernel stack)</code></pre>
+                    
+                    <h3 id="context-saving">Context Saving</h3>
+                    
+                    <p>We need to save ALL registers so we can restore the interrupted code perfectly. We'll create a structure to hold this context:</p>
+
+                    <pre><code class="language-c">/* registers.h - CPU register state structure */
+#ifndef REGISTERS_H
+#define REGISTERS_H
+
+#include &lt;stdint.h&gt;
+
+/* Structure pushed by our ISR stub + what CPU pushes automatically */
+typedef struct {
+    /* Pushed by our common stub (pusha-like) */
+    uint32_t ds;                                /* Data segment */
+    uint32_t edi, esi, ebp, esp_dummy;          /* General registers */
+    uint32_t ebx, edx, ecx, eax;                /* (esp_dummy ignored) */
+    
+    /* Pushed by our ISR stub */
+    uint32_t int_no;                            /* Interrupt number */
+    uint32_t err_code;                          /* Error code (or 0) */
+    
+    /* Pushed automatically by CPU */
+    uint32_t eip;                               /* Return address */
+    uint32_t cs;                                /* Code segment */
+    uint32_t eflags;                            /* CPU flags */
+    
+    /* Pushed by CPU only on privilege change */
+    uint32_t useresp;                           /* User's ESP */
+    uint32_t ss;                                /* User's SS */
+} __attribute__((packed)) registers_t;
+
+#endif
+</code></pre>
+
+                    <h3 id="common-stub">Assembly ISR Stubs</h3>
+                    
+                    <p>We need assembly code for the low-level ISR entry points. Each ISR pushes its number and jumps to a common stub:</p>
+
+                    <pre><code class="language-nasm">; isr.asm - Interrupt Service Routine stubs
+; These are the actual entry points installed in the IDT
+
+[BITS 32]
+
+; External C handler
+extern isr_handler
+extern irq_handler
+
+; Macro for ISRs that DON'T push an error code
+%macro ISR_NOERRCODE 1
+    global isr%1
+    isr%1:
+        cli                     ; Disable interrupts
+        push dword 0            ; Push dummy error code
+        push dword %1           ; Push interrupt number
+        jmp isr_common_stub
+%endmacro
+
+; Macro for ISRs that DO push an error code
+%macro ISR_ERRCODE 1
+    global isr%1
+    isr%1:
+        cli                     ; Disable interrupts
+        ; Error code already pushed by CPU
+        push dword %1           ; Push interrupt number
+        jmp isr_common_stub
+%endmacro
+
+; Macro for IRQs (hardware interrupts)
+%macro IRQ 2
+    global irq%1
+    irq%1:
+        cli
+        push dword 0            ; No error code for IRQs
+        push dword %2           ; Push interrupt number (32+)
+        jmp irq_common_stub
+%endmacro
+
+; CPU Exceptions (vectors 0-31)
+ISR_NOERRCODE  0   ; #DE - Division by Zero
+ISR_NOERRCODE  1   ; #DB - Debug
+ISR_NOERRCODE  2   ; NMI - Non-Maskable Interrupt
+ISR_NOERRCODE  3   ; #BP - Breakpoint
+ISR_NOERRCODE  4   ; #OF - Overflow
+ISR_NOERRCODE  5   ; #BR - Bound Range Exceeded
+ISR_NOERRCODE  6   ; #UD - Invalid Opcode
+ISR_NOERRCODE  7   ; #NM - No Math Coprocessor
+ISR_ERRCODE    8   ; #DF - Double Fault (error code = 0 always)
+ISR_NOERRCODE  9   ; Coprocessor Segment Overrun (obsolete)
+ISR_ERRCODE   10   ; #TS - Invalid TSS
+ISR_ERRCODE   11   ; #NP - Segment Not Present
+ISR_ERRCODE   12   ; #SS - Stack Segment Fault
+ISR_ERRCODE   13   ; #GP - General Protection Fault
+ISR_ERRCODE   14   ; #PF - Page Fault
+ISR_NOERRCODE 15   ; Reserved
+ISR_NOERRCODE 16   ; #MF - x87 FPU Error
+ISR_ERRCODE   17   ; #AC - Alignment Check
+ISR_NOERRCODE 18   ; #MC - Machine Check
+ISR_NOERRCODE 19   ; #XM - SIMD Exception
+; 20-31 reserved...
+
+; Hardware IRQs (mapped to vectors 32-47)
+IRQ  0, 32  ; Timer (PIT)
+IRQ  1, 33  ; Keyboard
+IRQ  2, 34  ; Cascade for slave PIC
+IRQ  3, 35  ; COM2
+IRQ  4, 36  ; COM1
+IRQ  5, 37  ; LPT2
+IRQ  6, 38  ; Floppy
+IRQ  7, 39  ; LPT1 / Spurious
+IRQ  8, 40  ; RTC
+IRQ  9, 41  ; ACPI
+IRQ 10, 42  ; Available
+IRQ 11, 43  ; Available
+IRQ 12, 44  ; Mouse
+IRQ 13, 45  ; FPU
+IRQ 14, 46  ; Primary ATA
+IRQ 15, 47  ; Secondary ATA
+
+; Common ISR stub - saves CPU state, calls C handler
+isr_common_stub:
+    ; Save all general-purpose registers
+    pusha
+    
+    ; Save data segment
+    mov ax, ds
+    push eax
+    
+    ; Load kernel data segment
+    mov ax, 0x10        ; Kernel data segment selector
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    
+    ; Push pointer to register structure (stack pointer)
+    push esp
+    
+    ; Call C handler: isr_handler(registers_t* regs)
+    call isr_handler
+    
+    ; Remove pushed pointer
+    add esp, 4
+    
+    ; Restore data segment
+    pop eax
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    
+    ; Restore general-purpose registers
+    popa
+    
+    ; Clean up pushed error code and interrupt number
+    add esp, 8
+    
+    ; Return from interrupt (pops EIP, CS, EFLAGS, and possibly ESP, SS)
+    iret
+
+; Common IRQ stub - similar but calls irq_handler
+irq_common_stub:
+    pusha
+    
+    mov ax, ds
+    push eax
+    
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    
+    push esp
+    call irq_handler
+    add esp, 4
+    
+    pop eax
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    
+    popa
+    add esp, 8
+    iret
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Error Code Complexity:</strong> Some exceptions push an error code automatically, others don't. Our macros handle this by pushing a dummy 0 when needed. The Page Fault (#14) error code contains valuable information about what went wrong!
+                    </div>
+                </div>
+
+                <!-- CPU Exceptions Section -->
+                <div id="exceptions" class="blog-content mt-5">
+                    <h2><i class="fas fa-exclamation-triangle me-2 text-teal"></i>CPU Exceptions</h2>
+                    
+                    <p>CPU exceptions are interrupts generated by the processor itself when something goes wrong (or intentionally, like breakpoints). Handling them properly is crucial for a stable OS.</p>
+
+                    <h3 id="exception-list">Exception Types</h3>
+
+<pre><code class="language-plaintext">x86 CPU EXCEPTIONS (Vectors 0-31)
+═══════════════════════════════════════════════════════════════
+
+Vec │ Name                   │ Type   │ Err? │ Description
+────┼────────────────────────┼────────┼──────┼─────────────────────
+ 0  │ #DE Division Error     │ Fault  │  No  │ DIV/IDIV by zero
+ 1  │ #DB Debug              │ F/Trap │  No  │ Debug exception
+ 2  │ NMI                    │ Int    │  No  │ Non-Maskable Interrupt
+ 3  │ #BP Breakpoint         │ Trap   │  No  │ INT 3 instruction
+ 4  │ #OF Overflow           │ Trap   │  No  │ INTO instruction
+ 5  │ #BR Bound Range        │ Fault  │  No  │ BOUND instruction
+ 6  │ #UD Invalid Opcode     │ Fault  │  No  │ Unknown instruction
+ 7  │ #NM No FPU             │ Fault  │  No  │ FPU not available
+ 8  │ #DF Double Fault       │ Abort  │ Yes* │ Exception during exc.
+ 9  │ (obsolete)             │  -     │  No  │ Coprocessor overrun
+10  │ #TS Invalid TSS        │ Fault  │ Yes  │ Task switch failed
+11  │ #NP Segment Not Pres.  │ Fault  │ Yes  │ Segment not in memory
+12  │ #SS Stack Fault        │ Fault  │ Yes  │ Stack segment issue
+13  │ #GP General Protection │ Fault  │ Yes  │ Memory/privilege error
+14  │ #PF Page Fault         │ Fault  │ Yes  │ Page not present/etc.
+15  │ (reserved)             │  -     │  -   │ Intel reserved
+16  │ #MF x87 FPU Error      │ Fault  │  No  │ Math error
+17  │ #AC Alignment Check    │ Fault  │ Yes  │ Unaligned access
+18  │ #MC Machine Check      │ Abort  │  No  │ Hardware error
+19  │ #XM SIMD Exception     │ Fault  │  No  │ SSE/SSE2/etc. error
+20-31│ (reserved)            │  -     │  -   │ Intel reserved
+
+*Double Fault error code is always 0</code></pre>
+                    
+                    <h3 id="fault-handling">Implementing Exception Handlers</h3>
+                    
+                    <p>Here's a complete C handler for CPU exceptions:</p>
+
+                    <pre><code class="language-c">/* isr.c - Interrupt Service Routine handlers */
+
+#include "idt.h"
+#include "registers.h"
+#include "terminal.h"
+#include "io.h"
+
+/* Human-readable exception messages */
+static const char* exception_messages[32] = {
+    "Division By Zero",
+    "Debug",
+    "Non Maskable Interrupt",
+    "Breakpoint",
+    "Into Detected Overflow",
+    "Out of Bounds",
+    "Invalid Opcode",
+    "No Coprocessor (Device Not Available)",
+    "Double Fault",
+    "Coprocessor Segment Overrun",
+    "Bad TSS",
+    "Segment Not Present",
+    "Stack Fault",
+    "General Protection Fault",
+    "Page Fault",
+    "Unknown Interrupt (Reserved)",
+    "x87 FPU Error",
+    "Alignment Check",
+    "Machine Check",
+    "SIMD Floating-Point Exception",
+    "Virtualization Exception",
+    "Control Protection Exception",
+    "Reserved", "Reserved", "Reserved", "Reserved",
+    "Reserved", "Reserved",
+    "Hypervisor Injection Exception",
+    "VMM Communication Exception",
+    "Security Exception",
+    "Reserved"
+};
+
+/* Display register state on exception */
+static void dump_registers(registers_t* regs) {
+    kprintf("\n=== REGISTER DUMP ===\n");
+    kprintf("EAX=%08X  EBX=%08X  ECX=%08X  EDX=%08X\n",
+            regs->eax, regs->ebx, regs->ecx, regs->edx);
+    kprintf("ESI=%08X  EDI=%08X  EBP=%08X  ESP=%08X\n",
+            regs->esi, regs->edi, regs->ebp, regs->useresp);
+    kprintf("EIP=%08X  CS=%04X  DS=%04X  EFLAGS=%08X\n",
+            regs->eip, regs->cs & 0xFFFF, regs->ds & 0xFFFF, regs->eflags);
+}
+
+/* Main ISR handler - called from assembly stub */
+void isr_handler(registers_t* regs) {
+    /* Only handle CPU exceptions (0-31) here */
+    if (regs->int_no < 32) {
+        /* Change to red for error display */
+        terminal_set_color(vga_make_color(VGA_LIGHT_RED, VGA_BLACK));
+        
+        kprintf("\n╔══════════════════════════════════════════╗\n");
+        kprintf("║          KERNEL PANIC!                   ║\n");
+        kprintf("╚══════════════════════════════════════════╝\n");
+        
+        kprintf("Exception: %s (INT %d)\n", 
+                exception_messages[regs->int_no], regs->int_no);
+        
+        if (regs->int_no == 14) {
+            /* Page fault - read CR2 for faulting address */
+            uint32_t faulting_address;
+            __asm__ volatile("mov %%cr2, %0" : "=r"(faulting_address));
+            kprintf("Faulting Address: 0x%08X\n", faulting_address);
+            kprintf("Error Code: 0x%X\n", regs->err_code);
+            kprintf("  %s | %s | %s\n",
+                    (regs->err_code & 1) ? "Protection" : "Not Present",
+                    (regs->err_code & 2) ? "Write" : "Read",
+                    (regs->err_code & 4) ? "User" : "Kernel");
+        } else if (regs->err_code != 0) {
+            kprintf("Error Code: 0x%X\n", regs->err_code);
+        }
+        
+        dump_registers(regs);
+        
+        kprintf("\nSystem Halted.\n");
+        
+        /* Disable interrupts and halt forever */
+        __asm__ volatile("cli");
+        for (;;) {
+            __asm__ volatile("hlt");
+        }
+    }
+}
+</code></pre>
+                    
+                    <h3 id="error-codes">Understanding Error Codes</h3>
+                    
+                    <p>The Page Fault (#14) error code is particularly useful for debugging:</p>
+
+<pre><code class="language-plaintext">PAGE FAULT ERROR CODE FORMAT
+═══════════════════════════════════════════════════════════════
+
+Bit │ Name │ Meaning when SET
+────┼──────┼─────────────────────────────────────────
+ 0  │  P   │ Page-level protection violation (vs. not present)
+ 1  │ W/R  │ Write access caused fault (vs. read)
+ 2  │ U/S  │ User-mode access (vs. supervisor/kernel)
+ 3  │ RSVD │ Reserved bit set in page table
+ 4  │ I/D  │ Instruction fetch (vs. data access)
+ 5  │  PK  │ Protection key violation
+ 6  │  SS  │ Shadow stack access
+ 7  │ HLAT │ HLAT paging fault
+15  │ SGX  │ SGX violation
+
+EXAMPLE INTERPRETATIONS:
+Error Code 0x00: Page not present, read, kernel
+Error Code 0x02: Page not present, write, kernel
+Error Code 0x04: Page not present, read, user
+Error Code 0x05: Page present but protected, read, user
+Error Code 0x07: Page present but protected, write, user
+
+The faulting linear address is stored in CR2!</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-flask me-2"></i>General Protection Fault (GPF) Causes</h4>
+                        <p>GPF (#13) is the "catch-all" for privilege violations. Common causes:</p>
+                        <ul>
+                            <li>Writing to read-only memory</li>
+                            <li>Accessing kernel memory from user mode</li>
+                            <li>Loading invalid segment selectors</li>
+                            <li>Executing privileged instructions from Ring 3</li>
+                            <li>Exceeding segment limits</li>
+                        </ul>
+                        <span class="bias-tag"><i class="fas fa-bug me-1"></i>Debugging</span>
+                    </div>
+                </div>
+
+                <!-- PIC Section -->
+                <div id="pic" class="blog-content mt-5">
+                    <h2><i class="fas fa-microchip me-2 text-teal"></i>Programming the PIC</h2>
+                    
+                    <p>The <strong>Programmable Interrupt Controller (PIC)</strong> is a chip that manages hardware interrupts. The original IBM PC used the Intel 8259A, and modern systems emulate it for compatibility.</p>
+                    
+                    <h3 id="pic-overview">Why We Need the PIC</h3>
+
+<pre><code class="language-plaintext">HARDWARE INTERRUPT FLOW
+═══════════════════════════════════════════════════════════════
+
+                     ┌─────────────┐
+         IRQ0 ──────>│             │
+  (Timer)IRQ1 ──────>│    Master   │           ┌─────────────┐
+(Keyboard)IRQ2 ◄─────│     PIC     │──────────>│     CPU     │
+         IRQ3 ──────>│  (0x20-21)  │   INTR    │             │
+         IRQ4 ──────>│             │           │  Processes  │
+         IRQ5 ──────>│             │           │   IDT[n]    │
+         IRQ6 ──────>└─────────────┘           └─────────────┘
+         IRQ7 ──────>      │
+                           │ CASCADE (IRQ2)
+         IRQ8 ──────>┌─────┴───────┐
+    (RTC) IRQ9 ──────>│             │
+        IRQ10 ──────>│    Slave    │
+        IRQ11 ──────>│     PIC     │
+(PS/2)  IRQ12 ──────>│  (0xA0-A1)  │
+(FPU)   IRQ13 ──────>│             │
+(ATA1)  IRQ14 ──────>│             │
+(ATA2)  IRQ15 ──────>└─────────────┘
+
+Master PIC: IRQ 0-7  → Vectors 32-39 (after remapping)
+Slave PIC:  IRQ 8-15 → Vectors 40-47 (after remapping)</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-history me-2"></i>
+                        <strong>Why Remap?</strong> By default, the PIC maps IRQ 0-7 to vectors 8-15, which conflicts with CPU exceptions (8 = Double Fault, 13 = GPF, 14 = Page Fault). We must remap them to vectors 32+ where there's no conflict.
+                    </div>
+                    
+                    <h3 id="remapping">IRQ Remapping</h3>
+                    
+                    <p>The PIC is initialized by sending a sequence of <strong>Initialization Command Words (ICWs)</strong>:</p>
+
+<pre><code class="language-plaintext">PIC INITIALIZATION SEQUENCE
+═══════════════════════════════════════════════════════════════
+
+     ICW1              ICW2              ICW3              ICW4
+┌───────────┐    ┌───────────┐    ┌───────────┐    ┌───────────┐
+│  Trigger  │    │  Vector   │    │  Cascade  │    │  Mode     │
+│   Mode    │ -> │  Offset   │ -> │  Config   │ -> │  Settings │
+│  Init Bit │    │  (32/40)  │    │  (IRQ2)   │    │  (8086)   │
+└───────────┘    └───────────┘    └───────────┘    └───────────┘
+
+ICW1 (0x11): Start init, expect ICW4
+ICW2: Base vector (Master=0x20/32, Slave=0x28/40)
+ICW3: Cascade configuration
+ICW4 (0x01): 8086/88 mode</code></pre>
+
+                    <pre><code class="language-c">/* pic.c - 8259 Programmable Interrupt Controller */
+
+#include "io.h"
+
+/* PIC I/O Ports */
+#define PIC1_COMMAND    0x20    /* Master PIC command port */
+#define PIC1_DATA       0x21    /* Master PIC data port */
+#define PIC2_COMMAND    0xA0    /* Slave PIC command port */
+#define PIC2_DATA       0xA1    /* Slave PIC data port */
+
+/* PIC Commands */
+#define PIC_EOI         0x20    /* End of Interrupt command */
+
+/* ICW1 - Initialization Command Word 1 */
+#define ICW1_ICW4       0x01    /* ICW4 needed */
+#define ICW1_INIT       0x10    /* Initialization command */
+
+/* ICW4 - Initialization Command Word 4 */
+#define ICW4_8086       0x01    /* 8086/88 mode */
+
+/**
+ * Remap the PIC to avoid conflicts with CPU exceptions
+ * 
+ * By default:
+ *   Master PIC: IRQ 0-7  → vectors 8-15 (CONFLICT!)
+ *   Slave PIC:  IRQ 8-15 → vectors 112-127
+ * 
+ * After remapping:
+ *   Master PIC: IRQ 0-7  → vectors 32-39
+ *   Slave PIC:  IRQ 8-15 → vectors 40-47
+ */
+void pic_remap(void) {
+    /* Save existing masks */
+    uint8_t mask1 = inb(PIC1_DATA);
+    uint8_t mask2 = inb(PIC2_DATA);
+    
+    /* Start initialization sequence (cascade mode) */
+    outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
+    io_wait();
+    outb(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
+    io_wait();
+    
+    /* ICW2: Set vector offsets */
+    outb(PIC1_DATA, 0x20);  /* Master: IRQ 0-7  → INT 32-39 */
+    io_wait();
+    outb(PIC2_DATA, 0x28);  /* Slave:  IRQ 8-15 → INT 40-47 */
+    io_wait();
+    
+    /* ICW3: Configure cascade wiring */
+    outb(PIC1_DATA, 0x04);  /* Master: Slave on IRQ2 (bit 2) */
+    io_wait();
+    outb(PIC2_DATA, 0x02);  /* Slave:  Cascade identity = 2 */
+    io_wait();
+    
+    /* ICW4: Set 8086 mode */
+    outb(PIC1_DATA, ICW4_8086);
+    io_wait();
+    outb(PIC2_DATA, ICW4_8086);
+    io_wait();
+    
+    /* Restore saved masks */
+    outb(PIC1_DATA, mask1);
+    outb(PIC2_DATA, mask2);
+}
+</code></pre>
+                    
+                    <h3 id="eoi">End of Interrupt (EOI)</h3>
+                    
+                    <p>After handling any IRQ, you <strong>must</strong> send an EOI command to the PIC, or it won't deliver any more interrupts of that priority:</p>
+
+                    <pre><code class="language-c">/**
+ * Send End-of-Interrupt signal to PIC
+ * MUST be called at end of every IRQ handler!
+ */
+void pic_send_eoi(uint8_t irq) {
+    /* If this came from the slave PIC, send EOI to both */
+    if (irq >= 8) {
+        outb(PIC2_COMMAND, PIC_EOI);
+    }
+    /* Always send EOI to master */
+    outb(PIC1_COMMAND, PIC_EOI);
+}
+
+/**
+ * Mask (disable) a specific IRQ
+ */
+void pic_set_mask(uint8_t irq) {
+    uint16_t port;
+    uint8_t value;
+    
+    if (irq < 8) {
+        port = PIC1_DATA;
+    } else {
+        port = PIC2_DATA;
+        irq -= 8;
+    }
+    value = inb(port) | (1 << irq);
+    outb(port, value);
+}
+
+/**
+ * Unmask (enable) a specific IRQ
+ */
+void pic_clear_mask(uint8_t irq) {
+    uint16_t port;
+    uint8_t value;
+    
+    if (irq < 8) {
+        port = PIC1_DATA;
+    } else {
+        port = PIC2_DATA;
+        irq -= 8;
+    }
+    value = inb(port) & ~(1 << irq);
+    outb(port, value);
+}
+</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-exclamation-circle me-2 text-crimson"></i>Critical: Forgetting EOI</h4>
+                        <p>If you forget to send EOI:</p>
+                        <ul>
+                            <li>The PIC thinks you're still handling that interrupt</li>
+                            <li>No more interrupts of that priority or lower will fire</li>
+                            <li>Your timer/keyboard will appear "frozen"</li>
+                            <li>For slave PIC IRQs (8-15), you must send EOI to BOTH PICs</li>
+                        </ul>
+                        <span class="bias-tag"><i class="fas fa-bolt me-1"></i>Common Bug</span>
+                    </div>
+                </div>
+
+                <!-- Timer Section -->
+                <div id="timer" class="blog-content mt-5">
+                    <h2><i class="fas fa-clock me-2 text-teal"></i>Programmable Interval Timer (PIT)</h2>
+                    
+                    <p>The <strong>PIT (Intel 8253/8254)</strong> is a hardware timer that can generate periodic interrupts. It's essential for time-keeping, scheduling, and implementing sleep functions.</p>
+                    
+                    <h3 id="pit-overview">Understanding the PIT</h3>
+
+<pre><code class="language-plaintext">PIT ARCHITECTURE
+═══════════════════════════════════════════════════════════════
+
+┌───────────────────────────────────────────────────────────────┐
+│                    8253/8254 PIT Chip                         │
+├───────────┬───────────┬───────────┬───────────────────────────┤
+│           │           │           │                           │
+│ Channel 0 │ Channel 1 │ Channel 2 │    Common Control         │
+│           │           │           │                           │
+│   IRQ 0   │   DRAM    │  PC      │    Base Frequency:        │
+│  (Timer)  │  Refresh  │ Speaker   │    1,193,182 Hz           │
+│           │ (Legacy)  │           │                           │
+├───────────┴───────────┴───────────┤    Output = Base / Div    │
+│  Port 0x40  Port 0x41  Port 0x42  │    Command Port: 0x43     │
+└───────────────────────────────────┴───────────────────────────┘
+
+WHY 1,193,182 Hz?
+─────────────────────────
+The original IBM PC used a 14.31818 MHz crystal (for NTSC video).
+This was divided by 12 for the PIT: 14,318,180 / 12 = 1,193,182
+
+COMMON DIVISORS:
+─────────────────────────
+Divisor    │ Frequency  │ Period     │ Use Case
+───────────┼────────────┼────────────┼──────────────────
+    1193   │ ~1000 Hz   │ ~1 ms      │ High precision
+   11932   │  100 Hz    │ 10 ms      │ Typical OS tick
+   47727   │  25 Hz     │ 40 ms      │ Retro gaming
+  119318   │  10 Hz     │ 100 ms     │ Battery saving</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Choosing a Tick Rate:</strong> 100 Hz (10ms periods) is a good balance. Higher rates give finer scheduling granularity but increase interrupt overhead. Linux defaults to 250 Hz or 1000 Hz depending on configuration.
+                    </div>
+                    
+                    <h3 id="timer-setup">Configuring the Timer</h3>
+
+                    <pre><code class="language-c">/* timer.c - Programmable Interval Timer driver */
+
+#include "io.h"
+#include "pic.h"
+#include "registers.h"
+
+/* PIT I/O Ports */
+#define PIT_CHANNEL0    0x40    /* Channel 0 data port */
+#define PIT_CHANNEL1    0x41    /* Channel 1 data port */
+#define PIT_CHANNEL2    0x42    /* Channel 2 data port */
+#define PIT_COMMAND     0x43    /* Mode/Command register */
+
+/* PIT Command Register Bits */
+#define PIT_SEL_CH0     0x00    /* Select channel 0 */
+#define PIT_SEL_CH1     0x40    /* Select channel 1 */
+#define PIT_SEL_CH2     0x80    /* Select channel 2 */
+#define PIT_ACCESS_LH   0x30    /* Access: lobyte then hibyte */
+#define PIT_MODE2       0x04    /* Mode 2: rate generator */
+#define PIT_MODE3       0x06    /* Mode 3: square wave */
+#define PIT_BINARY      0x00    /* Binary counting (vs BCD) */
+
+/* Base frequency of the PIT */
+#define PIT_BASE_FREQ   1193182
+
+/* Our desired timer frequency */
+#define TIMER_FREQ_HZ   100     /* 100 Hz = 10ms periods */
+
+/* Global tick counter (volatile because modified in ISR) */
+static volatile uint32_t timer_ticks = 0;
+
+/**
+ * Initialize the PIT for periodic interrupts
+ * 
+ * Command byte breakdown for 0x36:
+ *   Bits 7-6: 00 = Channel 0
+ *   Bits 5-4: 11 = Access lobyte/hibyte
+ *   Bits 3-1: 011 = Mode 3 (square wave)
+ *   Bit 0:    0 = Binary counting
+ */
+void timer_init(uint32_t frequency) {
+    /* Calculate divisor for desired frequency */
+    uint32_t divisor = PIT_BASE_FREQ / frequency;
+    
+    /* Clamp divisor to 16-bit range */
+    if (divisor > 0xFFFF) {
+        divisor = 0xFFFF;
+    }
+    if (divisor < 1) {
+        divisor = 1;
+    }
+    
+    /* Send command byte: Channel 0, lobyte/hibyte, square wave, binary */
+    outb(PIT_COMMAND, PIT_SEL_CH0 | PIT_ACCESS_LH | PIT_MODE3 | PIT_BINARY);
+    
+    /* Send divisor (low byte first, then high byte) */
+    outb(PIT_CHANNEL0, (uint8_t)(divisor & 0xFF));
+    outb(PIT_CHANNEL0, (uint8_t)((divisor >> 8) & 0xFF));
+    
+    /* Enable IRQ 0 */
+    pic_clear_mask(0);
+}
+
+/**
+ * Get current tick count
+ */
+uint32_t timer_get_ticks(void) {
+    return timer_ticks;
+}
+
+/**
+ * Sleep for a given number of ticks
+ */
+void timer_sleep(uint32_t ticks) {
+    uint32_t end_ticks = timer_ticks + ticks;
+    while (timer_ticks < end_ticks) {
+        /* Wait - could use HLT for power saving */
+        __asm__ volatile("hlt");
+    }
+}
+
+/**
+ * Get uptime in seconds
+ */
+uint32_t timer_uptime_seconds(void) {
+    return timer_ticks / TIMER_FREQ_HZ;
+}
+</code></pre>
+                    
+                    <h3 id="tick-counting">Timer IRQ Handler</h3>
+                    
+                    <p>The timer handler is called every tick (e.g., 100 times per second at 100 Hz):</p>
+
+                    <pre><code class="language-c">/**
+ * Timer interrupt handler (IRQ 0 → INT 32)
+ * Called from irq_handler dispatch
+ */
+void timer_handler(registers_t* regs) {
+    timer_ticks++;
+    
+    /* Periodic tasks could go here:
+     * - Update system time
+     * - Check for sleeping processes to wake
+     * - Trigger scheduler (preemptive multitasking)
+     */
+    
+    /* Note: EOI is sent by irq_handler after this returns */
+}
+
+/**
+ * Main IRQ dispatcher (called from irq_common_stub)
+ */
+void irq_handler(registers_t* regs) {
+    /* Calculate IRQ number from interrupt number */
+    uint8_t irq = regs->int_no - 32;
+    
+    /* Dispatch to specific handler */
+    switch (irq) {
+        case 0:  /* Timer */
+            timer_handler(regs);
+            break;
+        case 1:  /* Keyboard */
+            keyboard_handler(regs);
+            break;
+        /* Add more IRQ handlers here */
+    }
+    
+    /* Send End-of-Interrupt to PIC */
+    pic_send_eoi(irq);
+}
+</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-flask me-2"></i>Implementing a Simple Clock</h4>
+                        <p>Once you have timer interrupts working, you can display a running clock:</p>
+                        <pre><code class="language-c">void display_uptime(void) {
+    uint32_t total = timer_get_ticks() / 100;  /* Assuming 100 Hz */
+    uint32_t hours = total / 3600;
+    uint32_t minutes = (total % 3600) / 60;
+    uint32_t seconds = total % 60;
+    
+    /* Display at fixed screen position */
+    terminal_set_cursor(70, 0);
+    kprintf("%02d:%02d:%02d", hours, minutes, seconds);
+}</code></pre>
+                        <span class="bias-tag"><i class="fas fa-code me-1"></i>Exercise</span>
+                    </div>
+                </div>
+
+                <!-- Keyboard IRQ Section -->
+                <div id="keyboard-irq" class="blog-content mt-5">
+                    <h2><i class="fas fa-keyboard me-2 text-teal"></i>Keyboard IRQ Handler</h2>
+                    
+                    <p>In Phase 4, we used <strong>polling</strong> to read keyboard input. Now we'll upgrade to <strong>interrupt-driven</strong> input, which is more efficient and responsive.</p>
+
+<pre><code class="language-plaintext">POLLING vs INTERRUPT-DRIVEN I/O
+═══════════════════════════════════════════════════════════════
+
+POLLING (What we did in Phase 4):
+┌──────────────────────────────────────────────────────────────┐
+│  while (true) {                                              │
+│      if (keyboard_data_available()) {  <- Wastes CPU cycles  │
+│          process_key();                   checking constantly│
+│      }                                                       │
+│  }                                                           │
+└──────────────────────────────────────────────────────────────┘
+
+INTERRUPT-DRIVEN (What we do now):
+┌──────────────────────────────────────────────────────────────┐
+│  CPU does useful work...                                     │
+│  CPU does useful work...                                     │
+│  [USER PRESSES KEY]                                          │
+│  CPU jumps to keyboard_handler() ← Hardware notifies us!     │
+│  keyboard_handler() stores key ─>│ Buffer │                  │
+│  CPU resumes useful work...                                  │
+└──────────────────────────────────────────────────────────────┘
+</code></pre>
+
+                    <h3 id="keyboard-buffer">Circular Buffer</h3>
+                    
+                    <p>We need a buffer to store keypresses until the program is ready to read them. A circular (ring) buffer is perfect:</p>
+
+                    <pre><code class="language-c">/* keyboard.c - Interrupt-driven keyboard driver */
+
+#include "io.h"
+#include "pic.h"
+#include "registers.h"
+
+/* PS/2 Keyboard Ports */
+#define KEYBOARD_DATA_PORT      0x60
+#define KEYBOARD_STATUS_PORT    0x64
+
+/* Circular buffer for keyboard input */
+#define KEYBOARD_BUFFER_SIZE    256
+static volatile char keyboard_buffer[KEYBOARD_BUFFER_SIZE];
+static volatile uint8_t buffer_head = 0;  /* Write position */
+static volatile uint8_t buffer_tail = 0;  /* Read position */
+
+/* Modifier key states */
+static volatile uint8_t shift_pressed = 0;
+static volatile uint8_t ctrl_pressed = 0;
+static volatile uint8_t alt_pressed = 0;
+
+/* Scan code to ASCII lookup tables (US QWERTY) */
+static const char scancode_normal[128] = {
+    0,  27, '1','2','3','4','5','6','7','8','9','0','-','=','\b',
+    '\t','q','w','e','r','t','y','u','i','o','p','[',']','\n',
+    0,  'a','s','d','f','g','h','j','k','l',';','\'','`',
+    0,  '\\','z','x','c','v','b','n','m',',','.','/', 0,  '*',
+    0,  ' ', 0,   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,   0,
+    /* ... function keys, etc ... */
+};
+
+static const char scancode_shifted[128] = {
+    0,  27, '!','@','#','$','%','^','&','*','(',')','_','+','\b',
+    '\t','Q','W','E','R','T','Y','U','I','O','P','{','}','\n',
+    0,  'A','S','D','F','G','H','J','K','L',':','"','~',
+    0,  '|','Z','X','C','V','B','N','M','<','>','?', 0,  '*',
+    0,  ' ', 0,   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,   0,
+};
+
+/**
+ * Add a character to the keyboard buffer
+ */
+static void buffer_add(char c) {
+    uint8_t next = (buffer_head + 1) % KEYBOARD_BUFFER_SIZE;
+    
+    /* Only add if buffer isn't full */
+    if (next != buffer_tail) {
+        keyboard_buffer[buffer_head] = c;
+        buffer_head = next;
+    }
+    /* If full, keypress is dropped (you could beep here) */
+}
+
+/**
+ * Check if keyboard buffer has data
+ */
+int keyboard_has_data(void) {
+    return buffer_head != buffer_tail;
+}
+
+/**
+ * Read one character from keyboard buffer (blocking)
+ */
+char keyboard_getchar(void) {
+    /* Wait for data */
+    while (!keyboard_has_data()) {
+        __asm__ volatile("hlt");  /* Sleep until next interrupt */
+    }
+    
+    char c = keyboard_buffer[buffer_tail];
+    buffer_tail = (buffer_tail + 1) % KEYBOARD_BUFFER_SIZE;
+    return c;
+}
+
+/**
+ * Keyboard interrupt handler (IRQ 1 → INT 33)
+ */
+void keyboard_handler(registers_t* regs) {
+    /* Read the scancode */
+    uint8_t scancode = inb(KEYBOARD_DATA_PORT);
+    
+    /* Check if this is a key release (bit 7 set) */
+    int key_released = scancode & 0x80;
+    uint8_t code = scancode & 0x7F;
+    
+    /* Handle modifier keys */
+    if (code == 0x2A || code == 0x36) {         /* Left/Right Shift */
+        shift_pressed = !key_released;
+        return;
+    }
+    if (code == 0x1D) {                          /* Ctrl */
+        ctrl_pressed = !key_released;
+        return;
+    }
+    if (code == 0x38) {                          /* Alt */
+        alt_pressed = !key_released;
+        return;
+    }
+    
+    /* Only process key presses, not releases */
+    if (key_released) {
+        return;
+    }
+    
+    /* Look up the ASCII character */
+    char c;
+    if (shift_pressed) {
+        c = scancode_shifted[code];
+    } else {
+        c = scancode_normal[code];
+    }
+    
+    /* Handle Ctrl+C (break) */
+    if (ctrl_pressed && (c == 'c' || c == 'C')) {
+        /* Could set a flag for process termination */
+        buffer_add(3);  /* ASCII ETX (Ctrl+C) */
+        return;
+    }
+    
+    /* Add to buffer if it's a printable character */
+    if (c != 0) {
+        buffer_add(c);
+    }
+    
+    /* Note: EOI is sent by irq_handler after this returns */
+}
+</code></pre>
+
+                    <h3 id="init-interrupts">Putting It All Together</h3>
+                    
+                    <p>Here's the complete interrupt system initialization:</p>
+
+                    <pre><code class="language-c">/* Initialize all interrupt-related subsystems */
+void interrupts_init(void) {
+    /* Set up the Interrupt Descriptor Table */
+    idt_init();
+    
+    /* Remap the PIC (move IRQs to vectors 32-47) */
+    pic_remap();
+    
+    /* Initialize the timer at 100 Hz */
+    timer_init(100);
+    
+    /* Enable the keyboard IRQ */
+    pic_clear_mask(1);
+    
+    /* Enable interrupts! */
+    __asm__ volatile("sti");
+    
+    kprintf("Interrupts enabled.\n");
+}
+
+/* Main kernel entry point */
+void kernel_main(void) {
+    /* Initialize display */
+    terminal_init();
+    kprintf("Kernel starting...\n");
+    
+    /* Set up interrupt handling */
+    interrupts_init();
+    
+    /* Now we can use interrupt-driven I/O! */
+    kprintf("Type something: ");
+    
+    while (1) {
+        char c = keyboard_getchar();
+        terminal_putc(c);  /* Echo the character */
+    }
+}
+</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-lightbulb me-2"></i>Benefits of Interrupt-Driven I/O</h4>
+                        <ul>
+                            <li><strong>CPU Efficiency:</strong> No wasted cycles polling; CPU can do useful work or sleep</li>
+                            <li><strong>Responsiveness:</strong> Input is captured immediately when it happens</li>
+                            <li><strong>Buffering:</strong> Keypresses aren't lost if the program is busy</li>
+                            <li><strong>Foundation for Multitasking:</strong> Timer interrupt enables preemptive scheduling</li>
+                        </ul>
+                        <span class="bias-tag"><i class="fas fa-check-circle me-1"></i>Best Practice</span>
+                    </div>
+                </div>
+
+                <!-- What You Can Build Section -->
+                <div id="build" class="blog-content mt-5">
+                    <h2><i class="fas fa-hammer me-2 text-teal"></i>What You Can Build</h2>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Phase 5 Achievement:</strong> You now have a fully interrupt-driven kernel! It ticks 100 times per second, responds instantly to keypresses, and handles CPU exceptions gracefully. This is the foundation for everything else in an operating system.
+                    </div>
+                    
+                    <h3>Project: Timer-Driven Status Bar</h3>
+                    
+                    <p>Let's put everything together with a status bar that updates in real-time:</p>
+
+                    <pre><code class="language-c">/* status.c - Real-time status bar */
+
+#include "terminal.h"
+#include "timer.h"
+#include "keyboard.h"
+
+/* Status bar lives at row 0 */
+#define STATUS_ROW  0
+
+/* Called periodically (e.g., every 10 ticks = 100ms) */
+void update_status_bar(void) {
+    static uint32_t last_update = 0;
+    uint32_t now = timer_get_ticks();
+    
+    /* Only update every 10 ticks (100ms at 100Hz) */
+    if (now - last_update < 10) {
+        return;
+    }
+    last_update = now;
+    
+    /* Save cursor position */
+    int saved_x = terminal_getx();
+    int saved_y = terminal_gety();
+    
+    /* Draw status bar with different colors */
+    uint8_t saved_color = terminal_getcolor();
+    terminal_set_color(vga_make_color(VGA_BLACK, VGA_LIGHT_GREY));
+    
+    /* Clear status line */
+    terminal_set_cursor(0, STATUS_ROW);
+    for (int i = 0; i < 80; i++) {
+        terminal_putc(' ');
+    }
+    
+    /* Left: OS name */
+    terminal_set_cursor(1, STATUS_ROW);
+    terminal_set_color(vga_make_color(VGA_LIGHT_CYAN, VGA_LIGHT_GREY));
+    kprintf(" MyOS v0.5 ");
+    
+    /* Center: Current time */
+    terminal_set_cursor(35, STATUS_ROW);
+    terminal_set_color(vga_make_color(VGA_BLACK, VGA_LIGHT_GREY));
+    uint32_t uptime = timer_uptime_seconds();
+    kprintf(" %02d:%02d:%02d ", 
+            uptime / 3600, 
+            (uptime % 3600) / 60, 
+            uptime % 60);
+    
+    /* Right: Keyboard buffer status */
+    terminal_set_cursor(65, STATUS_ROW);
+    if (keyboard_has_data()) {
+        terminal_set_color(vga_make_color(VGA_LIGHT_GREEN, VGA_LIGHT_GREY));
+        kprintf("Data Ready");
+    } else {
+        terminal_set_color(vga_make_color(VGA_DARK_GREY, VGA_LIGHT_GREY));
+        kprintf("  Idle    ");
+    }
+    
+    /* Restore cursor and color */
+    terminal_set_color(saved_color);
+    terminal_set_cursor(saved_x, saved_y);
+}
+
+/* Hook into timer interrupt */
+void timer_handler(registers_t* regs) {
+    timer_ticks++;
+    update_status_bar();
+}
+</code></pre>
+
+                    <h3>Exercises</h3>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-dumbbell me-2"></i>Exercise 1: Implement sleep() Function</h4>
+                        <p>Create a user-friendly sleep function that waits for a specified number of milliseconds:</p>
+                        <pre><code class="language-c">void sleep_ms(uint32_t milliseconds) {
+    /* Convert ms to ticks based on TIMER_FREQ_HZ */
+    /* Handle rounding: 1ms at 100Hz = 0.1 ticks, round up! */
+}</code></pre>
+                        <span class="bias-tag"><i class="fas fa-code me-1"></i>Code Challenge</span>
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-dumbbell me-2"></i>Exercise 2: Add IRQ Handler Registration</h4>
+                        <p>Instead of a big switch statement in irq_handler, implement a registration system:</p>
+                        <pre><code class="language-c">typedef void (*irq_handler_fn)(registers_t*);
+
+void irq_install_handler(uint8_t irq, irq_handler_fn handler);
+void irq_uninstall_handler(uint8_t irq);
+
+/* Usage: */
+irq_install_handler(0, timer_handler);
+irq_install_handler(1, keyboard_handler);</code></pre>
+                        <span class="bias-tag"><i class="fas fa-puzzle-piece me-1"></i>Design Pattern</span>
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-dumbbell me-2"></i>Exercise 3: Implement a Beep Function</h4>
+                        <p>Use the PC Speaker (port 0x61 + PIT Channel 2) to generate a beep:</p>
+                        <pre><code class="language-c">void beep(uint32_t frequency, uint32_t duration_ms);
+
+/* The PC Speaker is controlled by:
+ * - PIT Channel 2 (0x42) for frequency
+ * - Port 0x61 bits 0-1 for enabling
+ */</code></pre>
+                        <span class="bias-tag"><i class="fas fa-volume-up me-1"></i>Hardware Fun</span>
+                    </div>
+                </div>
+
+                <!-- Next Steps Section -->
+                <div id="next-steps" class="blog-content mt-5">
+                    <h2><i class="fas fa-arrow-right me-2 text-teal"></i>Next Steps</h2>
+                    
+                    <p>Your kernel now has a <strong>heartbeat</strong>! With interrupts working, you have the foundation for:</p>
+                    
+                    <ul>
+                        <li><strong>Preemptive Multitasking:</strong> Timer interrupts let you switch between processes</li>
+                        <li><strong>Responsive I/O:</strong> Handle keyboard, mouse, disk without polling</li>
+                        <li><strong>Time Keeping:</strong> Track uptime, implement delays, schedule events</li>
+                        <li><strong>Power Efficiency:</strong> Let CPU sleep between interrupts (HLT instruction)</li>
+                    </ul>
+
+<pre><code class="language-plaintext">WHAT'S NEXT: PHASE 6 - MEMORY MANAGEMENT
+═══════════════════════════════════════════════════════════════
+
+Your current kernel:                After Phase 6:
+┌───────────────────────────┐      ┌───────────────────────────┐
+│  Physical Memory          │      │  Virtual Address Space    │
+│  ┌─────────────────────┐  │      │  ┌─────────────────────┐  │
+│  │ Kernel (fixed addr) │  │      │  │ Kernel Space (high) │  │
+│  ├─────────────────────┤  │ -->  │  ├─────────────────────┤  │
+│  │ ??? (unused)        │  │      │  │ User Space (low)    │  │
+│  │ ??? (unknown)       │  │      │  │ [protected, paged]   │  │
+│  └─────────────────────┘  │      │  └─────────────────────┘  │
+│  No protection!           │      │  Page tables + allocator! │
+└───────────────────────────┘      └───────────────────────────┘
+
+Topics in Phase 6:
+• Paging: Virtual to physical address translation
+• Page Tables: 4KB pages, CR3, TLB
+• Physical Memory Manager: Track free/used frames
+• Virtual Memory Manager: Map pages for processes
+• Heap Allocator: kmalloc() and kfree()</code></pre>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-graduation-cap me-2"></i>
+                        <strong>Key Takeaways from Phase 5:</strong>
+                        <ul class="mb-0">
+                            <li>The IDT maps interrupt numbers to handler functions (256 entries)</li>
+                            <li>CPU exceptions (0-31) are faults, traps, and aborts from the processor</li>
+                            <li>The PIC must be remapped to avoid conflicts with CPU exceptions</li>
+                            <li>Always send EOI to the PIC after handling hardware interrupts</li>
+                            <li>Interrupt-driven I/O is more efficient than polling</li>
+                            <li>Timer interrupts enable scheduling and time-keeping</li>
+                        </ul>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 4: Display, Input & Output</h5>
+                            <p class="text-muted small mb-2">Review VGA text mode output and basic keyboard input handling.</p>
+                            <a href="kernel-dev-phase-04-display-input.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 6: Memory Management</h5>
+                            <p class="text-muted small mb-2">Implement paging, virtual memory, and a dynamic heap allocator.</p>
+                            <a href="kernel-dev-phase-06-memory.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 7: Disk Access & Filesystems</h5>
+                            <p class="text-muted small mb-2">Access block devices, implement FAT filesystem, and build a VFS layer.</p>
+                            <a href="kernel-dev-phase-07-filesystem.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook">
+                            <i class="fab fa-facebook-f"></i>
+                        </a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter">
+                            <i class="fab fa-twitter"></i>
+                        </a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn">
+                            <i class="fab fa-linkedin-in"></i>
+                        </a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube">
+                            <i class="fab fa-youtube"></i>
+                        </a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram">
+                            <i class="fab fa-instagram"></i>
+                        </a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest">
+                            <i class="fab fa-pinterest-p"></i>
+                        </a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email">
+                            <i class="fas fa-envelope"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="bg-secondary">
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+    
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+    
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>

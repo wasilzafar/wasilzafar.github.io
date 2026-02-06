@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kernel Development Series - Phase 11: 64-Bit Long Mode | Wasil Zafar</title>
+    <meta name="description" content="Upgrade your kernel to x86-64 architecture with 64-bit long mode, 4-level paging, and modern CPU features.">
+    <meta name="keywords" content="kernel development, x86-64, long mode, 64-bit, 4-level paging, modern CPU, OS development">
+    <meta name="author" content="Wasil Zafar">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Kernel Development Series - Phase 11: 64-Bit Long Mode">
+    <meta property="og:description" content="Upgrade your kernel to x86-64 architecture with 64-bit long mode, 4-level paging, and modern CPU features.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://wasilzafar.com/pages/series/kernel-development/kernel-dev-phase-11-long-mode.html">
+    <meta property="og:image" content="https://wasilzafar.com/images/og-kernel-dev.png">
+    <meta property="article:published_time" content="2026-02-06">
+    <meta property="article:author" content="Wasil Zafar">
+    <meta property="article:section" content="Technology">
+
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+    
+    <!-- Google Consent Mode v2 -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('consent', 'default', {
+        'ad_storage': 'denied',
+        'ad_user_data': 'denied',
+        'ad_personalization': 'denied',
+        'analytics_storage': 'denied',
+        'wait_for_update': 500
+      });
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="../../../images/favicon_io/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="../../../css/main.css">
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. 
+                    By clicking "Accept All", you consent to our use of cookies. See our 
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a> 
+                    for more information.
+                </p>
+                
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#about">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#skills">Skills</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#certifications">Certifications</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/#interests">Interests</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">Phase 11: 64-Bit Long Mode</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>February 6, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>35 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Upgrade your kernel to 64-bit x86-64 architecture with 4-level paging, expanded registers, and modern CPU features.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation Overlay -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#introduction" onclick="closeNav()">Introduction</a>
+                <ul>
+                    <li><a href="#why-64bit" onclick="closeNav()">Why 64-Bit?</a></li>
+                    <li><a href="#architecture-overview" onclick="closeNav()">Architecture Overview</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#cpu-detection" onclick="closeNav()">CPU Detection</a>
+                <ul>
+                    <li><a href="#cpuid" onclick="closeNav()">CPUID Instruction</a></li>
+                    <li><a href="#check-support" onclick="closeNav()">Checking Support</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#64bit-gdt" onclick="closeNav()">64-Bit GDT</a>
+                <ul>
+                    <li><a href="#gdt-structure" onclick="closeNav()">GDT Structure</a></li>
+                    <li><a href="#long-mode-segments" onclick="closeNav()">Long Mode Segments</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#paging-64" onclick="closeNav()">4-Level Paging</a>
+                <ul>
+                    <li><a href="#pml4" onclick="closeNav()">PML4 Table</a></li>
+                    <li><a href="#table-hierarchy" onclick="closeNav()">Table Hierarchy</a></li>
+                    <li><a href="#identity-mapping" onclick="closeNav()">Identity Mapping</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#transition" onclick="closeNav()">Mode Transition</a>
+                <ul>
+                    <li><a href="#enable-pae" onclick="closeNav()">Enable PAE</a></li>
+                    <li><a href="#enable-longmode" onclick="closeNav()">Enable Long Mode</a></li>
+                    <li><a href="#jump-64" onclick="closeNav()">Jump to 64-Bit</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#64bit-kernel" onclick="closeNav()">64-Bit Kernel Code</a>
+                <ul>
+                    <li><a href="#calling-convention" onclick="closeNav()">Calling Convention</a></li>
+                    <li><a href="#porting" onclick="closeNav()">Porting Considerations</a></li>
+                </ul>
+            </li>
+            <li><a href="#build" onclick="closeNav()">What You Can Build</a></li>
+            <li><a href="#next-steps" onclick="closeNav()">Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- Introduction -->
+                <div id="introduction" class="blog-content">
+                    <h2><i class="fas fa-microchip me-2 text-teal"></i>Introduction: Going 64-Bit</h2>
+                    
+                    <div class="highlight-box crimson">
+                        <i class="fas fa-flag me-2"></i>
+                        <strong>Phase 11 Goals:</strong> By the end of this phase, your kernel will run in 64-bit long mode. You'll have 4-level paging for huge address spaces, expanded 64-bit registers, and access to modern CPU features.
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-map-signs me-2"></i>Complete Series Navigation</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-2">18-Part Series</span>
+                            <span class="badge bg-crimson">OS Development Mastery</span>
+                        </div>
+                        <div class="content">
+                            <ol>
+                                <li><a href="kernel-dev-phase-00-orientation.html">Phase 0: Orientation & Big Picture</a> - OS fundamentals, kernel architectures, learning path</li>
+                                <li><a href="kernel-dev-phase-01-boot-process.html">Phase 1: How a Computer Starts</a> - BIOS/UEFI, boot sequence, dev environment</li>
+                                <li><a href="kernel-dev-phase-02-real-mode.html">Phase 2: Real Mode - First Steps</a> - Real mode, bootloader, BIOS interrupts</li>
+                                <li><a href="kernel-dev-phase-03-protected-mode.html">Phase 3: Entering Protected Mode</a> - GDT, 32-bit mode, C code execution</li>
+                                <li><a href="kernel-dev-phase-04-display-input.html">Phase 4: Display, Input & Output</a> - VGA text mode, keyboard handling</li>
+                                <li><a href="kernel-dev-phase-05-interrupts.html">Phase 5: Interrupts & CPU Control</a> - IDT, ISRs, PIC programming</li>
+                                <li><a href="kernel-dev-phase-06-memory.html">Phase 6: Memory Management</a> - Paging, virtual memory, heap allocator</li>
+                                <li><a href="kernel-dev-phase-07-filesystem.html">Phase 7: Disk Access & Filesystems</a> - Block devices, FAT, VFS layer</li>
+                                <li><a href="kernel-dev-phase-08-processes.html">Phase 8: Processes & User Mode</a> - Task switching, system calls, user space</li>
+                                <li><a href="kernel-dev-phase-09-elf.html">Phase 9: ELF Loading & Executables</a> - ELF format, program loading</li>
+                                <li><a href="kernel-dev-phase-10-stdlib-shell.html">Phase 10: Standard Library & Shell</a> - C library, command-line shell</li>
+                                <li><strong>Phase 11: 64-Bit Long Mode (This Guide)</strong> - x86-64, 64-bit paging, modern architecture</li>
+                                <li><a href="kernel-dev-phase-12-uefi.html">Phase 12: Modern Booting with UEFI</a> - UEFI boot services, memory maps</li>
+                                <li><a href="kernel-dev-phase-13-graphics.html">Phase 13: Graphics & GUI Systems</a> - Framebuffer, windowing, drawing</li>
+                                <li><a href="kernel-dev-phase-14-input-timing.html">Phase 14: Advanced Input & Timing</a> - Mouse, high-precision timers</li>
+                                <li><a href="kernel-dev-phase-15-hardware-drivers.html">Phase 15: Hardware Discovery & Drivers</a> - PCI, device drivers, NVMe</li>
+                                <li><a href="kernel-dev-phase-16-performance.html">Phase 16: Performance & Optimization</a> - Caching, scheduler tuning</li>
+                                <li><a href="kernel-dev-phase-17-security.html">Phase 17: Stability, Security & Finishing</a> - Debugging, hardening, completion</li>
+                            </ol>
+                        </div>
+                    </div>
+                    
+                    <p>Content will be populated here...</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Key Insight:</strong> 64-bit mode isn't just about more memory—it brings more registers, a simpler segment model, and mandatory paging that actually simplifies many aspects of kernel development.
+                    </div>
+                    
+<pre style="background: #1e1e1e; padding: 1rem; border-radius: 8px; color: #dcdcaa; overflow-x: auto; font-size: 0.85rem;">
+<span style="color: #6a9955;">x86 CPU Modes Evolution:</span>
+
+<span style="color: #9cdcfe;">┌─────────────────────────────────────────────────────────────────┐</span>
+<span style="color: #9cdcfe;">│                         CPU History                             │</span>
+<span style="color: #9cdcfe;">├───────────┬───────────────────────────────────────────────────┤</span>
+<span style="color: #9cdcfe;">│  8086     │  Real Mode (16-bit, 1MB)                 1978      │</span>
+<span style="color: #9cdcfe;">├───────────┼───────────────────────────────────────────────────┤</span>
+<span style="color: #9cdcfe;">│  80386    │  Protected Mode (32-bit, 4GB)            1985      │</span>
+<span style="color: #9cdcfe;">├───────────┼───────────────────────────────────────────────────┤</span>
+<span style="color: #dcdcaa;">│  AMD64    │  Long Mode (64-bit, 256TB)               2003      │</span> ← We're here!
+<span style="color: #9cdcfe;">└───────────┴───────────────────────────────────────────────────┘</span>
+
+<span style="color: #6a9955;">Memory Addressing Comparison:</span>
+
+<span style="color: #9cdcfe;">32-bit Protected Mode:          64-bit Long Mode:</span>
+<span style="color: #9cdcfe;">┌──────────────────┐            ┌──────────────────────────────┐</span>
+<span style="color: #9cdcfe;">│                  │            │                              │</span>
+<span style="color: #9cdcfe;">│    4 GB Max      │            │      256 TB Virtual          │</span>
+<span style="color: #9cdcfe;">│   (2³² bytes)    │            │     (2⁴⁸ bytes*)             │</span>
+<span style="color: #9cdcfe;">│                  │            │                              │</span>
+<span style="color: #9cdcfe;">│  ┌────────────┐  │            │  ┌────────────────────────┐  │</span>
+<span style="color: #9cdcfe;">│  │ User Space │  │            │  │     User Space         │  │</span>
+<span style="color: #9cdcfe;">│  │   3 GB     │  │            │  │      128 TB            │  │</span>
+<span style="color: #9cdcfe;">│  ├────────────┤  │            │  ├────────────────────────┤  │</span>
+<span style="color: #9cdcfe;">│  │   Kernel   │  │            │  │      Kernel            │  │</span>
+<span style="color: #9cdcfe;">│  │   1 GB     │  │            │  │      128 TB            │  │</span>
+<span style="color: #9cdcfe;">│  └────────────┘  │            │  └────────────────────────┘  │</span>
+<span style="color: #9cdcfe;">└──────────────────┘            └──────────────────────────────┘</span>
+
+<span style="color: #6a9955;">* Current implementations use 48 bits; architecture supports 57 bits (128PB)</span>
+</pre>
+
+                    <h3 id="why-64bit">Why 64-Bit?</h3>
+                    
+                    <p>64-bit mode provides significant advantages beyond just addressing more memory:</p>
+                    
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Feature</th>
+                                <th>32-Bit Mode</th>
+                                <th>64-Bit Mode</th>
+                                <th>Benefit</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>General Purpose Registers</strong></td>
+                                <td>8 (EAX-EDI)</td>
+                                <td>16 (RAX-R15)</td>
+                                <td>More data in registers, fewer memory accesses</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Register Width</strong></td>
+                                <td>32 bits</td>
+                                <td>64 bits</td>
+                                <td>Larger values without multi-precision math</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Virtual Address Space</strong></td>
+                                <td>4 GB</td>
+                                <td>256 TB</td>
+                                <td>Room for big data, memory-mapped files</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Calling Convention</strong></td>
+                                <td>Stack-based</td>
+                                <td>Register-based</td>
+                                <td>Faster function calls, no stack bouncing</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Instruction Pointer</strong></td>
+                                <td>RIP-relative: manual</td>
+                                <td>RIP-relative addressing</td>
+                                <td>Position-independent code easier</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Segment Registers</strong></td>
+                                <td>Active (GDT required)</td>
+                                <td>Mostly ignored (flat model)</td>
+                                <td>Simpler memory model</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span><i class="fas fa-desktop me-1"></i>Real-World Impact</span>
+                        </div>
+                        <h4><i class="fas fa-memory me-2"></i>Why 4GB Isn't Enough</h4>
+                        <div class="content">
+                            <p>Modern applications easily exceed 32-bit limits:</p>
+                            <ul>
+                                <li><strong>Web browser</strong> - Chrome/Firefox can use 2-4 GB per tab</li>
+                                <li><strong>Video editing</strong> - 4K footage needs 8+ GB for editing</li>
+                                <li><strong>Databases</strong> - In-memory caching requires huge RAM</li>
+                                <li><strong>Machine learning</strong> - Model training uses 16-64+ GB</li>
+                            </ul>
+                            <p>The 4GB limit of 32-bit mode became a serious constraint by mid-2000s.</p>
+                        </div>
+                        <div class="tags">
+                            <span class="bias-tag">Motivation</span>
+                            <span class="bias-tag">Memory</span>
+                        </div>
+                    </div>
+
+                    <h3 id="architecture-overview">Architecture Overview</h3>
+                    
+                    <p>The transition from 32-bit to 64-bit involves several CPU and OS changes:</p>
+                    
+<pre style="background: #1e1e1e; padding: 1rem; border-radius: 8px; color: #dcdcaa; overflow-x: auto; font-size: 0.85rem;">
+<span style="color: #6a9955;">Long Mode Sub-Modes:</span>
+
+<span style="color: #9cdcfe;">┌─────────────────────────────────────────────────────────────────┐</span>
+<span style="color: #9cdcfe;">│                      Long Mode (IA-32e)                         │</span>
+<span style="color: #9cdcfe;">├─────────────────────────────────┬───────────────────────────────┤</span>
+<span style="color: #9cdcfe;">│    64-Bit Mode                  │    Compatibility Mode         │</span>
+<span style="color: #9cdcfe;">│    (Native 64-bit code)         │    (Run 32-bit code)          │</span>
+<span style="color: #9cdcfe;">│                                 │                               │</span>
+<span style="color: #9cdcfe;">│  • Full 64-bit registers        │  • 32-bit registers only      │</span>
+<span style="color: #9cdcfe;">│  • 64-bit pointers              │  • 32-bit pointers            │</span>
+<span style="color: #9cdcfe;">│  • New instruction encodings    │  • Original instruction set   │</span>
+<span style="color: #9cdcfe;">│  • RIP-relative addressing      │  • Same as protected mode     │</span>
+<span style="color: #9cdcfe;">└─────────────────────────────────┴───────────────────────────────┘</span>
+
+<span style="color: #6a9955;">Compatibility mode allows running 32-bit apps on 64-bit kernel!</span>
+</pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>AMD vs Intel:</strong> AMD created x86-64 (AMD64) in 2003. Intel later adopted it as "Intel 64" or "EM64T". They're compatible—your code works on both. We use "x86-64" or "long mode" to refer to the architecture.
+                    </div>
+                </div>
+
+                <!-- CPU Detection Section -->
+                <div id="cpu-detection" class="blog-content mt-5">
+                    <h2><i class="fas fa-search me-2 text-teal"></i>CPU Detection</h2>
+                    
+                    <p>Before switching to 64-bit mode, we must verify the CPU supports it. Not all x86 processors have long mode—older 32-bit-only CPUs don't. The CPUID instruction tells us what features are available.</p>
+                    
+                    <h3 id="cpuid">CPUID Instruction</h3>
+                    
+                    <p>CPUID is x86's feature discovery mechanism. You put a "leaf" number in EAX, execute CPUID, and get feature flags back in EAX/EBX/ECX/EDX:</p>
+                    
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>CPUID Leaf</th>
+                                <th>Information Returned</th>
+                                <th>Key Bits</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>EAX=0</code></td>
+                                <td>Vendor string, max leaf</td>
+                                <td>"GenuineIntel" or "AuthenticAMD"</td>
+                            </tr>
+                            <tr>
+                                <td><code>EAX=1</code></td>
+                                <td>Feature flags</td>
+                                <td>SSE, SSE2, PAE, PSE, etc.</td>
+                            </tr>
+                            <tr>
+                                <td><code>EAX=0x80000000</code></td>
+                                <td>Extended leaf max</td>
+                                <td>Check if extended features exist</td>
+                            </tr>
+                            <tr>
+                                <td><code>EAX=0x80000001</code></td>
+                                <td>Extended features</td>
+                                <td><strong>Long Mode (bit 29 of EDX)</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>CPUID Support:</strong> CPUID itself isn't available on pre-486 CPUs! You must first check if the EFLAGS.ID bit (bit 21) can be toggled. If it can, CPUID is supported.
+                    </div>
+                    
+                    <h3 id="check-support">Checking Support</h3>
+                    
+                    <p>Here's the complete sequence to verify long mode is available:</p>
+
+                    <pre><code class="language-nasm">; Check for long mode support
+check_long_mode:
+    ; Check if CPUID is supported
+    pushfd
+    pop eax
+    mov ecx, eax
+    xor eax, 1 << 21    ; Flip ID bit
+    push eax
+    popfd
+    pushfd
+    pop eax
+    push ecx
+    popfd
+    cmp eax, ecx
+    je .no_cpuid
+    
+    ; Check for extended CPUID
+    mov eax, 0x80000000
+    cpuid
+    cmp eax, 0x80000001
+    jb .no_long_mode
+    
+    ; Check for long mode
+    mov eax, 0x80000001
+    cpuid
+    test edx, 1 << 29   ; Long mode bit
+    jz .no_long_mode
+    
+    mov eax, 1          ; Long mode supported
+    ret
+    
+.no_cpuid:
+.no_long_mode:
+    xor eax, eax        ; Long mode not supported
+    ret
+</code></pre>
+
+                    <p><strong>Detection steps explained:</strong></p>
+                    <ol>
+                        <li><strong>Check CPUID support</strong> - Toggle EFLAGS.ID bit. If it toggles, CPUID exists</li>
+                        <li><strong>Check extended leaves</strong> - Call CPUID with EAX=0x80000000 to see if 0x80000001 is supported</li>
+                        <li><strong>Check long mode bit</strong> - Call CPUID with EAX=0x80000001, check EDX bit 29</li>
+                    </ol>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Graceful Fallback:</strong> If long mode isn't supported, you have options: run as 32-bit OS, show error message, or use PAE for >4GB RAM in 32-bit mode. Don't just crash!
+                    </div>
+                </div>
+
+                <!-- 64-Bit GDT Section -->
+                <div id="64bit-gdt" class="blog-content mt-5">
+                    <h2><i class="fas fa-table me-2 text-teal"></i>64-Bit GDT</h2>
+                    
+                    <p>Long mode still requires a GDT, but it's much simpler. Most segment fields are ignored—the CPU uses a flat memory model. We only need to set a few specific bits.</p>
+                    
+                    <h3 id="gdt-structure">GDT Structure</h3>
+                    
+<pre style="background: #1e1e1e; padding: 1rem; border-radius: 8px; color: #dcdcaa; overflow-x: auto; font-size: 0.85rem;">
+<span style="color: #6a9955;">64-Bit GDT Entry (8 bytes):</span>
+
+<span style="color: #9cdcfe;">Bit:   63                                                    0</span>
+<span style="color: #9cdcfe;">       ┌────┬───┬───┬───┬────┬─────────────────────────────────┐</span>
+<span style="color: #9cdcfe;">       │ G  │ D │ L │AVL│Seg │         (Ignored in 64-bit)     │</span>
+<span style="color: #9cdcfe;">       │    │ B │   │   │Lim │                                 │</span>
+<span style="color: #9cdcfe;">       ├────┼───┼───┼───┼────┼───┬───┬───┬───┬────────────────┤</span>
+<span style="color: #9cdcfe;">Byte:  │  7 │   │   │   │  6 │ P │DPL│ S │Type│       5-0      │</span>
+<span style="color: #9cdcfe;">       └────┴───┴───┴───┴────┴───┴───┴───┴───┴────────────────┘</span>
+
+<span style="color: #6a9955;">For 64-bit code segment:</span>
+<span style="color: #dcdcaa;">  L  = 1  (Long mode)</span>
+<span style="color: #dcdcaa;">  D  = 0  (Must be 0 when L=1)</span>
+<span style="color: #dcdcaa;">  P  = 1  (Present)</span>
+<span style="color: #dcdcaa;">  S  = 1  (Code/data, not system)</span>
+<span style="color: #dcdcaa;">Type = 0xA (Execute/Read)</span>
+
+<span style="color: #6a9955;">Result: The code segment is just a few bits set!</span>
+</pre>
+
+                    <pre><code class="language-nasm">; 64-bit GDT
+section .rodata
+gdt64:
+    dq 0                            ; Null descriptor
+.code: equ $ - gdt64
+    dq (1 << 43) | (1 << 44) | (1 << 47) | (1 << 53)  ; Code segment
+.data: equ $ - gdt64
+    dq (1 << 44) | (1 << 47)        ; Data segment
+.pointer:
+    dw $ - gdt64 - 1                ; GDT limit
+    dq gdt64                        ; GDT base
+</code></pre>
+                    
+                    <p><strong>Breaking down the magic numbers:</strong></p>
+                    <ul>
+                        <li><code>(1 << 43)</code> - Executable bit (this is a code segment)</li>
+                        <li><code>(1 << 44)</code> - Descriptor type: code/data (not system)</li>
+                        <li><code>(1 << 47)</code> - Present bit</li>
+                        <li><code>(1 << 53)</code> - Long mode bit (L flag)</li>
+                    </ul>
+                    
+                    <h3 id="long-mode-segments">Long Mode Segments</h3>
+                    
+                    <p>In 64-bit mode, segmentation is mostly disabled:</p>
+                    
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Segment</th>
+                                <th>64-Bit Behavior</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>CS</td>
+                                <td>Mode selection only</td>
+                                <td>L bit determines 64-bit vs compatibility mode</td>
+                            </tr>
+                            <tr>
+                                <td>DS, ES, SS</td>
+                                <td>Base ignored (treated as 0)</td>
+                                <td>Still need valid selectors but base doesn't matter</td>
+                            </tr>
+                            <tr>
+                                <td>FS, GS</td>
+                                <td><strong>Base IS used</strong></td>
+                                <td>Used for thread-local storage, CPU-local data</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Why FS/GS matter:</strong> Linux uses GS for kernel per-CPU data and FS for thread-local storage. Windows uses the opposite convention. The MSR_GS_BASE and MSR_FS_BASE registers set the base address directly, bypassing the GDT.
+                    </div>
+                </div>
+
+                <!-- 4-Level Paging Section -->
+                <div id="paging-64" class="blog-content mt-5">
+                    <h2><i class="fas fa-layer-group me-2 text-teal"></i>4-Level Paging</h2>
+                    
+                    <p>Long mode <strong>requires</strong> paging—you can't run without it. And it uses 4-level paging (instead of 32-bit's 2-level) to address the huge 48-bit virtual address space.</p>
+                    
+                    <h3 id="pml4">PML4 Table</h3>
+                    
+<pre style="background: #1e1e1e; padding: 1rem; border-radius: 8px; color: #dcdcaa; overflow-x: auto; font-size: 0.85rem;">
+<span style="color: #6a9955;">4-Level Page Table Structure:</span>
+
+<span style="color: #9cdcfe;">Virtual Address (48 bits used):</span>
+<span style="color: #9cdcfe;">┌────────┬────────┬────────┬────────┬────────────────────┐</span>
+<span style="color: #9cdcfe;">│        │  PML4  │  PDPT  │   PD   │   PT   │  Offset   │</span>
+<span style="color: #9cdcfe;">│ Sign   │  Index │  Index │  Index │  Index │           │</span>
+<span style="color: #9cdcfe;">│ Extend │   9b   │   9b   │   9b   │   9b   │    12b    │</span>
+<span style="color: #9cdcfe;">│ 16 bits│        │        │        │        │           │</span>
+<span style="color: #9cdcfe;">└────────┴────────┴────────┴────────┴────────┴───────────┘</span>
+<span style="color: #9cdcfe;">  63-48     47-39    38-30    29-21    20-12      11-0</span>
+
+<span style="color: #6a9955;">Page Table Walk (for 4KB pages):</span>
+
+<span style="color: #9cdcfe;">    CR3 ────► ┌──────────┐</span>
+<span style="color: #9cdcfe;">              │   PML4   │ (512 entries × 8 bytes = 4KB)</span>
+<span style="color: #9cdcfe;">              │   Table  │</span>
+<span style="color: #9cdcfe;">              └────┬─────┘</span>
+<span style="color: #9cdcfe;">                   │ [PML4 index]</span>
+<span style="color: #9cdcfe;">                   ▼</span>
+<span style="color: #9cdcfe;">              ┌──────────┐</span>
+<span style="color: #9cdcfe;">              │   PDPT   │ (Page Directory Pointer Table)</span>
+<span style="color: #9cdcfe;">              │  Table   │</span>
+<span style="color: #9cdcfe;">              └────┬─────┘</span>
+<span style="color: #9cdcfe;">                   │ [PDPT index]</span>
+<span style="color: #9cdcfe;">                   ▼</span>
+<span style="color: #9cdcfe;">              ┌──────────┐</span>
+<span style="color: #9cdcfe;">              │    PD    │ (Page Directory)</span>
+<span style="color: #9cdcfe;">              │   Table  │</span>
+<span style="color: #9cdcfe;">              └────┬─────┘</span>
+<span style="color: #9cdcfe;">                   │ [PD index]</span>
+<span style="color: #9cdcfe;">                   ▼</span>
+<span style="color: #9cdcfe;">              ┌──────────┐</span>
+<span style="color: #9cdcfe;">              │   Page   │ (Page Table)</span>
+<span style="color: #9cdcfe;">              │   Table  │</span>
+<span style="color: #9cdcfe;">              └────┬─────┘</span>
+<span style="color: #9cdcfe;">                   │ [PT index]</span>
+<span style="color: #9cdcfe;">                   ▼</span>
+<span style="color: #9cdcfe;">              ┌──────────┐</span>
+<span style="color: #9cdcfe;">              │ Physical │ + Offset (12 bits)</span>
+<span style="color: #9cdcfe;">              │   Page   │</span>
+<span style="color: #9cdcfe;">              └──────────┘</span>
+</pre>
+
+                    <p>The code below sets up minimal paging for the first 1GB using 2MB huge pages (skips the PT level):</p>
+
+                    <pre><code class="language-nasm">; Set up 4-level paging for long mode
+section .bss
+align 4096
+p4_table:
+    resb 4096
+p3_table:
+    resb 4096
+p2_table:
+    resb 4096
+
+section .text
+setup_page_tables:
+    ; Map P4 -> P3
+    mov eax, p3_table
+    or eax, 0b11        ; Present + Writable
+    mov [p4_table], eax
+    
+    ; Map P3 -> P2
+    mov eax, p2_table
+    or eax, 0b11
+    mov [p3_table], eax
+    
+    ; Map P2 entries (2MB pages)
+    mov ecx, 0          ; Counter
+.map_p2:
+    mov eax, 0x200000   ; 2MB
+    mul ecx
+    or eax, 0b10000011  ; Present + Writable + Huge
+    mov [p2_table + ecx * 8], eax
+    inc ecx
+    cmp ecx, 512        ; Map 1GB
+    jne .map_p2
+    
+    ret
+</code></pre>
+                    
+                    <h3 id="table-hierarchy">Table Hierarchy</h3>
+                    
+                    <p>Each level of the page table hierarchy covers progressively smaller regions:</p>
+                    
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Level</th>
+                                <th>Entries</th>
+                                <th>Each Entry Maps</th>
+                                <th>Total Coverage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>PML4</td>
+                                <td>512</td>
+                                <td>512 GB</td>
+                                <td>256 TB (full address space)</td>
+                            </tr>
+                            <tr>
+                                <td>PDPT</td>
+                                <td>512</td>
+                                <td>1 GB (or huge page)</td>
+                                <td>512 GB per PML4 entry</td>
+                            </tr>
+                            <tr>
+                                <td>PD</td>
+                                <td>512</td>
+                                <td>2 MB (or huge page)</td>
+                                <td>1 GB per PDPT entry</td>
+                            </tr>
+                            <tr>
+                                <td>PT</td>
+                                <td>512</td>
+                                <td>4 KB (standard page)</td>
+                                <td>2 MB per PD entry</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span><i class="fas fa-memory me-1"></i>Optimization</span>
+                        </div>
+                        <h4><i class="fas fa-expand me-2"></i>Huge Pages</h4>
+                        <div class="content">
+                            <p>Instead of 4KB pages, you can use:</p>
+                            <ul>
+                                <li><strong>2MB pages</strong> - Set PS bit in PD entry, skip PT level</li>
+                                <li><strong>1GB pages</strong> - Set PS bit in PDPT entry, skip PD and PT</li>
+                            </ul>
+                            <p>Benefits: Fewer TLB entries used, better TLB hit rate for large allocations. Databases and VMs love huge pages!</p>
+                            <pre><code class="language-nasm">; 2MB huge page entry
+mov eax, 0x200000       ; Physical address
+or eax, 0b10000011      ; Present + Writable + Huge
+mov [p2_table + ecx*8], eax</code></pre>
+                        </div>
+                        <div class="tags">
+                            <span class="bias-tag">Performance</span>
+                            <span class="bias-tag">TLB</span>
+                        </div>
+                    </div>
+                    
+                    <h3 id="identity-mapping">Identity Mapping</h3>
+                    
+                    <p>During the transition to long mode, we need <strong>identity mapping</strong>—where virtual address equals physical address. Why? Because when we enable paging, the instruction pointer suddenly becomes a virtual address. If that virtual address isn't mapped to where the code actually is, we crash.</p>
+                    
+<pre style="background: #1e1e1e; padding: 1rem; border-radius: 8px; color: #dcdcaa; overflow-x: auto; font-size: 0.85rem;">
+<span style="color: #6a9955;">Identity Mapping for Boot:</span>
+
+<span style="color: #9cdcfe;">Physical:  0x00000000 ─────────────────────► 0x40000000 (1GB)</span>
+<span style="color: #9cdcfe;">              │                                   │</span>
+<span style="color: #9cdcfe;">              │        1:1 Mapping                │</span>
+<span style="color: #9cdcfe;">              │                                   │</span>
+<span style="color: #9cdcfe;">Virtual:   0x00000000 ─────────────────────► 0x40000000 (1GB)</span>
+
+<span style="color: #6a9955;">After boot, you might want a higher-half kernel:</span>
+
+<span style="color: #9cdcfe;">Physical:     0x00000000 ──────────────────► 0x40000000</span>
+<span style="color: #9cdcfe;">                   │</span>
+<span style="color: #9cdcfe;">                   │ Mapped to TWO places:</span>
+<span style="color: #9cdcfe;">                   │</span>
+<span style="color: #9cdcfe;">Virtual:   0x00000000 (identity, temporary)</span>
+<span style="color: #9cdcfe;">        0xFFFF800000000000 (higher-half kernel)</span>
+</pre>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Higher-Half Kernel:</strong> Most 64-bit kernels map themselves at the top of the address space (like <code>0xFFFF8000_00000000</code>). This leaves the entire lower half for user space. We start with identity mapping, then add the higher-half mapping, then remove the identity mapping.
+                    </div>
+                </div>
+
+                <!-- Mode Transition Section -->
+                <div id="transition" class="blog-content mt-5">
+                    <h2><i class="fas fa-exchange-alt me-2 text-teal"></i>Mode Transition</h2>
+                    
+                    <p>The transition from 32-bit protected mode to 64-bit long mode requires a specific sequence. You can't just flip a switch—several CPU features must be enabled in order.</p>
+                    
+<pre style="background: #1e1e1e; padding: 1rem; border-radius: 8px; color: #dcdcaa; overflow-x: auto; font-size: 0.85rem;">
+<span style="color: #6a9955;">Transition Sequence:</span>
+
+<span style="color: #9cdcfe;">┌─────────────────────────────────────────────────────────────────┐</span>
+<span style="color: #9cdcfe;">│  32-Bit Protected Mode                                          │</span>
+<span style="color: #9cdcfe;">│  ┌───────────────────────────────────────────────────────────┐  │</span>
+<span style="color: #9cdcfe;">│  │ 1. Disable paging (if enabled)        CR0.PG = 0         │  │</span>
+<span style="color: #9cdcfe;">│  │ 2. Load PML4 address into CR3         CR3 = p4_table     │  │</span>
+<span style="color: #9cdcfe;">│  │ 3. Enable PAE                         CR4.PAE = 1        │  │</span>
+<span style="color: #9cdcfe;">│  │ 4. Enable Long Mode in EFER           EFER.LME = 1       │  │</span>
+<span style="color: #9cdcfe;">│  │ 5. Enable paging                      CR0.PG = 1         │  │</span>
+<span style="color: #9cdcfe;">│  └───────────────────────────────────────────────────────────┘  │</span>
+<span style="color: #9cdcfe;">│                         │                                       │</span>
+<span style="color: #9cdcfe;">│                         ▼                                       │</span>
+<span style="color: #9cdcfe;">│  ┌───────────────────────────────────────────────────────────┐  │</span>
+<span style="color: #9cdcfe;">│  │ 6. Far jump to 64-bit code segment    jmp gdt64.code:...  │  │</span>
+<span style="color: #9cdcfe;">│  └───────────────────────────────────────────────────────────┘  │</span>
+<span style="color: #9cdcfe;">└─────────────────────────────────────────────────────────────────┘</span>
+<span style="color: #9cdcfe;">                                                                   </span>
+<span style="color: #9cdcfe;">┌─────────────────────────────────────────────────────────────────┐</span>
+<span style="color: #9cdcfe;">│  64-Bit Long Mode                                               │</span>
+<span style="color: #9cdcfe;">│  ┌───────────────────────────────────────────────────────────┐  │</span>
+<span style="color: #9cdcfe;">│  │ 7. Reload segment registers with 64-bit selectors         │  │</span>
+<span style="color: #9cdcfe;">│  │ 8. Set up 64-bit stack pointer                            │  │</span>
+<span style="color: #9cdcfe;">│  │ 9. Call 64-bit kernel main                                │  │</span>
+<span style="color: #9cdcfe;">│  └───────────────────────────────────────────────────────────┘  │</span>
+<span style="color: #9cdcfe;">└─────────────────────────────────────────────────────────────────┘</span>
+</pre>
+                    
+                    <h3 id="enable-pae">Enable PAE</h3>
+                    
+                    <p><strong>PAE (Physical Address Extension)</strong> is required for long mode. It changes the page table format from 32-bit entries to 64-bit entries, which is the basis for 4-level paging:</p>
+                    
+                    <pre><code class="language-nasm">; Enable PAE (required for long mode)
+mov eax, cr4
+or eax, 1 << 5      ; Set PAE bit (bit 5)
+mov cr4, eax</code></pre>
+                    
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Order Matters!</strong> You must enable PAE <em>before</em> enabling long mode. The CPU checks PAE when you set EFER.LME. If PAE isn't enabled, it triggers a general protection fault.
+                    </div>
+                    
+                    <h3 id="enable-longmode">Enable Long Mode</h3>
+                    
+                    <p>Long mode is enabled through the EFER (Extended Feature Enable Register) MSR. This is a model-specific register accessed with RDMSR/WRMSR:</p>
+
+                    <pre><code class="language-nasm">; Transition to long mode
+enable_long_mode:
+    ; Disable paging first
+    mov eax, cr0
+    and eax, ~(1 << 31)
+    mov cr0, eax
+    
+    ; Load P4 table address
+    mov eax, p4_table
+    mov cr3, eax
+    
+    ; Enable PAE
+    mov eax, cr4
+    or eax, 1 << 5      ; PAE bit
+    mov cr4, eax
+    
+    ; Enable long mode in EFER MSR
+    mov ecx, 0xC0000080 ; EFER MSR
+    rdmsr
+    or eax, 1 << 8      ; LM bit
+    wrmsr
+    
+    ; Enable paging
+    mov eax, cr0
+    or eax, 1 << 31     ; PG bit
+    mov cr0, eax
+    
+    ret
+</code></pre>
+
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>EFER Bit</th>
+                                <th>Name</th>
+                                <th>Purpose</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Bit 0</td>
+                                <td>SCE</td>
+                                <td>System Call Extensions (enables SYSCALL/SYSRET)</td>
+                            </tr>
+                            <tr>
+                                <td>Bit 8</td>
+                                <td>LME</td>
+                                <td><strong>Long Mode Enable</strong> - Set this to enter long mode</td>
+                            </tr>
+                            <tr>
+                                <td>Bit 10</td>
+                                <td>LMA</td>
+                                <td>Long Mode Active - CPU sets this (read-only)</td>
+                            </tr>
+                            <tr>
+                                <td>Bit 11</td>
+                                <td>NXE</td>
+                                <td>No-Execute Enable (for W^X security)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <h3 id="jump-64">Jump to 64-Bit</h3>
+                    
+                    <p>After enabling paging with long mode active, we're technically in "compatibility mode" until we load a 64-bit code segment. A far jump loads the new GDT and switches to true 64-bit mode:</p>
+
+                    <pre><code class="language-nasm">; Jump to 64-bit code
+    lgdt [gdt64.pointer]
+    jmp gdt64.code:long_mode_start
+
+[BITS 64]
+long_mode_start:
+    ; Reload segment registers
+    mov ax, gdt64.data
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+    
+    ; Set up 64-bit stack
+    mov rsp, stack_top
+    
+    ; Clear screen and print success
+    mov rax, 0x2F4B2F4F2F20
+    mov qword [0xB8000], rax
+    
+    ; Call 64-bit kernel main
+    extern kernel_main_64
+    call kernel_main_64
+    
+    ; Halt
+    hlt
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <strong>Success!</strong> After the far jump, you're in 64-bit mode. The instruction pointer is now 64 bits, registers are 64 bits, and you can access the full address space. The "OK" printed to the screen confirms the transition worked.
+                    </div>
+                </div>
+
+                <!-- 64-Bit Kernel Code Section -->
+                <div id="64bit-kernel" class="blog-content mt-5">
+                    <h2><i class="fas fa-code me-2 text-teal"></i>64-Bit Kernel Code</h2>
+                    
+                    <p>With 64-bit mode active, you'll write kernel code in 64-bit C. But there are important differences from 32-bit code.</p>
+                    
+                    <h3 id="calling-convention">Calling Convention</h3>
+                    
+                    <p>The <strong>System V AMD64 ABI</strong> (used on Linux, BSD, macOS) passes arguments in registers, not on the stack:</p>
+                    
+<pre style="background: #1e1e1e; padding: 1rem; border-radius: 8px; color: #dcdcaa; overflow-x: auto; font-size: 0.85rem;">
+<span style="color: #6a9955;">System V AMD64 Calling Convention:</span>
+
+<span style="color: #9cdcfe;">Arguments (left to right):</span>
+<span style="color: #9cdcfe;">  Integer/Pointer:  RDI, RSI, RDX, RCX, R8, R9</span>
+<span style="color: #9cdcfe;">  Floating-point:   XMM0-XMM7</span>
+<span style="color: #9cdcfe;">  Additional args:  On stack (right-to-left)</span>
+
+<span style="color: #9cdcfe;">Return value:</span>
+<span style="color: #9cdcfe;">  Integer/Pointer:  RAX (and RDX for 128-bit)</span>
+<span style="color: #9cdcfe;">  Floating-point:   XMM0</span>
+
+<span style="color: #9cdcfe;">Caller-saved (volatile):    RAX, RCX, RDX, RSI, RDI, R8-R11</span>
+<span style="color: #9cdcfe;">Callee-saved (preserved):   RBX, RBP, R12-R15</span>
+
+<span style="color: #6a9955;">Example: my_func(a, b, c, d, e, f, g)</span>
+<span style="color: #9cdcfe;">                │  │  │  │  │  │  └── On stack</span>
+<span style="color: #9cdcfe;">                │  │  │  │  │  └───── R9</span>
+<span style="color: #9cdcfe;">                │  │  │  │  └──────── R8</span>
+<span style="color: #9cdcfe;">                │  │  │  └─────────── RCX</span>
+<span style="color: #9cdcfe;">                │  │  └──────────────  RDX</span>
+<span style="color: #9cdcfe;">                │  └─────────────────  RSI</span>
+<span style="color: #9cdcfe;">                └────────────────────  RDI</span>
+</pre>
+
+                    <pre><code class="language-c">/* 64-bit kernel entry point */
+// System V AMD64 ABI calling convention:
+// Arguments: RDI, RSI, RDX, RCX, R8, R9
+// Return: RAX
+// Caller-saved: RAX, RCX, RDX, RSI, RDI, R8, R9, R10, R11
+// Callee-saved: RBX, RBP, R12, R13, R14, R15
+
+void kernel_main_64(void) {
+    // Initialize 64-bit IDT
+    idt64_init();
+    
+    // Initialize 64-bit memory manager
+    pmm64_init();
+    vmm64_init();
+    
+    // Initialize interrupts
+    pic_init();
+    
+    // Print welcome message
+    terminal_write("Welcome to 64-bit mode!\n");
+    
+    // Main kernel loop
+    while (1) {
+        __asm__("hlt");
+    }
+}
+</code></pre>
+                    
+                    <h3 id="porting">Porting Considerations</h3>
+                    
+                    <p>When converting 32-bit kernel code to 64-bit, watch for these common issues:</p>
+                    
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Issue</th>
+                                <th>32-Bit</th>
+                                <th>64-Bit</th>
+                                <th>Fix</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Pointer size</strong></td>
+                                <td>4 bytes</td>
+                                <td>8 bytes</td>
+                                <td>Use <code>size_t</code>, <code>uintptr_t</code> for pointer math</td>
+                            </tr>
+                            <tr>
+                                <td><strong>long size</strong></td>
+                                <td>4 bytes</td>
+                                <td>8 bytes (Unix)</td>
+                                <td>Use explicit types: <code>uint32_t</code>, <code>uint64_t</code></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Stack alignment</strong></td>
+                                <td>4-byte</td>
+                                <td>16-byte before CALL</td>
+                                <td>Assembly must maintain alignment</td>
+                            </tr>
+                            <tr>
+                                <td><strong>IDT entry size</strong></td>
+                                <td>8 bytes</td>
+                                <td>16 bytes</td>
+                                <td>Rewrite IDT structures</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Inline assembly</strong></td>
+                                <td>32-bit registers</td>
+                                <td>64-bit registers</td>
+                                <td>EAX → RAX, etc.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span><i class="fas fa-code me-1"></i>Code Pattern</span>
+                        </div>
+                        <h4><i class="fas fa-sync me-2"></i>64-Bit Portable Structures</h4>
+                        <div class="content">
+                            <pre><code class="language-c">/* Portable types for 64-bit */
+#include <stdint.h>
+
+// Page table entry - always 64-bit in long mode
+typedef uint64_t pte_t;
+
+// Physical addresses can be 52-bit
+typedef uint64_t phys_addr_t;
+
+// Virtual addresses are 64-bit (48 used)
+typedef uintptr_t virt_addr_t;
+
+// Use size_t for sizes and counts
+size_t num_pages = mem_size / PAGE_SIZE;
+
+/* 64-bit IDT entry structure */
+typedef struct {
+    uint16_t offset_low;      // Bits 0-15
+    uint16_t selector;        // Code segment selector
+    uint8_t  ist;             // Interrupt Stack Table
+    uint8_t  type_attr;       // Type and attributes
+    uint16_t offset_mid;      // Bits 16-31
+    uint32_t offset_high;     // Bits 32-63  ← NEW!
+    uint32_t reserved;        // Must be 0    ← NEW!
+} __attribute__((packed)) idt64_entry_t;</code></pre>
+                        </div>
+                        <div class="tags">
+                            <span class="bias-tag">Portability</span>
+                            <span class="bias-tag">Types</span>
+                        </div>
+                    </div>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-tools me-2"></i>
+                        <strong>Compiler Flags:</strong> Compile 64-bit kernel code with: <code>gcc -m64 -mcmodel=large -mno-red-zone -fno-pic</code>. The <code>-mno-red-zone</code> is critical for interrupt handlers—without it, interrupts corrupt the stack!
+                    </div>
+                </div>
+
+                <!-- What You Can Build Section -->
+                <div id="build" class="blog-content mt-5">
+                    <h2><i class="fas fa-hammer me-2 text-teal"></i>What You Can Build</h2>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Phase 11 Milestone:</strong> A 64-bit operating system! Your kernel now runs in long mode with 4-level paging, expanded registers, and access to modern CPU features. You're ready for modern hardware and can address terabytes of memory.
+                    </div>
+                    
+                    <h3>Complete 64-Bit Boot Sequence</h3>
+                    
+                    <pre><code class="language-nasm">; boot64.asm - Complete boot to 64-bit mode
+[BITS 32]
+section .text
+global _start
+
+_start:
+    ; We're in 32-bit protected mode from bootloader
+    
+    ; 1. Check long mode support
+    call check_long_mode
+    test eax, eax
+    jz .no_long_mode
+    
+    ; 2. Set up 4-level page tables
+    call setup_page_tables
+    
+    ; 3. Enable PAE
+    mov eax, cr4
+    or eax, 1 << 5
+    mov cr4, eax
+    
+    ; 4. Load PML4 into CR3
+    mov eax, p4_table
+    mov cr3, eax
+    
+    ; 5. Enable Long Mode in EFER
+    mov ecx, 0xC0000080
+    rdmsr
+    or eax, 1 << 8
+    wrmsr
+    
+    ; 6. Enable paging (enters compatibility mode)
+    mov eax, cr0
+    or eax, 1 << 31
+    mov cr0, eax
+    
+    ; 7. Load 64-bit GDT and far jump
+    lgdt [gdt64.pointer]
+    jmp gdt64.code:long_mode_entry
+
+.no_long_mode:
+    ; Print error and halt
+    mov dword [0xB8000], 0x4F524F45  ; "ER"
+    mov dword [0xB8004], 0x4F3A4F52  ; "R:"
+    hlt
+
+[BITS 64]
+long_mode_entry:
+    ; Reload segment registers
+    mov ax, gdt64.data
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+    
+    ; Set up stack
+    mov rsp, stack_top
+    
+    ; Call C kernel
+    extern kernel_main
+    call kernel_main
+    
+    ; Halt
+    cli
+    hlt
+
+section .bss
+align 16
+stack_bottom:
+    resb 16384
+stack_top:
+</code></pre>
+
+                    <h3>Exercises</h3>
+                    
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span><i class="fas fa-code me-1"></i>Exercise 1</span>
+                        </div>
+                        <h4><i class="fas fa-layer-group me-2"></i>Higher-Half Kernel</h4>
+                        <div class="content">
+                            <p>Map your kernel at the higher half of the address space:</p>
+                            <ol>
+                                <li>Keep identity mapping for boot transition</li>
+                                <li>Add second mapping at <code>0xFFFF800000000000</code></li>
+                                <li>Update kernel linker script to use higher-half addresses</li>
+                                <li>After transition, remove identity mapping</li>
+                            </ol>
+                            <pre><code class="language-nasm">; Map same physical memory to high address
+mov rax, p3_table
+or rax, 0b11
+mov [p4_table + 256 * 8], rax  ; PML4[256] = high half</code></pre>
+                        </div>
+                        <div class="tags">
+                            <span class="bias-tag">Memory</span>
+                            <span class="bias-tag">Layout</span>
+                        </div>
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span><i class="fas fa-code me-1"></i>Exercise 2</span>
+                        </div>
+                        <h4><i class="fas fa-shield-alt me-2"></i>NX (No-Execute) Protection</h4>
+                        <div class="content">
+                            <p>Enable no-execute bit for data pages:</p>
+                            <ol>
+                                <li>Set EFER.NXE bit to enable NX feature</li>
+                                <li>Mark code pages as executable (bit 63 = 0)</li>
+                                <li>Mark data/stack pages as non-executable (bit 63 = 1)</li>
+                                <li>Test: Try executing code from stack—should fault!</li>
+                            </ol>
+                            <pre><code class="language-c">// Set NX bit on data page entry
+pte |= (1ULL << 63);  // No execute</code></pre>
+                        </div>
+                        <div class="tags">
+                            <span class="bias-tag">Security</span>
+                            <span class="bias-tag">W^X</span>
+                        </div>
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span><i class="fas fa-code me-1"></i>Exercise 3</span>
+                        </div>
+                        <h4><i class="fas fa-phone-alt me-2"></i>SYSCALL/SYSRET</h4>
+                        <div class="content">
+                            <p>Replace interrupt-based syscalls with SYSCALL instruction:</p>
+                            <ol>
+                                <li>Set EFER.SCE to enable SYSCALL</li>
+                                <li>Configure STAR MSR with segment selectors</li>
+                                <li>Set LSTAR MSR with syscall handler address</li>
+                                <li>Set FMASK MSR to clear flags on entry</li>
+                            </ol>
+                            <pre><code class="language-c">// Setup SYSCALL
+wrmsr(MSR_STAR, ((uint64_t)KERNEL_CS << 32) | 
+                ((uint64_t)USER_CS << 48));
+wrmsr(MSR_LSTAR, (uint64_t)syscall_handler);
+wrmsr(MSR_FMASK, 0x200);  // Clear IF</code></pre>
+                        </div>
+                        <div class="tags">
+                            <span class="bias-tag">Performance</span>
+                            <span class="bias-tag">Syscalls</span>
+                        </div>
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span><i class="fas fa-code me-1"></i>Exercise 4</span>
+                        </div>
+                        <h4><i class="fas fa-memory me-2"></i>5-Level Paging</h4>
+                        <div class="content">
+                            <p>Modern CPUs support 5-level paging (57-bit addresses):</p>
+                            <ol>
+                                <li>Check CPUID for la57 support (leaf 7, ECX bit 16)</li>
+                                <li>Create PML5 table pointing to PML4</li>
+                                <li>Set CR4.LA57 before enabling paging</li>
+                                <li>Address space grows to 128 PB!</li>
+                            </ol>
+                            <p><strong>Note:</strong> 5-level paging is only needed for massive server workloads. 4-level (256TB) is plenty for most systems.</p>
+                        </div>
+                        <div class="tags">
+                            <span class="bias-tag">Advanced</span>
+                            <span class="bias-tag">Modern CPUs</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Next Steps Section -->
+                <div id="next-steps" class="blog-content mt-5">
+                    <h2><i class="fas fa-arrow-right me-2 text-teal"></i>Next Steps</h2>
+                    
+                    <p>Congratulations! Your kernel now runs in 64-bit mode with access to modern CPU features. But we're still booting via legacy BIOS. In <strong>Phase 12</strong>, we'll modernize the boot process with UEFI.</p>
+                    
+<pre style="background: #1e1e1e; padding: 1rem; border-radius: 8px; color: #dcdcaa; overflow-x: auto; font-size: 0.85rem;">
+<span style="color: #6a9955;">BIOS vs UEFI Boot:</span>
+
+<span style="color: #9cdcfe;">Legacy BIOS (Current):           UEFI (Next Phase):</span>
+<span style="color: #9cdcfe;">┌─────────────────────┐          ┌─────────────────────────┐</span>
+<span style="color: #9cdcfe;">│  16-bit Real Mode   │          │  64-bit from start!     │</span>
+<span style="color: #9cdcfe;">│  512-byte bootloader│          │  Full FAT32 filesystem  │</span>
+<span style="color: #9cdcfe;">│  MBR partitioning   │          │  GPT partitioning       │</span>
+<span style="color: #9cdcfe;">│  No graphics        │          │  GOP framebuffer        │</span>
+<span style="color: #9cdcfe;">│  Manual A20 gate    │          │  Modern memory map      │</span>
+<span style="color: #9cdcfe;">└─────────────────────┘          └─────────────────────────┘</span>
+</pre>
+                    
+                    <h3>Key Takeaways</h3>
+                    
+                    <ul>
+                        <li><strong>CPUID before transition</strong> - Always verify long mode support before attempting switch</li>
+                        <li><strong>PAE is mandatory</strong> - Long mode requires PAE-style page tables</li>
+                        <li><strong>4-level paging</strong> - PML4 → PDPT → PD → PT for 48-bit addresses</li>
+                        <li><strong>Identity mapping during switch</strong> - EIP must be valid as virtual address</li>
+                        <li><strong>Far jump activates 64-bit</strong> - Loading CS with 64-bit segment completes transition</li>
+                        <li><strong>Register-based calling</strong> - Arguments in RDI, RSI, RDX, RCX, R8, R9</li>
+                    </ul>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-trophy me-2"></i>
+                        <strong>Modern Architecture!</strong> Your OS now runs on the same CPU mode as Windows, Linux, and macOS. You have access to 16 general-purpose registers, terabytes of address space, and modern security features like NX bit. The foundation is complete!
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 10: Standard Library & Shell</h5>
+                            <p class="text-muted small mb-2">Review libc implementation and shell design.</p>
+                            <a href="kernel-dev-phase-10-stdlib-shell.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 12: Modern Booting with UEFI</h5>
+                            <p class="text-muted small mb-2">Replace BIOS booting with UEFI firmware services.</p>
+                            <a href="kernel-dev-phase-12-uefi.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Phase 13: Graphics & GUI Systems</h5>
+                            <p class="text-muted small mb-2">Implement framebuffer graphics and windowing.</p>
+                            <a href="kernel-dev-phase-13-graphics.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook">
+                            <i class="fab fa-facebook-f"></i>
+                        </a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter">
+                            <i class="fab fa-twitter"></i>
+                        </a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn">
+                            <i class="fab fa-linkedin-in"></i>
+                        </a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube">
+                            <i class="fab fa-youtube"></i>
+                        </a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram">
+                            <i class="fab fa-instagram"></i>
+                        </a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest">
+                            <i class="fab fa-pinterest-p"></i>
+                        </a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email">
+                            <i class="fas fa-envelope"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="bg-secondary">
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+    
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+    
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>
