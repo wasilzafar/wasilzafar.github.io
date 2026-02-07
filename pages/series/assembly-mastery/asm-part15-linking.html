@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, archive" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Master x86 linking and object files: ELF format structure, sections (.text, .data, .bss, .rodata), symbol tables, relocation, static vs dynamic linking, and creating shared libraries." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="ELF Format, Linking, Object Files, Symbol Table, Relocation, Static Linking, Dynamic Linking, Shared Libraries, .text .data .bss" />
+    <meta property="og:title" content="x86 Assembly Series Part 15: Linking & Object Files" />
+    <meta property="og:description" content="Understand ELF format, sections, symbols, and the linking process." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-02-06" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    
+    <title>x86 Assembly Series Part 15: Linking & Object Files - Wasil Zafar</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', { 'ad_storage': 'denied', 'ad_user_data': 'denied', 'ad_personalization': 'denied', 'analytics_storage': 'denied', 'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE'] });
+        gtag('consent', 'default', { 'ad_storage': 'granted', 'ad_user_data': 'granted', 'ad_personalization': 'granted', 'analytics_storage': 'granted' });
+    </script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+                <h1 class="display-4 fw-bold mb-3">x86 Assembly Series Part 15: Linking & Object Files</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>February 6, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>35 min read</span>
+                    <button onclick="window.print()" class="print-btn"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Master the ELF format, understand sections (.text, .data, .bss), symbol tables, relocation entries, and the complete linking process from object files to executables and shared libraries.</p>
+            </div>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents"><i class="fas fa-list"></i></button>
+
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#elf-overview" onclick="closeNav()">ELF Format Overview</a></li>
+            <li><a href="#sections" onclick="closeNav()">Sections</a>
+                <ul>
+                    <li><a href="#text" onclick="closeNav()">.text (Code)</a></li>
+                    <li><a href="#data" onclick="closeNav()">.data & .rodata</a></li>
+                    <li><a href="#bss" onclick="closeNav()">.bss</a></li>
+                </ul>
+            </li>
+            <li><a href="#symbols" onclick="closeNav()">Symbol Tables</a></li>
+            <li><a href="#relocation" onclick="closeNav()">Relocation</a></li>
+            <li><a href="#static" onclick="closeNav()">Static Linking</a></li>
+            <li><a href="#dynamic" onclick="closeNav()">Dynamic Linking</a></li>
+            <li><a href="#shared" onclick="closeNav()">Creating Shared Libraries</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <div id="elf-overview" class="blog-content">
+                    <h2><i class="fas fa-file-alt me-2 text-teal"></i>ELF Format Overview</h2>
+                    
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>ELF:</strong> Executable and Linkable Format is the standard binary format on Linux/Unix. It describes object files (.o), executables, and shared libraries (.so).
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-map-signs me-2"></i>Complete Series Navigation</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-2">25-Part Series</span>
+                            <span class="badge bg-crimson">x86 Assembly Mastery</span>
+                        </div>
+                        <div class="content">
+                            <p><strong>Foundation & Environment Setup</strong></p>
+                            <ol start="0">
+                                <li><a href="asm-part00-environment-setup.html">Development Environment, Tooling & Workflow</a></li>
+                                <li><a href="asm-part01-fundamentals.html">Assembly Language Fundamentals & Toolchain Setup</a></li>
+                                <li><a href="asm-part02-cpu-architecture.html">x86 CPU Architecture Overview</a></li>
+                                <li><a href="asm-part03-registers.html">Registers – Complete Deep Dive</a></li>
+                                <li><a href="asm-part04-instruction-encoding.html">Instruction Encoding & Binary Layout</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Assemblers, Syntax & Memory</strong></p>
+                            <ol start="5">
+                                <li><a href="asm-part05-nasm.html">NASM Syntax, Directives & Macros</a></li>
+                                <li><a href="asm-part06-masm.html">Complete Assembler Comparison</a></li>
+                                <li><a href="asm-part07-memory-addressing.html">Memory Addressing Modes</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Control Flow, Stack & Computation</strong></p>
+                            <ol start="8">
+                                <li><a href="asm-part08-stack-calling.html">Stack Internals & Calling Conventions</a></li>
+                                <li><a href="asm-part09-control-flow.html">Control Flow & Procedures</a></li>
+                                <li><a href="asm-part10-arithmetic.html">Integer, Bitwise & Arithmetic Operations</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Floating Point, SIMD & Performance</strong></p>
+                            <ol start="11">
+                                <li><a href="asm-part11-floating-point.html">Floating Point & SIMD Foundations</a></li>
+                                <li><a href="asm-part12-simd.html">SIMD, Vectorization & Performance</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>OS Interaction & Debugging</strong></p>
+                            <ol start="13">
+                                <li><a href="asm-part13-syscalls-interrupts.html">System Calls, Interrupts & Privilege Transitions</a></li>
+                                <li><a href="asm-part14-debugging.html">Debugging & Reverse Engineering</a></li>
+                                <li><strong>Linking, Relocation & Loader Behavior (This Guide)</strong></li>
+                            </ol>
+                            <p class="mt-3"><strong>Advanced Architecture & Interoperability</strong></p>
+                            <ol start="16">
+                                <li><a href="asm-part16-long-mode.html">x86-64 Long Mode & Advanced Features</a></li>
+                                <li><a href="asm-part17-c-interop.html">Assembly + C/C++ Interoperability</a></li>
+                                <li><a href="asm-part18-security.html">Memory Protection & Security Concepts</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Bare Metal, Kernel & Virtualization</strong></p>
+                            <ol start="19">
+                                <li><a href="asm-part19-bootloader.html">Bootloaders & Bare-Metal Programming</a></li>
+                                <li><a href="asm-part20-kernel.html">Kernel-Level Assembly</a></li>
+                                <li><a href="asm-part21-qemu.html">Complete Emulator & Simulator Guide</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>CPU Microarchitecture & Optimization</strong></p>
+                            <ol start="22">
+                                <li><a href="asm-part22-optimization.html">Advanced Optimization & CPU Internals</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Real-World Application & Mastery</strong></p>
+                            <ol start="23">
+                                <li><a href="asm-part23-projects.html">Real-World Assembly Projects</a></li>
+                                <li><a href="asm-part24-capstone.html">Assembly Mastery Capstone</a></li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <pre><code class="language-bash"># View ELF header
+readelf -h program
+
+# View sections
+readelf -S program
+
+# View program headers
+readelf -l program
+
+# View symbols
+readelf -s program</code></pre>
+                </div>
+
+                <div id="sections" class="blog-content mt-5">
+                    <h2><i class="fas fa-layer-group me-2 text-teal"></i>ELF Sections</h2>
+                    
+                    <h3 id="text">.text Section (Code)</h3>
+                    
+                    <pre><code class="language-nasm">section .text
+    global _start
+_start:
+    ; Executable code goes here
+    ; Read-only at runtime</code></pre>
+
+                    <h3 id="data">.data & .rodata Sections</h3>
+                    
+                    <pre><code class="language-nasm">section .data           ; Initialized read-write data
+    counter dq 0
+    message db "Hello", 0
+
+section .rodata         ; Initialized read-only data
+    const_pi dq 3.14159
+    fmt db "Result: %d", 10, 0</code></pre>
+
+                    <h3 id="bss">.bss Section</h3>
+                    
+                    <pre><code class="language-nasm">section .bss            ; Uninitialized data (zero-filled)
+    buffer resb 1024    ; Reserve 1024 bytes
+    array resq 100      ; Reserve 100 quadwords</code></pre>
+                </div>
+
+                <div id="symbols" class="blog-content mt-5">
+                    <h2><i class="fas fa-tags me-2 text-teal"></i>Symbol Tables</h2>
+                    
+                    <pre><code class="language-bash"># View symbol table
+nm program
+objdump -t program
+
+# Symbol types:
+# T/t = text (code)
+# D/d = initialized data
+# B/b = BSS (uninitialized)
+# U   = undefined (external reference)</code></pre>
+                </div>
+
+                <div id="relocation" class="blog-content mt-5">
+                    <h2><i class="fas fa-link me-2 text-teal"></i>Relocation</h2>
+                    
+                    <p>Relocation is how the linker patches addresses in object files to create a runnable executable:</p>
+                    
+                    <pre><code class="language-bash"># View relocation entries
+readelf -r program.o
+objdump -r program.o
+
+# Common relocation types (x86-64):
+# R_X86_64_64      - Absolute 64-bit address
+# R_X86_64_PC32    - PC-relative 32-bit (RIP-relative)
+# R_X86_64_PLT32   - PLT entry for function call
+# R_X86_64_GOTPCREL - GOT entry, PC-relative</code></pre>
+                    
+                    <h3>Position-Independent Code (PIC)</h3>
+                    <pre><code class="language-nasm">; Non-PIC (absolute addressing)
+mov rax, [my_var]           ; Needs relocation at runtime
+
+; PIC (RIP-relative) - preferred for shared libraries
+mov rax, [rel my_var]       ; Uses RIP-relative addressing
+lea rdi, [rel my_var]       ; Get address of my_var (PIC)
+
+; For external/global data in shared libraries, use GOT:
+mov rax, [rel external_var wrt ..got]  ; Load via GOT</code></pre>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Why PIC?</strong> Position-independent code can load at any address, enabling shared libraries, ASLR (Address Space Layout Randomization), and memory sharing between processes.
+                    </div>
+                </div>
+
+                <div id="static" class="blog-content mt-5">
+                    <h2><i class="fas fa-cube me-2 text-teal"></i>Static Linking</h2>
+                    
+                    <p>Static linking combines all object files into one standalone executable:</p>
+                    
+                    <pre><code class="language-bash"># Create static library from object files
+ar rcs libmylib.a file1.o file2.o file3.o
+
+# Link with static library
+ld -o program main.o -L. -lmylib
+# Or with gcc:
+gcc -static -o program main.o -L. -lmylib
+
+# View archive contents
+ar -t libmylib.a
+
+# Extract member
+ar -x libmylib.a file1.o</code></pre>
+                    
+                    <h3>Static Link Process</h3>
+                    <pre><code class="language-plaintext">1. Collect all object files and libraries
+2. Resolve symbol references
+3. Merge sections (.text, .data, .bss)
+4. Apply relocations (patch addresses)
+5. Write executable with all code embedded
+
+Pros: No runtime dependencies, faster startup
+Cons: Larger executables, no library updates without recompile</code></pre>
+                </div>
+
+                <div id="dynamic" class="blog-content mt-5">
+                    <h2><i class="fas fa-cubes me-2 text-teal"></i>Dynamic Linking</h2>
+                    
+                    <p>Dynamic linking defers symbol resolution until runtime:</p>
+                    
+                    <pre><code class="language-plaintext">GOT (Global Offset Table):
+- Table of pointers to global data/functions
+- Filled in by dynamic linker at load time
+- Code references GOT entries, not absolute addresses
+
+PLT (Procedure Linkage Table):
+- Stub code for calling external functions
+- First call: resolve symbol, patch GOT, call function
+- Subsequent calls: jump directly via GOT (fast path)
+
+call printf@PLT      ; First call flow:
+  └─→ PLT stub: jmp [GOT entry]
+        └─→ GOT initially points back to PLT
+              └─→ PLT: push index; jmp dynamic_linker
+                    └─→ Linker resolves, patches GOT
+                          └─→ Function runs</code></pre>
+                    
+                    <pre><code class="language-nasm">; Calling external function (dynamic)
+section .text
+    extern printf
+global _start
+_start:
+    lea rdi, [rel fmt]
+    xor eax, eax              ; No float args
+    call printf wrt ..plt     ; Call via PLT
+    
+; Or let NASM figure it out:
+    call printf               ; NASM generates PLT reference</code></pre>
+                    
+                    <pre><code class="language-bash"># View dynamic symbols
+readelf -d program        # Dynamic section
+readelf --dyn-syms prog   # Dynamic symbol table
+objdump -R program        # Dynamic relocations
+ldd program               # List shared library dependencies</code></pre>
+                </div>
+
+                <div id="shared" class="blog-content mt-5">
+                    <h2><i class="fas fa-share-alt me-2 text-teal"></i>Creating Shared Libraries</h2>
+                    
+                    <pre><code class="language-bash"># Assemble as PIC (position-independent)
+nasm -f elf64 -o mylib.o mylib.asm
+
+# Create shared library (.so)
+ld -shared -o libmylib.so mylib.o
+# Or with gcc (adds libc):
+gcc -shared -o libmylib.so mylib.o
+
+# Link against shared library
+ld -o program main.o -L. -lmylib -dynamic-linker /lib64/ld-linux-x86-64.so.2
+
+# Run with library path
+LD_LIBRARY_PATH=. ./program
+
+# Install system-wide
+sudo cp libmylib.so /usr/local/lib/
+sudo ldconfig    # Update library cache</code></pre>
+                    
+                    <h3>Exported Symbols</h3>
+                    <pre><code class="language-nasm">; mylib.asm - Shared library source
+global my_function:function    ; Export as function
+global my_variable:data        ; Export as data
+
+section .data
+my_variable: dd 42
+
+section .text
+my_function:
+    mov eax, [rel my_variable]
+    ret</code></pre>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-flask me-2"></i>Exercise: Create and Use a Shared Library</h4>
+                        <ol>
+                            <li>Write <code>mathlib.asm</code> with <code>add_numbers</code> and <code>multiply_numbers</code> functions</li>
+                            <li>Create <code>libmath.so</code> shared library</li>
+                            <li>Write a main program that calls both functions</li>
+                            <li>Link and run with <code>LD_LIBRARY_PATH</code></li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="blog-content mt-5">
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 14: Debugging with GDB & objdump</h5>
+                            <p class="text-muted small mb-2">Debug assembly code with professional tools.</p>
+                            <a href="asm-part14-debugging.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 16: x64 Long Mode & Protected Mode</h5>
+                            <p class="text-muted small mb-2">Understand CPU modes and memory protection.</p>
+                            <a href="asm-part16-long-mode.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 17: C & Assembly Interoperability</h5>
+                            <p class="text-muted small mb-2">Call C from assembly and vice versa.</p>
+                            <a href="asm-part17-c-interop.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small"><i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a></p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"></div>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>

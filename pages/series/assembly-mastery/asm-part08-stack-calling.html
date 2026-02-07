@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, archive" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Master stack operations and calling conventions: push/pop, stack frames, System V AMD64 ABI, Windows x64 calling convention, shadow space, parameter passing, and leaf functions." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="Stack, x86 Stack, Calling Convention, System V ABI, Windows x64, Shadow Space, Stack Frame, Push Pop, Function Prologue Epilogue, cdecl, stdcall" />
+    <meta property="og:title" content="x86 Assembly Series Part 8: Stack Operations & Calling Conventions" />
+    <meta property="og:description" content="Master stack mechanics, function calls, System V AMD64 ABI, and Windows x64 calling conventions." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-02-06" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    
+    <title>x86 Assembly Series Part 8: Stack Operations & Calling Conventions - Wasil Zafar</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', { 'ad_storage': 'denied', 'ad_user_data': 'denied', 'ad_personalization': 'denied', 'analytics_storage': 'denied', 'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE'] });
+        gtag('consent', 'default', { 'ad_storage': 'granted', 'ad_user_data': 'granted', 'ad_personalization': 'granted', 'analytics_storage': 'granted' });
+    </script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+                <h1 class="display-4 fw-bold mb-3">x86 Assembly Series Part 8: Stack Operations & Calling Conventions</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>February 6, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>35 min read</span>
+                    <button onclick="window.print()" class="print-btn"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Master stack operations (push/pop), stack frames, function prologues and epilogues, System V AMD64 ABI for Linux, Windows x64 calling convention with shadow space, and register preservation rules.</p>
+            </div>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents"><i class="fas fa-list"></i></button>
+
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#stack-basics" onclick="closeNav()">Stack Fundamentals</a>
+                <ul>
+                    <li><a href="#push-pop" onclick="closeNav()">PUSH & POP</a></li>
+                    <li><a href="#rsp" onclick="closeNav()">RSP Management</a></li>
+                </ul>
+            </li>
+            <li><a href="#stack-frame" onclick="closeNav()">Stack Frames</a>
+                <ul>
+                    <li><a href="#prologue" onclick="closeNav()">Function Prologue</a></li>
+                    <li><a href="#epilogue" onclick="closeNav()">Function Epilogue</a></li>
+                </ul>
+            </li>
+            <li><a href="#system-v" onclick="closeNav()">System V AMD64 ABI</a>
+                <ul>
+                    <li><a href="#sysv-params" onclick="closeNav()">Parameter Passing</a></li>
+                    <li><a href="#sysv-return" onclick="closeNav()">Return Values</a></li>
+                    <li><a href="#sysv-preserved" onclick="closeNav()">Callee-Saved Registers</a></li>
+                </ul>
+            </li>
+            <li><a href="#win64" onclick="closeNav()">Windows x64 Convention</a>
+                <ul>
+                    <li><a href="#shadow" onclick="closeNav()">Shadow Space</a></li>
+                    <li><a href="#win64-params" onclick="closeNav()">Parameter Passing</a></li>
+                </ul>
+            </li>
+            <li><a href="#leaf" onclick="closeNav()">Leaf Functions</a></li>
+            <li><a href="#red-zone" onclick="closeNav()">Red Zone (System V)</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <div id="stack-basics" class="blog-content">
+                    <h2><i class="fas fa-layer-group me-2 text-teal"></i>Stack Fundamentals</h2>
+                    
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-arrow-down me-2"></i>
+                        <strong>Stack Direction:</strong> The x86 stack grows downward (toward lower addresses). PUSH decrements RSP, POP increments RSP. The stack must be 16-byte aligned before CALL instructions.
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-map-signs me-2"></i>Complete Series Navigation</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-2">25-Part Series</span>
+                            <span class="badge bg-crimson">x86 Assembly Mastery</span>
+                        </div>
+                        <div class="content">
+                            <p><strong>Foundation & Environment Setup</strong></p>
+                            <ol start="0">
+                                <li><a href="asm-part00-environment-setup.html">Development Environment, Tooling & Workflow</a></li>
+                                <li><a href="asm-part01-fundamentals.html">Assembly Language Fundamentals & Toolchain Setup</a></li>
+                                <li><a href="asm-part02-cpu-architecture.html">x86 CPU Architecture Overview</a></li>
+                                <li><a href="asm-part03-registers.html">Registers – Complete Deep Dive</a></li>
+                                <li><a href="asm-part04-instruction-encoding.html">Instruction Encoding & Binary Layout</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Assemblers, Syntax & Memory</strong></p>
+                            <ol start="5">
+                                <li><a href="asm-part05-nasm.html">NASM Syntax, Directives & Macros</a></li>
+                                <li><a href="asm-part06-masm.html">Complete Assembler Comparison</a></li>
+                                <li><a href="asm-part07-memory-addressing.html">Memory Addressing Modes</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Control Flow, Stack & Computation</strong></p>
+                            <ol start="8">
+                                <li><strong>Stack Internals & Calling Conventions (This Guide)</strong></li>
+                                <li><a href="asm-part09-control-flow.html">Control Flow & Procedures</a></li>
+                                <li><a href="asm-part10-arithmetic.html">Integer, Bitwise & Arithmetic Operations</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Floating Point, SIMD & Performance</strong></p>
+                            <ol start="11">
+                                <li><a href="asm-part11-floating-point.html">Floating Point & SIMD Foundations</a></li>
+                                <li><a href="asm-part12-simd.html">SIMD, Vectorization & Performance</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>OS Interaction & Debugging</strong></p>
+                            <ol start="13">
+                                <li><a href="asm-part13-syscalls-interrupts.html">System Calls, Interrupts & Privilege Transitions</a></li>
+                                <li><a href="asm-part14-debugging.html">Debugging & Reverse Engineering</a></li>
+                                <li><a href="asm-part15-linking.html">Linking, Relocation & Loader Behavior</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Advanced Architecture & Interoperability</strong></p>
+                            <ol start="16">
+                                <li><a href="asm-part16-long-mode.html">x86-64 Long Mode & Advanced Features</a></li>
+                                <li><a href="asm-part17-c-interop.html">Assembly + C/C++ Interoperability</a></li>
+                                <li><a href="asm-part18-security.html">Memory Protection & Security Concepts</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Bare Metal, Kernel & Virtualization</strong></p>
+                            <ol start="19">
+                                <li><a href="asm-part19-bootloader.html">Bootloaders & Bare-Metal Programming</a></li>
+                                <li><a href="asm-part20-kernel.html">Kernel-Level Assembly</a></li>
+                                <li><a href="asm-part21-qemu.html">Complete Emulator & Simulator Guide</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>CPU Microarchitecture & Optimization</strong></p>
+                            <ol start="22">
+                                <li><a href="asm-part22-optimization.html">Advanced Optimization & CPU Internals</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Real-World Application & Mastery</strong></p>
+                            <ol start="23">
+                                <li><a href="asm-part23-projects.html">Real-World Assembly Projects</a></li>
+                                <li><a href="asm-part24-capstone.html">Assembly Mastery Capstone</a></li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <h3 id="push-pop">PUSH & POP Instructions</h3>
+                    
+                    <div class="experiment-card">
+                        <div class="card-meta mb-2"><span class="badge bg-teal text-white">Basics</span></div>
+                        <h4>Stack Operations</h4>
+                        <pre><code class="language-nasm">; PUSH: Decrement RSP, store value
+push rax                ; RSP -= 8; [RSP] = RAX
+push qword 42           ; Push immediate
+push qword [var]        ; Push memory value
+
+; POP: Load value, increment RSP
+pop rbx                 ; RBX = [RSP]; RSP += 8
+pop qword [var]         ; Pop to memory
+
+; Equivalent operations:
+sub rsp, 8              ; Equivalent to...
+mov [rsp], rax          ; ...push rax
+
+mov rbx, [rsp]          ; Equivalent to...
+add rsp, 8              ; ...pop rbx</code></pre>
+                    </div>
+
+                    <h3 id="rsp">RSP Management & Alignment</h3>
+                    
+                    <p>The x86-64 ABI requires the stack to be <strong>16-byte aligned</strong> before a <code>CALL</code> instruction. Since CALL pushes an 8-byte return address, RSP is misaligned inside the called function.</p>
+                    
+                    <pre><code class="language-plaintext">Before CALL:  RSP = 0x7FFF0010  (16-byte aligned: last nibble is 0)
+After CALL:   RSP = 0x7FFF0008  (misaligned by 8 due to return address)
+After PUSH:   RSP = 0x7FFF0000  (aligned again)</code></pre>
+                    
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Alignment Rule:</strong> Before calling any function (including library functions), ensure RSP is 16-byte aligned. Misalignment can cause <code>SEGFAULT</code> on SSE instructions that require aligned memory!
+                    </div>
+                    
+                    <pre><code class="language-nasm">; Proper stack alignment patterns:
+
+; Pattern 1: Push an odd number of 8-byte values
+my_function:
+    push rbp            ; RSP now 16-byte aligned
+    push rbx            ; (if needed, saves callee-saved)
+    push r12
+    sub rsp, 24         ; Allocate + ensure 16-byte alignment
+    
+; Pattern 2: Use AND to force alignment
+    mov rbp, rsp
+    and rsp, -16        ; Force 16-byte alignment (clear low 4 bits)
+    
+; Pattern 3: Adjust allocation size
+    sub rsp, 40         ; 32 for shadow space + 8 for alignment</code></pre>
+                </div>
+
+                <div id="stack-frame" class="blog-content mt-5">
+                    <h2><i class="fas fa-window-restore me-2 text-teal"></i>Stack Frames</h2>
+                    
+                    <h3 id="prologue">Function Prologue</h3>
+                    
+                    <pre><code class="language-nasm">; Standard prologue (with frame pointer)
+my_function:
+    push rbp            ; Save caller's frame pointer
+    mov rbp, rsp        ; Establish new frame pointer
+    sub rsp, 32         ; Allocate local variables + alignment
+
+    ; Function body...</code></pre>
+
+                    <h3 id="epilogue">Function Epilogue</h3>
+                    
+                    <pre><code class="language-nasm">    ; End of function body...
+    mov rsp, rbp        ; Deallocate locals
+    pop rbp             ; Restore caller's frame pointer
+    ret                 ; Return to caller
+
+; Or use LEAVE instruction:
+    leave               ; Equivalent to: mov rsp,rbp + pop rbp
+    ret</code></pre>
+                </div>
+
+                <div id="system-v" class="blog-content mt-5">
+                    <h2><i class="fab fa-linux me-2 text-teal"></i>System V AMD64 ABI (Linux/macOS)</h2>
+                    
+                    <h3 id="sysv-params">Parameter Passing</h3>
+                    
+                    <div class="experiment-card">
+                        <div class="card-meta mb-2"><span class="badge bg-crimson text-white">Reference</span></div>
+                        <h4>System V Register Usage</h4>
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-dark">
+                                <tr><th>Purpose</th><th>Registers</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Integer Args (1-6)</td><td>RDI, RSI, RDX, RCX, R8, R9</td></tr>
+                                <tr><td>Float Args (1-8)</td><td>XMM0-XMM7</td></tr>
+                                <tr><td>Return Value</td><td>RAX (int), XMM0 (float)</td></tr>
+                                <tr><td>Callee-Saved</td><td>RBX, RBP, R12-R15</td></tr>
+                                <tr><td>Caller-Saved</td><td>RAX, RCX, RDX, RSI, RDI, R8-R11</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h3 id="sysv-return">Return Values</h3>
+                    
+                    <p>Functions return values in registers based on type:</p>
+                    
+                    <pre><code class="language-nasm">; Integer return (up to 64 bits)
+my_int_func:
+    mov rax, 42         ; Return value in RAX
+    ret
+
+; 128-bit integer return
+my_128bit_func:
+    mov rax, low_part   ; Low 64 bits in RAX
+    mov rdx, high_part  ; High 64 bits in RDX
+    ret
+
+; Floating-point return
+my_float_func:
+    movsd xmm0, [my_double]  ; Return double in XMM0
+    ret
+
+; Struct return (small structs)
+; Structs ≤ 16 bytes returned in RAX:RDX
+; Larger structs: caller passes hidden pointer as first arg
+return_large_struct:
+    ; RDI contains hidden pointer to return buffer
+    mov [rdi], rax      ; Store struct data
+    mov [rdi+8], rbx
+    mov rax, rdi        ; Return the pointer in RAX
+    ret</code></pre>
+
+                    <h3 id="sysv-preserved">Callee-Saved Registers</h3>
+                    
+                    <p>If your function uses callee-saved registers, you <strong>must</strong> preserve their values:</p>
+                    
+                    <pre><code class="language-nasm">; Function that uses callee-saved registers
+process_data:
+    ; Save registers we'll use
+    push rbx            ; Must preserve
+    push r12            ; Must preserve
+    push r13            ; Must preserve
+    
+    ; Now safe to use RBX, R12, R13
+    mov rbx, rdi        ; Save parameter
+    mov r12, rsi
+    xor r13, r13        ; Counter
+    
+.loop:
+    ; ... processing ...
+    inc r13
+    cmp r13, r12
+    jl .loop
+    
+    mov rax, r13        ; Return value
+    
+    ; Restore in reverse order!
+    pop r13
+    pop r12
+    pop rbx
+    ret</code></pre>
+                    
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Memory Trick:</strong> Callee-saved = "Belongs to caller, Borrowed by callee." Think of it as borrowing a book—you must return it exactly as received.
+                    </div>
+                </div>
+
+                <div id="win64" class="blog-content mt-5">
+                    <h2><i class="fab fa-windows me-2 text-teal"></i>Windows x64 Calling Convention</h2>
+                    
+                    <h3 id="shadow">Shadow Space (Home Space)</h3>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Windows Requirement:</strong> Callers must allocate 32 bytes (4 × 8) of "shadow space" on the stack before every CALL, even if the function takes fewer than 4 arguments.
+                    </div>
+                    
+                    <pre><code class="language-nasm">; Calling a Windows function
+sub rsp, 40             ; 32 bytes shadow + 8 for alignment
+mov rcx, param1         ; First parameter
+mov rdx, param2         ; Second parameter
+call SomeFunction
+add rsp, 40             ; Clean up</code></pre>
+
+                    <h3 id="win64-params">Parameter Passing</h3>
+                    
+                    <p>Windows x64 uses a <strong>four-register</strong> calling convention:</p>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Argument</th>
+                                    <th>Integer/Pointer</th>
+                                    <th>Float/Double</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>1st</td><td>RCX</td><td>XMM0</td></tr>
+                                <tr><td>2nd</td><td>RDX</td><td>XMM1</td></tr>
+                                <tr><td>3rd</td><td>R8</td><td>XMM2</td></tr>
+                                <tr><td>4th</td><td>R9</td><td>XMM3</td></tr>
+                                <tr><td>5th+</td><td colspan="2">Stack (RSP+40, RSP+48, ...)</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <pre><code class="language-nasm">; Call Windows API: MessageBoxA(hWnd, lpText, lpCaption, uType)
+extern MessageBoxA
+
+section .data
+    msg db "Hello, Windows!", 0
+    title db "My App", 0
+
+section .text
+main:
+    sub rsp, 40             ; Shadow space (32) + alignment (8) = 40
+    
+    xor ecx, ecx            ; hWnd = NULL
+    lea rdx, [msg]          ; lpText
+    lea r8, [title]         ; lpCaption
+    mov r9d, 0              ; uType = MB_OK
+    call MessageBoxA
+    
+    add rsp, 40
+    ret</code></pre>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-flask me-2"></i>Key Differences: System V vs Windows x64</h4>
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-secondary">
+                                <tr><th>Aspect</th><th>System V (Linux)</th><th>Windows x64</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Args in registers</td><td>6 (RDI, RSI, RDX, RCX, R8, R9)</td><td>4 (RCX, RDX, R8, R9)</td></tr>
+                                <tr><td>Shadow space</td><td>No</td><td>Yes (32 bytes mandatory)</td></tr>
+                                <tr><td>Red zone</td><td>Yes (128 bytes)</td><td>No</td></tr>
+                                <tr><td>Callee-saved XMM</td><td>None</td><td>XMM6-XMM15</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="leaf" class="blog-content mt-5">
+                    <h2><i class="fas fa-leaf me-2 text-teal"></i>Leaf Functions</h2>
+                    
+                    <p>A <strong>leaf function</strong> is one that doesn't call other functions. These can be heavily optimized:</p>
+                    
+                    <ul>
+                        <li>No need to set up a stack frame</li>
+                        <li>No need for frame pointer (RBP)</li>
+                        <li>Can use red zone on System V</li>
+                        <li>Minimal prologue/epilogue</li>
+                    </ul>
+                    
+                    <pre><code class="language-nasm">; Non-leaf function (calls printf)
+; Must follow full convention
+print_value:
+    push rbp
+    mov rbp, rsp
+    sub rsp, 16         ; Alignment + locals
+    
+    mov rsi, rdi        ; Arg for printf
+    lea rdi, [fmt]
+    xor eax, eax        ; 0 vector args
+    call printf
+    
+    leave
+    ret
+
+; Leaf function (optimized, no calls)
+; Can skip frame setup entirely
+add_three:
+    lea rax, [rdi + rsi]    ; rax = a + b
+    add rax, rdx            ; rax += c
+    ret                     ; No prologue/epilogue needed!</code></pre>
+                    
+                    <div class="highlight-box">
+                        <i class="fas fa-bolt me-2"></i>
+                        <strong>Compiler Optimization:</strong> Modern compilers automatically detect leaf functions and omit frame pointers. Use <code>-fomit-frame-pointer</code> to enable this for non-leaf functions too (harder to debug).
+                    </div>
+                </div>
+
+                <div id="red-zone" class="blog-content mt-5">
+                    <h2><i class="fas fa-ban me-2 text-teal"></i>Red Zone (System V)</h2>
+                    
+                    <p>The <strong>red zone</strong> is a 128-byte area below RSP that leaf functions can use without adjusting RSP. It's "protected" from signal handlers and interrupts.</p>
+                    
+                    <pre><code class="language-plaintext">Stack Layout with Red Zone:
+
+        │             │
+        ├─────────────┤
+        │ Return Addr │ ← RSP points here
+        ├─────────────┤
+        │             │
+        │  Red Zone   │ ← 128 bytes, usable without SUB RSP
+        │  (128 bytes)│
+        │             │
+        ├─────────────┤
+        │ Danger Zone │ ← Below red zone, may be clobbered
+        └─────────────┘</code></pre>
+                    
+                    <h3>Using the Red Zone</h3>
+                    <pre><code class="language-nasm">; Leaf function using red zone (System V only!)
+compute_hash:
+    ; No stack frame needed - use red zone for locals
+    mov [rsp - 8], rbx      ; Save RBX in red zone
+    mov [rsp - 16], r12     ; Save R12 in red zone
+    
+    ; Use RBX and R12 freely...
+    mov rbx, rdi
+    xor r12, r12
+    
+    ; ... computation ...
+    
+    ; Restore and return
+    mov rbx, [rsp - 8]
+    mov r12, [rsp - 16]
+    ret</code></pre>
+                    
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Windows Warning:</strong> Windows x64 has <strong>NO red zone</strong>! The area below RSP can be clobbered by interrupts, exception handlers, or debuggers. Always allocate stack space explicitly on Windows.
+                    </div>
+                    
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-flask me-2"></i>Exercise: Cross-Platform Function</h4>
+                        <p>Write a function that works on both Linux and Windows:</p>
+                        <pre><code class="language-nasm">; Cross-platform compatible function
+multiply_add:
+    ; Works on both Linux and Windows
+    ; Linux: args in RDI, RSI, RDX
+    ; Windows: args in RCX, RDX, R8
+%ifdef WINDOWS
+    mov rax, rcx
+    imul rax, rdx
+    add rax, r8
+%else
+    mov rax, rdi
+    imul rax, rsi
+    add rax, rdx
+%endif
+    ret</code></pre>
+                    </div>
+                </div>
+
+                <div class="blog-content mt-5">
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 7: Memory Addressing Modes</h5>
+                            <p class="text-muted small mb-2">Master all x86 addressing modes including RIP-relative addressing.</p>
+                            <a href="asm-part07-memory-addressing.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 9: Control Flow Instructions</h5>
+                            <p class="text-muted small mb-2">Master jumps, branches, loops, and conditional execution.</p>
+                            <a href="asm-part09-control-flow.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 16: C Interoperability</h5>
+                            <p class="text-muted small mb-2">Integrate assembly with C code using proper calling conventions.</p>
+                            <a href="asm-part16-c-interop.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small"><i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a></p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"></div>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>
