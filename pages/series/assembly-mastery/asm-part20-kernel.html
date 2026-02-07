@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, archive" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Master x86 kernel assembly: interrupt handlers, context switching, scheduler entry points, GDT/IDT setup, memory management primitives, and writing OS kernel components in assembly." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="Kernel Assembly, OS Development, Context Switch, Interrupt Handler, IDT Setup, GDT Setup, Task Switching, Assembly Kernel" />
+    <meta property="og:title" content="x86 Assembly Series Part 20: Kernel Assembly Components" />
+    <meta property="og:description" content="Write kernel-level assembly code for operating system development." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-02-06" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    
+    <title>x86 Assembly Series Part 20: Kernel Assembly Components - Wasil Zafar</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', { 'ad_storage': 'denied', 'ad_user_data': 'denied', 'ad_personalization': 'denied', 'analytics_storage': 'denied', 'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE'] });
+        gtag('consent', 'default', { 'ad_storage': 'granted', 'ad_user_data': 'granted', 'ad_personalization': 'granted', 'analytics_storage': 'granted' });
+    </script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+                <h1 class="display-4 fw-bold mb-3">x86 Assembly Series Part 20: Kernel Assembly Components</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>February 6, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>45 min read</span>
+                    <button onclick="window.print()" class="print-btn"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Master kernel-level assembly: GDT/IDT initialization, interrupt handlers, context switching, syscall entry points, and essential assembly components for operating system kernels.</p>
+            </div>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents"><i class="fas fa-list"></i></button>
+
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#kernel-entry" onclick="closeNav()">Kernel Entry Point</a></li>
+            <li><a href="#gdt-idt" onclick="closeNav()">GDT & IDT Setup</a></li>
+            <li><a href="#isr" onclick="closeNav()">Interrupt Service Routines</a></li>
+            <li><a href="#context-switch" onclick="closeNav()">Context Switching</a></li>
+            <li><a href="#syscall-entry" onclick="closeNav()">Syscall Entry</a></li>
+            <li><a href="#memory-ops" onclick="closeNav()">Memory Operations</a></li>
+            <li><a href="#spinlocks" onclick="closeNav()">Spinlocks & Atomics</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <div id="kernel-entry" class="blog-content">
+                    <h2><i class="fas fa-door-open me-2 text-teal"></i>Kernel Entry Point</h2>
+                    
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-server me-2"></i>
+                        <strong>Multiboot Entry:</strong> Kernels following the Multiboot spec receive control in 32-bit protected mode with specific register values. The entry point must set up the long mode environment.
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-map-signs me-2"></i>Complete Series Navigation</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-2">25-Part Series</span>
+                            <span class="badge bg-crimson">x86 Assembly Mastery</span>
+                        </div>
+                        <div class="content">
+                            <p><strong>Foundation & Environment Setup</strong></p>
+                            <ol start="0">
+                                <li><a href="asm-part00-environment-setup.html">Development Environment, Tooling & Workflow</a></li>
+                                <li><a href="asm-part01-fundamentals.html">Assembly Language Fundamentals & Toolchain Setup</a></li>
+                                <li><a href="asm-part02-cpu-architecture.html">x86 CPU Architecture Overview</a></li>
+                                <li><a href="asm-part03-registers.html">Registers – Complete Deep Dive</a></li>
+                                <li><a href="asm-part04-instruction-encoding.html">Instruction Encoding & Binary Layout</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Assemblers, Syntax & Memory</strong></p>
+                            <ol start="5">
+                                <li><a href="asm-part05-nasm.html">NASM Syntax, Directives & Macros</a></li>
+                                <li><a href="asm-part06-masm.html">Complete Assembler Comparison</a></li>
+                                <li><a href="asm-part07-memory-addressing.html">Memory Addressing Modes</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Control Flow, Stack & Computation</strong></p>
+                            <ol start="8">
+                                <li><a href="asm-part08-stack-calling.html">Stack Internals & Calling Conventions</a></li>
+                                <li><a href="asm-part09-control-flow.html">Control Flow & Procedures</a></li>
+                                <li><a href="asm-part10-arithmetic.html">Integer, Bitwise & Arithmetic Operations</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Floating Point, SIMD & Performance</strong></p>
+                            <ol start="11">
+                                <li><a href="asm-part11-floating-point.html">Floating Point & SIMD Foundations</a></li>
+                                <li><a href="asm-part12-simd.html">SIMD, Vectorization & Performance</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>OS Interaction & Debugging</strong></p>
+                            <ol start="13">
+                                <li><a href="asm-part13-syscalls-interrupts.html">System Calls, Interrupts & Privilege Transitions</a></li>
+                                <li><a href="asm-part14-debugging.html">Debugging & Reverse Engineering</a></li>
+                                <li><a href="asm-part15-linking.html">Linking, Relocation & Loader Behavior</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Advanced Architecture & Interoperability</strong></p>
+                            <ol start="16">
+                                <li><a href="asm-part16-long-mode.html">x86-64 Long Mode & Advanced Features</a></li>
+                                <li><a href="asm-part17-c-interop.html">Assembly + C/C++ Interoperability</a></li>
+                                <li><a href="asm-part18-security.html">Memory Protection & Security Concepts</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Bare Metal, Kernel & Virtualization</strong></p>
+                            <ol start="19">
+                                <li><a href="asm-part19-bootloader.html">Bootloaders & Bare-Metal Programming</a></li>
+                                <li><strong>Kernel-Level Assembly (This Guide)</strong></li>
+                                <li><a href="asm-part21-qemu.html">Complete Emulator & Simulator Guide</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>CPU Microarchitecture & Optimization</strong></p>
+                            <ol start="22">
+                                <li><a href="asm-part22-optimization.html">Advanced Optimization & CPU Internals</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Real-World Application & Mastery</strong></p>
+                            <ol start="23">
+                                <li><a href="asm-part23-projects.html">Real-World Assembly Projects</a></li>
+                                <li><a href="asm-part24-capstone.html">Assembly Mastery Capstone</a></li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <pre><code class="language-nasm">; Multiboot header
+section .multiboot
+align 4
+    dd 0x1BADB002           ; Magic
+    dd 0x00                 ; Flags
+    dd -(0x1BADB002 + 0x00) ; Checksum
+
+section .text
+global _start
+extern kernel_main
+
+_start:
+    ; EAX = magic, EBX = multiboot info
+    cli
+    
+    ; Set up stack
+    mov esp, stack_top
+    
+    ; Call C kernel
+    push ebx                ; Multiboot info pointer
+    push eax                ; Magic number
+    call kernel_main
+    
+    ; Halt if kernel returns
+    cli
+.hang:
+    hlt
+    jmp .hang
+
+section .bss
+align 16
+stack_bottom:
+    resb 16384              ; 16 KB stack
+stack_top:</code></pre>
+                </div>
+
+                <div id="gdt-idt" class="blog-content mt-5">
+                    <h2><i class="fas fa-table me-2 text-teal"></i>GDT & IDT Setup</h2>
+                    
+                    <p>The Global Descriptor Table (GDT) defines memory segments, while the Interrupt Descriptor Table (IDT) routes interrupts to handlers. Both are essential kernel structures.</p>
+                    
+                    <h3>64-bit GDT Structure</h3>
+<pre><code class="language-nasm">section .data
+align 16
+gdt64:
+    .null:    dq 0                          ; Null descriptor (required)
+    
+    .code:    dw 0xFFFF                      ; Limit 0:15
+              dw 0                           ; Base 0:15
+              db 0                           ; Base 16:23
+              db 10011010b                   ; Access: Present, Ring 0, Code, Exec, Read
+              db 10101111b                   ; Flags: Gran, Long mode, Limit 16:19
+              db 0                           ; Base 24:31
+              
+    .data:    dw 0xFFFF
+              dw 0
+              db 0
+              db 10010010b                   ; Access: Present, Ring 0, Data, Write
+              db 10101111b
+              db 0
+              
+    .user_code:                              ; Ring 3 code segment
+              dw 0xFFFF
+              dw 0
+              db 0
+              db 11111010b                   ; DPL=3, Code
+              db 10101111b
+              db 0
+              
+    .user_data:
+              dw 0xFFFF
+              dw 0
+              db 0
+              db 11110010b                   ; DPL=3, Data
+              db 10101111b
+              db 0
+              
+    .tss:                                    ; Task State Segment descriptor
+              dw tss_size - 1                ; Limit
+              dw 0                           ; Base will be filled at runtime
+              db 0
+              db 10001001b                   ; Present, 64-bit TSS
+              db 0
+              db 0
+              dq 0                           ; High 32 bits of base (64-bit)
+
+gdt64_ptr:
+    dw $ - gdt64 - 1                         ; GDT size - 1
+    dq gdt64                                 ; GDT address
+
+; Segment selectors (offset into GDT)
+KERNEL_CODE equ 0x08    ; gdt64.code
+KERNEL_DATA equ 0x10    ; gdt64.data
+USER_CODE   equ 0x1B    ; gdt64.user_code | RPL 3
+USER_DATA   equ 0x23    ; gdt64.user_data | RPL 3
+TSS_SEL     equ 0x28    ; gdt64.tss</code></pre>
+
+                    <h3>64-bit IDT Entry Structure</h3>
+<pre><code class="language-plaintext">IDT Gate Descriptor (16 bytes in 64-bit mode):
+
+┌───────────────┬───────────────┐
+│ Offset 0:15   │ Selector      │  Bytes 0-3
+├───────────────┼───────────────┤
+│ IST  │ Type  │ Offset 16:31  │  Bytes 4-7
+├───────────────┴───────────────┤
+│         Offset 32:63          │  Bytes 8-11
+├───────────────────────────────┤
+│           Reserved            │  Bytes 12-15
+└───────────────────────────────┘
+
+Type field (byte 5):
+  Bit 7:      Present (1=valid)
+  Bits 5-6:   DPL (ring level to call from)
+  Bits 0-3:   Type (0xE=64-bit interrupt, 0xF=64-bit trap)</code></pre>
+
+<pre><code class="language-nasm">; IDT setup with NASM macros
+section .data
+
+; Macro to create IDT entry
+%macro IDT_ENTRY 1
+    dw (%1) & 0xFFFF            ; Offset 0:15
+    dw KERNEL_CODE              ; Selector
+    db 0                        ; IST (0 = no stack switching)
+    db 10001110b                ; Present, Ring 0, Interrupt Gate
+    dw ((%1) >> 16) & 0xFFFF    ; Offset 16:31
+    dd (%1) >> 32               ; Offset 32:63
+    dd 0                        ; Reserved
+%endmacro
+
+align 16
+idt64:
+    IDT_ENTRY isr0              ; 0: Divide Error
+    IDT_ENTRY isr1              ; 1: Debug
+    IDT_ENTRY isr2              ; 2: NMI
+    IDT_ENTRY isr3              ; 3: Breakpoint
+    ; ... entries 4-31 for exceptions ...
+    IDT_ENTRY irq0              ; 32: Timer (IRQ0)
+    IDT_ENTRY irq1              ; 33: Keyboard (IRQ1)
+    ; ... more IRQ handlers ...
+idt64_end:
+
+idt64_ptr:
+    dw idt64_end - idt64 - 1    ; IDT size - 1
+    dq idt64                    ; IDT address
+
+section .text
+load_gdt_idt:
+    lgdt [gdt64_ptr]
+    lidt [idt64_ptr]
+    
+    ; Reload CS with far return
+    push KERNEL_CODE
+    lea rax, [rel .reload_cs]
+    push rax
+    retfq
+.reload_cs:
+    ; Reload data segments
+    mov ax, KERNEL_DATA
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+    ret</code></pre>
+                </div>
+
+                <div id="isr" class="blog-content mt-5">
+                    <h2><i class="fas fa-bolt me-2 text-teal"></i>Interrupt Service Routines</h2>
+                    
+                    <pre><code class="language-nasm">; Common ISR stub - saves context and calls C handler
+isr_common_stub:
+    ; Push all general-purpose registers
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push rbp
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+    
+    ; Call C interrupt handler
+    mov rdi, rsp            ; Pass stack frame pointer
+    call interrupt_handler
+    
+    ; Restore registers
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+    
+    add rsp, 16             ; Remove error code and ISR number
+    iretq                   ; Return from interrupt</code></pre>
+                </div>
+
+                <div id="context-switch" class="blog-content mt-5">
+                    <h2><i class="fas fa-exchange-alt me-2 text-teal"></i>Context Switching</h2>
+                    
+                    <p>Context switching saves one task's CPU state and restores another's. It's the mechanism that enables multitasking—like pausing a video, switching to a browser, then resuming exactly where you left off.</p>
+                    
+<pre><code class="language-plaintext">Task State (what we save/restore):
+
+┌────────────────────────────────┐
+│ General Purpose Registers    │  RAX-R15, RBP
+├────────────────────────────────┤
+│ Stack Pointer (RSP)          │  Task's stack location
+├────────────────────────────────┤
+│ Instruction Pointer (RIP)    │  Where to resume
+├────────────────────────────────┤
+│ RFLAGS                       │  CPU flags
+├────────────────────────────────┤
+│ CR3                          │  Page table base (address space)
+├────────────────────────────────┤
+│ FPU/SSE State                │  XMM0-XMM15 (optional)
+└────────────────────────────────┘</code></pre>
+
+<pre><code class="language-nasm">; Context structure
+struc context
+    .rax    resq 1
+    .rbx    resq 1
+    .rcx    resq 1
+    .rdx    resq 1
+    .rsi    resq 1
+    .rdi    resq 1
+    .rbp    resq 1
+    .r8     resq 1
+    .r9     resq 1
+    .r10    resq 1
+    .r11    resq 1
+    .r12    resq 1
+    .r13    resq 1
+    .r14    resq 1
+    .r15    resq 1
+    .rip    resq 1
+    .rflags resq 1
+    .rsp    resq 1
+    .cr3    resq 1
+endstruc
+
+; void switch_context(context* old, context* new)
+; RDI = pointer to current task's context (save here)
+; RSI = pointer to next task's context (restore from here)
+global switch_context
+switch_context:
+    ; Save current task's registers
+    mov [rdi + context.rax], rax
+    mov [rdi + context.rbx], rbx
+    mov [rdi + context.rcx], rcx
+    mov [rdi + context.rdx], rdx
+    mov [rdi + context.rsi], rsi
+    mov [rdi + context.rdi], rdi
+    mov [rdi + context.rbp], rbp
+    mov [rdi + context.r8],  r8
+    mov [rdi + context.r9],  r9
+    mov [rdi + context.r10], r10
+    mov [rdi + context.r11], r11
+    mov [rdi + context.r12], r12
+    mov [rdi + context.r13], r13
+    mov [rdi + context.r14], r14
+    mov [rdi + context.r15], r15
+    
+    ; Save stack pointer and return address
+    mov [rdi + context.rsp], rsp
+    mov rax, [rsp]                  ; Return address
+    mov [rdi + context.rip], rax
+    
+    ; Save flags
+    pushfq
+    pop qword [rdi + context.rflags]
+    
+    ; Save CR3 (page table)
+    mov rax, cr3
+    mov [rdi + context.cr3], rax
+    
+    ; === Now restore new task === 
+    
+    ; Switch address space (if different)
+    mov rax, [rsi + context.cr3]
+    mov cr3, rax                    ; TLB flush happens here
+    
+    ; Restore registers
+    mov rax, [rsi + context.rax]
+    mov rbx, [rsi + context.rbx]
+    mov rcx, [rsi + context.rcx]
+    mov rdx, [rsi + context.rdx]
+    mov rbp, [rsi + context.rbp]
+    mov r8,  [rsi + context.r8]
+    mov r9,  [rsi + context.r9]
+    mov r10, [rsi + context.r10]
+    mov r11, [rsi + context.r11]
+    mov r12, [rsi + context.r12]
+    mov r13, [rsi + context.r13]
+    mov r14, [rsi + context.r14]
+    mov r15, [rsi + context.r15]
+    
+    ; Restore flags
+    push qword [rsi + context.rflags]
+    popfq
+    
+    ; Switch stack and jump to new task
+    mov rsp, [rsi + context.rsp]
+    mov rdi, [rsi + context.rdi]    ; Restore RDI last
+    push qword [rsi + context.rip]  ; Push return address
+    mov rsi, [rsi + context.rsi]    ; Restore RSI last
+    ret                             ; "Return" to new task</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Performance Tip:</strong> Modern kernels use lazy FPU switching—only save/restore XMM registers if the task actually used floating point. Track this with a flag and handle #NM (Device Not Available) exception.
+                    </div>
+                </div>
+
+                <div id="syscall-entry" class="blog-content mt-5">
+                    <h2><i class="fas fa-arrow-right me-2 text-teal"></i>Syscall Entry Point</h2>
+                    
+                    <p>The <code>SYSCALL</code> instruction provides fast user→kernel transitions without the overhead of interrupt gates. It's the modern way for applications to request kernel services.</p>
+                    
+                    <h3>MSR Configuration</h3>
+<pre><code class="language-nasm">; Setup SYSCALL/SYSRET mechanism
+; Must be done in kernel initialization
+
+MSR_EFER    equ 0xC0000080    ; Extended Feature Enable Register
+MSR_STAR    equ 0xC0000081    ; Segment selectors for SYSCALL/SYSRET
+MSR_LSTAR   equ 0xC0000082    ; RIP for SYSCALL (64-bit)
+MSR_SFMASK  equ 0xC0000084    ; RFLAGS mask for SYSCALL
+
+setup_syscall:
+    ; Enable SYSCALL/SYSRET in EFER
+    mov ecx, MSR_EFER
+    rdmsr
+    or eax, 1                  ; Set SCE (Syscall Enable) bit
+    wrmsr
+    
+    ; STAR: Set segment selectors
+    ; Bits 32-47: SYSCALL CS/SS (kernel segments)
+    ; Bits 48-63: SYSRET CS/SS (user segments)
+    mov ecx, MSR_STAR
+    xor eax, eax
+    mov edx, (KERNEL_CODE) | ((USER_CODE - 16) << 16)
+    ; Note: SYSRET loads CS from STAR[48:63]+16, SS from STAR[48:63]+8
+    wrmsr
+    
+    ; LSTAR: Entry point for SYSCALL
+    mov ecx, MSR_LSTAR
+    mov rax, syscall_entry
+    mov rdx, rax
+    shr rdx, 32
+    wrmsr
+    
+    ; SFMASK: Clear these flags on SYSCALL
+    mov ecx, MSR_SFMASK
+    mov eax, 0x200             ; Clear IF (disable interrupts)
+    xor edx, edx
+    wrmsr
+    ret</code></pre>
+
+                    <h3>Syscall Handler</h3>
+<pre><code class="language-nasm">; Syscall entry point (RIP loaded from LSTAR MSR)
+; On entry:
+;   RCX = user RIP (return address)
+;   R11 = user RFLAGS
+;   RAX = syscall number
+;   RDI, RSI, RDX, R10, R8, R9 = arguments
+
+syscall_entry:
+    ; CRITICAL: We're on user stack! Switch to kernel stack first.
+    swapgs                      ; Swap GS.base with KernelGSBase MSR
+    mov [gs:USER_RSP], rsp      ; Save user RSP in per-CPU data
+    mov rsp, [gs:KERNEL_RSP]    ; Load kernel stack
+    
+    ; Push user context for SYSRET
+    push rcx                    ; User RIP
+    push r11                    ; User RFLAGS
+    push qword [gs:USER_RSP]    ; User RSP
+    
+    ; Re-enable interrupts (cleared by SYSCALL)
+    sti
+    
+    ; Bounds check syscall number
+    cmp rax, SYSCALL_MAX
+    ja .invalid_syscall
+    
+    ; Call handler: syscall_table[rax](rdi, rsi, rdx, r10, r8, r9)
+    mov rcx, r10                ; Adjust: syscall uses R10 for arg4
+    call [syscall_table + rax * 8]
+    
+.return_to_user:
+    cli                         ; Disable interrupts for SYSRET
+    
+    ; Restore user context
+    pop rsp                     ; User RSP
+    pop r11                     ; User RFLAGS
+    pop rcx                     ; User RIP
+    
+    swapgs                      ; Restore user GS.base
+    sysretq                     ; Return to user mode
+
+.invalid_syscall:
+    mov rax, -1                 ; Return -EINVAL
+    jmp .return_to_user
+
+section .data
+syscall_table:
+    dq sys_read                 ; 0
+    dq sys_write                ; 1
+    dq sys_open                 ; 2
+    ; ... more syscall handlers ...
+SYSCALL_MAX equ ($ - syscall_table) / 8 - 1</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Security Critical:</strong> Always switch to kernel stack before doing anything else! User code controls RSP—operating on user stack is a privilege escalation vulnerability.
+                    </div>
+                </div>
+
+                <div id="memory-ops" class="blog-content mt-5">
+                    <h2><i class="fas fa-memory me-2 text-teal"></i>Memory Operations</h2>
+                    
+                    <p>Hand-optimized memory operations are kernel essentials. These functions are called millions of times—every cycle counts.</p>
+                    
+                    <h3>memcpy - Fast Memory Copy</h3>
+<pre><code class="language-nasm">; void* memcpy(void* dest, const void* src, size_t n)
+; RDI = dest, RSI = src, RDX = count
+; Returns: original dest in RAX
+global memcpy
+memcpy:
+    mov rax, rdi            ; Return value = dest
+    mov rcx, rdx            ; Count
+    
+    ; Copy 8 bytes at a time
+    shr rcx, 3              ; RCX = count / 8
+    rep movsq               ; Copy qwords
+    
+    ; Copy remaining bytes (0-7)
+    mov rcx, rdx
+    and rcx, 7              ; RCX = count % 8
+    rep movsb               ; Copy remaining bytes
+    
+    ret
+
+; SIMD-optimized memcpy for large blocks
+memcpy_simd:
+    mov rax, rdi
+    cmp rdx, 128
+    jb memcpy               ; Fall back for small copies
+    
+    ; Align destination to 16 bytes
+.align_loop:
+    test rdi, 15
+    jz .aligned
+    movsb
+    dec rdx
+    jmp .align_loop
+    
+.aligned:
+    mov rcx, rdx
+    shr rcx, 7              ; 128 bytes per iteration
+    
+.simd_loop:
+    movdqa xmm0, [rsi]
+    movdqa xmm1, [rsi + 16]
+    movdqa xmm2, [rsi + 32]
+    movdqa xmm3, [rsi + 48]
+    movdqa xmm4, [rsi + 64]
+    movdqa xmm5, [rsi + 80]
+    movdqa xmm6, [rsi + 96]
+    movdqa xmm7, [rsi + 112]
+    
+    movdqa [rdi], xmm0
+    movdqa [rdi + 16], xmm1
+    movdqa [rdi + 32], xmm2
+    movdqa [rdi + 48], xmm3
+    movdqa [rdi + 64], xmm4
+    movdqa [rdi + 80], xmm5
+    movdqa [rdi + 96], xmm6
+    movdqa [rdi + 112], xmm7
+    
+    add rsi, 128
+    add rdi, 128
+    dec rcx
+    jnz .simd_loop
+    
+    ; Handle remainder
+    and rdx, 127
+    mov rcx, rdx
+    rep movsb
+    ret</code></pre>
+
+                    <h3>memset - Fill Memory</h3>
+<pre><code class="language-nasm">; void* memset(void* dest, int c, size_t n)
+; RDI = dest, RSI = value (byte), RDX = count
+; Returns: original dest in RAX
+global memset
+memset:
+    mov rax, rdi            ; Save dest for return
+    mov r8, rdi             ; Backup dest
+    
+    ; Broadcast byte to all 8 bytes of RAX
+    movzx eax, sil          ; AL = byte value
+    mov ah, al              ; AX = byte repeated
+    mov rcx, rax
+    shl rcx, 16
+    or rax, rcx             ; EAX = byte * 4
+    mov rcx, rax
+    shl rcx, 32
+    or rax, rcx             ; RAX = byte * 8
+    
+    ; Fill 8 bytes at a time
+    mov rcx, rdx
+    shr rcx, 3
+    rep stosq
+    
+    ; Fill remaining bytes
+    mov rcx, rdx
+    and rcx, 7
+    rep stosb
+    
+    mov rax, r8             ; Return original dest
+    ret</code></pre>
+
+                    <h3>memcmp - Compare Memory</h3>
+<pre><code class="language-nasm">; int memcmp(const void* s1, const void* s2, size_t n)
+; Returns: 0 if equal, <0 if s1<s2, >0 if s1>s2
+global memcmp
+memcmp:
+    xor eax, eax
+    test rdx, rdx
+    jz .done                ; n=0, return 0
+    
+    mov rcx, rdx
+    repe cmpsb              ; Compare until mismatch or done
+    
+    je .done                ; All equal
+    
+    ; Found difference at [rsi-1] vs [rdi-1]
+    movzx eax, byte [rdi - 1]
+    movzx ecx, byte [rsi - 1]
+    sub eax, ecx
+    
+.done:
+    ret</code></pre>
+                </div>
+
+                <div id="spinlocks" class="blog-content mt-5">
+                    <h2><i class="fas fa-lock me-2 text-teal"></i>Spinlocks & Atomics</h2>
+                    
+                    <p>In a multi-core system, spinlocks protect shared data from concurrent access. A spinlock "spins" (busy-waits) until it can acquire exclusive access—like waiting at a single-person bathroom door.</p>
+                    
+                    <h3>The LOCK Prefix</h3>
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>LOCK Prefix:</strong> Makes the following instruction atomic (indivisible). The CPU locks the memory bus during the operation, preventing other cores from interfering.
+                    </div>
+
+<pre><code class="language-nasm">; Atomic operations with LOCK prefix
+lock inc qword [counter]    ; Atomic increment
+lock dec qword [counter]    ; Atomic decrement
+lock add qword [val], 10    ; Atomic add
+lock xadd [val], rax        ; Atomic exchange-add (returns old value)
+lock cmpxchg [ptr], rbx     ; Compare-and-swap (if [ptr]==rax, [ptr]=rbx)
+lock bts [bitmap], rax      ; Atomic bit test and set</code></pre>
+
+                    <h3>Simple Spinlock Implementation</h3>
+<pre><code class="language-nasm">; Spinlock structure: 0 = unlocked, 1 = locked
+section .data
+    my_lock dq 0
+
+section .text
+
+; void spin_lock(uint64_t* lock)
+; RDI = pointer to lock
+global spin_lock
+spin_lock:
+    mov rax, 1
+.try_acquire:
+    xchg rax, [rdi]         ; Atomically swap 1 with lock
+    test rax, rax           ; Was it 0 (unlocked)?
+    jnz .spin               ; No → someone else holds it
+    ret                     ; Yes → we acquired the lock!
+    
+.spin:
+    pause                   ; CPU hint: we're spinning (saves power)
+    cmp qword [rdi], 0      ; Check without LOCK (read is atomic)
+    jne .spin               ; Still locked, keep spinning
+    jmp .try_acquire        ; Looks free, try to acquire
+
+; void spin_unlock(uint64_t* lock)
+; RDI = pointer to lock
+global spin_unlock
+spin_unlock:
+    mov qword [rdi], 0      ; Release lock (simple store is atomic)
+    ret</code></pre>
+
+                    <h3>Ticket Spinlock (Fair)</h3>
+                    <p>Simple spinlocks can starve some CPUs. Ticket locks ensure first-come-first-served ordering:</p>
+                    
+<pre><code class="language-nasm">; Ticket lock: 2x 32-bit counters
+; Low 32 bits: "now serving" (head)
+; High 32 bits: "take a number" (tail)
+section .data
+ticket_lock: dq 0           ; head=0, tail=0
+
+section .text
+
+; void ticket_lock_acquire(uint64_t* lock)
+global ticket_lock_acquire
+ticket_lock_acquire:
+    mov eax, 1
+    lock xadd [rdi + 4], eax    ; Atomically get ticket (tail++)
+    ; EAX = our ticket number
+    
+.wait:
+    cmp [rdi], eax              ; Is it our turn? (head == ticket)
+    je .acquired
+    pause
+    jmp .wait
+    
+.acquired:
+    ret
+
+; void ticket_lock_release(uint64_t* lock)
+global ticket_lock_release
+ticket_lock_release:
+    lock inc dword [rdi]        ; head++ (next customer)
+    ret</code></pre>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-primary">Exercise</span>
+                        </div>
+                        <div class="experiment-content">
+                            <h4>Implement atomic_compare_exchange</h4>
+                            <p>Write a function that atomically compares <code>*ptr</code> with <code>expected</code> and, if equal, stores <code>desired</code>. Return 1 if swap succeeded, 0 if not.</p>
+<pre><code class="language-c">// C signature:
+int atomic_cas(uint64_t* ptr, uint64_t expected, uint64_t desired);
+// RDI = ptr, RSI = expected, RDX = desired</code></pre>
+                            <p><em>Hint: Use <code>lock cmpxchg</code>. It compares RAX with memory and swaps if equal.</em></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="blog-content mt-5">
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 19: Bootloader Development</h5>
+                            <p class="text-muted small mb-2">Write bootloaders and boot sector code.</p>
+                            <a href="asm-part19-bootloader.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 21: Complete Emulator & Simulator Guide</h5>
+                            <p class="text-muted small mb-2">Test your code with QEMU, Bochs, and specialized simulators.</p>
+                            <a href="asm-part21-qemu.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 13: System Calls & Interrupts</h5>
+                            <p class="text-muted small mb-2">User-space syscall interface fundamentals.</p>
+                            <a href="asm-part13-syscalls-interrupts.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small"><i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a></p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"></div>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>

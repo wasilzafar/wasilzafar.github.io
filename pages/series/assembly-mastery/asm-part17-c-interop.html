@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, archive" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Master C and assembly interoperability: calling C functions from assembly, writing assembly functions callable from C, inline assembly (GCC asm), and understanding the C ABI." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="C Assembly Interop, Inline Assembly, GCC asm, Calling Convention, cdecl, System V ABI, extern, global, C ABI" />
+    <meta property="og:title" content="x86 Assembly Series Part 17: C & Assembly Interoperability" />
+    <meta property="og:description" content="Call C from assembly and vice versa with proper ABI compliance." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-02-06" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    
+    <title>x86 Assembly Series Part 17: C & Assembly Interoperability - Wasil Zafar</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', { 'ad_storage': 'denied', 'ad_user_data': 'denied', 'ad_personalization': 'denied', 'analytics_storage': 'denied', 'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE'] });
+        gtag('consent', 'default', { 'ad_storage': 'granted', 'ad_user_data': 'granted', 'ad_personalization': 'granted', 'analytics_storage': 'granted' });
+    </script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+                <h1 class="display-4 fw-bold mb-3">x86 Assembly Series Part 17: C & Assembly Interoperability</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>February 6, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>30 min read</span>
+                    <button onclick="window.print()" class="print-btn"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Master C and assembly integration: call C library functions from assembly, write assembly functions callable from C, use GCC inline assembly, and understand ABI compliance for seamless interop.</p>
+            </div>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents"><i class="fas fa-list"></i></button>
+
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#overview" onclick="closeNav()">Interop Overview</a></li>
+            <li><a href="#asm-calls-c" onclick="closeNav()">Assembly Calling C</a>
+                <ul>
+                    <li><a href="#extern" onclick="closeNav()">extern Declarations</a></li>
+                    <li><a href="#libc" onclick="closeNav()">Using libc</a></li>
+                </ul>
+            </li>
+            <li><a href="#c-calls-asm" onclick="closeNav()">C Calling Assembly</a>
+                <ul>
+                    <li><a href="#global" onclick="closeNav()">global Exports</a></li>
+                    <li><a href="#abi-compliance" onclick="closeNav()">ABI Compliance</a></li>
+                </ul>
+            </li>
+            <li><a href="#inline" onclick="closeNav()">GCC Inline Assembly</a></li>
+            <li><a href="#data-types" onclick="closeNav()">C Data Types in Assembly</a></li>
+            <li><a href="#structs" onclick="closeNav()">Structures & Arrays</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <div id="overview" class="blog-content">
+                    <h2><i class="fas fa-plug me-2 text-teal"></i>Interop Overview</h2>
+                    
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Why Interop?</strong> Combine C's productivity with assembly's performance. Use C for complex logic, assembly for hot loops. Access libc (printf, malloc) from assembly.
+                    </div>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-map-signs me-2"></i>Complete Series Navigation</h4>
+                        <div class="meta mb-2">
+                            <span class="badge bg-teal me-2">25-Part Series</span>
+                            <span class="badge bg-crimson">x86 Assembly Mastery</span>
+                        </div>
+                        <div class="content">
+                            <p><strong>Foundation & Environment Setup</strong></p>
+                            <ol start="0">
+                                <li><a href="asm-part00-environment-setup.html">Development Environment, Tooling & Workflow</a></li>
+                                <li><a href="asm-part01-fundamentals.html">Assembly Language Fundamentals & Toolchain Setup</a></li>
+                                <li><a href="asm-part02-cpu-architecture.html">x86 CPU Architecture Overview</a></li>
+                                <li><a href="asm-part03-registers.html">Registers – Complete Deep Dive</a></li>
+                                <li><a href="asm-part04-instruction-encoding.html">Instruction Encoding & Binary Layout</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Assemblers, Syntax & Memory</strong></p>
+                            <ol start="5">
+                                <li><a href="asm-part05-nasm.html">NASM Syntax, Directives & Macros</a></li>
+                                <li><a href="asm-part06-masm.html">Complete Assembler Comparison</a></li>
+                                <li><a href="asm-part07-memory-addressing.html">Memory Addressing Modes</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Control Flow, Stack & Computation</strong></p>
+                            <ol start="8">
+                                <li><a href="asm-part08-stack-calling.html">Stack Internals & Calling Conventions</a></li>
+                                <li><a href="asm-part09-control-flow.html">Control Flow & Procedures</a></li>
+                                <li><a href="asm-part10-arithmetic.html">Integer, Bitwise & Arithmetic Operations</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Floating Point, SIMD & Performance</strong></p>
+                            <ol start="11">
+                                <li><a href="asm-part11-floating-point.html">Floating Point & SIMD Foundations</a></li>
+                                <li><a href="asm-part12-simd.html">SIMD, Vectorization & Performance</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>OS Interaction & Debugging</strong></p>
+                            <ol start="13">
+                                <li><a href="asm-part13-syscalls-interrupts.html">System Calls, Interrupts & Privilege Transitions</a></li>
+                                <li><a href="asm-part14-debugging.html">Debugging & Reverse Engineering</a></li>
+                                <li><a href="asm-part15-linking.html">Linking, Relocation & Loader Behavior</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Advanced Architecture & Interoperability</strong></p>
+                            <ol start="16">
+                                <li><a href="asm-part16-long-mode.html">x86-64 Long Mode & Advanced Features</a></li>
+                                <li><strong>Assembly + C/C++ Interoperability (This Guide)</strong></li>
+                                <li><a href="asm-part18-security.html">Memory Protection & Security Concepts</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Bare Metal, Kernel & Virtualization</strong></p>
+                            <ol start="19">
+                                <li><a href="asm-part19-bootloader.html">Bootloaders & Bare-Metal Programming</a></li>
+                                <li><a href="asm-part20-kernel.html">Kernel-Level Assembly</a></li>
+                                <li><a href="asm-part21-qemu.html">Complete Emulator & Simulator Guide</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>CPU Microarchitecture & Optimization</strong></p>
+                            <ol start="22">
+                                <li><a href="asm-part22-optimization.html">Advanced Optimization & CPU Internals</a></li>
+                            </ol>
+                            <p class="mt-3"><strong>Real-World Application & Mastery</strong></p>
+                            <ol start="23">
+                                <li><a href="asm-part23-projects.html">Real-World Assembly Projects</a></li>
+                                <li><a href="asm-part24-capstone.html">Assembly Mastery Capstone</a></li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="asm-calls-c" class="blog-content mt-5">
+                    <h2><i class="fas fa-arrow-right me-2 text-teal"></i>Assembly Calling C Functions</h2>
+                    
+                    <h3 id="extern">extern Declarations</h3>
+                    
+                    <pre><code class="language-nasm">; Declare external C functions
+extern printf
+extern malloc
+extern free
+
+section .data
+    fmt db "Value: %d", 10, 0
+
+section .text
+global main
+
+main:
+    push rbp
+    mov rbp, rsp
+    
+    ; Call printf(fmt, 42)
+    lea rdi, [fmt]          ; First arg: format string
+    mov rsi, 42             ; Second arg: value
+    xor eax, eax            ; AL = 0 (no vector args)
+    call printf
+    
+    xor eax, eax            ; return 0
+    pop rbp
+    ret</code></pre>
+
+                    <h3 id="libc">Using libc Functions</h3>
+                    
+                    <pre><code class="language-bash"># Compile and link with libc
+nasm -f elf64 program.asm -o program.o
+gcc -no-pie program.o -o program</code></pre>
+                </div>
+
+                <div id="c-calls-asm" class="blog-content mt-5">
+                    <h2><i class="fas fa-arrow-left me-2 text-teal"></i>C Calling Assembly Functions</h2>
+                    
+                    <h3 id="global">global Exports</h3>
+                    
+                    <pre><code class="language-nasm">; asm_add.asm - Assembly function callable from C
+section .text
+global asm_add          ; Export symbol
+
+; int asm_add(int a, int b)
+; Args: RDI = a, RSI = b (System V ABI)
+; Returns: RAX
+asm_add:
+    mov rax, rdi        ; RAX = a
+    add rax, rsi        ; RAX = a + b
+    ret</code></pre>
+
+                    <pre><code class="language-c">// main.c - C code calling assembly
+#include &lt;stdio.h&gt;
+
+extern int asm_add(int a, int b);
+
+int main() {
+    int result = asm_add(10, 20);
+    printf("Result: %d\n", result);  // Output: 30
+    return 0;
+}</code></pre>
+
+                    <h3 id="abi-compliance">ABI Compliance</h3>
+                    
+                    <p>When your assembly function is called from C, you must follow the ABI rules or risk corrupting the caller's state. Think of it like a hotel room—you can rearrange furniture, but put everything back before checkout.</p>
+                    
+                    <h4>Callee-Saved Registers (System V AMD64)</h4>
+                    <p>These registers must have the same value when your function returns:</p>
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr><th>Register</th><th>Must Preserve?</th><th>Common Use</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>RBX</code></td><td><strong>Yes</strong></td><td>General callee-saved</td></tr>
+                                <tr><td><code>RBP</code></td><td><strong>Yes</strong></td><td>Frame pointer</td></tr>
+                                <tr><td><code>R12-R15</code></td><td><strong>Yes</strong></td><td>General callee-saved</td></tr>
+                                <tr><td><code>RSP</code></td><td><strong>Yes</strong></td><td>Stack pointer (critical!)</td></tr>
+                                <tr><td><code>RAX, RCX, RDX</code></td><td>No</td><td>Return value / scratch</td></tr>
+                                <tr><td><code>RDI, RSI</code></td><td>No</td><td>Arguments / scratch</td></tr>
+                                <tr><td><code>R8-R11</code></td><td>No</td><td>Arguments / scratch</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+<pre><code class="language-nasm">; Proper callee-saved register handling
+global my_function
+my_function:
+    ; Save callee-saved registers we'll use
+    push rbx
+    push r12
+    push r13
+    push rbp
+    
+    ; Now we can freely use RBX, R12, R13, RBP
+    mov rbx, rdi
+    mov r12, rsi
+    ; ... do work ...
+    
+    ; Restore in reverse order
+    pop rbp
+    pop r13
+    pop r12
+    pop rbx
+    ret</code></pre>
+
+                    <h4>Stack Alignment Rule</h4>
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Critical:</strong> The stack must be 16-byte aligned BEFORE the <code>call</code> instruction. Since <code>call</code> pushes an 8-byte return address, RSP is misaligned upon function entry. If you push an odd number of 8-byte values, you realign it.
+                    </div>
+
+<pre><code class="language-nasm">; Stack alignment examples
+
+; BAD: Calling printf with misaligned stack
+my_func:
+    ; RSP is 8-byte misaligned after call instruction
+    mov rdi, format_str
+    call printf         ; CRASH! Stack not 16-byte aligned
+    ret
+
+; GOOD: Align stack before calling
+my_func:
+    sub rsp, 8          ; Realign to 16 bytes
+    mov rdi, format_str
+    call printf
+    add rsp, 8
+    ret
+
+; ALTERNATIVE: Use push for alignment
+my_func:
+    push rbx            ; Align + save callee-saved register
+    mov rdi, format_str
+    call printf
+    pop rbx
+    ret</code></pre>
+                </div>
+
+                <div id="inline" class="blog-content mt-5">
+                    <h2><i class="fas fa-code me-2 text-teal"></i>GCC Inline Assembly</h2>
+                    
+                    <pre><code class="language-c">// Basic inline assembly
+int main() {
+    int a = 10, b = 20, result;
+    
+    __asm__ (
+        "addl %1, %0"
+        : "=r" (result)          // Output operand
+        : "r" (b), "0" (a)       // Input operands
+    );
+    
+    printf("Result: %d\n", result);
+    return 0;
+}</code></pre>
+                </div>
+
+                <div id="data-types" class="blog-content mt-5">
+                    <h2><i class="fas fa-database me-2 text-teal"></i>C Data Types in Assembly</h2>
+                    
+                    <p>Understanding how C types map to assembly sizes and registers is essential for correct interop. Here's the complete mapping for x86-64 Linux (System V ABI):</p>
+                    
+                    <h3>Integer Types</h3>
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr><th>C Type</th><th>Size</th><th>NASM Equivalent</th><th>Register</th><th>Access</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>char</code></td><td>1 byte</td><td><code>db</code></td><td><code>AL, DIL</code></td><td><code>byte [addr]</code></td></tr>
+                                <tr><td><code>short</code></td><td>2 bytes</td><td><code>dw</code></td><td><code>AX, DI</code></td><td><code>word [addr]</code></td></tr>
+                                <tr><td><code>int</code></td><td>4 bytes</td><td><code>dd</code></td><td><code>EAX, EDI</code></td><td><code>dword [addr]</code></td></tr>
+                                <tr><td><code>long</code></td><td>8 bytes</td><td><code>dq</code></td><td><code>RAX, RDI</code></td><td><code>qword [addr]</code></td></tr>
+                                <tr><td><code>long long</code></td><td>8 bytes</td><td><code>dq</code></td><td><code>RAX, RDI</code></td><td><code>qword [addr]</code></td></tr>
+                                <tr><td><code>void*</code></td><td>8 bytes</td><td><code>dq</code></td><td><code>RAX, RDI</code></td><td><code>qword [addr]</code></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h3>Floating Point Types</h3>
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr><th>C Type</th><th>Size</th><th>Register</th><th>Instructions</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>float</code></td><td>4 bytes</td><td><code>XMM0-XMM7</code></td><td><code>movss, addss, mulss</code></td></tr>
+                                <tr><td><code>double</code></td><td>8 bytes</td><td><code>XMM0-XMM7</code></td><td><code>movsd, addsd, mulsd</code></td></tr>
+                                <tr><td><code>long double</code></td><td>16 bytes*</td><td><code>ST(0)</code> (x87)</td><td><code>fld, fstp</code></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="small text-muted">*long double is 80-bit internally, padded to 16 bytes for alignment</p>
+
+                    <h3>Passing Floats and Doubles</h3>
+<pre><code class="language-nasm">; float add_floats(float a, float b)
+; Arguments: XMM0 = a, XMM1 = b
+; Return: XMM0
+global add_floats
+add_floats:
+    addss xmm0, xmm1    ; XMM0 = a + b
+    ret
+
+; double multiply(double x, double y)
+; Arguments: XMM0 = x, XMM1 = y
+global multiply
+multiply:
+    mulsd xmm0, xmm1    ; XMM0 = x * y
+    ret</code></pre>
+
+                    <h3>Mixed Integer and Float Arguments</h3>
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Integer arguments use RDI, RSI, RDX, RCX, R8, R9. Float arguments use XMM0-XMM7. They have <strong>separate counters</strong>!
+                    </div>
+
+<pre><code class="language-c">// C function with mixed types
+void mixed(int a, double b, int c, float d);
+// a → EDI (integer slot 1)
+// b → XMM0 (float slot 1)
+// c → ESI (integer slot 2) 
+// d → XMM1 (float slot 2)</code></pre>
+
+<pre><code class="language-nasm">; Assembly calling mixed(10, 3.14, 20, 2.5)
+section .data
+    double_val dq 3.14
+    float_val  dd 2.5
+
+section .text
+    mov edi, 10
+    movsd xmm0, [rel double_val]
+    mov esi, 20
+    movss xmm1, [rel float_val]
+    call mixed</code></pre>
+                </div>
+
+                <div id="structs" class="blog-content mt-5">
+                    <h2><i class="fas fa-layer-group me-2 text-teal"></i>Structures & Arrays</h2>
+                    
+                    <p>C structures are laid out in memory with specific alignment rules. Understanding padding and offsets is crucial for accessing struct members from assembly.</p>
+                    
+                    <h3>Structure Layout & Padding</h3>
+<pre><code class="language-c">// C struct definition
+typedef struct {
+    char  a;      // Offset 0, 1 byte
+    // 3 bytes padding
+    int   b;      // Offset 4, 4 bytes (aligned to 4)
+    short c;      // Offset 8, 2 bytes
+    // 6 bytes padding
+    long  d;      // Offset 16, 8 bytes (aligned to 8)
+} Example;        // Total: 24 bytes
+
+// To check: printf("Size: %zu\n", sizeof(Example));</code></pre>
+
+<pre><code class="language-plaintext">Memory Layout:
+┌────────┬────────┬────────┬────────┐
+│   a    │ pad[3] │    b     │ (4B)   │  Bytes 0-7
+└────────┴────────┴────────┴────────┘
+┌────────┬──────────────────────────┐
+│   c    │       padding        │  Bytes 8-15
+└────────┴──────────────────────────┘
+┌───────────────────────────────────┐
+│              d                  │  Bytes 16-23
+└───────────────────────────────────┘</code></pre>
+
+                    <h3>Accessing Struct Members from Assembly</h3>
+<pre><code class="language-nasm">; void process_struct(Example* ptr)
+; Argument: RDI = pointer to Example struct
+global process_struct
+process_struct:
+    ; Define offsets (match C struct layout)
+    %define OFFSET_A  0
+    %define OFFSET_B  4
+    %define OFFSET_C  8
+    %define OFFSET_D  16
+    
+    ; Read members
+    movzx eax, byte [rdi + OFFSET_A]   ; Load char a (zero-extend)
+    mov   ebx, [rdi + OFFSET_B]         ; Load int b
+    movsx ecx, word [rdi + OFFSET_C]    ; Load short c (sign-extend)
+    mov   rdx, [rdi + OFFSET_D]         ; Load long d
+    
+    ; Modify members
+    mov   byte [rdi + OFFSET_A], 'X'    ; Set a = 'X'
+    add   dword [rdi + OFFSET_B], 100   ; b += 100
+    
+    ret</code></pre>
+
+                    <h3>Using NASM Structs (Cleaner Approach)</h3>
+<pre><code class="language-nasm">; Define struct in NASM
+struc Example
+    .a:     resb 1
+            resb 3      ; Explicit padding
+    .b:     resd 1
+    .c:     resw 1
+            resb 6      ; Padding
+    .d:     resq 1
+endstruc
+
+; Now use struct offsets
+process_struct:
+    mov al, [rdi + Example.a]      ; Load a
+    mov ebx, [rdi + Example.b]     ; Load b
+    mov rcx, [rdi + Example.d]     ; Load d
+    ret</code></pre>
+
+                    <h3>Arrays</h3>
+<pre><code class="language-nasm">; int sum_array(int* arr, int len)
+; RDI = array pointer, ESI = length
+global sum_array
+sum_array:
+    xor eax, eax            ; sum = 0
+    test esi, esi
+    jz .done
+    
+.loop:
+    add eax, [rdi]          ; sum += arr[i]
+    add rdi, 4              ; Move to next int (4 bytes)
+    dec esi
+    jnz .loop
+    
+.done:
+    ret                     ; Return sum in EAX</code></pre>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-primary">Exercise</span>
+                        </div>
+                        <div class="experiment-content">
+                            <h4>Struct Sum Challenge</h4>
+                            <p>Write an assembly function that takes a pointer to this C struct and returns the sum of all numeric members:</p>
+<pre><code class="language-c">typedef struct {
+    int    x;    // Offset 0
+    int    y;    // Offset 4
+    double z;    // Offset 8 (aligned to 8)
+} Point;         // Size: 16 bytes
+
+// Prototype: double point_sum(Point* p);</code></pre>
+                            <p><em>Hint: Return float/double values in XMM0. Convert integers with <code>cvtsi2sd</code>.</em></p>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-tools me-2"></i>
+                        <strong>Pro Tip:</strong> Use <code>pahole</code> or <code>offsetof()</code> to verify struct layouts. Different compilers and platforms may pad differently!
+                    </div>
+                </div>
+
+                <div class="blog-content mt-5">
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 16: x64 Long Mode & Protected Mode</h5>
+                            <p class="text-muted small mb-2">Understand CPU modes and memory protection.</p>
+                            <a href="asm-part16-long-mode.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 18: Memory Protection & Security</h5>
+                            <p class="text-muted small mb-2">Stack canaries, ASLR, and secure coding in assembly.</p>
+                            <a href="asm-part18-security.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 8: Stack Operations & Calling Conventions</h5>
+                            <p class="text-muted small mb-2">Deep dive into the System V and Windows ABI.</p>
+                            <a href="asm-part08-stack-calling.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small"><i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a></p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> | 
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | 
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"></div>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>
