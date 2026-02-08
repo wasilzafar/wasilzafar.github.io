@@ -747,6 +747,100 @@ link /SUBSYSTEM:CONSOLE /ENTRY:main hello_win.obj kernel32.lib
 nasm -f win64 hello_win.asm -o hello_win.obj
 golink /console /entry main hello_win.obj kernel32.dll</code></pre>
 
+                    <h3>Complete Build Example (macOS)</h3>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fab fa-apple me-2"></i>
+                        <strong>macOS Key Differences:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li><strong>Object format:</strong> <code>macho64</code> (Mach-O) instead of <code>elf64</code></li>
+                            <li><strong>Entry point:</strong> Labels must be prefixed with <code>_</code> (e.g., <code>_main</code> not <code>_start</code>)</li>
+                            <li><strong>Syscall numbers:</strong> Add <code>0x2000000</code> offset (e.g., write = <code>0x2000004</code>, exit = <code>0x2000001</code>)</li>
+                            <li><strong>Apple Silicon (M1/M2/M3/M4):</strong> Uses ARM64 natively — x86-64 NASM code runs via <strong>Rosetta 2</strong></li>
+                            <li><strong>No 32-bit support:</strong> macOS Catalina+ removed all 32-bit binary execution</li>
+                        </ul>
+                    </div>
+
+                    <pre><code class="language-bash"># Simple standalone program (Intel Mac or Rosetta 2 on Apple Silicon)
+nasm -f macho64 hello.asm -o hello.o
+ld -macos_version_min 10.13 -e _main -static hello.o -o hello
+./hello
+
+# On Apple Silicon — verify Rosetta is running your binary
+file hello              # Should show: Mach-O 64-bit executable x86_64
+arch -x86_64 ./hello    # Force x86_64 execution explicitly
+
+# With debug symbols (use lldb on macOS, not gdb)
+nasm -f macho64 -g hello.asm -o hello.o
+ld -macos_version_min 10.13 -e _main -static hello.o -o hello
+lldb ./hello
+
+# Linking with libc (use _main as entry, gcc handles C runtime)
+nasm -f macho64 program.asm -o program.o
+gcc program.o -o program       # GCC/Clang links with libc automatically
+# Note: macOS gcc is actually Clang — no -no-pie needed
+
+# Disassemble with macOS-native tools
+otool -t -v hello               # Disassemble .text section
+otool -l hello                  # Show load commands (Mach-O segments)
+nm hello                        # List symbols</code></pre>
+
+                    <div class="experiment-card">
+                        <h4><i class="fab fa-apple me-2"></i>macOS Syscall Number Reference</h4>
+                        <div class="content">
+                            <table class="table table-bordered table-sm">
+                                <thead class="table-dark">
+                                    <tr><th>Syscall</th><th>Linux (RAX)</th><th>macOS (RAX)</th><th>Args</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td>exit</td><td><code>60</code></td><td><code>0x2000001</code></td><td>RDI = status</td></tr>
+                                    <tr><td>fork</td><td><code>57</code></td><td><code>0x2000002</code></td><td>(none)</td></tr>
+                                    <tr><td>read</td><td><code>0</code></td><td><code>0x2000003</code></td><td>RDI=fd, RSI=buf, RDX=len</td></tr>
+                                    <tr><td>write</td><td><code>1</code></td><td><code>0x2000004</code></td><td>RDI=fd, RSI=buf, RDX=len</td></tr>
+                                    <tr><td>open</td><td><code>2</code></td><td><code>0x2000005</code></td><td>RDI=path, RSI=flags, RDX=mode</td></tr>
+                                    <tr><td>close</td><td><code>3</code></td><td><code>0x2000006</code></td><td>RDI=fd</td></tr>
+                                    <tr><td>mmap</td><td><code>9</code></td><td><code>0x20000C5</code></td><td>RDI=addr, RSI=len, RDX=prot, ...</td></tr>
+                                </tbody>
+                            </table>
+                            <p class="small text-muted mb-0"><i class="fas fa-info-circle me-1"></i>macOS syscall = <code>0x2000000 + BSD_syscall_number</code>. Full list: <code>/usr/include/sys/syscall.h</code> or search <code>XNU syscalls</code>.</p>
+                        </div>
+                    </div>
+
+                    <h4>Apple Silicon Makefile (Rosetta 2)</h4>
+
+                    <pre><code class="language-bash"># Makefile for macOS (Intel & Apple Silicon via Rosetta 2)
+ASM      = nasm
+ASMFLAGS = -f macho64
+LD       = ld
+LDFLAGS  = -macos_version_min 10.13 -e _main -static
+
+SRC = hello.asm
+OBJ = $(SRC:.asm=.o)
+BIN = hello
+
+all: $(BIN)
+
+$(BIN): $(OBJ)
+	$(LD) $(LDFLAGS) $(OBJ) -o $(BIN)
+
+%.o: %.asm
+	$(ASM) $(ASMFLAGS) $< -o $@
+
+debug: ASMFLAGS += -g
+debug: clean all
+	lldb ./$(BIN)
+
+disasm: $(BIN)
+	otool -t -v $(BIN)
+
+ndisasm: $(OBJ)
+	ndisasm -b 64 $(OBJ)
+
+clean:
+	rm -f $(OBJ) $(BIN)
+
+.PHONY: all clean debug disasm ndisasm</code></pre>
+
                     <h3>Listing Files and Debugging</h3>
 
                     <pre><code class="language-bash"># Generate listing file (shows assembled bytes)
