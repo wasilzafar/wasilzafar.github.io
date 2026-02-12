@@ -2402,6 +2402,204 @@ var DocGenerator = {
     ]});
   },
   // ============================================================
+  // VC Pitch Deck Generator (Part 5 - Fundraising)
+  // ============================================================
+  generateVCPitchDeckWord: async function(filename, data) {
+    var sections = [
+      { heading: '1. Title', content: [(data.companyName || 'Company') + (data.tagline ? ' — ' + data.tagline : '') + (data.founderNames ? '\nPrepared by: ' + data.founderNames : '')] },
+      { heading: '2. Problem', content: [data.problem || 'N/A'] },
+      { heading: '3. Solution', content: [data.solution || 'N/A'] },
+      { heading: '4. Demo / Product', content: [data.demoProduct || 'N/A'] },
+      { heading: '5. Traction', content: [data.traction || 'N/A'] },
+      { heading: '6. Market (TAM/SAM/SOM)', content: [data.market || 'N/A'] },
+      { heading: '7. Business Model', content: [data.businessModel || 'N/A'] },
+      { heading: '8. Competition & Differentiation', content: [data.competition || 'N/A'] },
+      { heading: '9. Team', content: [data.team || 'N/A'] },
+      { heading: '10. Financials', content: [data.financials || 'N/A'] },
+      { heading: '11. The Ask', content: [data.theAsk || 'N/A'] },
+      { heading: '12. Closing / Vision', content: [data.closing || 'N/A'] }
+    ];
+    if (data.appendixFinancials || data.appendixTestimonials || data.appendixArchitecture || data.appendixPress) {
+      sections.push({ heading: 'Appendix', content: [
+        data.appendixFinancials ? 'Detailed Financials:\n' + data.appendixFinancials : '',
+        data.appendixTestimonials ? 'Customer Testimonials:\n' + data.appendixTestimonials : '',
+        data.appendixArchitecture ? 'Technical Architecture:\n' + data.appendixArchitecture : '',
+        data.appendixPress ? 'Press & Awards:\n' + data.appendixPress : ''
+      ].filter(Boolean) });
+    }
+    return this.generateWord(filename, { title: 'VC Pitch Deck — ' + (data.companyName || 'Startup'), author: 'Generated from wasilzafar.com', sections: sections });
+  },
+
+  generateVCPitchDeckExcel: function(filename, data) {
+    var rows = [
+      ['Company', data.companyName || '', ''],
+      ['Tagline', data.tagline || '', ''],
+      ['Founder(s)', data.founderNames || '', ''],
+      ['Problem', data.problem || '', 'Slide 2'],
+      ['Solution', data.solution || '', 'Slide 3'],
+      ['Demo / Product', data.demoProduct || '', 'Slide 4'],
+      ['Traction', data.traction || '', 'Slide 5'],
+      ['Market (TAM/SAM/SOM)', data.market || '', 'Slide 6'],
+      ['Business Model', data.businessModel || '', 'Slide 7'],
+      ['Competition', data.competition || '', 'Slide 8'],
+      ['Team', data.team || '', 'Slide 9'],
+      ['Financials', data.financials || '', 'Slide 10'],
+      ['The Ask', data.theAsk || '', 'Slide 11'],
+      ['Closing / Vision', data.closing || '', 'Slide 12']
+    ];
+    if (data.appendixFinancials) rows.push(['Appendix: Financials', data.appendixFinancials, 'Appendix']);
+    if (data.appendixTestimonials) rows.push(['Appendix: Testimonials', data.appendixTestimonials, 'Appendix']);
+    if (data.appendixArchitecture) rows.push(['Appendix: Architecture', data.appendixArchitecture, 'Appendix']);
+    if (data.appendixPress) rows.push(['Appendix: Press/Awards', data.appendixPress, 'Appendix']);
+    return this.generateExcel(filename, { sheetName: 'VC Pitch Deck', headers: ['Section', 'Content', 'Slide'], data: rows });
+  },
+
+  generateVCPitchDeckPDF: function(filename, data) {
+    var lines = [
+      { text: data.companyName || 'Startup', size: 18, bold: true },
+      { text: data.tagline || '', size: 12 },
+      { text: data.founderNames ? 'Prepared by: ' + data.founderNames : '', size: 10 },
+      { text: 'VC Pitch Deck — 12-Slide Format', size: 13, bold: true },
+      { text: '', size: 6 }
+    ];
+    var slides = [
+      ['Slide 2: Problem', data.problem], ['Slide 3: Solution', data.solution],
+      ['Slide 4: Demo / Product', data.demoProduct], ['Slide 5: Traction', data.traction],
+      ['Slide 6: Market', data.market], ['Slide 7: Business Model', data.businessModel],
+      ['Slide 8: Competition', data.competition], ['Slide 9: Team', data.team],
+      ['Slide 10: Financials', data.financials], ['Slide 11: The Ask', data.theAsk],
+      ['Slide 12: Closing', data.closing]
+    ];
+    slides.forEach(function(s) {
+      lines.push({ text: s[0], size: 13, bold: true });
+      lines.push({ text: s[1] || 'N/A', size: 11 });
+      lines.push({ text: '', size: 4 });
+    });
+    // Appendix
+    var hasAppendix = data.appendixFinancials || data.appendixTestimonials || data.appendixArchitecture || data.appendixPress;
+    if (hasAppendix) {
+      lines.push({ text: '', size: 6 });
+      lines.push({ text: 'APPENDIX', size: 14, bold: true });
+      if (data.appendixFinancials) { lines.push({ text: 'Detailed Financials', size: 12, bold: true }); lines.push({ text: data.appendixFinancials, size: 10 }); lines.push({ text: '', size: 4 }); }
+      if (data.appendixTestimonials) { lines.push({ text: 'Customer Testimonials', size: 12, bold: true }); lines.push({ text: data.appendixTestimonials, size: 10 }); lines.push({ text: '', size: 4 }); }
+      if (data.appendixArchitecture) { lines.push({ text: 'Technical Architecture', size: 12, bold: true }); lines.push({ text: data.appendixArchitecture, size: 10 }); lines.push({ text: '', size: 4 }); }
+      if (data.appendixPress) { lines.push({ text: 'Press & Awards', size: 12, bold: true }); lines.push({ text: data.appendixPress, size: 10 }); }
+    }
+    return this.generatePDF(filename, { title: 'VC Pitch Deck', lines: lines });
+  },
+
+  generateVCPitchDeckPPTX: async function(filename, data) {
+    if (!window.PptxGenJS) { alert('PptxGenJS library not loaded.'); return false; }
+
+    var pres = new window.PptxGenJS();
+    pres.layout = 'LAYOUT_16x9';
+    pres.author = 'Generated from wasilzafar.com';
+    pres.title = (data.companyName || 'Startup') + ' — VC Pitch Deck';
+
+    var C = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666', darkGray: '333333' };
+
+    // Slide number on all content slides
+    function slideNum(slide) { slide.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray }; }
+
+    // Reusable content slide: accent bar + title + body
+    function contentSlide(title, body, accent) {
+      accent = accent || C.teal;
+      var slide = pres.addSlide();
+      slide.background = { color: C.white };
+      slide.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: accent } });
+      slideNum(slide);
+      slide.addText(title, { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 28, bold: true, color: C.navy, fontFace: 'Arial' });
+      slide.addShape(pres.ShapeType.rect, { x: 0.6, y: 1.05, w: 2.0, h: 0.04, fill: { color: accent } });
+      slide.addText(body || 'N/A', { x: 0.6, y: 1.3, w: 8.8, h: 3.9, fontSize: 18, color: C.darkGray, fontFace: 'Arial', wrap: true, valign: 'top', lineSpacingMultiple: 1.3, fit: 'shrink', margin: [4, 4, 4, 4] });
+      return slide;
+    }
+
+    // --- Slide 1: Title ---
+    var ts = pres.addSlide();
+    ts.background = { color: C.navy };
+    ts.addShape(pres.ShapeType.rect, { x: 0, y: 2.4, w: '100%', h: 0.06, fill: { color: C.teal } });
+    ts.addText(data.companyName || 'Company Name', { x: 0.6, y: 0.6, w: 8.8, h: 1.2, fontSize: 44, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
+    if (data.tagline) {
+      ts.addText(data.tagline, { x: 0.6, y: 1.9, w: 8.8, h: 0.5, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center', italic: true });
+    }
+    if (data.founderNames) {
+      ts.addText(data.founderNames, { x: 0.6, y: 2.7, w: 8.8, h: 0.5, fontSize: 16, color: C.gray, fontFace: 'Arial', align: 'center' });
+    }
+    ts.addText('INVESTOR PITCH DECK', { x: 0.6, y: 4.2, w: 8.8, h: 0.4, fontSize: 13, color: C.gray, fontFace: 'Arial', align: 'center', charSpacing: 6 });
+
+    // --- Slide 2: Problem ---
+    if (data.problem) contentSlide('The Problem', data.problem, C.crimson);
+
+    // --- Slide 3: Solution ---
+    if (data.solution) contentSlide('Our Solution', data.solution, C.teal);
+
+    // --- Slide 4: Demo / Product ---
+    if (data.demoProduct) contentSlide('Demo / Product', data.demoProduct, C.blue);
+
+    // --- Slide 5: Traction ---
+    if (data.traction) {
+      var trSlide = contentSlide('Traction & Metrics', data.traction, C.teal);
+      trSlide.addShape(pres.ShapeType.rect, { x: 0.4, y: 5.0, w: 9.2, h: 0.03, fill: { color: C.teal } });
+    }
+
+    // --- Slide 6: Market ---
+    if (data.market) contentSlide('Market Opportunity', data.market, C.blue);
+
+    // --- Slide 7: Business Model ---
+    if (data.businessModel) contentSlide('Business Model', data.businessModel, C.teal);
+
+    // --- Slide 8: Competition ---
+    if (data.competition) contentSlide('Competition & Differentiation', data.competition, C.crimson);
+
+    // --- Slide 9: Team ---
+    if (data.team) contentSlide('The Team', data.team, C.navy);
+
+    // --- Slide 10: Financials ---
+    if (data.financials) contentSlide('Financial Projections', data.financials, C.blue);
+
+    // --- Slide 11: The Ask ---
+    if (data.theAsk) {
+      var askSlide = pres.addSlide();
+      askSlide.background = { color: C.light };
+      askSlide.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: C.crimson } });
+      slideNum(askSlide);
+      askSlide.addText('The Ask', { x: 0.6, y: 0.3, w: 6.5, h: 0.7, fontSize: 28, bold: true, color: C.navy, fontFace: 'Arial' });
+      askSlide.addShape(pres.ShapeType.rect, { x: 0.6, y: 1.05, w: 2.0, h: 0.04, fill: { color: C.crimson } });
+      askSlide.addText(data.theAsk, { x: 1.0, y: 1.6, w: 8.0, h: 2.4, fontSize: 24, bold: true, color: C.crimson, fontFace: 'Arial', align: 'center', valign: 'middle', fill: { color: C.white }, line: { color: C.crimson, width: 2 }, rectRadius: 0.15, wrap: true, fit: 'shrink', margin: [6, 6, 6, 6] });
+    }
+
+    // --- Slide 12: Closing ---
+    if (data.closing) contentSlide('Vision & Next Steps', data.closing, C.teal);
+
+    // --- Appendix slides ---
+    var hasAppendix = data.appendixFinancials || data.appendixTestimonials || data.appendixArchitecture || data.appendixPress;
+    if (hasAppendix) {
+      var apxTitle = pres.addSlide();
+      apxTitle.background = { color: C.navy };
+      apxTitle.addText('APPENDIX', { x: 0.6, y: 2.0, w: 8.8, h: 1.0, fontSize: 40, bold: true, color: C.white, fontFace: 'Arial', align: 'center', charSpacing: 8 });
+      apxTitle.addShape(pres.ShapeType.rect, { x: 3.5, y: 3.2, w: 3.0, h: 0.05, fill: { color: C.teal } });
+
+      if (data.appendixFinancials) contentSlide('Appendix: Detailed Financials', data.appendixFinancials, C.blue);
+      if (data.appendixTestimonials) contentSlide('Appendix: Customer Testimonials', data.appendixTestimonials, C.teal);
+      if (data.appendixArchitecture) contentSlide('Appendix: Technical Architecture', data.appendixArchitecture, C.navy);
+      if (data.appendixPress) contentSlide('Appendix: Press & Awards', data.appendixPress, C.crimson);
+    }
+
+    // --- Thank You slide ---
+    var endSlide = pres.addSlide();
+    endSlide.background = { color: C.navy };
+    endSlide.addShape(pres.ShapeType.rect, { x: 0, y: 2.8, w: '100%', h: 0.06, fill: { color: C.teal } });
+    endSlide.addText('Thank You', { x: 0.6, y: 1.3, w: 8.8, h: 1.0, fontSize: 44, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
+    endSlide.addText(data.companyName || '', { x: 0.6, y: 3.2, w: 8.8, h: 0.6, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center' });
+    if (data.tagline) {
+      endSlide.addText(data.tagline, { x: 0.6, y: 3.8, w: 8.8, h: 0.5, fontSize: 16, color: C.gray, fontFace: 'Arial', align: 'center', italic: true });
+    }
+    endSlide.addText('Q&A', { x: 0.6, y: 4.5, w: 8.8, h: 0.4, fontSize: 14, color: C.gray, fontFace: 'Arial', align: 'center', charSpacing: 6 });
+
+    return pres.writeFile({ fileName: filename + '.pptx' });
+  },
+
+  // ============================================================
   // Angel Pitch Generator (Part 5 - Fundraising)
   // ============================================================
   generateAngelPitchWord: async function(filename, data) {
