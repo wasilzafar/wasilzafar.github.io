@@ -2748,6 +2748,1066 @@ var DocGenerator = {
     return { contribution: contribution, marginPct: marginPct, ltv: ltv, ratio: ratio, payback: payback, health: health };
   },
 
+
+  // ============================================================
+  // CONSULTING FRAMEWORKS — Porter's Five Forces
+  // ============================================================
+  generatePorterFiveForcesWord: async function(filename, data) {
+    var forces = [
+      { key: 'threatNewEntrants', label: 'Threat of New Entrants' },
+      { key: 'bargainingBuyers', label: 'Bargaining Power of Buyers' },
+      { key: 'bargainingSuppliers', label: 'Bargaining Power of Suppliers' },
+      { key: 'threatSubstitutes', label: 'Threat of Substitutes' },
+      { key: 'competitiveRivalry', label: 'Competitive Rivalry' }
+    ];
+    var sections = [{ heading: "Porter's Five Forces Analysis", content: ['Industry: ' + (data.industryName || 'N/A'), 'Analyst: ' + (data.analystName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] }];
+    forces.forEach(function(f) { sections.push({ heading: f.label, content: (data[f.key] || 'Not specified') + '\nRating: ' + (data[f.key + 'Rating'] || 'N/A') + '/5' }); });
+    if (data.overallAssessment) sections.push({ heading: 'Overall Assessment', content: data.overallAssessment });
+    if (data.strategicImplications) sections.push({ heading: 'Strategic Implications', content: data.strategicImplications });
+    return this.generateWord(filename, { title: "Porter's Five Forces Analysis", author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generatePorterFiveForcesExcel: function(filename, data) {
+    var rows = [
+      ['Industry', data.industryName || ''], ['Analyst', data.analystName || ''], ['Date', new Date().toLocaleDateString()], ['', ''],
+      ['Threat of New Entrants', data.threatNewEntrants || ''], ['  Rating (1-5)', data.threatNewEntrantsRating || ''],
+      ['Bargaining Power of Buyers', data.bargainingBuyers || ''], ['  Rating (1-5)', data.bargainingBuyersRating || ''],
+      ['Bargaining Power of Suppliers', data.bargainingSuppliers || ''], ['  Rating (1-5)', data.bargainingSuppliersRating || ''],
+      ['Threat of Substitutes', data.threatSubstitutes || ''], ['  Rating (1-5)', data.threatSubstitutesRating || ''],
+      ['Competitive Rivalry', data.competitiveRivalry || ''], ['  Rating (1-5)', data.competitiveRivalryRating || ''],
+      ['', ''], ['Overall Assessment', data.overallAssessment || ''], ['Strategic Implications', data.strategicImplications || '']
+    ];
+    return this.generateExcel(filename, { sheetName: "Porter's Five Forces", headers: ['Force / Element', 'Analysis'], data: rows });
+  },
+  generatePorterFiveForcesPDF: function(filename, data) {
+    var forces = [
+      { key: 'threatNewEntrants', label: 'Threat of New Entrants' },
+      { key: 'bargainingBuyers', label: 'Bargaining Power of Buyers' },
+      { key: 'bargainingSuppliers', label: 'Bargaining Power of Suppliers' },
+      { key: 'threatSubstitutes', label: 'Threat of Substitutes' },
+      { key: 'competitiveRivalry', label: 'Competitive Rivalry' }
+    ];
+    var sections = [{ heading: "PORTER'S FIVE FORCES ANALYSIS", content: 'Industry: ' + (data.industryName || 'N/A') + '\nAnalyst: ' + (data.analystName || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() }];
+    forces.forEach(function(f) { sections.push({ heading: f.label + ' (Rating: ' + (data[f.key + 'Rating'] || 'N/A') + '/5)', content: data[f.key] || 'Not specified' }); });
+    if (data.overallAssessment) sections.push({ heading: 'Overall Assessment', content: data.overallAssessment });
+    if (data.strategicImplications) sections.push({ heading: 'Strategic Implications', content: data.strategicImplications });
+    return this.generatePDF(filename, { title: "Porter's Five Forces Analysis", sections: sections });
+  },
+
+  // ============================================================
+  // CONSULTING FRAMEWORKS — BCG Growth-Share Matrix
+  // ============================================================
+  generateBcgMatrixWord: async function(filename, data) {
+    var sections = [{ heading: 'BCG Growth-Share Matrix', content: ['Company: ' + (data.companyName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] }];
+    var quads = [
+      { key: 'stars', label: 'Stars (High Growth, High Share)' },
+      { key: 'cashCows', label: 'Cash Cows (Low Growth, High Share)' },
+      { key: 'questionMarks', label: 'Question Marks (High Growth, Low Share)' },
+      { key: 'dogs', label: 'Dogs (Low Growth, Low Share)' }
+    ];
+    quads.forEach(function(q) { sections.push({ heading: q.label, content: data[q.key] || 'Not specified' }); });
+    if (data.portfolioStrategy) sections.push({ heading: 'Portfolio Strategy', content: data.portfolioStrategy });
+    return this.generateWord(filename, { title: 'BCG Growth-Share Matrix', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateBcgMatrixExcel: function(filename, data) {
+    var rows = [
+      ['Company', data.companyName || ''], ['Date', new Date().toLocaleDateString()], ['', ''],
+      ['Stars (High Growth, High Share)', data.stars || ''],
+      ['Cash Cows (Low Growth, High Share)', data.cashCows || ''],
+      ['Question Marks (High Growth, Low Share)', data.questionMarks || ''],
+      ['Dogs (Low Growth, Low Share)', data.dogs || ''],
+      ['', ''], ['Portfolio Strategy', data.portfolioStrategy || '']
+    ];
+    return this.generateExcel(filename, { sheetName: 'BCG Matrix', headers: ['Quadrant', 'Products / Analysis'], data: rows });
+  },
+  generateBcgMatrixPDF: function(filename, data) {
+    var sections = [
+      { heading: 'BCG GROWTH-SHARE MATRIX', content: 'Company: ' + (data.companyName || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() },
+      { heading: 'Stars (High Growth, High Share)', content: data.stars || 'Not specified' },
+      { heading: 'Cash Cows (Low Growth, High Share)', content: data.cashCows || 'Not specified' },
+      { heading: 'Question Marks (High Growth, Low Share)', content: data.questionMarks || 'Not specified' },
+      { heading: 'Dogs (Low Growth, Low Share)', content: data.dogs || 'Not specified' },
+      { heading: 'Portfolio Strategy', content: data.portfolioStrategy || 'Not specified' }
+    ];
+    return this.generatePDF(filename, { title: 'BCG Growth-Share Matrix', sections: sections });
+  },
+
+  // ============================================================
+  // CONSULTING FRAMEWORKS — Market Entry Assessment
+  // ============================================================
+  generateMarketEntryWord: async function(filename, data) {
+    var sections = [
+      { heading: 'Market Entry Assessment', content: ['Company: ' + (data.companyName || 'N/A'), 'Target Market: ' + (data.targetMarket || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] },
+      { heading: 'Market Attractiveness', content: data.marketAttractiveness || 'Not specified' },
+      { heading: 'Competitive Landscape', content: data.competitiveLandscape || 'Not specified' },
+      { heading: 'Entry Mode', content: data.entryMode || 'Not specified' },
+      { heading: 'Key Success Factors', content: data.keySuccessFactors || 'Not specified' },
+      { heading: 'Risks & Barriers', content: data.risksBarriers || 'Not specified' },
+      { heading: 'Financial Projections', content: data.financialProjections || 'Not specified' },
+      { heading: 'Go/No-Go Recommendation', content: data.recommendation || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'Market Entry Assessment', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateMarketEntryExcel: function(filename, data) {
+    var rows = [
+      ['Company', data.companyName || ''], ['Target Market', data.targetMarket || ''], ['Date', new Date().toLocaleDateString()], ['', ''],
+      ['Market Attractiveness', data.marketAttractiveness || ''],
+      ['Competitive Landscape', data.competitiveLandscape || ''],
+      ['Entry Mode', data.entryMode || ''],
+      ['Key Success Factors', data.keySuccessFactors || ''],
+      ['Risks & Barriers', data.risksBarriers || ''],
+      ['Financial Projections', data.financialProjections || ''],
+      ['Go/No-Go Recommendation', data.recommendation || '']
+    ];
+    return this.generateExcel(filename, { sheetName: 'Market Entry', headers: ['Element', 'Analysis'], data: rows });
+  },
+  generateMarketEntryPDF: function(filename, data) {
+    var sections = [
+      { heading: 'MARKET ENTRY ASSESSMENT', content: 'Company: ' + (data.companyName || 'N/A') + '\nTarget Market: ' + (data.targetMarket || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() },
+      { heading: 'Market Attractiveness', content: data.marketAttractiveness || 'Not specified' },
+      { heading: 'Competitive Landscape', content: data.competitiveLandscape || 'Not specified' },
+      { heading: 'Entry Mode', content: data.entryMode || 'Not specified' },
+      { heading: 'Key Success Factors', content: data.keySuccessFactors || 'Not specified' },
+      { heading: 'Risks & Barriers', content: data.risksBarriers || 'Not specified' },
+      { heading: 'Financial Projections', content: data.financialProjections || 'Not specified' },
+      { heading: 'Go/No-Go Recommendation', content: data.recommendation || 'Not specified' }
+    ];
+    return this.generatePDF(filename, { title: 'Market Entry Assessment', sections: sections });
+  },
+
+  // ============================================================
+  // CONSULTING FRAMEWORKS — McKinsey 7S Assessment
+  // ============================================================
+  generateMcKinsey7SWord: async function(filename, data) {
+    var elements = [
+      { key: 'strategy', label: 'Strategy' }, { key: 'structure', label: 'Structure' },
+      { key: 'systems', label: 'Systems' }, { key: 'sharedValues', label: 'Shared Values' },
+      { key: 'style', label: 'Style' }, { key: 'staff', label: 'Staff' }, { key: 'skills', label: 'Skills' }
+    ];
+    var sections = [{ heading: 'McKinsey 7S Assessment', content: ['Organization: ' + (data.orgName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] }];
+    elements.forEach(function(e) { sections.push({ heading: e.label, content: data[e.key] || 'Not specified' }); });
+    if (data.alignmentGaps) sections.push({ heading: 'Alignment Gaps', content: data.alignmentGaps });
+    return this.generateWord(filename, { title: 'McKinsey 7S Assessment', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateMcKinsey7SExcel: function(filename, data) {
+    var rows = [
+      ['Organization', data.orgName || ''], ['Date', new Date().toLocaleDateString()], ['', ''],
+      ['Strategy', data.strategy || ''], ['Structure', data.structure || ''], ['Systems', data.systems || ''],
+      ['Shared Values', data.sharedValues || ''], ['Style', data.style || ''], ['Staff', data.staff || ''], ['Skills', data.skills || ''],
+      ['', ''], ['Alignment Gaps', data.alignmentGaps || '']
+    ];
+    return this.generateExcel(filename, { sheetName: 'McKinsey 7S', headers: ['Element', 'Assessment'], data: rows });
+  },
+  generateMcKinsey7SPDF: function(filename, data) {
+    var elements = ['Strategy', 'Structure', 'Systems', 'Shared Values', 'Style', 'Staff', 'Skills'];
+    var keys = ['strategy', 'structure', 'systems', 'sharedValues', 'style', 'staff', 'skills'];
+    var sections = [{ heading: 'McKINSEY 7S ASSESSMENT', content: 'Organization: ' + (data.orgName || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() }];
+    elements.forEach(function(e, i) { sections.push({ heading: e, content: data[keys[i]] || 'Not specified' }); });
+    if (data.alignmentGaps) sections.push({ heading: 'Alignment Gaps', content: data.alignmentGaps });
+    return this.generatePDF(filename, { title: 'McKinsey 7S Assessment', sections: sections });
+  },
+
+  // ============================================================
+  // CONSULTING FRAMEWORKS — Change Readiness / ADKAR
+  // ============================================================
+  generateChangeReadinessWord: async function(filename, data) {
+    var adkar = ['awareness', 'desire', 'knowledge', 'ability', 'reinforcement'];
+    var labels = ['Awareness', 'Desire', 'Knowledge', 'Ability', 'Reinforcement'];
+    var sections = [{ heading: 'Change Readiness Assessment (ADKAR)', content: ['Organization: ' + (data.orgName || 'N/A'), 'Change Initiative: ' + (data.changeInitiative || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] }];
+    adkar.forEach(function(a, i) { sections.push({ heading: labels[i], content: (data[a] || 'Not specified') + '\nRating: ' + (data[a + 'Rating'] || 'N/A') + '/5' }); });
+    if (data.stakeholderImpact) sections.push({ heading: 'Stakeholder Impact', content: data.stakeholderImpact });
+    if (data.actionPlan) sections.push({ heading: 'Action Plan', content: data.actionPlan });
+    return this.generateWord(filename, { title: 'Change Readiness Assessment', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateChangeReadinessExcel: function(filename, data) {
+    var rows = [
+      ['Organization', data.orgName || ''], ['Change Initiative', data.changeInitiative || ''], ['Date', new Date().toLocaleDateString()], ['', ''],
+      ['Awareness', data.awareness || ''], ['  Rating (1-5)', data.awarenessRating || ''],
+      ['Desire', data.desire || ''], ['  Rating (1-5)', data.desireRating || ''],
+      ['Knowledge', data.knowledge || ''], ['  Rating (1-5)', data.knowledgeRating || ''],
+      ['Ability', data.ability || ''], ['  Rating (1-5)', data.abilityRating || ''],
+      ['Reinforcement', data.reinforcement || ''], ['  Rating (1-5)', data.reinforcementRating || ''],
+      ['', ''], ['Stakeholder Impact', data.stakeholderImpact || ''], ['Action Plan', data.actionPlan || '']
+    ];
+    return this.generateExcel(filename, { sheetName: 'Change Readiness', headers: ['ADKAR Element', 'Assessment'], data: rows });
+  },
+  generateChangeReadinessPDF: function(filename, data) {
+    var adkar = ['awareness', 'desire', 'knowledge', 'ability', 'reinforcement'];
+    var labels = ['Awareness', 'Desire', 'Knowledge', 'Ability', 'Reinforcement'];
+    var sections = [{ heading: 'CHANGE READINESS ASSESSMENT (ADKAR)', content: 'Organization: ' + (data.orgName || 'N/A') + '\nChange Initiative: ' + (data.changeInitiative || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() }];
+    adkar.forEach(function(a, i) { sections.push({ heading: labels[i] + ' (Rating: ' + (data[a + 'Rating'] || 'N/A') + '/5)', content: data[a] || 'Not specified' }); });
+    if (data.stakeholderImpact) sections.push({ heading: 'Stakeholder Impact', content: data.stakeholderImpact });
+    if (data.actionPlan) sections.push({ heading: 'Action Plan', content: data.actionPlan });
+    return this.generatePDF(filename, { title: 'Change Readiness Assessment', sections: sections });
+  },
+
+  // ============================================================
+  // CONSULTING FRAMEWORKS — DCF Valuation Calculator
+  // ============================================================
+  generateDcfValuationExcel: function(filename, data) {
+    var rows = [
+      ['Company', data.companyName || ''], ['Analyst', data.analystName || ''], ['Date', new Date().toLocaleDateString()], ['', ''],
+      ['Revenue Year 1', data.revenueY1 || ''], ['Revenue Year 2', data.revenueY2 || ''], ['Revenue Year 3', data.revenueY3 || ''],
+      ['Revenue Year 4', data.revenueY4 || ''], ['Revenue Year 5', data.revenueY5 || ''],
+      ['Operating Margin (%)', data.operatingMargin || ''], ['Tax Rate (%)', data.taxRate || ''],
+      ['Discount Rate / WACC (%)', data.discountRate || ''], ['Terminal Growth Rate (%)', data.terminalGrowth || ''],
+      ['', ''], ['Assumptions & Notes', data.assumptions || '']
+    ];
+    return this.generateExcel(filename, { sheetName: 'DCF Valuation', headers: ['Parameter', 'Value'], data: rows });
+  },
+  generateDcfValuationPDF: function(filename, data) {
+    var sections = [
+      { heading: 'DCF VALUATION MODEL', content: 'Company: ' + (data.companyName || 'N/A') + '\nAnalyst: ' + (data.analystName || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() },
+      { heading: 'Revenue Projections', content: 'Year 1: ' + (data.revenueY1 || 'N/A') + '\nYear 2: ' + (data.revenueY2 || 'N/A') + '\nYear 3: ' + (data.revenueY3 || 'N/A') + '\nYear 4: ' + (data.revenueY4 || 'N/A') + '\nYear 5: ' + (data.revenueY5 || 'N/A') },
+      { heading: 'Key Assumptions', content: 'Operating Margin: ' + (data.operatingMargin || 'N/A') + '%\nTax Rate: ' + (data.taxRate || 'N/A') + '%\nDiscount Rate (WACC): ' + (data.discountRate || 'N/A') + '%\nTerminal Growth Rate: ' + (data.terminalGrowth || 'N/A') + '%' },
+      { heading: 'Assumptions & Notes', content: data.assumptions || 'Not specified' }
+    ];
+    return this.generatePDF(filename, { title: 'DCF Valuation Model', sections: sections });
+  },
+
+  // ============================================================
+  // CONSULTING FRAMEWORKS — Due Diligence Checklist
+  // ============================================================
+  generateDueDiligenceChecklistWord: async function(filename, data) {
+    var sections = [
+      { heading: 'Due Diligence Checklist', content: ['Target Company: ' + (data.targetCompany || 'N/A'), 'Deal Type: ' + (data.dealType || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] },
+      { heading: 'Financial Items', content: data.financialItems || 'Not specified' },
+      { heading: 'Legal Items', content: data.legalItems || 'Not specified' },
+      { heading: 'Operational Items', content: data.operationalItems || 'Not specified' },
+      { heading: 'Commercial Items', content: data.commercialItems || 'Not specified' },
+      { heading: 'HR Items', content: data.hrItems || 'Not specified' },
+      { heading: 'Red Flags', content: data.redFlags || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'Due Diligence Checklist', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateDueDiligenceChecklistExcel: function(filename, data) {
+    var rows = [
+      ['Target Company', data.targetCompany || ''], ['Deal Type', data.dealType || ''], ['Date', new Date().toLocaleDateString()], ['', ''],
+      ['Financial Items', data.financialItems || ''], ['Legal Items', data.legalItems || ''],
+      ['Operational Items', data.operationalItems || ''], ['Commercial Items', data.commercialItems || ''],
+      ['HR Items', data.hrItems || ''], ['', ''], ['Red Flags', data.redFlags || '']
+    ];
+    return this.generateExcel(filename, { sheetName: 'Due Diligence', headers: ['Category', 'Checklist / Notes'], data: rows });
+  },
+  generateDueDiligenceChecklistPDF: function(filename, data) {
+    var sections = [
+      { heading: 'DUE DILIGENCE CHECKLIST', content: 'Target Company: ' + (data.targetCompany || 'N/A') + '\nDeal Type: ' + (data.dealType || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() },
+      { heading: 'Financial Items', content: data.financialItems || 'Not specified' },
+      { heading: 'Legal Items', content: data.legalItems || 'Not specified' },
+      { heading: 'Operational Items', content: data.operationalItems || 'Not specified' },
+      { heading: 'Commercial Items', content: data.commercialItems || 'Not specified' },
+      { heading: 'HR Items', content: data.hrItems || 'Not specified' },
+      { heading: 'Red Flags', content: data.redFlags || 'Not specified' }
+    ];
+    return this.generatePDF(filename, { title: 'Due Diligence Checklist', sections: sections });
+  },
+
+  // ============================================================
+  // CONSULTING FRAMEWORKS — Problem Definition Canvas
+  // ============================================================
+  generateProblemDefinitionWord: async function(filename, data) {
+    var sections = [
+      { heading: 'Problem Definition Canvas', content: ['Problem: ' + (data.problemTitle || 'N/A'), 'Client: ' + (data.clientName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] },
+      { heading: 'Problem Statement', content: data.problemStatement || 'Not specified' },
+      { heading: 'Context & Background', content: data.context || 'Not specified' },
+      { heading: 'Scope & Boundaries', content: data.scope || 'Not specified' },
+      { heading: 'Stakeholders Affected', content: data.stakeholders || 'Not specified' },
+      { heading: 'Constraints', content: data.constraints || 'Not specified' },
+      { heading: 'Success Criteria', content: data.successCriteria || 'Not specified' },
+      { heading: 'Initial Hypotheses', content: data.initialHypotheses || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'Problem Definition Canvas', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateProblemDefinitionExcel: function(filename, data) {
+    var rows = [
+      ['Problem Title', data.problemTitle || ''], ['Client', data.clientName || ''], ['Date', new Date().toLocaleDateString()], ['', ''],
+      ['Problem Statement', data.problemStatement || ''], ['Context & Background', data.context || ''],
+      ['Scope & Boundaries', data.scope || ''], ['Stakeholders Affected', data.stakeholders || ''],
+      ['Constraints', data.constraints || ''], ['Success Criteria', data.successCriteria || ''],
+      ['Initial Hypotheses', data.initialHypotheses || '']
+    ];
+    return this.generateExcel(filename, { sheetName: 'Problem Definition', headers: ['Element', 'Description'], data: rows });
+  },
+  generateProblemDefinitionPDF: function(filename, data) {
+    var sections = [
+      { heading: 'PROBLEM DEFINITION CANVAS', content: 'Problem: ' + (data.problemTitle || 'N/A') + '\nClient: ' + (data.clientName || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() },
+      { heading: 'Problem Statement', content: data.problemStatement || 'Not specified' },
+      { heading: 'Context & Background', content: data.context || 'Not specified' },
+      { heading: 'Scope & Boundaries', content: data.scope || 'Not specified' },
+      { heading: 'Stakeholders Affected', content: data.stakeholders || 'Not specified' },
+      { heading: 'Constraints', content: data.constraints || 'Not specified' },
+      { heading: 'Success Criteria', content: data.successCriteria || 'Not specified' },
+      { heading: 'Initial Hypotheses', content: data.initialHypotheses || 'Not specified' }
+    ];
+    return this.generatePDF(filename, { title: 'Problem Definition Canvas', sections: sections });
+  },
+
+  // ============================================================
+  // CONSULTING FRAMEWORKS — Prioritization Matrix
+  // ============================================================
+  generatePrioritizationMatrixExcel: function(filename, data) {
+    var rows = [
+      ['Project', data.projectName || ''], ['Date', new Date().toLocaleDateString()], ['', '']
+    ];
+    for (var i = 1; i <= 5; i++) {
+      var name = data['item' + i + 'Name'];
+      if (name && name.trim()) {
+        rows.push([name, 'Impact: ' + (data['item' + i + 'Impact'] || '') + ' | Effort: ' + (data['item' + i + 'Effort'] || '')]);
+      }
+    }
+    if (data.notes) { rows.push(['', '']); rows.push(['Notes', data.notes]); }
+    return this.generateExcel(filename, { sheetName: 'Prioritization Matrix', headers: ['Initiative', 'Impact & Effort'], data: rows });
+  },
+  generatePrioritizationMatrixPDF: function(filename, data) {
+    var lines = [{ text: 'PRIORITIZATION MATRIX', size: 16, bold: true }, { text: 'Project: ' + (data.projectName || 'N/A') + '  |  Date: ' + new Date().toLocaleDateString(), size: 11 }, { text: '', size: 8 }];
+    for (var i = 1; i <= 5; i++) {
+      var name = data['item' + i + 'Name'];
+      if (name && name.trim()) {
+        lines.push({ text: name, size: 13, bold: true });
+        lines.push({ text: 'Impact: ' + (data['item' + i + 'Impact'] || 'N/A') + '/5  |  Effort: ' + (data['item' + i + 'Effort'] || 'N/A') + '/5', size: 11 });
+        lines.push({ text: '', size: 6 });
+      }
+    }
+    if (data.notes) { lines.push({ text: 'Notes', size: 13, bold: true }); lines.push({ text: data.notes, size: 11 }); }
+    return this.generatePDF(filename, { title: 'Prioritization Matrix', lines: lines });
+  },
+
+  // ============================================================
+  // CONSULTING FRAMEWORKS — Value Chain Analysis
+  // ============================================================
+  generateValueChainAnalysisWord: async function(filename, data) {
+    var sections = [
+      { heading: 'Value Chain Analysis', content: ['Company: ' + (data.companyName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] },
+      { heading: 'Inbound Logistics', content: data.inboundLogistics || 'Not specified' },
+      { heading: 'Operations', content: data.operations || 'Not specified' },
+      { heading: 'Outbound Logistics', content: data.outboundLogistics || 'Not specified' },
+      { heading: 'Marketing & Sales', content: data.marketingSales || 'Not specified' },
+      { heading: 'Service', content: data.service || 'Not specified' },
+      { heading: 'Firm Infrastructure (Support)', content: data.firmInfrastructure || 'Not specified' },
+      { heading: 'Human Resources (Support)', content: data.humanResources || 'Not specified' },
+      { heading: 'Technology Development (Support)', content: data.technologyDev || 'Not specified' },
+      { heading: 'Procurement (Support)', content: data.procurement || 'Not specified' },
+      { heading: 'Competitive Advantage Sources', content: data.competitiveAdvantage || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'Value Chain Analysis', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateValueChainAnalysisExcel: function(filename, data) {
+    var rows = [
+      ['Company', data.companyName || ''], ['Date', new Date().toLocaleDateString()], ['', ''],
+      ['--- PRIMARY ACTIVITIES ---', ''],
+      ['Inbound Logistics', data.inboundLogistics || ''], ['Operations', data.operations || ''],
+      ['Outbound Logistics', data.outboundLogistics || ''], ['Marketing & Sales', data.marketingSales || ''], ['Service', data.service || ''],
+      ['', ''], ['--- SUPPORT ACTIVITIES ---', ''],
+      ['Firm Infrastructure', data.firmInfrastructure || ''], ['Human Resources', data.humanResources || ''],
+      ['Technology Development', data.technologyDev || ''], ['Procurement', data.procurement || ''],
+      ['', ''], ['Competitive Advantage Sources', data.competitiveAdvantage || '']
+    ];
+    return this.generateExcel(filename, { sheetName: 'Value Chain', headers: ['Activity', 'Analysis'], data: rows });
+  },
+  generateValueChainAnalysisPDF: function(filename, data) {
+    var sections = [
+      { heading: 'VALUE CHAIN ANALYSIS', content: 'Company: ' + (data.companyName || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() },
+      { heading: 'PRIMARY ACTIVITIES', content: '' },
+      { heading: 'Inbound Logistics', content: data.inboundLogistics || 'Not specified' },
+      { heading: 'Operations', content: data.operations || 'Not specified' },
+      { heading: 'Outbound Logistics', content: data.outboundLogistics || 'Not specified' },
+      { heading: 'Marketing & Sales', content: data.marketingSales || 'Not specified' },
+      { heading: 'Service', content: data.service || 'Not specified' },
+      { heading: 'SUPPORT ACTIVITIES', content: '' },
+      { heading: 'Firm Infrastructure', content: data.firmInfrastructure || 'Not specified' },
+      { heading: 'Human Resources', content: data.humanResources || 'Not specified' },
+      { heading: 'Technology Development', content: data.technologyDev || 'Not specified' },
+      { heading: 'Procurement', content: data.procurement || 'Not specified' },
+      { heading: 'Competitive Advantage Sources', content: data.competitiveAdvantage || 'Not specified' }
+    ];
+    return this.generatePDF(filename, { title: 'Value Chain Analysis', sections: sections });
+  },
+
+  // ============================================================
+  // CONSULTING FRAMEWORKS — Blue Ocean Strategy Canvas
+  // ============================================================
+  generateBlueOceanStrategyWord: async function(filename, data) {
+    var sections = [
+      { heading: 'Blue Ocean Strategy Canvas', content: ['Company: ' + (data.companyName || 'N/A'), 'Industry: ' + (data.industryName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] },
+      { heading: 'Eliminate', content: data.eliminate || 'Not specified' },
+      { heading: 'Reduce', content: data.reduce || 'Not specified' },
+      { heading: 'Raise', content: data.raise || 'Not specified' },
+      { heading: 'Create', content: data.create || 'Not specified' },
+      { heading: 'New Value Curve', content: data.newValueCurve || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'Blue Ocean Strategy Canvas', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateBlueOceanStrategyExcel: function(filename, data) {
+    var rows = [
+      ['Company', data.companyName || ''], ['Industry', data.industryName || ''], ['Date', new Date().toLocaleDateString()], ['', ''],
+      ['Eliminate', data.eliminate || ''], ['Reduce', data.reduce || ''],
+      ['Raise', data.raise || ''], ['Create', data.create || ''],
+      ['', ''], ['New Value Curve', data.newValueCurve || '']
+    ];
+    return this.generateExcel(filename, { sheetName: 'Blue Ocean', headers: ['ERRC Grid', 'Details'], data: rows });
+  },
+  generateBlueOceanStrategyPDF: function(filename, data) {
+    var sections = [
+      { heading: 'BLUE OCEAN STRATEGY CANVAS', content: 'Company: ' + (data.companyName || 'N/A') + '\nIndustry: ' + (data.industryName || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() },
+      { heading: 'Eliminate', content: data.eliminate || 'Not specified' },
+      { heading: 'Reduce', content: data.reduce || 'Not specified' },
+      { heading: 'Raise', content: data.raise || 'Not specified' },
+      { heading: 'Create', content: data.create || 'Not specified' },
+      { heading: 'New Value Curve', content: data.newValueCurve || 'Not specified' }
+    ];
+    return this.generatePDF(filename, { title: 'Blue Ocean Strategy Canvas', sections: sections });
+  },
+
+  // ============================================================
+  // CONSULTING FRAMEWORKS — Stakeholder Map
+  // ============================================================
+  generateStakeholderMapWord: async function(filename, data) {
+    var sections = [
+      { heading: 'Stakeholder Map', content: ['Project: ' + (data.projectName || 'N/A'), 'Analyst: ' + (data.analystName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] },
+      { heading: 'Manage Closely (High Power, High Interest)', content: data.manageClosely || 'Not specified' },
+      { heading: '  Strategy', content: data.manageCloselyStrategy || 'Not specified' },
+      { heading: 'Keep Satisfied (High Power, Low Interest)', content: data.keepSatisfied || 'Not specified' },
+      { heading: '  Strategy', content: data.keepSatisfiedStrategy || 'Not specified' },
+      { heading: 'Keep Informed (Low Power, High Interest)', content: data.keepInformed || 'Not specified' },
+      { heading: '  Strategy', content: data.keepInformedStrategy || 'Not specified' },
+      { heading: 'Monitor (Low Power, Low Interest)', content: data.monitor || 'Not specified' },
+      { heading: '  Strategy', content: data.monitorStrategy || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'Stakeholder Map', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateStakeholderMapExcel: function(filename, data) {
+    var rows = [
+      ['Project', data.projectName || ''], ['Analyst', data.analystName || ''], ['Date', new Date().toLocaleDateString()], ['', ''],
+      ['--- MANAGE CLOSELY (High Power, High Interest) ---', ''],
+      ['Stakeholders', data.manageClosely || ''], ['Strategy', data.manageCloselyStrategy || ''], ['', ''],
+      ['--- KEEP SATISFIED (High Power, Low Interest) ---', ''],
+      ['Stakeholders', data.keepSatisfied || ''], ['Strategy', data.keepSatisfiedStrategy || ''], ['', ''],
+      ['--- KEEP INFORMED (Low Power, High Interest) ---', ''],
+      ['Stakeholders', data.keepInformed || ''], ['Strategy', data.keepInformedStrategy || ''], ['', ''],
+      ['--- MONITOR (Low Power, Low Interest) ---', ''],
+      ['Stakeholders', data.monitor || ''], ['Strategy', data.monitorStrategy || '']
+    ];
+    return this.generateExcel(filename, { sheetName: 'Stakeholder Map', headers: ['Quadrant / Element', 'Details'], data: rows });
+  },
+  generateStakeholderMapPDF: function(filename, data) {
+    var sections = [
+      { heading: 'STAKEHOLDER MAP', content: 'Project: ' + (data.projectName || 'N/A') + '\nAnalyst: ' + (data.analystName || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() },
+      { heading: 'Manage Closely (High Power, High Interest)', content: (data.manageClosely || 'Not specified') + '\nStrategy: ' + (data.manageCloselyStrategy || 'Not specified') },
+      { heading: 'Keep Satisfied (High Power, Low Interest)', content: (data.keepSatisfied || 'Not specified') + '\nStrategy: ' + (data.keepSatisfiedStrategy || 'Not specified') },
+      { heading: 'Keep Informed (Low Power, High Interest)', content: (data.keepInformed || 'Not specified') + '\nStrategy: ' + (data.keepInformedStrategy || 'Not specified') },
+      { heading: 'Monitor (Low Power, Low Interest)', content: (data.monitor || 'Not specified') + '\nStrategy: ' + (data.monitorStrategy || 'Not specified') }
+    ];
+    return this.generatePDF(filename, { title: 'Stakeholder Map', sections: sections });
+  },
+
+  // ============================================================
+  // CONSULTING FRAMEWORKS — Case Interview Framework Builder
+  // ============================================================
+  generateCaseInterviewFrameworkWord: async function(filename, data) {
+    var sections = [
+      { heading: 'Case Interview Framework', content: ['Case: ' + (data.caseTitle || 'N/A'), 'Type: ' + (data.caseType || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] },
+      { heading: 'Client Situation', content: data.clientSituation || 'Not specified' },
+      { heading: 'Key Question', content: data.keyQuestion || 'Not specified' }
+    ];
+    for (var i = 1; i <= 4; i++) { var b = data['frameworkBranch' + i]; if (b && b.trim()) sections.push({ heading: 'Framework Branch ' + i, content: b }); }
+    sections.push({ heading: 'Hypothesis', content: data.hypothesis || 'Not specified' });
+    sections.push({ heading: 'Recommendation', content: data.recommendation || 'Not specified' });
+    return this.generateWord(filename, { title: 'Case Interview Framework', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateCaseInterviewFrameworkExcel: function(filename, data) {
+    var rows = [
+      ['Case Title', data.caseTitle || ''], ['Case Type', data.caseType || ''], ['Date', new Date().toLocaleDateString()], ['', ''],
+      ['Client Situation', data.clientSituation || ''], ['Key Question', data.keyQuestion || '']
+    ];
+    for (var i = 1; i <= 4; i++) { var b = data['frameworkBranch' + i]; if (b && b.trim()) rows.push(['Framework Branch ' + i, b]); }
+    rows.push(['', '']); rows.push(['Hypothesis', data.hypothesis || '']); rows.push(['Recommendation', data.recommendation || '']);
+    return this.generateExcel(filename, { sheetName: 'Case Framework', headers: ['Element', 'Details'], data: rows });
+  },
+  generateCaseInterviewFrameworkPDF: function(filename, data) {
+    var sections = [
+      { heading: 'CASE INTERVIEW FRAMEWORK', content: 'Case: ' + (data.caseTitle || 'N/A') + '\nType: ' + (data.caseType || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() },
+      { heading: 'Client Situation', content: data.clientSituation || 'Not specified' },
+      { heading: 'Key Question', content: data.keyQuestion || 'Not specified' }
+    ];
+    for (var i = 1; i <= 4; i++) { var b = data['frameworkBranch' + i]; if (b && b.trim()) sections.push({ heading: 'Framework Branch ' + i, content: b }); }
+    sections.push({ heading: 'Hypothesis', content: data.hypothesis || 'Not specified' });
+    sections.push({ heading: 'Recommendation', content: data.recommendation || 'Not specified' });
+    return this.generatePDF(filename, { title: 'Case Interview Framework', sections: sections });
+  },
+
+  // ============================================================
+  // CONSULTING FRAMEWORKS — Jobs-to-be-Done (JTBD)
+  // ============================================================
+  generateJobsToBeDoneWord: async function(filename, data) {
+    var sections = [
+      { heading: 'Jobs-to-be-Done Analysis', content: ['Product: ' + (data.productName || 'N/A'), 'Target Customer: ' + (data.targetCustomer || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] },
+      { heading: 'Functional Job', content: data.functionalJob || 'Not specified' },
+      { heading: 'Emotional Job', content: data.emotionalJob || 'Not specified' },
+      { heading: 'Social Job', content: data.socialJob || 'Not specified' },
+      { heading: 'Current Solutions', content: data.currentSolutions || 'Not specified' },
+      { heading: 'Pain Points', content: data.pains || 'Not specified' },
+      { heading: 'Desired Outcomes', content: data.desiredOutcomes || 'Not specified' },
+      { heading: 'Innovation Opportunities', content: data.innovationOpp || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'Jobs-to-be-Done Analysis', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateJobsToBeDoneExcel: function(filename, data) {
+    var rows = [
+      ['Product / Service', data.productName || ''], ['Target Customer', data.targetCustomer || ''], ['Date', new Date().toLocaleDateString()], ['', ''],
+      ['Functional Job', data.functionalJob || ''], ['Emotional Job', data.emotionalJob || ''], ['Social Job', data.socialJob || ''],
+      ['', ''], ['Current Solutions', data.currentSolutions || ''], ['Pain Points', data.pains || ''],
+      ['Desired Outcomes', data.desiredOutcomes || ''], ['Innovation Opportunities', data.innovationOpp || '']
+    ];
+    return this.generateExcel(filename, { sheetName: 'JTBD', headers: ['Job Element', 'Description'], data: rows });
+  },
+  generateJobsToBeDonePDF: function(filename, data) {
+    var sections = [
+      { heading: 'JOBS-TO-BE-DONE ANALYSIS', content: 'Product: ' + (data.productName || 'N/A') + '\nTarget Customer: ' + (data.targetCustomer || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() },
+      { heading: 'Functional Job', content: data.functionalJob || 'Not specified' },
+      { heading: 'Emotional Job', content: data.emotionalJob || 'Not specified' },
+      { heading: 'Social Job', content: data.socialJob || 'Not specified' },
+      { heading: 'Current Solutions', content: data.currentSolutions || 'Not specified' },
+      { heading: 'Pain Points', content: data.pains || 'Not specified' },
+      { heading: 'Desired Outcomes', content: data.desiredOutcomes || 'Not specified' },
+      { heading: 'Innovation Opportunities', content: data.innovationOpp || 'Not specified' }
+    ];
+    return this.generatePDF(filename, { title: 'Jobs-to-be-Done Analysis', sections: sections });
+  },
+
+  // ============================================================
+  // DDDM — KPI Definition Worksheet
+  // ============================================================
+  generateKpiWorksheetWord: async function(filename, data) {
+    var sections = [
+      { heading: 'KPI Definition Worksheet', content: ['Department: ' + (data.department || 'N/A'), 'Owner: ' + (data.ownerName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] }
+    ];
+    for (var i = 1; i <= 4; i++) {
+      var name = data['kpi' + i + 'Name'];
+      if (name && name.trim()) {
+        sections.push({ heading: 'KPI: ' + name, content: 'Definition: ' + (data['kpi' + i + 'Definition'] || 'N/A') + '\nTarget: ' + (data['kpi' + i + 'Target'] || 'N/A') + '\nData Source: ' + (data['kpi' + i + 'Source'] || 'N/A') + '\nFrequency: ' + (data['kpi' + i + 'Frequency'] || 'N/A') });
+      }
+    }
+    if (data.notes) sections.push({ heading: 'Notes', content: data.notes });
+    return this.generateWord(filename, { title: 'KPI Definition Worksheet', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateKpiWorksheetExcel: function(filename, data) {
+    var rows = [['Department', data.department || ''], ['Owner', data.ownerName || ''], ['Date', new Date().toLocaleDateString()], ['', '']];
+    for (var i = 1; i <= 4; i++) {
+      var name = data['kpi' + i + 'Name'];
+      if (name && name.trim()) {
+        rows.push([name, 'Def: ' + (data['kpi' + i + 'Definition'] || '') + ' | Target: ' + (data['kpi' + i + 'Target'] || '') + ' | Source: ' + (data['kpi' + i + 'Source'] || '') + ' | Freq: ' + (data['kpi' + i + 'Frequency'] || '')]);
+      }
+    }
+    if (data.notes) { rows.push(['', '']); rows.push(['Notes', data.notes]); }
+    return this.generateExcel(filename, { sheetName: 'KPI Worksheet', headers: ['KPI Name', 'Definition / Target / Source / Frequency'], data: rows });
+  },
+  generateKpiWorksheetPDF: function(filename, data) {
+    var lines = [{ text: 'KPI DEFINITION WORKSHEET', size: 16, bold: true }, { text: 'Department: ' + (data.department || 'N/A') + '  |  Owner: ' + (data.ownerName || 'N/A'), size: 11 }, { text: 'Date: ' + new Date().toLocaleDateString(), size: 11 }, { text: '', size: 8 }];
+    for (var i = 1; i <= 4; i++) {
+      var name = data['kpi' + i + 'Name'];
+      if (name && name.trim()) {
+        lines.push({ text: name, size: 13, bold: true });
+        lines.push({ text: 'Definition: ' + (data['kpi' + i + 'Definition'] || 'N/A'), size: 11 });
+        lines.push({ text: 'Target: ' + (data['kpi' + i + 'Target'] || 'N/A') + '  |  Source: ' + (data['kpi' + i + 'Source'] || 'N/A') + '  |  Frequency: ' + (data['kpi' + i + 'Frequency'] || 'N/A'), size: 11 });
+        lines.push({ text: '', size: 6 });
+      }
+    }
+    if (data.notes) { lines.push({ text: 'Notes', size: 13, bold: true }); lines.push({ text: data.notes, size: 11 }); }
+    return this.generatePDF(filename, { title: 'KPI Definition Worksheet', lines: lines });
+  },
+
+  // ============================================================
+  // DDDM — Balanced Scorecard Generator
+  // ============================================================
+  generateBalancedScorecardWord: async function(filename, data) {
+    var perspectives = [
+      { key: 'financial', label: 'Financial Perspective' },
+      { key: 'customer', label: 'Customer Perspective' },
+      { key: 'internal', label: 'Internal Process Perspective' },
+      { key: 'learning', label: 'Learning & Growth Perspective' }
+    ];
+    var sections = [{ heading: 'Balanced Scorecard', content: ['Organization: ' + (data.orgName || 'N/A'), 'Period: ' + (data.period || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] }];
+    perspectives.forEach(function(p) {
+      sections.push({ heading: p.label, content: 'Objective: ' + (data[p.key + 'Objective'] || 'N/A') + '\nMeasure: ' + (data[p.key + 'Measure'] || 'N/A') + '\nTarget: ' + (data[p.key + 'Target'] || 'N/A') + '\nInitiative: ' + (data[p.key + 'Initiative'] || 'N/A') });
+    });
+    if (data.strategicTheme) sections.push({ heading: 'Strategic Theme', content: data.strategicTheme });
+    return this.generateWord(filename, { title: 'Balanced Scorecard', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateBalancedScorecardExcel: function(filename, data) {
+    var rows = [['Organization', data.orgName || ''], ['Period', data.period || ''], ['Date', new Date().toLocaleDateString()], ['', '', '', '', '']];
+    var perspectives = ['Financial', 'Customer', 'Internal Process', 'Learning & Growth'];
+    var keys = ['financial', 'customer', 'internal', 'learning'];
+    perspectives.forEach(function(p, i) {
+      rows.push([p, data[keys[i] + 'Objective'] || '', data[keys[i] + 'Measure'] || '', data[keys[i] + 'Target'] || '', data[keys[i] + 'Initiative'] || '']);
+    });
+    if (data.strategicTheme) { rows.push(['', '', '', '', '']); rows.push(['Strategic Theme', data.strategicTheme, '', '', '']); }
+    return this.generateExcel(filename, { sheetName: 'Balanced Scorecard', headers: ['Perspective', 'Objective', 'Measure', 'Target', 'Initiative'], data: rows });
+  },
+  generateBalancedScorecardPDF: function(filename, data) {
+    var perspectives = ['Financial', 'Customer', 'Internal Process', 'Learning & Growth'];
+    var keys = ['financial', 'customer', 'internal', 'learning'];
+    var sections = [{ heading: 'BALANCED SCORECARD', content: 'Organization: ' + (data.orgName || 'N/A') + '\nPeriod: ' + (data.period || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() }];
+    perspectives.forEach(function(p, i) {
+      sections.push({ heading: p + ' Perspective', content: 'Objective: ' + (data[keys[i] + 'Objective'] || 'N/A') + '\nMeasure: ' + (data[keys[i] + 'Measure'] || 'N/A') + '\nTarget: ' + (data[keys[i] + 'Target'] || 'N/A') + '\nInitiative: ' + (data[keys[i] + 'Initiative'] || 'N/A') });
+    });
+    if (data.strategicTheme) sections.push({ heading: 'Strategic Theme', content: data.strategicTheme });
+    return this.generatePDF(filename, { title: 'Balanced Scorecard', sections: sections });
+  },
+
+  // ============================================================
+  // DDDM — Decision Matrix Generator
+  // ============================================================
+  generateDecisionMatrixExcel: function(filename, data) {
+    var rows = [['Decision', data.decisionName || ''], ['Owner', data.ownerName || ''], ['Date', new Date().toLocaleDateString()], ['', '', '', '']];
+    for (var i = 1; i <= 5; i++) {
+      var name = data['option' + i + 'Name'];
+      if (name && name.trim()) {
+        rows.push([name, data['option' + i + 'Pros'] || '', data['option' + i + 'Cons'] || '', data['option' + i + 'Score'] || '']);
+      }
+    }
+    if (data.recommendation) { rows.push(['', '', '', '']); rows.push(['Recommendation', data.recommendation, '', '']); }
+    return this.generateExcel(filename, { sheetName: 'Decision Matrix', headers: ['Option', 'Pros', 'Cons', 'Score (1-10)'], data: rows });
+  },
+  generateDecisionMatrixPDF: function(filename, data) {
+    var lines = [{ text: 'DECISION MATRIX', size: 16, bold: true }, { text: 'Decision: ' + (data.decisionName || 'N/A') + '  |  Owner: ' + (data.ownerName || 'N/A'), size: 11 }, { text: '', size: 8 }];
+    for (var i = 1; i <= 5; i++) {
+      var name = data['option' + i + 'Name'];
+      if (name && name.trim()) {
+        lines.push({ text: name + ' (Score: ' + (data['option' + i + 'Score'] || 'N/A') + '/10)', size: 13, bold: true });
+        lines.push({ text: 'Pros: ' + (data['option' + i + 'Pros'] || 'N/A'), size: 11 });
+        lines.push({ text: 'Cons: ' + (data['option' + i + 'Cons'] || 'N/A'), size: 11 });
+        lines.push({ text: '', size: 6 });
+      }
+    }
+    if (data.recommendation) { lines.push({ text: 'Recommendation', size: 13, bold: true }); lines.push({ text: data.recommendation, size: 11 }); }
+    return this.generatePDF(filename, { title: 'Decision Matrix', lines: lines });
+  },
+
+  // ============================================================
+  // DDDM — RACI Matrix Generator
+  // ============================================================
+  generateRaciMatrixWord: async function(filename, data) {
+    var sections = [{ heading: 'RACI Matrix', content: ['Project: ' + (data.projectName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] }];
+    for (var i = 1; i <= 5; i++) {
+      var task = data['task' + i + 'Name'];
+      if (task && task.trim()) {
+        sections.push({ heading: task, content: 'Responsible: ' + (data['task' + i + 'R'] || 'N/A') + '\nAccountable: ' + (data['task' + i + 'A'] || 'N/A') + '\nConsulted: ' + (data['task' + i + 'C'] || 'N/A') + '\nInformed: ' + (data['task' + i + 'I'] || 'N/A') });
+      }
+    }
+    return this.generateWord(filename, { title: 'RACI Matrix', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateRaciMatrixExcel: function(filename, data) {
+    var rows = [['Project', data.projectName || ''], ['Date', new Date().toLocaleDateString()], ['', '', '', '', '']];
+    for (var i = 1; i <= 5; i++) {
+      var task = data['task' + i + 'Name'];
+      if (task && task.trim()) {
+        rows.push([task, data['task' + i + 'R'] || '', data['task' + i + 'A'] || '', data['task' + i + 'C'] || '', data['task' + i + 'I'] || '']);
+      }
+    }
+    return this.generateExcel(filename, { sheetName: 'RACI Matrix', headers: ['Task / Activity', 'Responsible', 'Accountable', 'Consulted', 'Informed'], data: rows });
+  },
+  generateRaciMatrixPDF: function(filename, data) {
+    var lines = [{ text: 'RACI MATRIX', size: 16, bold: true }, { text: 'Project: ' + (data.projectName || 'N/A') + '  |  Date: ' + new Date().toLocaleDateString(), size: 11 }, { text: '', size: 8 }];
+    for (var i = 1; i <= 5; i++) {
+      var task = data['task' + i + 'Name'];
+      if (task && task.trim()) {
+        lines.push({ text: task, size: 13, bold: true });
+        lines.push({ text: 'R: ' + (data['task' + i + 'R'] || 'N/A') + '  |  A: ' + (data['task' + i + 'A'] || 'N/A') + '  |  C: ' + (data['task' + i + 'C'] || 'N/A') + '  |  I: ' + (data['task' + i + 'I'] || 'N/A'), size: 11 });
+        lines.push({ text: '', size: 6 });
+      }
+    }
+    return this.generatePDF(filename, { title: 'RACI Matrix', lines: lines });
+  },
+
+  // ============================================================
+  // DDDM — A/B Test Planner
+  // ============================================================
+  generateAbTestPlannerWord: async function(filename, data) {
+    var sections = [
+      { heading: 'A/B Test Plan', content: ['Test Name: ' + (data.testName || 'N/A'), 'Owner: ' + (data.ownerName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] },
+      { heading: 'Hypothesis', content: data.hypothesis || 'Not specified' },
+      { heading: 'Primary Metric', content: data.primaryMetric || 'Not specified' },
+      { heading: 'Secondary Metrics', content: data.secondaryMetrics || 'Not specified' },
+      { heading: 'Control (A)', content: data.controlDescription || 'Not specified' },
+      { heading: 'Variant (B)', content: data.variantDescription || 'Not specified' },
+      { heading: 'Target Audience', content: data.targetAudience || 'Not specified' },
+      { heading: 'Sample Size & Duration', content: 'Sample Size: ' + (data.sampleSize || 'N/A') + '\nDuration: ' + (data.duration || 'N/A') },
+      { heading: 'Success Criteria', content: data.successCriteria || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'A/B Test Plan', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateAbTestPlannerExcel: function(filename, data) {
+    var rows = [
+      ['Test Name', data.testName || ''], ['Owner', data.ownerName || ''], ['Date', new Date().toLocaleDateString()], ['', ''],
+      ['Hypothesis', data.hypothesis || ''], ['Primary Metric', data.primaryMetric || ''],
+      ['Secondary Metrics', data.secondaryMetrics || ''], ['Control (A)', data.controlDescription || ''],
+      ['Variant (B)', data.variantDescription || ''], ['Target Audience', data.targetAudience || ''],
+      ['Sample Size', data.sampleSize || ''], ['Duration', data.duration || ''],
+      ['Success Criteria', data.successCriteria || '']
+    ];
+    return this.generateExcel(filename, { sheetName: 'AB Test Plan', headers: ['Element', 'Details'], data: rows });
+  },
+  generateAbTestPlannerPDF: function(filename, data) {
+    var sections = [
+      { heading: 'A/B TEST PLAN', content: 'Test Name: ' + (data.testName || 'N/A') + '\nOwner: ' + (data.ownerName || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() },
+      { heading: 'Hypothesis', content: data.hypothesis || 'Not specified' },
+      { heading: 'Primary Metric', content: data.primaryMetric || 'Not specified' },
+      { heading: 'Secondary Metrics', content: data.secondaryMetrics || 'Not specified' },
+      { heading: 'Control (A)', content: data.controlDescription || 'Not specified' },
+      { heading: 'Variant (B)', content: data.variantDescription || 'Not specified' },
+      { heading: 'Target Audience', content: data.targetAudience || 'Not specified' },
+      { heading: 'Sample Size & Duration', content: 'Sample Size: ' + (data.sampleSize || 'N/A') + '\nDuration: ' + (data.duration || 'N/A') },
+      { heading: 'Success Criteria', content: data.successCriteria || 'Not specified' }
+    ];
+    return this.generatePDF(filename, { title: 'A/B Test Plan', sections: sections });
+  },
+
+  // ============================================================
+  // DDDM — Sample Size Calculator
+  // ============================================================
+  generateSampleSizeExcel: function(filename, data) {
+    var rows = [
+      ['Calculator', 'Sample Size Calculator'], ['Date', new Date().toLocaleDateString()], ['', ''],
+      ['Baseline Conversion Rate (%)', data.baselineRate || ''],
+      ['Minimum Detectable Effect (%)', data.mde || ''],
+      ['Statistical Significance (%)', data.significance || '95'],
+      ['Statistical Power (%)', data.power || '80'],
+      ['Tails', data.tails || 'Two-tailed'],
+      ['', ''], ['Notes', data.notes || '']
+    ];
+    return this.generateExcel(filename, { sheetName: 'Sample Size', headers: ['Parameter', 'Value'], data: rows });
+  },
+  generateSampleSizePDF: function(filename, data) {
+    var sections = [
+      { heading: 'SAMPLE SIZE CALCULATOR', content: 'Date: ' + new Date().toLocaleDateString() },
+      { heading: 'Parameters', content: 'Baseline Conversion Rate: ' + (data.baselineRate || 'N/A') + '%\nMinimum Detectable Effect: ' + (data.mde || 'N/A') + '%\nStatistical Significance: ' + (data.significance || '95') + '%\nStatistical Power: ' + (data.power || '80') + '%\nTails: ' + (data.tails || 'Two-tailed') },
+      { heading: 'Notes', content: data.notes || 'Not specified' }
+    ];
+    return this.generatePDF(filename, { title: 'Sample Size Calculator', sections: sections });
+  },
+
+  // ============================================================
+  // DDDM — Data Quality Assessment
+  // ============================================================
+  generateDataQualityWord: async function(filename, data) {
+    var dimensions = [
+      { key: 'accuracy', label: 'Accuracy' }, { key: 'completeness', label: 'Completeness' },
+      { key: 'consistency', label: 'Consistency' }, { key: 'timeliness', label: 'Timeliness' },
+      { key: 'uniqueness', label: 'Uniqueness' }, { key: 'validity', label: 'Validity' }
+    ];
+    var sections = [{ heading: 'Data Quality Assessment', content: ['Dataset: ' + (data.datasetName || 'N/A'), 'Assessor: ' + (data.assessorName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] }];
+    dimensions.forEach(function(d) { sections.push({ heading: d.label, content: (data[d.key] || 'Not specified') + '\nRating: ' + (data[d.key + 'Rating'] || 'N/A') + '/5' }); });
+    if (data.remediationPlan) sections.push({ heading: 'Remediation Plan', content: data.remediationPlan });
+    return this.generateWord(filename, { title: 'Data Quality Assessment', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateDataQualityExcel: function(filename, data) {
+    var rows = [
+      ['Dataset', data.datasetName || ''], ['Assessor', data.assessorName || ''], ['Date', new Date().toLocaleDateString()], ['', '', ''],
+      ['Accuracy', data.accuracy || '', data.accuracyRating || ''],
+      ['Completeness', data.completeness || '', data.completenessRating || ''],
+      ['Consistency', data.consistency || '', data.consistencyRating || ''],
+      ['Timeliness', data.timeliness || '', data.timelinessRating || ''],
+      ['Uniqueness', data.uniqueness || '', data.uniquenessRating || ''],
+      ['Validity', data.validity || '', data.validityRating || ''],
+      ['', '', ''], ['Remediation Plan', data.remediationPlan || '', '']
+    ];
+    return this.generateExcel(filename, { sheetName: 'Data Quality', headers: ['Dimension', 'Assessment', 'Rating (1-5)'], data: rows });
+  },
+  generateDataQualityPDF: function(filename, data) {
+    var dims = ['Accuracy', 'Completeness', 'Consistency', 'Timeliness', 'Uniqueness', 'Validity'];
+    var keys = ['accuracy', 'completeness', 'consistency', 'timeliness', 'uniqueness', 'validity'];
+    var sections = [{ heading: 'DATA QUALITY ASSESSMENT', content: 'Dataset: ' + (data.datasetName || 'N/A') + '\nAssessor: ' + (data.assessorName || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() }];
+    dims.forEach(function(d, i) { sections.push({ heading: d + ' (Rating: ' + (data[keys[i] + 'Rating'] || 'N/A') + '/5)', content: data[keys[i]] || 'Not specified' }); });
+    if (data.remediationPlan) sections.push({ heading: 'Remediation Plan', content: data.remediationPlan });
+    return this.generatePDF(filename, { title: 'Data Quality Assessment', sections: sections });
+  },
+
+  // ============================================================
+  // DDDM — Dashboard Requirements Document
+  // ============================================================
+  generateDashboardRequirementsWord: async function(filename, data) {
+    var sections = [
+      { heading: 'Dashboard Requirements Document', content: ['Dashboard Name: ' + (data.dashboardName || 'N/A'), 'Owner: ' + (data.ownerName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] },
+      { heading: 'Purpose & Audience', content: data.purposeAudience || 'Not specified' },
+      { heading: 'Key Metrics & KPIs', content: data.keyMetrics || 'Not specified' },
+      { heading: 'Data Sources', content: data.dataSources || 'Not specified' },
+      { heading: 'Visualizations Required', content: data.visualizations || 'Not specified' },
+      { heading: 'Filters & Interactivity', content: data.filtersInteractivity || 'Not specified' },
+      { heading: 'Refresh Frequency', content: data.refreshFrequency || 'Not specified' },
+      { heading: 'Access & Permissions', content: data.accessPermissions || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'Dashboard Requirements Document', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateDashboardRequirementsPDF: function(filename, data) {
+    var sections = [
+      { heading: 'DASHBOARD REQUIREMENTS DOCUMENT', content: 'Dashboard Name: ' + (data.dashboardName || 'N/A') + '\nOwner: ' + (data.ownerName || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() },
+      { heading: 'Purpose & Audience', content: data.purposeAudience || 'Not specified' },
+      { heading: 'Key Metrics & KPIs', content: data.keyMetrics || 'Not specified' },
+      { heading: 'Data Sources', content: data.dataSources || 'Not specified' },
+      { heading: 'Visualizations Required', content: data.visualizations || 'Not specified' },
+      { heading: 'Filters & Interactivity', content: data.filtersInteractivity || 'Not specified' },
+      { heading: 'Refresh Frequency', content: data.refreshFrequency || 'Not specified' },
+      { heading: 'Access & Permissions', content: data.accessPermissions || 'Not specified' }
+    ];
+    return this.generatePDF(filename, { title: 'Dashboard Requirements Document', sections: sections });
+  },
+
+  // ============================================================
+  // DDDM — Data Maturity Assessment
+  // ============================================================
+  generateDataMaturityWord: async function(filename, data) {
+    var pillars = [
+      { key: 'dataGovernance', label: 'Data Governance' },
+      { key: 'dataQuality', label: 'Data Quality' },
+      { key: 'analytics', label: 'Analytics Capability' },
+      { key: 'dataCulture', label: 'Data Culture' },
+      { key: 'technology', label: 'Technology & Tools' }
+    ];
+    var sections = [{ heading: 'Data Maturity Assessment', content: ['Organization: ' + (data.orgName || 'N/A'), 'Assessor: ' + (data.assessorName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] }];
+    pillars.forEach(function(p) { sections.push({ heading: p.label, content: (data[p.key] || 'Not specified') + '\nMaturity Level: ' + (data[p.key + 'Level'] || 'N/A') + '/5' }); });
+    if (data.roadmap) sections.push({ heading: 'Improvement Roadmap', content: data.roadmap });
+    return this.generateWord(filename, { title: 'Data Maturity Assessment', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateDataMaturityExcel: function(filename, data) {
+    var rows = [
+      ['Organization', data.orgName || ''], ['Assessor', data.assessorName || ''], ['Date', new Date().toLocaleDateString()], ['', '', ''],
+      ['Data Governance', data.dataGovernance || '', data.dataGovernanceLevel || ''],
+      ['Data Quality', data.dataQuality || '', data.dataQualityLevel || ''],
+      ['Analytics Capability', data.analytics || '', data.analyticsLevel || ''],
+      ['Data Culture', data.dataCulture || '', data.dataCultureLevel || ''],
+      ['Technology & Tools', data.technology || '', data.technologyLevel || ''],
+      ['', '', ''], ['Improvement Roadmap', data.roadmap || '', '']
+    ];
+    return this.generateExcel(filename, { sheetName: 'Data Maturity', headers: ['Pillar', 'Assessment', 'Level (1-5)'], data: rows });
+  },
+  generateDataMaturityPDF: function(filename, data) {
+    var pillars = ['Data Governance', 'Data Quality', 'Analytics Capability', 'Data Culture', 'Technology & Tools'];
+    var keys = ['dataGovernance', 'dataQuality', 'analytics', 'dataCulture', 'technology'];
+    var sections = [{ heading: 'DATA MATURITY ASSESSMENT', content: 'Organization: ' + (data.orgName || 'N/A') + '\nAssessor: ' + (data.assessorName || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() }];
+    pillars.forEach(function(p, i) { sections.push({ heading: p + ' (Level: ' + (data[keys[i] + 'Level'] || 'N/A') + '/5)', content: data[keys[i]] || 'Not specified' }); });
+    if (data.roadmap) sections.push({ heading: 'Improvement Roadmap', content: data.roadmap });
+    return this.generatePDF(filename, { title: 'Data Maturity Assessment', sections: sections });
+  },
+
+  // ============================================================
+  // DDDM — Data Story Outline
+  // ============================================================
+  generateDataStoryWord: async function(filename, data) {
+    var sections = [
+      { heading: 'Data Story Outline', content: ['Story Title: ' + (data.storyTitle || 'N/A'), 'Author: ' + (data.authorName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] },
+      { heading: 'Audience', content: data.audience || 'Not specified' },
+      { heading: 'Key Message / "So What?"', content: data.keyMessage || 'Not specified' },
+      { heading: 'Context / Setup', content: data.context || 'Not specified' },
+      { heading: 'Key Data Points', content: data.dataPoints || 'Not specified' },
+      { heading: 'Visualization Plan', content: data.visualizationPlan || 'Not specified' },
+      { heading: 'Call to Action', content: data.callToAction || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'Data Story Outline', author: 'Generated from wasilzafar.com', sections: sections });
+  },
+  generateDataStoryPDF: function(filename, data) {
+    var sections = [
+      { heading: 'DATA STORY OUTLINE', content: 'Story Title: ' + (data.storyTitle || 'N/A') + '\nAuthor: ' + (data.authorName || 'N/A') + '\nDate: ' + new Date().toLocaleDateString() },
+      { heading: 'Audience', content: data.audience || 'Not specified' },
+      { heading: 'Key Message / "So What?"', content: data.keyMessage || 'Not specified' },
+      { heading: 'Context / Setup', content: data.context || 'Not specified' },
+      { heading: 'Key Data Points', content: data.dataPoints || 'Not specified' },
+      { heading: 'Visualization Plan', content: data.visualizationPlan || 'Not specified' },
+      { heading: 'Call to Action', content: data.callToAction || 'Not specified' }
+    ];
+    return this.generatePDF(filename, { title: 'Data Story Outline', sections: sections });
+  },
+
+  // ============================================================
+  // PPTX Helper — Generic section-based PowerPoint generator
+  // ============================================================
+  _generateSectionsPPTX: async function(filename, config) {
+    if (!window.PptxGenJS) { alert('PptxGenJS library not loaded.'); return false; }
+    var pres = new window.PptxGenJS();
+    pres.layout = 'LAYOUT_16x9'; pres.author = 'Generated from wasilzafar.com';
+    pres.title = (config.entityName || '') + ' \u2014 ' + config.title;
+    var C = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    // Title slide
+    var s1 = pres.addSlide(); s1.background = { color: C.navy };
+    s1.addShape(pres.ShapeType.rect, { x: 0, y: 2.2, w: '100%', h: 0.06, fill: { color: C.teal } });
+    s1.addText(config.entityName || config.title, { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 40, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
+    s1.addText(config.title, { x: 0.6, y: 2.5, w: 8.8, h: 0.7, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center', italic: true });
+    if (config.subtitle) s1.addText(config.subtitle, { x: 0.6, y: 3.3, w: 8.8, h: 0.5, fontSize: 14, color: C.light, fontFace: 'Arial', align: 'center' });
+    // Content slides — group sections
+    var sections = config.sections || []; var perSlide = config.perSlide || 3;
+    for (var i = 0; i < sections.length; i += perSlide) {
+      var slide = pres.addSlide(); slide.background = { color: C.white };
+      slide.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: C.teal } });
+      slide.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray };
+      var batch = sections.slice(i, i + perSlide); var sH = batch.length <= 2 ? 2.0 : 1.35; var yP = 0.25;
+      for (var j = 0; j < batch.length; j++) {
+        var sec = batch[j]; var hc = sec.color || C.navy;
+        slide.addText(sec.heading, { x: 0.5, y: yP, w: 9.0, h: 0.4, fontSize: 16, bold: true, color: hc, fontFace: 'Arial' }); yP += 0.45;
+        var txt = Array.isArray(sec.content) ? sec.content.join('\n') : (sec.content || 'Not specified');
+        slide.addText(txt, { x: 0.5, y: yP, w: 9.0, h: sH, fontSize: 12, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4, 4, 4, 4] }); yP += sH + 0.15;
+      }
+    }
+    // Closing slide
+    var end = pres.addSlide(); end.background = { color: C.navy };
+    end.addShape(pres.ShapeType.rect, { x: 0, y: 2.6, w: '100%', h: 0.06, fill: { color: C.teal } });
+    end.addText(config.entityName || config.title, { x: 0.6, y: 1.8, w: 8.8, h: 1.0, fontSize: 36, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
+    end.addText(config.title, { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 18, color: C.teal, fontFace: 'Arial', align: 'center' });
+    return pres.writeFile({ fileName: filename + '.pptx' });
+  },
+
+  // ============================================================
+  // PPTX — Consulting Frameworks (12 generators)
+  // ============================================================
+  generatePorterFiveForcesPPTX: async function(filename, data) {
+    return this._generateSectionsPPTX(filename, { title: "Porter's Five Forces Analysis", entityName: data.companyName || 'Company', sections: [
+      { heading: 'Competitive Rivalry', content: data.rivalry }, { heading: 'Threat of New Entrants', content: data.newEntrants },
+      { heading: 'Threat of Substitutes', content: data.substitutes }, { heading: 'Buyer Power', content: data.buyerPower },
+      { heading: 'Supplier Power', content: data.supplierPower }, { heading: 'Overall Assessment', content: data.overallAssessment }
+    ]});
+  },
+  generateBcgMatrixPPTX: async function(filename, data) {
+    var secs = []; for (var i = 1; i <= 5; i++) { var n = data['product' + i + 'Name']; if (n && n.trim()) secs.push({ heading: n, content: 'Revenue: ' + (data['product' + i + 'Revenue'] || 'N/A') + '\nGrowth: ' + (data['product' + i + 'Growth'] || 'N/A') + '%\nMarket Share: ' + (data['product' + i + 'MarketShare'] || 'N/A') + '%' }); }
+    return this._generateSectionsPPTX(filename, { title: 'BCG Growth-Share Matrix', entityName: data.companyName || 'Company', perSlide: 2, sections: secs });
+  },
+  generateMarketEntryPPTX: async function(filename, data) {
+    return this._generateSectionsPPTX(filename, { title: 'Market Entry Strategy', entityName: data.companyName || 'Company', sections: [
+      { heading: 'Target Market', content: data.targetMarket }, { heading: 'Entry Mode', content: data.entryMode },
+      { heading: 'Market Size', content: data.marketSize }, { heading: 'Competitive Landscape', content: data.competitiveLandscape },
+      { heading: 'Regulatory Environment', content: data.regulatoryEnv }, { heading: 'Risks', content: data.risks },
+      { heading: 'Timeline', content: data.timeline }
+    ]});
+  },
+  generateMcKinsey7SPPTX: async function(filename, data) {
+    return this._generateSectionsPPTX(filename, { title: 'McKinsey 7-S Framework', entityName: data.orgName || 'Organization', sections: [
+      { heading: 'Strategy', content: data.strategy }, { heading: 'Structure', content: data.structure },
+      { heading: 'Systems', content: data.systems }, { heading: 'Shared Values', content: data.sharedValues },
+      { heading: 'Style', content: data.style }, { heading: 'Staff', content: data.staff },
+      { heading: 'Skills', content: data.skills }
+    ]});
+  },
+  generateChangeReadinessPPTX: async function(filename, data) {
+    return this._generateSectionsPPTX(filename, { title: 'ADKAR Change Readiness Assessment', entityName: data.changeInitiative || 'Change Initiative', subtitle: data.orgName || '', sections: [
+      { heading: 'Awareness (Rating: ' + (data.awarenessRating || 'N/A') + '/5)', content: 'Understanding of why change is needed' },
+      { heading: 'Desire (Rating: ' + (data.desireRating || 'N/A') + '/5)', content: 'Willingness to support and participate' },
+      { heading: 'Knowledge (Rating: ' + (data.knowledgeRating || 'N/A') + '/5)', content: 'Information on how to change' },
+      { heading: 'Ability (Rating: ' + (data.abilityRating || 'N/A') + '/5)', content: 'Capability to implement required skills' },
+      { heading: 'Reinforcement (Rating: ' + (data.reinforcementRating || 'N/A') + '/5)', content: 'Sustaining the change long-term' },
+      { heading: 'Key Actions', content: data.keyActions }
+    ]});
+  },
+  generateDueDiligenceChecklistPPTX: async function(filename, data) {
+    return this._generateSectionsPPTX(filename, { title: 'Due Diligence Checklist', entityName: data.companyName || 'Company', subtitle: 'Deal Type: ' + (data.dealType || 'N/A'), sections: [
+      { heading: 'Financial Items', content: data.financialItems }, { heading: 'Legal Items', content: data.legalItems },
+      { heading: 'Operational Items', content: data.operationalItems }, { heading: 'Commercial Items', content: data.commercialItems },
+      { heading: 'HR & People Items', content: data.hrItems }, { heading: 'Red Flags / Concerns', content: data.redFlags }
+    ]});
+  },
+  generateProblemDefinitionPPTX: async function(filename, data) {
+    return this._generateSectionsPPTX(filename, { title: 'Problem Definition Worksheet', entityName: data.problemTitle || 'Problem', subtitle: 'Client: ' + (data.clientName || 'N/A'), sections: [
+      { heading: 'Context', content: data.context }, { heading: 'Scope & Boundaries', content: data.scope },
+      { heading: 'Initial Hypotheses', content: data.initialHypotheses }
+    ]});
+  },
+  generateValueChainAnalysisPPTX: async function(filename, data) {
+    return this._generateSectionsPPTX(filename, { title: 'Value Chain Analysis', entityName: data.companyName || 'Company', perSlide: 2, sections: [
+      { heading: 'Inbound Logistics', content: data.inboundLogistics }, { heading: 'Operations', content: data.operations },
+      { heading: 'Outbound Logistics', content: data.outboundLogistics }, { heading: 'Marketing & Sales', content: data.marketingSales },
+      { heading: 'Service', content: data.service }, { heading: 'Firm Infrastructure (Support)', content: data.firmInfrastructure },
+      { heading: 'Human Resources (Support)', content: data.humanResources }, { heading: 'Technology Development (Support)', content: data.technologyDev },
+      { heading: 'Procurement (Support)', content: data.procurement }, { heading: 'Competitive Advantage Sources', content: data.competitiveAdvantage }
+    ]});
+  },
+  generateBlueOceanStrategyPPTX: async function(filename, data) {
+    return this._generateSectionsPPTX(filename, { title: 'Blue Ocean Strategy Canvas', entityName: data.companyName || 'Company', subtitle: 'Industry: ' + (data.industryName || 'N/A'), perSlide: 2, sections: [
+      { heading: 'Eliminate', content: data.eliminate }, { heading: 'Reduce', content: data.reduce },
+      { heading: 'Raise', content: data.raise }, { heading: 'Create', content: data.create },
+      { heading: 'New Value Curve', content: data.newValueCurve }
+    ]});
+  },
+  generateJobsToBeDonePPTX: async function(filename, data) {
+    return this._generateSectionsPPTX(filename, { title: 'Jobs-to-be-Done Analysis', entityName: data.productName || 'Product', subtitle: 'Target Customer: ' + (data.targetCustomer || 'N/A'), sections: [
+      { heading: 'Functional Job', content: data.functionalJob }, { heading: 'Emotional Job', content: data.emotionalJob },
+      { heading: 'Social Job', content: data.socialJob }, { heading: 'Current Solutions', content: data.currentSolutions },
+      { heading: 'Pain Points', content: data.pains }, { heading: 'Desired Outcomes', content: data.desiredOutcomes },
+      { heading: 'Innovation Opportunities', content: data.innovationOpp }
+    ]});
+  },
+  generateStakeholderMapPPTX: async function(filename, data) {
+    return this._generateSectionsPPTX(filename, { title: 'Stakeholder Map', entityName: data.projectName || 'Project', subtitle: 'Analyst: ' + (data.analystName || 'N/A'), perSlide: 2, sections: [
+      { heading: 'Manage Closely (High Power, High Interest)', content: (data.manageClosely || 'Not specified') + '\nStrategy: ' + (data.manageCloselyStrategy || 'Not specified') },
+      { heading: 'Keep Satisfied (High Power, Low Interest)', content: (data.keepSatisfied || 'Not specified') + '\nStrategy: ' + (data.keepSatisfiedStrategy || 'Not specified') },
+      { heading: 'Keep Informed (Low Power, High Interest)', content: (data.keepInformed || 'Not specified') + '\nStrategy: ' + (data.keepInformedStrategy || 'Not specified') },
+      { heading: 'Monitor (Low Power, Low Interest)', content: (data.monitor || 'Not specified') + '\nStrategy: ' + (data.monitorStrategy || 'Not specified') }
+    ]});
+  },
+  generateCaseInterviewFrameworkPPTX: async function(filename, data) {
+    var secs = [{ heading: 'Client Situation', content: data.clientSituation }, { heading: 'Key Question', content: data.keyQuestion }];
+    for (var i = 1; i <= 4; i++) { var b = data['frameworkBranch' + i]; if (b && b.trim()) secs.push({ heading: 'Framework Branch ' + i, content: b }); }
+    secs.push({ heading: 'Hypothesis', content: data.hypothesis }); secs.push({ heading: 'Recommendation', content: data.recommendation });
+    return this._generateSectionsPPTX(filename, { title: 'Case Interview Framework', entityName: data.caseTitle || 'Case', subtitle: 'Type: ' + (data.caseType || 'N/A'), sections: secs });
+  },
+
+  // ============================================================
+  // PPTX — DDDM (9 generators)
+  // ============================================================
+  generateKpiWorksheetPPTX: async function(filename, data) {
+    var secs = []; for (var i = 1; i <= 4; i++) { var n = data['kpi' + i + 'Name']; if (n && n.trim()) secs.push({ heading: n, content: 'Definition: ' + (data['kpi' + i + 'Definition'] || 'N/A') + '\nTarget: ' + (data['kpi' + i + 'Target'] || 'N/A') + '\nSource: ' + (data['kpi' + i + 'Source'] || 'N/A') + '\nFrequency: ' + (data['kpi' + i + 'Frequency'] || 'N/A') }); }
+    if (data.notes) secs.push({ heading: 'Notes', content: data.notes });
+    return this._generateSectionsPPTX(filename, { title: 'KPI Definition Worksheet', entityName: data.department || 'Department', subtitle: 'Owner: ' + (data.ownerName || 'N/A'), perSlide: 2, sections: secs });
+  },
+  generateBalancedScorecardPPTX: async function(filename, data) {
+    var ps = [{ k: 'financial', l: 'Financial' }, { k: 'customer', l: 'Customer' }, { k: 'internal', l: 'Internal Process' }, { k: 'learning', l: 'Learning & Growth' }];
+    var secs = []; ps.forEach(function(p) { secs.push({ heading: p.l + ' Perspective', content: 'Objective: ' + (data[p.k + 'Objective'] || 'N/A') + '\nMeasure: ' + (data[p.k + 'Measure'] || 'N/A') + '\nTarget: ' + (data[p.k + 'Target'] || 'N/A') + '\nInitiative: ' + (data[p.k + 'Initiative'] || 'N/A') }); });
+    if (data.strategicTheme) secs.push({ heading: 'Strategic Theme', content: data.strategicTheme });
+    return this._generateSectionsPPTX(filename, { title: 'Balanced Scorecard', entityName: data.orgName || 'Organization', subtitle: 'Period: ' + (data.period || 'N/A'), perSlide: 2, sections: secs });
+  },
+  generateDecisionMatrixPPTX: async function(filename, data) {
+    var secs = []; for (var i = 1; i <= 5; i++) { var n = data['option' + i + 'Name']; if (n && n.trim()) secs.push({ heading: n + ' (Score: ' + (data['option' + i + 'Score'] || 'N/A') + '/10)', content: 'Pros: ' + (data['option' + i + 'Pros'] || 'N/A') + '\nCons: ' + (data['option' + i + 'Cons'] || 'N/A') }); }
+    if (data.recommendation) secs.push({ heading: 'Recommendation', content: data.recommendation });
+    return this._generateSectionsPPTX(filename, { title: 'Decision Matrix', entityName: data.decisionName || 'Decision', subtitle: 'Owner: ' + (data.ownerName || 'N/A'), perSlide: 2, sections: secs });
+  },
+  generateRaciMatrixPPTX: async function(filename, data) {
+    var secs = []; for (var i = 1; i <= 5; i++) { var t = data['task' + i + 'Name']; if (t && t.trim()) secs.push({ heading: t, content: 'Responsible: ' + (data['task' + i + 'R'] || 'N/A') + '\nAccountable: ' + (data['task' + i + 'A'] || 'N/A') + '\nConsulted: ' + (data['task' + i + 'C'] || 'N/A') + '\nInformed: ' + (data['task' + i + 'I'] || 'N/A') }); }
+    return this._generateSectionsPPTX(filename, { title: 'RACI Matrix', entityName: data.projectName || 'Project', perSlide: 2, sections: secs });
+  },
+  generateAbTestPlannerPPTX: async function(filename, data) {
+    return this._generateSectionsPPTX(filename, { title: 'A/B Test Plan', entityName: data.testName || 'Test', subtitle: 'Owner: ' + (data.ownerName || 'N/A'), sections: [
+      { heading: 'Hypothesis', content: data.hypothesis }, { heading: 'Primary Metric', content: data.primaryMetric },
+      { heading: 'Secondary Metrics', content: data.secondaryMetrics }, { heading: 'Control (A)', content: data.controlDescription },
+      { heading: 'Variant (B)', content: data.variantDescription }, { heading: 'Target Audience', content: data.targetAudience },
+      { heading: 'Sample Size & Duration', content: 'Size: ' + (data.sampleSize || 'N/A') + ' | Duration: ' + (data.duration || 'N/A') },
+      { heading: 'Success Criteria', content: data.successCriteria }
+    ]});
+  },
+  generateDataQualityPPTX: async function(filename, data) {
+    var dims = ['Accuracy', 'Completeness', 'Consistency', 'Timeliness', 'Uniqueness', 'Validity'];
+    var keys = ['accuracy', 'completeness', 'consistency', 'timeliness', 'uniqueness', 'validity'];
+    var secs = []; dims.forEach(function(d, i) { secs.push({ heading: d + ' (Rating: ' + (data[keys[i] + 'Rating'] || 'N/A') + '/5)', content: data[keys[i]] || 'Not specified' }); });
+    if (data.remediationPlan) secs.push({ heading: 'Remediation Plan', content: data.remediationPlan });
+    return this._generateSectionsPPTX(filename, { title: 'Data Quality Assessment', entityName: data.datasetName || 'Dataset', subtitle: 'Assessor: ' + (data.assessorName || 'N/A'), perSlide: 2, sections: secs });
+  },
+  generateDashboardRequirementsPPTX: async function(filename, data) {
+    return this._generateSectionsPPTX(filename, { title: 'Dashboard Requirements', entityName: data.dashboardName || 'Dashboard', subtitle: 'Owner: ' + (data.ownerName || 'N/A'), sections: [
+      { heading: 'Purpose & Audience', content: data.purposeAudience }, { heading: 'Key Metrics & KPIs', content: data.keyMetrics },
+      { heading: 'Data Sources', content: data.dataSources }, { heading: 'Visualizations Required', content: data.visualizations },
+      { heading: 'Filters & Interactivity', content: data.filtersInteractivity }, { heading: 'Refresh Frequency', content: data.refreshFrequency },
+      { heading: 'Access & Permissions', content: data.accessPermissions }
+    ]});
+  },
+  generateDataMaturityPPTX: async function(filename, data) {
+    var ps = ['Data Governance', 'Data Quality', 'Analytics Capability', 'Data Culture', 'Technology & Tools'];
+    var ks = ['dataGovernance', 'dataQuality', 'analytics', 'dataCulture', 'technology'];
+    var secs = []; ps.forEach(function(p, i) { secs.push({ heading: p + ' (Level: ' + (data[ks[i] + 'Level'] || 'N/A') + '/5)', content: data[ks[i]] || 'Not specified' }); });
+    if (data.roadmap) secs.push({ heading: 'Improvement Roadmap', content: data.roadmap });
+    return this._generateSectionsPPTX(filename, { title: 'Data Maturity Assessment', entityName: data.orgName || 'Organization', subtitle: 'Assessor: ' + (data.assessorName || 'N/A'), perSlide: 2, sections: secs });
+  },
+  generateDataStoryPPTX: async function(filename, data) {
+    return this._generateSectionsPPTX(filename, { title: 'Data Story Outline', entityName: data.storyTitle || 'Data Story', subtitle: 'Author: ' + (data.authorName || 'N/A'), sections: [
+      { heading: 'Audience', content: data.audience }, { heading: 'Key Message / "So What?"', content: data.keyMessage },
+      { heading: 'Context / Setup', content: data.context }, { heading: 'Key Data Points', content: data.dataPoints },
+      { heading: 'Visualization Plan', content: data.visualizationPlan }, { heading: 'Call to Action', content: data.callToAction }
+    ]});
+  },
+
+
   /**
    * Internal helper to download file
    * @private
