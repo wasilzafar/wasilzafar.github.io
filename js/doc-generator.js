@@ -2401,6 +2401,140 @@ var DocGenerator = {
       { text: 'Health: ' + u.health, size: 12, bold: true }
     ]});
   },
+  // ============================================================
+  // Angel Pitch Generator (Part 5 - Fundraising)
+  // ============================================================
+  generateAngelPitchWord: async function(filename, data) {
+    var slides = [
+      { heading: 'Hook', content: [data.hook || 'N/A'] },
+      { heading: 'Problem', content: [data.problem || 'N/A'] },
+      { heading: 'Solution', content: [data.solution || 'N/A'] },
+      { heading: 'Traction', content: [data.traction || 'N/A'] },
+      { heading: 'Business Model', content: [data.businessModel || 'N/A'] },
+      { heading: 'Market Opportunity', content: [data.market || 'N/A'] },
+      { heading: 'Team', content: [data.team || 'N/A'] },
+      { heading: 'The Ask', content: [data.theAsk || 'N/A'] },
+      { heading: 'Why Now', content: [data.whyNow || 'N/A'] }
+    ];
+    return this.generateWord(filename, { title: 'Angel Pitch — ' + (data.companyName || 'Startup') + (data.tagline ? '\n' + data.tagline : ''), author: 'Generated from wasilzafar.com', sections: slides });
+  },
+
+  generateAngelPitchExcel: function(filename, data) {
+    return this.generateExcel(filename, { sheetName: 'Angel Pitch', headers: ['Section', 'Content', 'Duration'], data: [
+      ['Company', data.companyName || '', ''],
+      ['Tagline', data.tagline || '', ''],
+      ['Hook', data.hook || '', '30 sec'],
+      ['Problem', data.problem || '', '1 min'],
+      ['Solution', data.solution || '', '2 min'],
+      ['Traction', data.traction || '', '2 min'],
+      ['Business Model', data.businessModel || '', '1 min'],
+      ['Market (TAM/SAM/SOM)', data.market || '', '1 min'],
+      ['Team', data.team || '', '1 min'],
+      ['The Ask', data.theAsk || '', '30 sec'],
+      ['Why Now / Close', data.whyNow || '', '1 min']
+    ]});
+  },
+
+  generateAngelPitchPDF: function(filename, data) {
+    var items = [
+      ['Hook (30s)', data.hook], ['Problem (1 min)', data.problem],
+      ['Solution (2 min)', data.solution], ['Traction (2 min)', data.traction],
+      ['Business Model (1 min)', data.businessModel], ['Market (1 min)', data.market],
+      ['Team (1 min)', data.team], ['The Ask (30s)', data.theAsk],
+      ['Why Now (1 min)', data.whyNow]
+    ];
+    var lines = [{ text: data.companyName || 'Startup', size: 16, bold: true }];
+    if (data.tagline) lines.push({ text: data.tagline, size: 11 });
+    lines.push({ text: 'Angel Pitch — 10-Minute Format', size: 12, bold: true });
+    lines.push({ text: '', size: 6 });
+    items.forEach(function(item) {
+      lines.push({ text: item[0], size: 13, bold: true });
+      lines.push({ text: item[1] || 'N/A', size: 11 });
+      lines.push({ text: '', size: 4 });
+    });
+    return this.generatePDF(filename, { title: 'Angel Pitch Outline', lines: lines });
+  },
+
+  generateAngelPitchPPTX: async function(filename, data) {
+    if (!window.PptxGenJS) { alert('PptxGenJS library not loaded.'); return false; }
+
+    var pres = new window.PptxGenJS();
+    pres.layout = 'LAYOUT_16x9';
+    pres.author = 'Generated from wasilzafar.com';
+    pres.title = (data.companyName || 'Startup') + ' — Angel Pitch';
+
+    var C = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+
+    function addSlide(title, body, accent, timing) {
+      accent = accent || C.teal;
+      var slide = pres.addSlide();
+      slide.background = { color: C.white };
+      slide.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: accent } });
+      slide.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray };
+      slide.addText(title, { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 28, bold: true, color: C.navy, fontFace: 'Arial' });
+      slide.addShape(pres.ShapeType.rect, { x: 0.6, y: 1.05, w: 2.0, h: 0.04, fill: { color: accent } });
+      if (timing) {
+        slide.addText(timing, { x: 7.5, y: 0.35, w: 2.2, h: 0.4, fontSize: 11, color: C.white, fontFace: 'Arial', align: 'center', valign: 'middle', fill: { color: accent }, rectRadius: 0.12 });
+      }
+      slide.addText(body || 'N/A', { x: 0.6, y: 1.3, w: 8.8, h: 3.8, fontSize: 18, color: '333333', fontFace: 'Arial', wrap: true, valign: 'top', lineSpacingMultiple: 1.3, fit: 'shrink', margin: [4, 4, 4, 4] });
+      return slide;
+    }
+
+    // Title slide
+    var ts = pres.addSlide();
+    ts.background = { color: C.navy };
+    ts.addShape(pres.ShapeType.rect, { x: 0, y: 2.2, w: '100%', h: 0.06, fill: { color: C.teal } });
+    ts.addText(data.companyName || 'Company Name', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 44, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
+    if (data.tagline) {
+      ts.addText(data.tagline, { x: 0.6, y: 2.5, w: 8.8, h: 0.8, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center', italic: true });
+    }
+    ts.addText('ANGEL PITCH', { x: 0.6, y: 4.0, w: 8.8, h: 0.5, fontSize: 14, color: C.gray, fontFace: 'Arial', align: 'center', charSpacing: 6 });
+
+    // Hook slide
+    if (data.hook) {
+      var hookSlide = pres.addSlide();
+      hookSlide.background = { color: C.light };
+      hookSlide.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: C.crimson } });
+      hookSlide.addText('30 sec', { x: 7.5, y: 0.35, w: 2.2, h: 0.4, fontSize: 11, color: C.white, fontFace: 'Arial', align: 'center', valign: 'middle', fill: { color: C.crimson }, rectRadius: 0.12 });
+      hookSlide.addText(data.hook, { x: 1.0, y: 1.5, w: 8.0, h: 2.5, fontSize: 28, bold: true, color: C.navy, fontFace: 'Arial', align: 'center', valign: 'middle', fill: { color: C.white }, line: { color: C.teal, width: 2 }, rectRadius: 0.15, wrap: true, fit: 'shrink', margin: [8, 8, 8, 8] });
+    }
+
+    // Content slides
+    if (data.problem) addSlide('The Problem', data.problem, C.crimson, '1 min');
+    if (data.solution) addSlide('Our Solution', data.solution, C.teal, '2 min');
+    if (data.traction) addSlide('Traction & Metrics', data.traction, C.blue, '2 min');
+    if (data.businessModel) addSlide('Business Model', data.businessModel, C.teal, '1 min');
+    if (data.market) addSlide('Market Opportunity', data.market, C.blue, '1 min');
+    if (data.team) addSlide('The Team', data.team, C.navy, '1 min');
+
+    // The Ask slide
+    if (data.theAsk) {
+      var askSlide = pres.addSlide();
+      askSlide.background = { color: C.light };
+      askSlide.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: C.crimson } });
+      askSlide.addText('30 sec', { x: 7.5, y: 0.35, w: 2.2, h: 0.4, fontSize: 11, color: C.white, fontFace: 'Arial', align: 'center', valign: 'middle', fill: { color: C.crimson }, rectRadius: 0.12 });
+      askSlide.addText('The Ask', { x: 0.6, y: 0.3, w: 6.5, h: 0.7, fontSize: 28, bold: true, color: C.navy, fontFace: 'Arial' });
+      askSlide.addShape(pres.ShapeType.rect, { x: 0.6, y: 1.05, w: 2.0, h: 0.04, fill: { color: C.crimson } });
+      askSlide.addText(data.theAsk, { x: 1.0, y: 1.8, w: 8.0, h: 2.0, fontSize: 32, bold: true, color: C.crimson, fontFace: 'Arial', align: 'center', valign: 'middle', fill: { color: C.white }, line: { color: C.crimson, width: 2 }, rectRadius: 0.15, wrap: true, fit: 'shrink' });
+    }
+
+    // Why Now slide
+    if (data.whyNow) addSlide('Why Now', data.whyNow, C.teal, '1 min');
+
+    // Closing slide
+    var endSlide = pres.addSlide();
+    endSlide.background = { color: C.navy };
+    endSlide.addShape(pres.ShapeType.rect, { x: 0, y: 2.6, w: '100%', h: 0.06, fill: { color: C.teal } });
+    endSlide.addText('Thank You', { x: 0.6, y: 1.5, w: 8.8, h: 1.0, fontSize: 44, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
+    endSlide.addText(data.companyName || '', { x: 0.6, y: 3.0, w: 8.8, h: 0.6, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center' });
+    if (data.tagline) {
+      endSlide.addText(data.tagline, { x: 0.6, y: 3.6, w: 8.8, h: 0.5, fontSize: 16, color: C.gray, fontFace: 'Arial', align: 'center', italic: true });
+    }
+    endSlide.addText('Q&A — 5-10 minutes', { x: 0.6, y: 4.3, w: 8.8, h: 0.4, fontSize: 13, color: C.gray, fontFace: 'Arial', align: 'center', charSpacing: 3 });
+
+    return pres.writeFile({ fileName: filename + '.pptx' });
+  },
+
   /** @private Calculate unit economics */
   _calcUnitEcon: function(data) {
     var arpu = parseFloat(data.avgRevenuePerUser) || 0;
