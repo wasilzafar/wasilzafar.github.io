@@ -261,11 +261,11 @@ var DocGenerator = {
         return false;
       }
 
-      const doc = new JsPDFConstructor();
-      console.log('jsPDF instance created:', doc);
+      const doc = new JsPDFConstructor({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
       // Set font
       doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
       doc.setTextColor(19, 36, 64); // Navy color
 
       let yPos = 20;
@@ -273,74 +273,68 @@ var DocGenerator = {
       const pageWidth = doc.internal.pageSize.width;
       const margin = 15;
       const contentWidth = pageWidth - 2 * margin;
+      var lineHeight = 1.3; // multiplier for line spacing
+
+      // Helper: add text with wrapping and automatic page breaks
+      function addWrappedText(text, fontSize, isBold) {
+        doc.setFontSize(fontSize);
+        doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+        var wrapped = doc.splitTextToSize(String(text || ''), contentWidth);
+        var lineSpacing = fontSize * 0.353 * lineHeight; // pt to mm, with line-height multiplier
+        for (var i = 0; i < wrapped.length; i++) {
+          if (yPos > pageHeight - 15) {
+            doc.addPage();
+            yPos = 15;
+          }
+          doc.text(wrapped[i], margin, yPos);
+          yPos += lineSpacing;
+        }
+      }
 
       // Add title
       if (config.title) {
-        doc.text(config.title, margin, yPos);
-        yPos += 15;
+        doc.setTextColor(19, 36, 64);
+        addWrappedText(config.title, 16, true);
+        yPos += 5;
       }
 
       // Support both old API (sections) and new API (lines)
       if (config.lines && config.lines.length > 0) {
         // New API: flat array of {text, size, bold} objects
-        config.lines.forEach(line => {
-          if (yPos > pageHeight - 20) {
-            doc.addPage();
-            yPos = 20;
-          }
+        config.lines.forEach(function(line) {
           var fontSize = line.size || 11;
-          doc.setFontSize(fontSize);
           if (line.bold) {
-            doc.setFont(undefined, 'bold');
             doc.setTextColor(19, 36, 64);
           } else {
-            doc.setFont(undefined, 'normal');
             doc.setTextColor(51, 51, 51);
           }
-          var splitLines = doc.splitTextToSize(line.text || '', contentWidth);
-          doc.text(splitLines, margin, yPos);
-          yPos += splitLines.length * (fontSize * 0.4) + (fontSize * 0.3);
-          if (yPos > pageHeight - 20) {
-            doc.addPage();
-            yPos = 20;
-          }
+          addWrappedText(line.text, fontSize, !!line.bold);
+          yPos += (fontSize * 0.12); // small gap between items
         });
       } else if (config.sections && config.sections.length > 0) {
-        config.sections.forEach(section => {
+        config.sections.forEach(function(section) {
           // Check if we need a new page
-          if (yPos > pageHeight - 20) {
+          if (yPos > pageHeight - 25) {
             doc.addPage();
-            yPos = 20;
+            yPos = 15;
           }
 
           // Add section heading
-          doc.setFontSize(14);
-          doc.setFont(undefined, 'bold');
           doc.setTextColor(19, 36, 64);
-          doc.text(section.heading, margin, yPos);
-          yPos += 10;
+          addWrappedText(section.heading, 14, true);
+          yPos += 2;
 
           // Add section content
-          doc.setFontSize(11);
-          doc.setFont(undefined, 'normal');
           doc.setTextColor(51, 51, 51);
-
           const content = Array.isArray(section.content) ? section.content : [section.content];
-          content.forEach(item => {
+          content.forEach(function(item) {
             if (typeof item === 'string') {
-              const textLines = doc.splitTextToSize(item, contentWidth);
-              doc.text(textLines, margin, yPos);
-              yPos += textLines.length * 5 + 5;
-
-              // Check page break
-              if (yPos > pageHeight - 20) {
-                doc.addPage();
-                yPos = 20;
-              }
+              addWrappedText(item, 11, false);
+              yPos += 3;
             }
           });
 
-          yPos += 5;
+          yPos += 3;
         });
       }
 
