@@ -3438,33 +3438,18 @@ Object.assign(DocGenerator, {
   // ============================================================
 
   generateChannelStrategyWord: function(filename, data) {
-    var docxLib = window.docx.default || window.docx;
-    var doc = new docxLib.Document({
-      sections: [{
-        properties: {},
-        children: [
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Channel Strategy Canvas', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Company: ' + (data.companyName || ''), bold: true, size: 24, color: DocStyles.colors.blue })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: DocStyles.colors.gray })], spacing: { after: 400 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Channel Types & Architecture', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.channelTypes || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Ideal Partner Profile', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.partnerProfile || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Enablement Plan', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.enablementPlan || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Incentive Structure', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.incentives || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Success Metrics', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.metrics || 'Not specified', size: 20 })], spacing: { after: 300 } })
-        ]
-      }]
-    });
-    docxLib.Packer.toBlob(doc).then(function(blob) { DocGenerator._downloadFile(blob, filename + '.docx'); });
+    var sections = [
+      { heading: 'Channel Strategy Canvas', content: [
+        'Company: ' + (data.companyName || 'N/A'),
+        'Date: ' + new Date().toLocaleDateString()
+      ]},
+      { heading: 'Channel Types & Architecture', content: data.channelTypes || 'Not specified' },
+      { heading: 'Ideal Partner Profile', content: data.partnerProfile || 'Not specified' },
+      { heading: 'Enablement Plan', content: data.enablementPlan || 'Not specified' },
+      { heading: 'Incentive Structure', content: data.incentives || 'Not specified' },
+      { heading: 'Success Metrics', content: data.metrics || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'Channel Strategy Canvas', author: 'Generated from wasilzafar.com', sections: sections });
   },
 
   generateChannelStrategyExcel: function(filename, data) {
@@ -3560,30 +3545,18 @@ Object.assign(DocGenerator, {
   // ============================================================
 
   generateCapstoneStrategyWord: function(filename, data) {
-    var docxLib = window.docx.default || window.docx;
-    var doc = new docxLib.Document({
-      sections: [{
-        properties: {},
-        children: [
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Capstone Sales Strategy', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: (data.companyName || '') + ' — ' + (data.salesContext || ''), bold: true, size: 24, color: DocStyles.colors.blue })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: DocStyles.colors.gray })], spacing: { after: 400 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Sales Process Summary', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.salesProcess || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Team & Organization', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.teamOrganization || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Key Metrics & Targets', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.metricsTargets || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Risks & Contingencies', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.risksContingencies || 'Not specified', size: 20 })], spacing: { after: 300 } })
-        ]
-      }]
-    });
-    docxLib.Packer.toBlob(doc).then(function(blob) { DocGenerator._downloadFile(blob, filename + '.docx'); });
+    var sections = [
+      { heading: 'Capstone Sales Strategy', content: [
+        'Company: ' + (data.companyName || 'N/A'),
+        'Sales Context: ' + (data.salesContext || 'N/A'),
+        'Date: ' + new Date().toLocaleDateString()
+      ]},
+      { heading: 'Sales Process Summary', content: data.salesProcess || 'Not specified' },
+      { heading: 'Team & Organization', content: data.teamOrganization || 'Not specified' },
+      { heading: 'Key Metrics & Targets', content: data.metricsTargets || 'Not specified' },
+      { heading: 'Risks & Contingencies', content: data.risksContingencies || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'Capstone Sales Strategy', author: 'Generated from wasilzafar.com', sections: sections });
   },
 
   generateCapstoneStrategyExcel: function(filename, data) {

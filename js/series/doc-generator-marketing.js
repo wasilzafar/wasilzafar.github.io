@@ -8,42 +8,22 @@ Object.assign(DocGenerator, {
   // ============================================================
 
   generateMarketingStrategyWord: function(filename, data) {
-    var docxLib = window.docx.default || window.docx;
-    var doc = new docxLib.Document({
-      sections: [{
-        properties: {},
-        children: [
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Marketing Strategy Canvas', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: (data.companyName || '') + ' — ' + (data.industry || ''), bold: true, size: 24, color: DocStyles.colors.blue })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: DocStyles.colors.gray })], spacing: { after: 400 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Segment', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.targetSegment || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Customer Pain Points', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.customerPain || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Positioning Statement', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.positioning || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Value Proposition', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.valueProp || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Competitive Landscape', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.competitors || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Marketing Channels', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.channels || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Key Metrics & KPIs', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.metrics || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Growth Strategy', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.growthStrategy || 'Not specified', size: 20 })], spacing: { after: 300 } })
-        ]
-      }]
-    });
-    docxLib.Packer.toBlob(doc).then(function(blob) { DocGenerator._downloadFile(blob, filename + '.docx'); });
+    var sections = [
+      { heading: 'Marketing Strategy Canvas', content: [
+        'Company: ' + (data.companyName || 'N/A'),
+        'Industry: ' + (data.industry || 'N/A'),
+        'Date: ' + new Date().toLocaleDateString()
+      ]},
+      { heading: 'Target Segment', content: data.targetSegment || 'Not specified' },
+      { heading: 'Customer Pain Points', content: data.customerPain || 'Not specified' },
+      { heading: 'Positioning Statement', content: data.positioning || 'Not specified' },
+      { heading: 'Value Proposition', content: data.valueProp || 'Not specified' },
+      { heading: 'Competitive Landscape', content: data.competitors || 'Not specified' },
+      { heading: 'Marketing Channels', content: data.channels || 'Not specified' },
+      { heading: 'Key Metrics & KPIs', content: data.metrics || 'Not specified' },
+      { heading: 'Growth Strategy', content: data.growthStrategy || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'Marketing Strategy Canvas', author: 'Generated from wasilzafar.com', sections: sections });
   },
 
   generateMarketingStrategyExcel: function(filename, data) {
@@ -154,36 +134,20 @@ Object.assign(DocGenerator, {
   // ============================================================
 
   generateBuyerPsychologyWord: function(filename, data) {
-    var docxLib = window.docx.default || window.docx;
-    var doc = new docxLib.Document({
-      sections: [{
-        properties: {},
-        children: [
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Buyer Psychology Audit', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: (data.companyName || '') + ' — ' + (data.targetAudience || ''), bold: true, size: 24, color: DocStyles.colors.blue })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: DocStyles.colors.gray })], spacing: { after: 400 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'System 1 Triggers Used', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.system1Triggers || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'System 2 Content Available', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.system2Content || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Trust Signals Deployed', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.trustSignals || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Cognitive Biases Leveraged', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.cognitiveBiases || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Pricing Psychology Tactics', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.pricingStrategy || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Improvement Opportunities', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.improvements || 'Not specified', size: 20 })], spacing: { after: 300 } })
-        ]
-      }]
-    });
-    docxLib.Packer.toBlob(doc).then(function(blob) { DocGenerator._downloadFile(blob, filename + '.docx'); });
+    var sections = [
+      { heading: 'Buyer Psychology Audit', content: [
+        'Company: ' + (data.companyName || 'N/A'),
+        'Target Audience: ' + (data.targetAudience || 'N/A'),
+        'Date: ' + new Date().toLocaleDateString()
+      ]},
+      { heading: 'System 1 Triggers Used', content: data.system1Triggers || 'Not specified' },
+      { heading: 'System 2 Content Available', content: data.system2Content || 'Not specified' },
+      { heading: 'Trust Signals Deployed', content: data.trustSignals || 'Not specified' },
+      { heading: 'Cognitive Biases Leveraged', content: data.cognitiveBiases || 'Not specified' },
+      { heading: 'Pricing Psychology Tactics', content: data.pricingStrategy || 'Not specified' },
+      { heading: 'Improvement Opportunities', content: data.improvements || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'Buyer Psychology Audit', author: 'Generated from wasilzafar.com', sections: sections });
   },
 
   generateBuyerPsychologyExcel: function(filename, data) {
@@ -282,42 +246,22 @@ Object.assign(DocGenerator, {
   // ============================================================
 
   generateBrandCanvasWord: function(filename, data) {
-    var docxLib = window.docx.default || window.docx;
-    var doc = new docxLib.Document({
-      sections: [{
-        properties: {},
-        children: [
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Brand Building Canvas', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: (data.brandName || '') + ' — ' + (data.industry || ''), bold: true, size: 24, color: DocStyles.colors.blue })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: DocStyles.colors.gray })], spacing: { after: 400 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Mission Statement', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.mission || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Core Values', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.values || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Brand Personality', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.personality || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Audience', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.targetAudience || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Positioning Statement', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.positioning || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Key Differentiators', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.differentiators || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Voice & Tone', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.voiceTone || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Brand Story', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.brandStory || 'Not specified', size: 20 })], spacing: { after: 300 } })
-        ]
-      }]
-    });
-    docxLib.Packer.toBlob(doc).then(function(blob) { DocGenerator._downloadFile(blob, filename + '.docx'); });
+    var sections = [
+      { heading: 'Brand Building Canvas', content: [
+        'Brand: ' + (data.brandName || 'N/A'),
+        'Industry: ' + (data.industry || 'N/A'),
+        'Date: ' + new Date().toLocaleDateString()
+      ]},
+      { heading: 'Mission Statement', content: data.mission || 'Not specified' },
+      { heading: 'Core Values', content: data.values || 'Not specified' },
+      { heading: 'Brand Personality', content: data.personality || 'Not specified' },
+      { heading: 'Target Audience', content: data.targetAudience || 'Not specified' },
+      { heading: 'Positioning Statement', content: data.positioning || 'Not specified' },
+      { heading: 'Key Differentiators', content: data.differentiators || 'Not specified' },
+      { heading: 'Voice & Tone', content: data.voiceTone || 'Not specified' },
+      { heading: 'Brand Story', content: data.brandStory || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'Brand Building Canvas', author: 'Generated from wasilzafar.com', sections: sections });
   },
 
   generateBrandCanvasExcel: function(filename, data) {
@@ -424,42 +368,22 @@ Object.assign(DocGenerator, {
   // ============================================================
 
   generateSeoAuditWord: function(filename, data) {
-    var docxLib = window.docx.default || window.docx;
-    var doc = new docxLib.Document({
-      sections: [{
-        properties: {},
-        children: [
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'SEO Audit Canvas', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: (data.siteUrl || '') + ' — ' + (data.industry || ''), bold: true, size: 24, color: DocStyles.colors.blue })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: DocStyles.colors.gray })], spacing: { after: 400 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Keywords', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.targetKeywords || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Current Rankings', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.currentRankings || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Technical Issues', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.technicalIssues || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Content Gaps', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.contentGaps || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Backlink Profile', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.backlinkProfile || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Local SEO Presence', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.localPresence || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Top Competitors', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.competitors || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Priority Action Plan', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.actionPlan || 'Not specified', size: 20 })], spacing: { after: 300 } })
-        ]
-      }]
-    });
-    docxLib.Packer.toBlob(doc).then(function(blob) { DocGenerator._downloadFile(blob, filename + '.docx'); });
+    var sections = [
+      { heading: 'SEO Audit Canvas', content: [
+        'Site URL: ' + (data.siteUrl || 'N/A'),
+        'Industry: ' + (data.industry || 'N/A'),
+        'Date: ' + new Date().toLocaleDateString()
+      ]},
+      { heading: 'Target Keywords', content: data.targetKeywords || 'Not specified' },
+      { heading: 'Current Rankings', content: data.currentRankings || 'Not specified' },
+      { heading: 'Technical Issues', content: data.technicalIssues || 'Not specified' },
+      { heading: 'Content Gaps', content: data.contentGaps || 'Not specified' },
+      { heading: 'Backlink Profile', content: data.backlinkProfile || 'Not specified' },
+      { heading: 'Local SEO Presence', content: data.localPresence || 'Not specified' },
+      { heading: 'Top Competitors', content: data.competitors || 'Not specified' },
+      { heading: 'Priority Action Plan', content: data.actionPlan || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'SEO Audit Canvas', author: 'Generated from wasilzafar.com', sections: sections });
   },
 
   generateSeoAuditExcel: function(filename, data) {
@@ -565,45 +489,22 @@ Object.assign(DocGenerator, {
   // ============================================================
 
   generateSocialStrategyWord: function(filename, data) {
-    var docxLib = window.docx.default || window.docx;
-    var doc = new docxLib.Document({
-      sections: [{
-        properties: {},
-        children: [
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Social Media Strategy Canvas', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.companyName || '', bold: true, size: 24, color: DocStyles.colors.blue })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: DocStyles.colors.gray })], spacing: { after: 400 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Platforms', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.platforms || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Audience', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.audience || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Content Pillars', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.contentPillars || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Posting Cadence', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.postingCadence || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Community Strategy', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.communityStrategy || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Influencer Plan', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.influencerPlan || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Engagement Tactics', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.engagementTactics || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Key Metrics', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.metrics || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: '90-Day Growth Goals', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.growthGoals || 'Not specified', size: 20 })], spacing: { after: 300 } })
-        ]
-      }]
-    });
-    docxLib.Packer.toBlob(doc).then(function(blob) { DocGenerator._downloadFile(blob, filename + '.docx'); });
+    var sections = [
+      { heading: 'Social Media Strategy Canvas', content: [
+        'Company: ' + (data.companyName || 'N/A'),
+        'Date: ' + new Date().toLocaleDateString()
+      ]},
+      { heading: 'Target Platforms', content: data.platforms || 'Not specified' },
+      { heading: 'Target Audience', content: data.audience || 'Not specified' },
+      { heading: 'Content Pillars', content: data.contentPillars || 'Not specified' },
+      { heading: 'Posting Cadence', content: data.postingCadence || 'Not specified' },
+      { heading: 'Community Strategy', content: data.communityStrategy || 'Not specified' },
+      { heading: 'Influencer Plan', content: data.influencerPlan || 'Not specified' },
+      { heading: 'Engagement Tactics', content: data.engagementTactics || 'Not specified' },
+      { heading: 'Key Metrics', content: data.metrics || 'Not specified' },
+      { heading: '90-Day Growth Goals', content: data.growthGoals || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'Social Media Strategy Canvas', author: 'Generated from wasilzafar.com', sections: sections });
   },
 
   generateSocialStrategyExcel: function(filename, data) {
@@ -707,45 +608,22 @@ Object.assign(DocGenerator, {
   // ============================================================
 
   generateContentStrategyWord: function(filename, data) {
-    var docxLib = window.docx.default || window.docx;
-    var doc = new docxLib.Document({
-      sections: [{
-        properties: {},
-        children: [
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Content Strategy Canvas', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.companyName || '', bold: true, size: 24, color: DocStyles.colors.blue })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: DocStyles.colors.gray })], spacing: { after: 400 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Audience', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.audience || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Content Pillars', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.contentPillars || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Content Formats', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.contentFormats || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Distribution Channels', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.distribution || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Editorial Cadence', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.editorialCadence || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Competitor Content Gaps', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.competitorGaps || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Success Metrics', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.successMetrics || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Team & Budget', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.teamResources || 'Not specified', size: 20 })], spacing: { after: 300 } }),
-
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: '90-Day Content Goals', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.contentGoals || 'Not specified', size: 20 })], spacing: { after: 300 } })
-        ]
-      }]
-    });
-    docxLib.Packer.toBlob(doc).then(function(blob) { DocGenerator._downloadFile(blob, filename + '.docx'); });
+    var sections = [
+      { heading: 'Content Strategy Canvas', content: [
+        'Company: ' + (data.companyName || 'N/A'),
+        'Date: ' + new Date().toLocaleDateString()
+      ]},
+      { heading: 'Target Audience', content: data.audience || 'Not specified' },
+      { heading: 'Content Pillars', content: data.contentPillars || 'Not specified' },
+      { heading: 'Content Formats', content: data.contentFormats || 'Not specified' },
+      { heading: 'Distribution Channels', content: data.distribution || 'Not specified' },
+      { heading: 'Editorial Cadence', content: data.editorialCadence || 'Not specified' },
+      { heading: 'Competitor Content Gaps', content: data.competitorGaps || 'Not specified' },
+      { heading: 'Success Metrics', content: data.successMetrics || 'Not specified' },
+      { heading: 'Team & Budget', content: data.teamResources || 'Not specified' },
+      { heading: '90-Day Content Goals', content: data.contentGoals || 'Not specified' }
+    ];
+    return this.generateWord(filename, { title: 'Content Strategy Canvas', author: 'Generated from wasilzafar.com', sections: sections });
   },
 
   generateContentStrategyExcel: function(filename, data) {
@@ -868,14 +746,10 @@ Object.assign(DocGenerator, {
         new docxLib.TableCell({ children: [new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: s.value || '', size: 22 })] })], width: { size: 72, type: docxLib.WidthType.PERCENTAGE } })
       ] }));
     });
-    var doc = new docxLib.Document({
-      sections: [{ children: [
-        new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Email Strategy Canvas', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
-        new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Company: ' + (data.companyName || ''), size: 24, color: DocStyles.colors.blue })], spacing: { after: 300 } }),
-        new docxLib.Table({ rows: rows })
-      ] }]
-    });
-    docxLib.Packer.toBlob(doc).then(function(blob) { DocGenerator._downloadFile(blob, filename + '.docx'); });
+    var contentChildren = [
+      new docxLib.Table({ rows: rows })
+    ];
+    DocStyles.docxPackage(filename, 'Email Strategy Canvas', 'Generated from wasilzafar.com', contentChildren);
   },
 
   generateEmailStrategyExcel: function(filename, data) {
@@ -995,14 +869,10 @@ Object.assign(DocGenerator, {
         new docxLib.TableCell({ children: [new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: s.value || '', size: 22 })] })], width: { size: 72, type: docxLib.WidthType.PERCENTAGE } })
       ] }));
     });
-    var doc = new docxLib.Document({
-      sections: [{ children: [
-        new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Ad Campaign Strategy Canvas', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
-        new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Company: ' + (data.companyName || ''), size: 24, color: DocStyles.colors.blue })], spacing: { after: 300 } }),
-        new docxLib.Table({ rows: rows })
-      ] }]
-    });
-    docxLib.Packer.toBlob(doc).then(function(blob) { DocGenerator._downloadFile(blob, filename + '.docx'); });
+    var contentChildren = [
+      new docxLib.Table({ rows: rows })
+    ];
+    DocStyles.docxPackage(filename, 'Ad Campaign Strategy Canvas', 'Generated from wasilzafar.com', contentChildren);
   },
 
   generateAdCampaignExcel: function(filename, data) {

@@ -149,6 +149,7 @@ var DocStyles = {
       creator: config.author || 'Generated from wasilzafar.com',
       title: config.title || '',
       description: config.description || '',
+      features: { updateFields: true },
       styles: {
         default: {
           document: {
@@ -203,16 +204,130 @@ var DocStyles = {
     });
   },
 
-  /** Section heading paragraph (level 1=crimson, 2=blue, 3=navy) */
+  /** Section heading paragraph (level 1=crimson, 2=blue, 3=navy) — uses HeadingLevel for TOC */
   docxHeading: function(text, level) {
     var lib = this._getDocxLib(); if (!lib) return null;
     var colorMap = { 1: this.docx.sectionColor, 2: this.docx.subtitleColor, 3: this.docx.titleColor };
     var sizeMap  = { 1: this.docx.sectionSize,  2: this.docx.subsectionSize, 3: this.docx.bodySize };
+    var HL = lib.HeadingLevel;
+    var headingMap = HL ? { 1: HL.HEADING_1, 2: HL.HEADING_2, 3: HL.HEADING_3 } : {};
     var lvl = level || 1;
     return new lib.Paragraph({
       children: [new lib.TextRun({ text: text, bold: true, size: sizeMap[lvl] || sizeMap[1], color: colorMap[lvl] || colorMap[1], font: this.fonts.primary })],
+      heading: headingMap[lvl],
       spacing: { before: this.docx.spacing.beforeSection, after: this.docx.spacing.afterSection }
     });
+  },
+
+  // ── Title Page & Table of Contents helpers ─────────────────
+
+  /**
+   * Generate title page section children — centered title, decorative lines, author, date.
+   * Returns an array of Paragraph objects for use as a document section.
+   */
+  docxTitlePageChildren: function(title, subtitle, author, date) {
+    var lib = this._getDocxLib(); if (!lib) return [];
+    var S = this;
+    var align = lib.AlignmentType ? lib.AlignmentType.CENTER : 'center';
+    var dateStr = date || new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    var authorStr = author || 'Generated from wasilzafar.com';
+
+    var children = [
+      // Vertical spacer to push content toward center
+      new lib.Paragraph({ text: '', spacing: { before: 5000 } }),
+      // Decorative top line
+      new lib.Paragraph({
+        children: [new lib.TextRun({ text: '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501', size: 16, color: S.colors.teal })],
+        alignment: align,
+        spacing: { after: 400 }
+      }),
+      // Main title
+      new lib.Paragraph({
+        children: [new lib.TextRun({ text: title || 'Document', bold: true, size: 52, color: S.docx.titleColor, font: S.fonts.primary })],
+        alignment: align,
+        spacing: { after: 200 }
+      })
+    ];
+
+    // Optional subtitle
+    if (subtitle) {
+      children.push(new lib.Paragraph({
+        children: [new lib.TextRun({ text: subtitle, bold: true, size: S.docx.subtitleSize, color: S.colors.blue, font: S.fonts.primary })],
+        alignment: align,
+        spacing: { after: 200 }
+      }));
+    }
+
+    // Decorative bottom line + author + date
+    children.push(
+      new lib.Paragraph({
+        children: [new lib.TextRun({ text: '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501', size: 16, color: S.colors.teal })],
+        alignment: align,
+        spacing: { after: 600 }
+      }),
+      new lib.Paragraph({
+        children: [new lib.TextRun({ text: authorStr, size: 24, color: S.colors.blue, font: S.fonts.primary })],
+        alignment: align,
+        spacing: { after: 200 }
+      }),
+      new lib.Paragraph({
+        children: [new lib.TextRun({ text: dateStr, size: 20, color: S.colors.gray, font: S.fonts.primary })],
+        alignment: align
+      })
+    );
+
+    return children;
+  },
+
+  /**
+   * Generate Table of Contents section children.
+   * Returns an array with a heading + TOC field for use as a document section.
+   * Requires features: { updateFields: true } on the Document for auto-population.
+   */
+  docxTocChildren: function() {
+    var lib = this._getDocxLib(); if (!lib) return [];
+    var S = this;
+    var children = [
+      new lib.Paragraph({
+        children: [new lib.TextRun({ text: 'Table of Contents', bold: true, size: S.docx.titleSize, color: S.docx.titleColor, font: S.fonts.primary })],
+        spacing: { after: 400 }
+      })
+    ];
+    // Add TOC field if supported by docx library version
+    if (lib.TableOfContents) {
+      children.push(
+        new lib.TableOfContents('Table of Contents', {
+          hyperlink: true,
+          headingStyleRange: '1-3'
+        })
+      );
+    }
+    return children;
+  },
+
+  /**
+   * Build a complete Word document from raw content paragraphs.
+   * Wraps content with Title Page + TOC, applies heading styles, packs and downloads.
+   * Use this for custom-built paragraph arrays that bypass generateWord.
+   * @param {string} filename - Output filename (without .docx extension)
+   * @param {string} title - Document title for cover page
+   * @param {string} author - Author / source attribution
+   * @param {Array} contentChildren - Array of docx Paragraph/Table objects
+   */
+  docxPackage: function(filename, title, author, contentChildren) {
+    var lib = this._getDocxLib(); if (!lib) return;
+    var S = this;
+    var docSections = [
+      { children: S.docxTitlePageChildren(title, null, author) },
+      { children: S.docxTocChildren() },
+      { children: contentChildren }
+    ];
+    var doc = S.createStyledDoc({
+      title: title,
+      author: author,
+      sections: docSections
+    });
+    lib.Packer.toBlob(doc).then(function(blob) { DocGenerator._downloadFile(blob, filename + '.docx'); });
   },
 
   /** Body text paragraph (11pt dark gray) */
@@ -285,14 +400,23 @@ var DocStyles = {
     return children;
   },
 
-  /** Full DOCX generation shorthand — builds, packs, and downloads */
+  /** Full DOCX generation shorthand — builds, packs, and downloads.
+   *  Automatically prepends a Title Page and Table of Contents. */
   buildDocx: function(filename, config) {
     var lib = this._getDocxLib(); if (!lib) return;
-    var children = this.docxSectionChildren(config.title, config.subtitle, config.date, config.fields);
+    var S = this;
+    // Content fields only (title/subtitle/date are on the title page)
+    var contentChildren = this.docxSectionChildren(null, null, false, config.fields);
+    // Assemble: Title Page → TOC → Content
+    var docSections = [
+      { children: S.docxTitlePageChildren(config.title, config.subtitle, config.author, config.date) },
+      { children: S.docxTocChildren() },
+      { children: contentChildren }
+    ];
     var doc = this.createStyledDoc({
       title: config.title,
       author: config.author,
-      sections: [{ children: children }]
+      sections: docSections
     });
     lib.Packer.toBlob(doc).then(function(blob) { DocGenerator._downloadFile(blob, filename + '.docx'); });
   },
@@ -669,7 +793,9 @@ if (typeof window !== 'undefined') { window.DocStyles = DocStyles; }
 // ============================================================
 var DocGenerator = {
   /**
-   * Generate a Word document (.docx) — core delegation method
+   * Generate a Word document (.docx) — core delegation method.
+   * Automatically prepends a Title Page and Table of Contents.
+   * Section headings use HeadingLevel so Word can build the TOC.
    * @param {string} filename - Output filename (without .docx extension)
    * @param {Object} config - {title, author, sections: [{heading, content}]}
    */
@@ -682,51 +808,74 @@ var DocGenerator = {
 
       var docxLib = window.docx.default || window.docx;
       var Document = docxLib.Document, Packer = docxLib.Packer, Paragraph = docxLib.Paragraph, TextRun = docxLib.TextRun;
+      var HL = docxLib.HeadingLevel;
 
       if (!Document || !Packer || !Paragraph) {
         alert('Word document library failed to initialize properly.');
         return false;
       }
       var DS = DocStyles;
-      var sections = config.sections.map(function(section) {
-        var elements = [
-          new Paragraph({
-            children: [new TextRun({ text: section.heading, bold: true, size: DS.docx.sectionSize, color: DS.docx.sectionColor, font: DS.fonts.primary })],
-            spacing: { before: DS.docx.spacing.beforeSection, after: DS.docx.spacing.afterSection }
-          })
-        ];
+
+      // Build all content paragraphs merged into one continuous section
+      var contentChildren = [];
+      config.sections.forEach(function(section) {
+        // Section heading — with HeadingLevel for TOC discovery
+        contentChildren.push(new Paragraph({
+          children: [new TextRun({ text: section.heading, bold: true, size: DS.docx.sectionSize, color: DS.docx.sectionColor, font: DS.fonts.primary })],
+          heading: HL ? HL.HEADING_1 : undefined,
+          spacing: { before: DS.docx.spacing.beforeSection, after: DS.docx.spacing.afterSection }
+        }));
 
         var content = Array.isArray(section.content) ? section.content : [section.content];
         content.forEach(function(item) {
           if (typeof item === 'string') {
-            elements.push(new Paragraph({
+            contentChildren.push(new Paragraph({
               children: [new TextRun({ text: item, size: DS.docx.bodySize, color: DS.docx.bodyColor, font: DS.fonts.primary })],
               spacing: { after: DS.docx.spacing.afterBody }
             }));
           } else if (typeof item === 'object') {
             if (item.type === 'heading') {
-              elements.push(new Paragraph({
+              contentChildren.push(new Paragraph({
                 children: [new TextRun({ text: item.text, bold: true, size: DS.docx.subsectionSize, color: DS.docx.subtitleColor, font: DS.fonts.primary })],
+                heading: HL ? HL.HEADING_2 : undefined,
                 spacing: { before: 200, after: DS.docx.spacing.afterSmall }
               }));
             } else if (item.type === 'table') {
-              elements.push(item.data);
+              contentChildren.push(item.data);
             }
           }
         });
-
-        return { children: elements };
       });
+
+      // Assemble document sections: Title Page → TOC → Content
+      var docSections = [
+        { children: DS.docxTitlePageChildren(config.title, null, config.author) },
+        { children: DS.docxTocChildren() },
+        { children: contentChildren }
+      ];
 
       var doc = new Document({
         creator: config.author || 'Generated from wasilzafar.com',
         title: config.title,
+        features: { updateFields: true },
         styles: {
           default: {
-            document: { run: { size: DS.docx.bodySize, font: DS.fonts.primary, color: DS.docx.bodyColor } }
+            document: { run: { size: DS.docx.bodySize, font: DS.fonts.primary, color: DS.docx.bodyColor } },
+            heading1: {
+              run:       { size: DS.docx.sectionSize, bold: true, color: DS.docx.sectionColor, font: DS.fonts.primary },
+              paragraph: { spacing: { before: DS.docx.spacing.beforeSection, after: DS.docx.spacing.afterSection } }
+            },
+            heading2: {
+              run:       { size: DS.docx.subsectionSize, bold: true, color: DS.docx.subtitleColor, font: DS.fonts.primary },
+              paragraph: { spacing: { before: 200, after: 120 } }
+            },
+            heading3: {
+              run:       { size: DS.docx.bodySize, bold: true, color: DS.docx.titleColor, font: DS.fonts.primary },
+              paragraph: { spacing: { before: 120, after: 100 } }
+            }
           }
         },
-        sections: sections.map(function(s) { return { children: s.children }; })
+        sections: docSections
       });
 
       var blob = await Packer.toBlob(doc);
