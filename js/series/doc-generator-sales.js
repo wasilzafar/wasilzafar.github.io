@@ -52,7 +52,7 @@ Object.assign(DocGenerator, {
     
     return this.generateWord(filename, {
       title: 'Trust Building Scorecard',
-      author: 'Generated from wasilzafar.com',
+      author: data.authorName || '',
       sections: sections
     });
   },
@@ -189,7 +189,7 @@ Object.assign(DocGenerator, {
     
     return this.generateWord(filename, {
       title: 'Sales Psychology Self-Assessment',
-      author: 'Generated from wasilzafar.com',
+      author: data.authorName || '',
       sections: sections
     });
   },
@@ -308,7 +308,7 @@ Object.assign(DocGenerator, {
     
     return this.generateWord(filename, {
       title: 'Ideal Customer Profile (ICP)',
-      author: 'Generated from wasilzafar.com',
+      author: data.authorName || '',
       sections: sections
     });
   },
@@ -444,7 +444,7 @@ Object.assign(DocGenerator, {
     
     return this.generateWord(filename, {
       title: 'MEDDIC Deal Scorecard',
-      author: 'Generated from wasilzafar.com',
+      author: data.authorName || '',
       sections: sections
     });
   },
@@ -840,7 +840,7 @@ Object.assign(DocGenerator, {
         properties: {},
         children: [
           para([bold('Sales Presentation Planner Canvas')], { heading: HeadingLevel.HEADING_1 }),
-          para('Generated from wasilzafar.com'),
+          para((data.authorName || '')),
           para(''),
           para([bold('Company/Prospect: '), text(data.companyName || '')]),
           para([bold('Presenter: '), text(data.presenterName || '')]),
@@ -886,7 +886,7 @@ Object.assign(DocGenerator, {
   generateSalesPresentationPlannerExcel: function(filename, data) {
     var ws_data = [
       ['Sales Presentation Planner Canvas'],
-      ['Generated from wasilzafar.com'],
+      [(data.authorName || '')],
       [],
       ['Field', 'Value'],
       ['Company/Prospect', data.companyName || ''],
@@ -955,7 +955,7 @@ Object.assign(DocGenerator, {
     y += 10;
     doc.setFontSize(10);
     doc.setFont(undefined, 'normal');
-    doc.text('Generated from wasilzafar.com', margin, y);
+    doc.text((data.authorName || ''), margin, y);
     y += 12;
 
     // Overview
@@ -3449,7 +3449,7 @@ Object.assign(DocGenerator, {
       { heading: 'Incentive Structure', content: data.incentives || 'Not specified' },
       { heading: 'Success Metrics', content: data.metrics || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'Channel Strategy Canvas', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Channel Strategy Canvas', author: data.authorName || '', sections: sections });
   },
 
   generateChannelStrategyExcel: function(filename, data) {
@@ -3556,7 +3556,7 @@ Object.assign(DocGenerator, {
       { heading: 'Key Metrics & Targets', content: data.metricsTargets || 'Not specified' },
       { heading: 'Risks & Contingencies', content: data.risksContingencies || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'Capstone Sales Strategy', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Capstone Sales Strategy', author: data.authorName || '', sections: sections });
   },
 
   generateCapstoneStrategyExcel: function(filename, data) {

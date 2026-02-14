@@ -35,7 +35,7 @@ Object.assign(DocGenerator, {
       { heading: 'Applications', content: (data.applications || 'Not specified').split('\n') }
     ];
     if (data.notes) sections.push({ heading: 'Additional Notes', content: data.notes.split('\n') });
-    return this.generateWord(filename, { title: 'Robot Specification Sheet — ' + (data.robotName || ''), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Robot Specification Sheet — ' + (data.robotName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateRobotSpecExcel: function(filename, data) {
@@ -256,7 +256,7 @@ Object.assign(DocGenerator, {
         properties: {},
         children: [
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Robotics Business Strategy', bold: true, size: 48, color: DocStyles.colors.navy, font: DocStyles.fonts.primary })], spacing: { after: 300 } }),
-          new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Generated from wasilzafar.com — Robotics Business & Strategy', italics: true, size: 20, color: DocStyles.colors.teal })], spacing: { after: 400 } }),
+          new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: (data.authorName || ''), italics: true, size: 20, color: DocStyles.colors.teal })], spacing: { after: 400 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Company / Product Name', bold: true, size: 28, color: DocStyles.colors.blue })], spacing: { before: 200, after: 100 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: data.companyName || 'N/A', size: 24 })], spacing: { after: 200 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Target Market & Segment', bold: true, size: 28, color: DocStyles.colors.blue })], spacing: { before: 200, after: 100 } }),
@@ -279,7 +279,7 @@ Object.assign(DocGenerator, {
   generateBusinessStrategyExcel: function(filename, data) {
     var rows = [
       ['Robotics Business Strategy'],
-      ['Generated from wasilzafar.com'],
+      [(data.authorName || '')],
       [],
       ['Field', 'Details'],
       ['Company / Product Name', data.companyName || 'N/A'],
@@ -303,7 +303,7 @@ Object.assign(DocGenerator, {
     pdf.text('Robotics Business Strategy', 20, 25);
     pdf.setFontSize(10);
     pdf.setTextColor(...DocStyles.rgb.teal);
-    pdf.text('Generated from wasilzafar.com — Robotics Business & Strategy', 20, 33);
+    pdf.text((data.authorName || ''), 20, 33);
     pdf.setDrawColor(...DocStyles.rgb.teal);
     pdf.line(20, 37, 190, 37);
     var y = 50;
@@ -340,7 +340,7 @@ Object.assign(DocGenerator, {
         properties: {},
         children: [
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Systems Integration Plan', bold: true, size: 48, color: DocStyles.colors.navy, font: DocStyles.fonts.primary })], spacing: { after: 300 } }),
-          new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Generated from wasilzafar.com — Systems Integration & Deployment', italics: true, size: 20, color: DocStyles.colors.teal })], spacing: { after: 400 } }),
+          new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: (data.authorName || ''), italics: true, size: 20, color: DocStyles.colors.teal })], spacing: { after: 400 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'System / Project Name', bold: true, size: 28, color: DocStyles.colors.blue })], spacing: { before: 200, after: 100 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: data.projectName || 'N/A', size: 24 })], spacing: { after: 200 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Architecture Pattern', bold: true, size: 28, color: DocStyles.colors.blue })], spacing: { before: 200, after: 100 } }),
@@ -361,7 +361,7 @@ Object.assign(DocGenerator, {
   generateIntegrationPlanExcel: function(filename, data) {
     var rows = [
       ['Systems Integration Plan'],
-      ['Generated from wasilzafar.com'],
+      [(data.authorName || '')],
       [],
       ['Field', 'Details'],
       ['System / Project Name', data.projectName || 'N/A'],
@@ -384,7 +384,7 @@ Object.assign(DocGenerator, {
     pdf.text('Systems Integration Plan', 20, 25);
     pdf.setFontSize(10);
     pdf.setTextColor(...DocStyles.rgb.teal);
-    pdf.text('Generated from wasilzafar.com — Systems Integration & Deployment', 20, 33);
+    pdf.text((data.authorName || ''), 20, 33);
     pdf.setDrawColor(...DocStyles.rgb.teal);
     pdf.line(20, 37, 190, 37);
     var y = 50;
@@ -420,7 +420,7 @@ Object.assign(DocGenerator, {
         properties: {},
         children: [
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Emerging Robotics Research Plan', bold: true, size: 48, color: DocStyles.colors.navy, font: DocStyles.fonts.primary })], spacing: { after: 300 } }),
-          new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Generated from wasilzafar.com — Advanced & Emerging Robotics', italics: true, size: 20, color: DocStyles.colors.teal })], spacing: { after: 400 } }),
+          new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: (data.authorName || ''), italics: true, size: 20, color: DocStyles.colors.teal })], spacing: { after: 400 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Project Title', bold: true, size: 28, color: DocStyles.colors.blue })], spacing: { before: 200, after: 100 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: data.projectName || 'N/A', size: 24 })], spacing: { after: 200 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Focus Domain', bold: true, size: 28, color: DocStyles.colors.blue })], spacing: { before: 200, after: 100 } }),
@@ -441,7 +441,7 @@ Object.assign(DocGenerator, {
   generateEmergingRobotPlanExcel: function(filename, data) {
     var rows = [
       ['Emerging Robotics Research Plan'],
-      ['Generated from wasilzafar.com'],
+      [(data.authorName || '')],
       [],
       ['Field', 'Details'],
       ['Project Title', data.projectName || 'N/A'],
@@ -464,7 +464,7 @@ Object.assign(DocGenerator, {
     pdf.text('Emerging Robotics Research Plan', 20, 25);
     pdf.setFontSize(10);
     pdf.setTextColor(...DocStyles.rgb.teal);
-    pdf.text('Generated from wasilzafar.com — Advanced & Emerging Robotics', 20, 33);
+    pdf.text((data.authorName || ''), 20, 33);
     pdf.setDrawColor(...DocStyles.rgb.teal);
     pdf.line(20, 37, 190, 37);
     var y = 50;
@@ -500,7 +500,7 @@ Object.assign(DocGenerator, {
         properties: {},
         children: [
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Robot Safety Assessment Plan', bold: true, size: 48, color: DocStyles.colors.navy, font: DocStyles.fonts.primary })], spacing: { after: 300 } }),
-          new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Generated from wasilzafar.com — Robotics & Automation Series', italics: true, size: 20, color: DocStyles.colors.teal })], spacing: { after: 400 } }),
+          new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: (data.authorName || ''), italics: true, size: 20, color: DocStyles.colors.teal })], spacing: { after: 400 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Project: ', bold: true, size: 24 }), new docx_lib.TextRun({ text: data.projectName || 'N/A', size: 24 })], spacing: { after: 200 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Target SIL / PL Level', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 200 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: data.silLevel || 'N/A', size: 22 })], spacing: { after: 200 } }),
@@ -522,7 +522,7 @@ Object.assign(DocGenerator, {
   generateSafetyPlanExcel: function(filename, data) {
     var rows = [
       ['Robot Safety Assessment Plan'],
-      ['Generated from wasilzafar.com'],
+      [(data.authorName || '')],
       [],
       ['Field', 'Value'],
       ['Project Name', data.projectName || 'N/A'],
@@ -546,7 +546,7 @@ Object.assign(DocGenerator, {
     pdf.text('Robot Safety Assessment Plan', 20, 25);
     pdf.setFontSize(10);
     pdf.setTextColor(...DocStyles.rgb.teal);
-    pdf.text('Generated from wasilzafar.com — Robotics & Automation Series', 20, 33);
+    pdf.text((data.authorName || ''), 20, 33);
     pdf.setDrawColor(...DocStyles.rgb.teal);
     pdf.line(20, 37, 190, 37);
 
@@ -590,7 +590,7 @@ Object.assign(DocGenerator, {
         properties: {},
         children: [
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Mobile Robot Design Plan', bold: true, size: 48, color: DocStyles.colors.navy, font: DocStyles.fonts.primary })], spacing: { after: 300 } }),
-          new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Generated from wasilzafar.com — Robotics & Automation Series', italics: true, size: 20, color: DocStyles.colors.teal })], spacing: { after: 400 } }),
+          new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: (data.authorName || ''), italics: true, size: 20, color: DocStyles.colors.teal })], spacing: { after: 400 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Project: ', bold: true, size: 24 }), new docx_lib.TextRun({ text: data.projectName || 'N/A', size: 24 })], spacing: { after: 200 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Locomotion Type', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 200 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: data.locomotion || 'N/A', size: 22 })], spacing: { after: 200 } }),
@@ -610,7 +610,7 @@ Object.assign(DocGenerator, {
   generateMobileRobotPlanExcel: function(filename, data) {
     var rows = [
       ['Mobile Robot Design Plan'],
-      ['Generated from wasilzafar.com'],
+      [(data.authorName || '')],
       [],
       ['Field', 'Value'],
       ['Project Name', data.projectName || 'N/A'],
@@ -633,7 +633,7 @@ Object.assign(DocGenerator, {
     pdf.text('Mobile Robot Design Plan', 20, 25);
     pdf.setFontSize(10);
     pdf.setTextColor(...DocStyles.rgb.teal);
-    pdf.text('Generated from wasilzafar.com — Robotics & Automation Series', 20, 33);
+    pdf.text((data.authorName || ''), 20, 33);
     pdf.setDrawColor(...DocStyles.rgb.teal);
     pdf.line(20, 37, 190, 37);
 
@@ -676,7 +676,7 @@ Object.assign(DocGenerator, {
         properties: {},
         children: [
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Industrial Automation Plan', bold: true, size: 48, color: DocStyles.colors.navy, font: DocStyles.fonts.primary })], spacing: { after: 300 } }),
-          new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Generated from wasilzafar.com — Robotics & Automation Series', italics: true, size: 20, color: DocStyles.colors.teal })], spacing: { after: 400 } }),
+          new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: (data.authorName || ''), italics: true, size: 20, color: DocStyles.colors.teal })], spacing: { after: 400 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Project: ', bold: true, size: 24 }), new docx_lib.TextRun({ text: data.projectName || 'N/A', size: 24 })], spacing: { after: 200 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'PLC / Controller', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 200 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: data.plcType || 'N/A', size: 22 })], spacing: { after: 200 } }),
@@ -696,7 +696,7 @@ Object.assign(DocGenerator, {
   generateIndustrialPlanExcel: function(filename, data) {
     var rows = [
       ['Industrial Automation Plan'],
-      ['Generated from wasilzafar.com'],
+      [(data.authorName || '')],
       [],
       ['Field', 'Value'],
       ['Project Name', data.projectName || 'N/A'],
@@ -719,7 +719,7 @@ Object.assign(DocGenerator, {
     pdf.text('Industrial Automation Plan', 20, 25);
     pdf.setFontSize(10);
     pdf.setTextColor(...DocStyles.rgb.teal);
-    pdf.text('Generated from wasilzafar.com — Robotics & Automation Series', 20, 33);
+    pdf.text((data.authorName || ''), 20, 33);
     pdf.setDrawColor(...DocStyles.rgb.teal);
     pdf.line(20, 37, 190, 37);
 
@@ -762,7 +762,7 @@ Object.assign(DocGenerator, {
         properties: {},
         children: [
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'HRI System Design Plan', bold: true, size: 48, color: DocStyles.colors.navy, font: DocStyles.fonts.primary })], spacing: { after: 300 } }),
-          new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Generated from wasilzafar.com — Robotics & Automation Series', italics: true, size: 20, color: DocStyles.colors.teal })], spacing: { after: 400 } }),
+          new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: (data.authorName || ''), italics: true, size: 20, color: DocStyles.colors.teal })], spacing: { after: 400 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Project: ', bold: true, size: 24 }), new docx_lib.TextRun({ text: data.projectName || 'N/A', size: 24 })], spacing: { after: 200 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Cobot/Robot Type: ', bold: true, size: 24 }), new docx_lib.TextRun({ text: data.cobotType || 'N/A', size: 24 })], spacing: { after: 200 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Interaction Modalities', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 200 } }),
@@ -781,7 +781,7 @@ Object.assign(DocGenerator, {
   generateHRIDesignPlanExcel: function(filename, data) {
     var rows = [
       ['HRI System Design Plan'],
-      ['Generated from wasilzafar.com'],
+      [(data.authorName || '')],
       [],
       ['Field', 'Value'],
       ['Project Name', data.projectName || 'N/A'],
@@ -804,7 +804,7 @@ Object.assign(DocGenerator, {
     pdf.text('HRI System Design Plan', 20, 25);
     pdf.setFontSize(10);
     pdf.setTextColor(...DocStyles.rgb.teal);
-    pdf.text('Generated from wasilzafar.com — Robotics & Automation Series', 20, 33);
+    pdf.text((data.authorName || ''), 20, 33);
     pdf.setDrawColor(...DocStyles.rgb.teal);
     pdf.line(20, 37, 190, 37);
 
@@ -847,7 +847,7 @@ Object.assign(DocGenerator, {
         properties: {},
         children: [
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'AI System Architecture Plan', bold: true, size: 48, color: DocStyles.colors.navy, font: DocStyles.fonts.primary })], spacing: { after: 300 } }),
-          new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Generated from wasilzafar.com — Robotics & Automation Series', italics: true, size: 20, color: DocStyles.colors.teal })], spacing: { after: 400 } }),
+          new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: (data.authorName || ''), italics: true, size: 20, color: DocStyles.colors.teal })], spacing: { after: 400 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Project: ', bold: true, size: 24 }), new docx_lib.TextRun({ text: data.projectName || 'N/A', size: 24 })], spacing: { after: 200 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Robot Type: ', bold: true, size: 24 }), new docx_lib.TextRun({ text: data.robotType || 'N/A', size: 24 })], spacing: { after: 200 } }),
           new docx_lib.Paragraph({ children: [new docx_lib.TextRun({ text: 'Perception Stack', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 200 } }),
@@ -870,7 +870,7 @@ Object.assign(DocGenerator, {
   generateAISystemPlanExcel: function(filename, data) {
     var rows = [
       ['AI System Architecture Plan'],
-      ['Generated from wasilzafar.com'],
+      [(data.authorName || '')],
       [],
       ['Field', 'Value'],
       ['Project Name', data.projectName || 'N/A'],
@@ -895,7 +895,7 @@ Object.assign(DocGenerator, {
     pdf.text('AI System Architecture Plan', 20, 25);
     pdf.setFontSize(10);
     pdf.setTextColor(...DocStyles.rgb.teal);
-    pdf.text('Generated from wasilzafar.com — Robotics & Automation Series', 20, 33);
+    pdf.text((data.authorName || ''), 20, 33);
     pdf.setDrawColor(...DocStyles.rgb.teal);
     pdf.line(20, 37, 190, 37);
 

@@ -43,7 +43,7 @@ Object.assign(DocGenerator, {
 
     return this.generateWord(filename, {
       title: 'Business Model Canvas',
-      author: 'Generated from wasilzafar.com',
+      author: data.authorName || '',
       sections: sections
     });
   },
@@ -86,7 +86,7 @@ Object.assign(DocGenerator, {
 
     return this.generateWord(filename, {
       title: 'Lean Canvas',
-      author: 'Generated from wasilzafar.com',
+      author: data.authorName || '',
       sections: sections
     });
   },
@@ -181,7 +181,7 @@ Object.assign(DocGenerator, {
   generateBusinessModelCanvasPPTX: async function(filename, data) {
     if (!window.PptxGenJS) { alert('PptxGenJS library not loaded.'); return false; }
     var pres = new window.PptxGenJS();
-    pres.layout = 'LAYOUT_16x9'; pres.author = 'Generated from wasilzafar.com';
+    pres.layout = 'LAYOUT_16x9'; pres.author = data.authorName || '';
     pres.title = (data.companyName || 'Company') + ' — Business Model Canvas';
     var C = DocStyles.colors;
 
@@ -251,7 +251,7 @@ Object.assign(DocGenerator, {
   generateLeanCanvasPPTX: async function(filename, data) {
     if (!window.PptxGenJS) { alert('PptxGenJS library not loaded.'); return false; }
     var pres = new window.PptxGenJS();
-    pres.layout = 'LAYOUT_16x9'; pres.author = 'Generated from wasilzafar.com';
+    pres.layout = 'LAYOUT_16x9'; pres.author = data.authorName || '';
     pres.title = (data.productName || 'Startup') + ' — Lean Canvas';
     var C = DocStyles.colors;
 
@@ -319,7 +319,7 @@ Object.assign(DocGenerator, {
       ]},
       { heading: 'Assumptions & Notes', content: [data.assumptions || 'None specified'] }
     ];
-    return this.generateWord(filename, { title: 'TAM/SAM/SOM Market Sizing', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'TAM/SAM/SOM Market Sizing', author: data.authorName || '', sections: sections });
   },
 
   generateTamSamSomExcel: function(filename, data) {
@@ -388,7 +388,7 @@ Object.assign(DocGenerator, {
           'WT Strategies (Weaknesses → Threats): ' + (data.wtStrategies || 'Not specified')
       ]}
     ];
-    return this.generateWord(filename, { title: 'SWOT Analysis', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'SWOT Analysis', author: data.authorName || '', sections: sections });
   },
 
   generateSwotAnalysisExcel: function(filename, data) {
@@ -429,7 +429,7 @@ Object.assign(DocGenerator, {
   generateSwotAnalysisPPTX: async function(filename, data) {
     if (!window.PptxGenJS) { alert('PptxGenJS library not loaded.'); return false; }
     var pres = new window.PptxGenJS();
-    pres.layout = 'LAYOUT_16x9'; pres.author = 'Generated from wasilzafar.com';
+    pres.layout = 'LAYOUT_16x9'; pres.author = data.authorName || '';
     pres.title = (data.companyName || 'Company') + ' — SWOT Analysis';
     var C = DocStyles.colors;
 
@@ -516,7 +516,7 @@ Object.assign(DocGenerator, {
       });
     });
     if (data.notes) sections.push({ heading: 'Notes', content: [data.notes] });
-    return this.generateWord(filename, { title: 'ICE Scoring Calculator', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'ICE Scoring Calculator', author: data.authorName || '', sections: sections });
   },
 
   generateIceScoringExcel: function(filename, data) {
@@ -585,7 +585,7 @@ Object.assign(DocGenerator, {
       { heading: 'Gain Creators', content: (data.gainCreators || 'Not defined').split('\n') }
     ];
     if (data.evidence) sections.push({ heading: 'Evidence & Validation', content: data.evidence.split('\n') });
-    return this.generateWord(filename, { title: 'Problem-Solution Fit Canvas', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Problem-Solution Fit Canvas', author: data.authorName || '', sections: sections });
   },
 
   generateProblemSolutionFitExcel: function(filename, data) {
@@ -643,7 +643,7 @@ Object.assign(DocGenerator, {
   generateProblemSolutionFitPPTX: async function(filename, data) {
     if (!window.PptxGenJS) { alert('PptxGenJS library not loaded.'); return false; }
     var pres = new window.PptxGenJS();
-    pres.layout = 'LAYOUT_16x9'; pres.author = 'Generated from wasilzafar.com';
+    pres.layout = 'LAYOUT_16x9'; pres.author = data.authorName || '';
     pres.title = (data.companyName || 'Company') + ' — Problem-Solution Fit';
     var C = DocStyles.colors;
 
@@ -723,7 +723,7 @@ Object.assign(DocGenerator, {
       'Total Costs (12mo): $' + DocGenerator._fmt(months.reduce(function(s,m){return s+m.acqCost+m.fixedCosts;},0))
     ]});
     if (data.notes) sections.push({ heading: 'Notes', content: [data.notes] });
-    return this.generateWord(filename, { title: '12-Month SaaS Financial Model', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: '12-Month SaaS Financial Model', author: data.authorName || '', sections: sections });
   },
 
   generateFinancialModelExcel: function(filename, data) {
@@ -829,7 +829,7 @@ Object.assign(DocGenerator, {
       { heading: 'Cap Table (Post-Round)', content: rows.map(function(r) { return r.name + ': ' + DocGenerator._fmt(r.shares) + ' shares (' + r.percent.toFixed(1) + '%) — ' + r.class; }) }
     ];
     if (data.notes) sections.push({ heading: 'Notes', content: [data.notes] });
-    return this.generateWord(filename, { title: 'Cap Table Calculator', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Cap Table Calculator', author: data.authorName || '', sections: sections });
   },
 
   generateCapTableExcel: function(filename, data) {
@@ -932,7 +932,7 @@ Object.assign(DocGenerator, {
     var ratio = cac > 0 ? (ltv / cac).toFixed(1) : 'N/A';
     var payback = (arpu * margin) > 0 ? Math.ceil(cac / (arpu * margin)) : 'N/A';
     var health = ratio >= 3 ? 'Healthy (3:1+)' : ratio >= 2 ? 'Warning (2-3:1)' : 'Critical (<2:1)';
-    return this.generateWord(filename, { title: 'CAC/LTV Analysis', author: 'Generated from wasilzafar.com', sections: [
+    return this.generateWord(filename, { title: 'CAC/LTV Analysis', author: data.authorName || '', sections: [
       { heading: 'Customer Acquisition Cost (CAC)', content: ['Total Marketing Spend: $' + this._fmt(data.totalMarketingSpend), 'New Customers: ' + this._fmt(data.newCustomers), 'CAC: $' + this._fmt(cac)] },
       { heading: 'Customer Lifetime Value (LTV)', content: ['ARPU (Monthly): $' + this._fmt(arpu), 'Gross Margin: ' + data.grossMargin + '%', 'Monthly Churn Rate: ' + data.churnRate + '%', 'LTV: $' + this._fmt(ltv)] },
       { heading: 'Unit Economics Health', content: ['LTV:CAC Ratio: ' + ratio + ':1', 'Payback Period: ' + payback + ' months', 'Health Assessment: ' + health] }
@@ -994,7 +994,7 @@ Object.assign(DocGenerator, {
   // ============================================================
   generatePositioningWord: async function(filename, data) {
     var statement = 'For ' + (data.targetCustomer || '[target customer]') + ' who ' + (data.category || '[need]') + ', ' + (data.productName || '[product]') + ' is a ' + (data.productCategory || '[category]') + ' that ' + (data.keyBenefit || '[key benefit]') + '. Unlike ' + (data.competitor || '[competitor]') + ', we ' + (data.differentiator || '[differentiator]') + '.';
-    return this.generateWord(filename, { title: 'Positioning Statement', author: 'Generated from wasilzafar.com', sections: [
+    return this.generateWord(filename, { title: 'Positioning Statement', author: data.authorName || '', sections: [
       { heading: 'Positioning Statement', content: [statement] },
       { heading: 'Components', content: ['Target Customer: ' + (data.targetCustomer || 'N/A'), 'Need/Opportunity: ' + (data.category || 'N/A'), 'Product Name: ' + (data.productName || 'N/A'), 'Product Category: ' + (data.productCategory || 'N/A'), 'Key Benefit: ' + (data.keyBenefit || 'N/A'), 'Competitive Alternative: ' + (data.competitor || 'N/A'), 'Key Differentiator: ' + (data.differentiator || 'N/A')] },
       { heading: 'Elevator Pitch', content: [data.elevatorPitch || 'N/A'] }
@@ -1028,7 +1028,7 @@ Object.assign(DocGenerator, {
   generatePositioningPPTX: async function(filename, data) {
     if (!window.PptxGenJS) { alert('PptxGenJS library not loaded.'); return false; }
     var pres = new window.PptxGenJS();
-    pres.layout = 'LAYOUT_16x9'; pres.author = 'Generated from wasilzafar.com';
+    pres.layout = 'LAYOUT_16x9'; pres.author = data.authorName || '';
     pres.title = (data.productName || 'Product') + ' — Positioning Statement';
     var C = DocStyles.colors;
     var statement = 'For ' + (data.targetCustomer || '[target customer]') + ' who ' + (data.category || '[need]') + ', ' + (data.productName || '[product]') + ' is a ' + (data.productCategory || '[category]') + ' that ' + (data.keyBenefit || '[key benefit]') + '. Unlike ' + (data.competitor || '[competitor]') + ', we ' + (data.differentiator || '[differentiator]') + '.';
@@ -1090,7 +1090,7 @@ Object.assign(DocGenerator, {
     var sections = [{ heading: 'Equity Split Analysis', content: ['Date: ' + new Date().toLocaleDateString()] }];
     founders.forEach(function(f) { sections.push({ heading: f.name, content: ['Weighted Score: ' + f.score.toFixed(1), 'Equity Share: ' + f.pct.toFixed(1) + '%'] }); });
     sections.push({ heading: 'Recommendation', content: ['Standard 4-year vesting with 1-year cliff recommended.', 'Consider re-evaluating equity split at major milestones.'] });
-    return this.generateWord(filename, { title: 'Equity Split Analysis', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Equity Split Analysis', author: data.authorName || '', sections: sections });
   },
   generateEquitySplitExcel: function(filename, data) {
     var founders = this._calcEquitySplit(data);
@@ -1142,7 +1142,7 @@ Object.assign(DocGenerator, {
     var rec = avg >= 8 ? 'Strong Match — Proceed with confidence' : avg >= 6 ? 'Proceed with Caution — Address gaps first' : 'Red Flag — Significant compatibility concerns';
     var content = ['Candidate: ' + (data.candidateName || 'N/A'), 'Overall Score: ' + avg.toFixed(1) + '/10', 'Assessment: ' + rec, ''];
     dims.forEach(function(d, i) { content.push(labels[i] + ': ' + (data[d] || 'N/A') + '/10'); });
-    return this.generateWord(filename, { title: 'Co-Founder Compatibility Scorecard', author: 'Generated from wasilzafar.com', sections: [{ heading: 'Co-Founder Compatibility', content: content }] });
+    return this.generateWord(filename, { title: 'Co-Founder Compatibility Scorecard', author: data.authorName || '', sections: [{ heading: 'Co-Founder Compatibility', content: content }] });
   },
   generateCofounderScorecardExcel: function(filename, data) {
     var dims = ['complementarySkills', 'sharedValues', 'workStyle', 'conflictHandling', 'commitment', 'trustLevel', 'riskTolerance', 'communicationStyle'];
@@ -1170,7 +1170,7 @@ Object.assign(DocGenerator, {
   // ============================================================
   generateBurnRateWord: async function(filename, data) {
     var r = this._calcRunway(data);
-    return this.generateWord(filename, { title: 'Burn Rate & Runway Analysis', author: 'Generated from wasilzafar.com', sections: [
+    return this.generateWord(filename, { title: 'Burn Rate & Runway Analysis', author: data.authorName || '', sections: [
       { heading: 'Cash Position', content: ['Cash on Hand: $' + this._fmt(data.cashOnHand), 'Monthly Revenue: $' + this._fmt(data.monthlyRevenue), 'Monthly Expenses: $' + this._fmt(data.monthlyExpenses)] },
       { heading: 'Burn Analysis', content: ['Gross Burn Rate: $' + this._fmt(r.grossBurn) + '/mo', 'Net Burn Rate: $' + this._fmt(r.netBurn) + '/mo', 'Runway: ' + r.runway + ' months'] },
       { heading: 'Assessment', content: [r.status, r.runway < 6 ? 'URGENT: Begin fundraising immediately.' : r.runway < 12 ? 'Start fundraising prep — 6+ month process.' : 'Comfortable runway. Focus on growth.'] }
@@ -1219,7 +1219,7 @@ Object.assign(DocGenerator, {
   // ============================================================
   generateBusinessStructureWord: async function(filename, data) {
     var rec = this._recommendStructure(data);
-    return this.generateWord(filename, { title: 'Business Structure Recommendation', author: 'Generated from wasilzafar.com', sections: [
+    return this.generateWord(filename, { title: 'Business Structure Recommendation', author: data.authorName || '', sections: [
       { heading: 'Your Inputs', content: ['Plan to Raise Funding: ' + (data.planToRaiseFunding || 'N/A'), 'Number of Founders: ' + (data.numberOfFounders || 'N/A'), 'Expected Revenue: ' + (data.expectedRevenue || 'N/A'), 'Plan to Hire: ' + (data.planToHireEmployees || 'N/A'), 'Liability Protection: ' + (data.liabilityProtection || 'N/A'), 'Tax Flexibility: ' + (data.taxFlexibility || 'N/A'), 'IP Protection Needed: ' + (data.ipProtection || 'N/A')] },
       { heading: 'Recommendation: ' + rec.type, content: rec.reasons },
       { heading: 'Alternative to Consider', content: [rec.alternative] }
@@ -1260,7 +1260,7 @@ Object.assign(DocGenerator, {
   // Hypothesis Card Builder (Part 4 - Lean Startup)
   // ============================================================
   generateHypothesisCardWord: async function(filename, data) {
-    return this.generateWord(filename, { title: 'Hypothesis Card — ' + (data.hypothesisName || 'Untitled'), author: 'Generated from wasilzafar.com', sections: [
+    return this.generateWord(filename, { title: 'Hypothesis Card — ' + (data.hypothesisName || 'Untitled'), author: data.authorName || '', sections: [
       { heading: 'Hypothesis', content: ['Name: ' + (data.hypothesisName || 'N/A'), 'Type: ' + (data.hypothesisType || 'N/A'), 'We Believe That: ' + (data.weBelieveThat || 'N/A')] },
       { heading: 'Expected Outcome', content: ['For Segment: ' + (data.forSegment || 'N/A'), 'Will Result In: ' + (data.willResultIn || 'N/A')] },
       { heading: 'Validation', content: ['Success Criteria: ' + (data.successCriteria || 'N/A'), 'Test Method: ' + (data.testMethod || 'N/A'), 'Time Box: ' + (data.timeBox || 'N/A')] }
@@ -1290,7 +1290,7 @@ Object.assign(DocGenerator, {
   generateHypothesisCardPPTX: async function(filename, data) {
     if (!window.PptxGenJS) { alert('PptxGenJS library not loaded.'); return false; }
     var pres = new window.PptxGenJS();
-    pres.layout = 'LAYOUT_16x9'; pres.author = 'Generated from wasilzafar.com';
+    pres.layout = 'LAYOUT_16x9'; pres.author = data.authorName || '';
     pres.title = 'Hypothesis Card — ' + (data.hypothesisName || 'Untitled');
     var C = DocStyles.colors;
 
@@ -1350,7 +1350,7 @@ Object.assign(DocGenerator, {
     var experiments = this._collectExperiments(data);
     var sections = [{ heading: 'Experiment Log', content: ['Date: ' + new Date().toLocaleDateString(), 'Total Experiments: ' + experiments.length] }];
     experiments.forEach(function(e, i) { sections.push({ heading: 'Experiment ' + (i + 1) + ': ' + e.name, content: ['Hypothesis: ' + e.hypothesis, 'Metric: ' + e.metric, 'Target: ' + e.target, 'Result: ' + e.result, 'Decision: ' + e.decision] }); });
-    return this.generateWord(filename, { title: 'Experiment Tracker', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Experiment Tracker', author: data.authorName || '', sections: sections });
   },
   generateExperimentTrackerExcel: function(filename, data) {
     var experiments = this._collectExperiments(data);
@@ -1395,7 +1395,7 @@ Object.assign(DocGenerator, {
   // ============================================================
   generateViralKFactorWord: async function(filename, data) {
     var k = this._calcKFactor(data);
-    return this.generateWord(filename, { title: 'Viral Growth Analysis', author: 'Generated from wasilzafar.com', sections: [
+    return this.generateWord(filename, { title: 'Viral Growth Analysis', author: data.authorName || '', sections: [
       { heading: 'Input Metrics', content: ['Current Users: ' + this._fmt(data.currentUsers), 'Avg Invites/User: ' + (data.avgInvitesSent || 'N/A'), 'Invite Conversion Rate: ' + (data.inviteConversionRate || 'N/A') + '%', 'Viral Cycles (days): ' + (data.viralCycles || 'N/A')] },
       { heading: 'K-Factor Analysis', content: ['K-Factor: ' + k.kFactor.toFixed(2), 'Status: ' + k.status, 'Projected Users (Month 1): ' + this._fmt(k.m1), 'Projected Users (Month 3): ' + this._fmt(k.m3), 'Projected Users (Month 6): ' + this._fmt(k.m6)] }
     ]});
@@ -1446,7 +1446,7 @@ Object.assign(DocGenerator, {
   // ============================================================
   generateSaasMetricsWord: async function(filename, data) {
     var m = this._calcSaasMetrics(data);
-    return this.generateWord(filename, { title: 'SaaS Metrics Dashboard', author: 'Generated from wasilzafar.com', sections: [
+    return this.generateWord(filename, { title: 'SaaS Metrics Dashboard', author: data.authorName || '', sections: [
       { heading: 'Revenue Metrics', content: ['MRR: $' + this._fmt(m.mrr), 'ARR: $' + this._fmt(m.arr), 'Net New MRR: $' + this._fmt(m.netNewMRR), 'Quick Ratio: ' + m.quickRatio.toFixed(1)] },
       { heading: 'Retention & Churn', content: ['Gross Revenue Churn: ' + m.grossChurn.toFixed(1) + '%', 'Net Revenue Retention: ' + m.nrr.toFixed(0) + '%', 'Logo Churn: ' + m.logoChurn.toFixed(1) + '%'] },
       { heading: 'Efficiency', content: ['CAC: $' + this._fmt(data.cac), 'ARPU: $' + this._fmt(data.arpu), 'Health: ' + m.health] }
@@ -1508,7 +1508,7 @@ Object.assign(DocGenerator, {
   // ============================================================
   generateNpsCalculatorWord: async function(filename, data) {
     var n = this._calcNPS(data);
-    return this.generateWord(filename, { title: 'NPS Analysis', author: 'Generated from wasilzafar.com', sections: [
+    return this.generateWord(filename, { title: 'NPS Analysis', author: data.authorName || '', sections: [
       { heading: 'Survey Results', content: ['Promoters (9-10): ' + n.promoters, 'Passives (7-8): ' + n.passives, 'Detractors (0-6): ' + n.detractors, 'Total Responses: ' + n.total] },
       { heading: 'NPS Score: ' + n.nps, content: ['Promoter %: ' + n.promoterPct.toFixed(1) + '%', 'Detractor %: ' + n.detractorPct.toFixed(1) + '%', 'Rating: ' + n.rating] }
     ]});
@@ -1552,7 +1552,7 @@ Object.assign(DocGenerator, {
   // ============================================================
   generateStartupValuationWord: async function(filename, data) {
     var v = this._calcValuation(data);
-    return this.generateWord(filename, { title: 'Startup Valuation Analysis', author: 'Generated from wasilzafar.com', sections: [
+    return this.generateWord(filename, { title: 'Startup Valuation Analysis', author: data.authorName || '', sections: [
       { heading: 'Company: ' + (data.companyName || 'N/A'), content: ['Stage: ' + (data.stage || 'N/A'), 'Annual Recurring Revenue: $' + this._fmt(data.annualRecurringRevenue), 'Annual Growth Rate: ' + (data.annualGrowthRate || '0') + '%', 'Revenue Multiple: ' + (data.revenueMultiple || '10') + 'x'] },
       { heading: 'Valuation Estimates', content: ['Revenue Multiple Valuation: $' + this._fmt(v.revenueMultipleVal), 'DCF Valuation (' + v.years + '-year): $' + this._fmt(v.dcfVal)] }
     ]});
@@ -1610,7 +1610,7 @@ Object.assign(DocGenerator, {
       { heading: 'Team', content: [data.teamHighlights || 'N/A'] },
       { heading: 'The Ask', content: [data.theAsk || 'N/A'] }
     ];
-    return this.generateWord(filename, { title: 'Pitch Deck — ' + (data.companyName || 'Startup') + (data.tagline ? '\n' + data.tagline : ''), author: 'Generated from wasilzafar.com', sections: slides });
+    return this.generateWord(filename, { title: 'Pitch Deck — ' + (data.companyName || 'Startup') + (data.tagline ? '\n' + data.tagline : ''), author: data.authorName || '', sections: slides });
   },
   generatePitchDeckExcel: function(filename, data) {
     return this.generateExcel(filename, { sheetName: 'Pitch Deck', headers: ['Slide', 'Content'], data: [
@@ -1641,7 +1641,7 @@ Object.assign(DocGenerator, {
 
     var pres = new window.PptxGenJS();
     pres.layout = 'LAYOUT_16x9';
-    pres.author = 'Generated from wasilzafar.com';
+    pres.author = data.authorName || '';
     pres.title = (data.companyName || 'Startup') + ' — Pitch Deck';
 
     // Color palette (matches site CSS variables)
@@ -1761,7 +1761,7 @@ Object.assign(DocGenerator, {
     var content = ['Candidate: ' + (data.candidateName || 'N/A'), 'Role: ' + (data.role || 'N/A'), 'Average Score: ' + (total / dims.length).toFixed(1) + '/5', ''];
     dims.forEach(function(d, i) { content.push(labels[i] + ': ' + (data[d] || 'N/A') + '/5'); });
     if (data.notes) content.push('', 'Notes: ' + data.notes);
-    return this.generateWord(filename, { title: 'Hiring Scorecard', author: 'Generated from wasilzafar.com', sections: [{ heading: 'Hiring Scorecard', content: content }] });
+    return this.generateWord(filename, { title: 'Hiring Scorecard', author: data.authorName || '', sections: [{ heading: 'Hiring Scorecard', content: content }] });
   },
   generateHiringScorecardExcel: function(filename, data) {
     var dims = ['technicalSkills', 'cultureFit', 'leadership', 'communication', 'problemSolving', 'growthPotential'];
@@ -1796,7 +1796,7 @@ Object.assign(DocGenerator, {
       sections[1].content.push('KR ' + i + ': ' + kr + ' — Progress: ' + prog + '% — Status: ' + status);
     }
     if (sections[1].content.length === 0) sections[1].content.push('No key results defined');
-    return this.generateWord(filename, { title: 'OKR Plan', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'OKR Plan', author: data.authorName || '', sections: sections });
   },
   generateOkrPlannerExcel: function(filename, data) {
     var rows = [['OKR Plan — ' + (data.quarter || 'Q1')], ['Owner: ' + (data.owner || '')], [''],
@@ -1822,7 +1822,7 @@ Object.assign(DocGenerator, {
   generateOkrPlannerPPTX: async function(filename, data) {
     if (!window.PptxGenJS) { alert('PptxGenJS library not loaded.'); return false; }
     var pres = new window.PptxGenJS();
-    pres.layout = 'LAYOUT_16x9'; pres.author = 'Generated from wasilzafar.com';
+    pres.layout = 'LAYOUT_16x9'; pres.author = data.authorName || '';
     pres.title = (data.quarter || 'Q1') + ' OKR Plan';
     var C = DocStyles.colors;
 
@@ -1898,7 +1898,7 @@ Object.assign(DocGenerator, {
     var rec = avg >= 4 ? 'Strong Fit — Apply to accelerators!' : avg >= 3 ? 'Moderate Fit — Strengthen weak areas first' : 'Weak Fit — Build fundamentals before applying';
     var content = ['Company: ' + (data.companyName || 'N/A'), 'Overall Score: ' + avg.toFixed(1) + '/5', 'Recommendation: ' + rec, ''];
     dims.forEach(function(d, i) { content.push(labels[i] + ': ' + (data[d] || 'N/A') + '/5'); });
-    return this.generateWord(filename, { title: 'Accelerator Readiness Assessment', author: 'Generated from wasilzafar.com', sections: [{ heading: 'Accelerator Readiness Assessment', content: content }] });
+    return this.generateWord(filename, { title: 'Accelerator Readiness Assessment', author: data.authorName || '', sections: [{ heading: 'Accelerator Readiness Assessment', content: content }] });
   },
   generateAcceleratorFitExcel: function(filename, data) {
     var dims = ['stage', 'teamStrength', 'traction', 'marketOpportunity', 'productReadiness', 'scalability', 'coachability', 'networkNeed', 'fundraisingTimeline'];
@@ -1932,7 +1932,7 @@ Object.assign(DocGenerator, {
     var rec = avg >= 4 ? 'Strong — Technology stack is mature and scalable' : avg >= 3 ? 'Moderate — Invest in weak areas' : 'Weak — Significant technical debt to address';
     var content = ['Company: ' + (data.companyName || 'N/A'), 'Readiness Score: ' + avg.toFixed(1) + '/5', 'Assessment: ' + rec, ''];
     dims.forEach(function(d, i) { content.push(labels[i] + ': ' + (data[d] || 'N/A') + '/5'); });
-    return this.generateWord(filename, { title: 'Technology Readiness Assessment', author: 'Generated from wasilzafar.com', sections: [{ heading: 'Technology Readiness', content: content }] });
+    return this.generateWord(filename, { title: 'Technology Readiness Assessment', author: data.authorName || '', sections: [{ heading: 'Technology Readiness', content: content }] });
   },
   generateTechReadinessExcel: function(filename, data) {
     var dims = ['coreTechnology', 'dataInfrastructure', 'aiMlCapability', 'cloudScalability', 'securityCompliance', 'apiIntegration', 'technicalTeam', 'ipDefensibility', 'devopsAutomation'];
@@ -1960,7 +1960,7 @@ Object.assign(DocGenerator, {
   // ============================================================
   generateSafeConversionWord: async function(filename, data) {
     var s = this._calcSAFE(data);
-    return this.generateWord(filename, { title: 'SAFE Conversion Analysis', author: 'Generated from wasilzafar.com', sections: [
+    return this.generateWord(filename, { title: 'SAFE Conversion Analysis', author: data.authorName || '', sections: [
       { heading: 'SAFE Terms', content: ['Investment Amount: $' + this._fmt(data.safeInvestment), 'Valuation Cap: $' + this._fmt(data.valuationCap), 'Discount Rate: ' + (data.discountPercent || '0') + '%'] },
       { heading: 'Series A Terms', content: ['Pre-Money Valuation: $' + this._fmt(data.seriesAPreMoney), 'Series A Investment: $' + this._fmt(data.seriesAInvestment), 'Shares Outstanding: ' + this._fmt(data.sharesOutstanding)] },
       { heading: 'Conversion Results', content: ['SAFE Conversion Price: $' + s.conversionPrice.toFixed(4), 'SAFE Shares Issued: ' + this._fmt(s.safeShares), 'Post-Money Valuation: $' + this._fmt(s.postMoney), 'Founder Ownership: ' + s.founderPct.toFixed(1) + '%', 'SAFE Investor Ownership: ' + s.safePct.toFixed(1) + '%', 'Series A Investor: ' + s.seriesAPct.toFixed(1) + '%'] }
@@ -2020,7 +2020,7 @@ Object.assign(DocGenerator, {
   // ============================================================
   generateUnitEconomicsWord: async function(filename, data) {
     var u = this._calcUnitEcon(data);
-    return this.generateWord(filename, { title: 'Unit Economics Analysis', author: 'Generated from wasilzafar.com', sections: [
+    return this.generateWord(filename, { title: 'Unit Economics Analysis', author: data.authorName || '', sections: [
       { heading: 'Input Metrics', content: ['ARPU (Monthly): $' + this._fmt(data.avgRevenuePerUser), 'COGS (Monthly): $' + this._fmt(data.costOfGoodsSold), 'Avg Customer Lifespan: ' + (data.avgLifespanMonths || '0') + ' months', 'CAC: $' + this._fmt(data.customerAcquisitionCost)] },
       { heading: 'Unit Economics', content: ['Gross Margin: ' + u.marginPct.toFixed(0) + '%', 'Contribution/User: $' + this._fmt(u.contribution) + '/mo', 'LTV: $' + this._fmt(u.ltv), 'LTV:CAC Ratio: ' + u.ratio + ':1', 'Payback Period: ' + u.payback + ' months', 'Health: ' + u.health] }
     ]});
@@ -2080,7 +2080,7 @@ Object.assign(DocGenerator, {
         data.appendixPress ? 'Press & Awards:\n' + data.appendixPress : ''
       ].filter(Boolean) });
     }
-    return this.generateWord(filename, { title: 'VC Pitch Deck — ' + (data.companyName || 'Startup'), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'VC Pitch Deck — ' + (data.companyName || 'Startup'), author: data.authorName || '', sections: sections });
   },
 
   generateVCPitchDeckExcel: function(filename, data) {
@@ -2146,7 +2146,7 @@ Object.assign(DocGenerator, {
 
     var pres = new window.PptxGenJS();
     pres.layout = 'LAYOUT_16x9';
-    pres.author = 'Generated from wasilzafar.com';
+    pres.author = data.authorName || '';
     pres.title = (data.companyName || 'Startup') + ' — VC Pitch Deck';
 
     var C = DocStyles.colors;
@@ -2267,7 +2267,7 @@ Object.assign(DocGenerator, {
       { heading: 'The Ask', content: [data.theAsk || 'N/A'] },
       { heading: 'Why Now', content: [data.whyNow || 'N/A'] }
     ];
-    return this.generateWord(filename, { title: 'Angel Pitch — ' + (data.companyName || 'Startup') + (data.tagline ? '\n' + data.tagline : ''), author: 'Generated from wasilzafar.com', sections: slides });
+    return this.generateWord(filename, { title: 'Angel Pitch — ' + (data.companyName || 'Startup') + (data.tagline ? '\n' + data.tagline : ''), author: data.authorName || '', sections: slides });
   },
 
   generateAngelPitchExcel: function(filename, data) {
@@ -2311,7 +2311,7 @@ Object.assign(DocGenerator, {
 
     var pres = new window.PptxGenJS();
     pres.layout = 'LAYOUT_16x9';
-    pres.author = 'Generated from wasilzafar.com';
+    pres.author = data.authorName || '';
     pres.title = (data.companyName || 'Startup') + ' — Angel Pitch';
 
     var C = DocStyles.colors;

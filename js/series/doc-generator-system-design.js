@@ -42,7 +42,7 @@ Object.assign(DocGenerator, {
       { heading: '7. Estimated Scale', content: (data.estimatedScale || 'Not specified').split('\n') },
       { heading: '8. Constraints & Assumptions', content: (data.constraints || 'Not specified').split('\n') }
     ];
-    return this.generateWord(filename, { title: 'High-Level Design – ' + (data.systemName || ''), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'High-Level Design – ' + (data.systemName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateSystemDesignHLDExcel: function(filename, data) {
@@ -169,7 +169,7 @@ Object.assign(DocGenerator, {
       { heading: '7. Single Points of Failure', content: (data.spof || 'Not specified').split('\n') },
       { heading: '8. Disaster Recovery Strategy', content: (data.drStrategy || 'Not specified').split('\n') }
     ];
-    return this.generateWord(filename, { title: 'Scalability Plan – ' + (data.systemName || ''), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Scalability Plan – ' + (data.systemName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateScalabilityPlanExcel: function(filename, data) {
@@ -275,7 +275,7 @@ Object.assign(DocGenerator, {
         'Target: ' + (data.hitRatio || 'N/A')
       ]}
     ];
-    return this.generateWord(filename, { title: 'Caching Strategy – ' + (data.systemName || ''), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Caching Strategy – ' + (data.systemName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateCachingStrategyExcel: function(filename, data) {
@@ -401,7 +401,7 @@ Object.assign(DocGenerator, {
       { heading: '5. Global Indexing Notes', content: (data.indexing || 'Not specified').split('\n') },
       { heading: '6. Entity Schemas', content: ['Total Entities: ' + entities.length] }
     ].concat(entitySections);
-    return this.generateWord(filename, { title: 'Database Design – ' + (data.systemName || ''), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Database Design – ' + (data.systemName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateDatabaseDesignExcel: function(filename, data) {
@@ -536,7 +536,7 @@ Object.assign(DocGenerator, {
       { heading: '7. Data Strategy', content: ['Strategy: ' + (data.dataStrategy || 'N/A')] },
       { heading: '8. Cross-Cutting Concerns', content: (data.crossCutting || 'Not specified').split('\n') }
     ];
-    return this.generateWord(filename, { title: 'Microservices Plan – ' + (data.systemName || ''), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Microservices Plan – ' + (data.systemName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateMicroservicesPlanExcel: function(filename, data) {
@@ -643,7 +643,7 @@ Object.assign(DocGenerator, {
       { heading: '5. Pagination Strategy', content: ['Strategy: ' + (data.pagination || 'N/A')] },
       { heading: '6. Error Response Format', content: (data.errorFormat || 'Not specified').split('\n') }
     ];
-    return this.generateWord(filename, { title: 'API Design – ' + (data.apiName || ''), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'API Design – ' + (data.apiName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateApiDesignSpecExcel: function(filename, data) {
@@ -735,7 +735,7 @@ Object.assign(DocGenerator, {
       { heading: '6. Dead Letter Queue Strategy', content: (data.dlq || 'Not specified').split('\n') },
       { heading: '7. Expected Throughput', content: [(data.throughput || 'Not specified')] }
     ];
-    return this.generateWord(filename, { title: 'Event-Driven Design – ' + (data.systemName || ''), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Event-Driven Design – ' + (data.systemName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateEventDrivenDesignExcel: function(filename, data) {
@@ -833,7 +833,7 @@ Object.assign(DocGenerator, {
       { heading: '6. Consequences', content: (data.consequences || 'Not specified').split('\n') },
       { heading: '7. Affected Services', content: [(data.affectedServices || 'Not specified')] }
     ];
-    return this.generateWord(filename, { title: 'ADR – ' + (data.decisionTitle || ''), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'ADR – ' + (data.decisionTitle || ''), author: data.authorName || '', sections: sections });
   },
 
   generateArchitectureDecisionExcel: function(filename, data) {
@@ -939,7 +939,7 @@ Object.assign(DocGenerator, {
       { heading: '7. Monitoring & Alerting', content: (data.monitoring || 'Not specified').split('\n') },
       { heading: '8. Whitelist / Bypass Rules', content: (data.whitelist || 'Not specified').split('\n') }
     ];
-    return this.generateWord(filename, { title: 'Rate Limit Policy – ' + (data.serviceName || ''), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Rate Limit Policy – ' + (data.serviceName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateRateLimitPolicyExcel: function(filename, data) {
@@ -1039,7 +1039,7 @@ Object.assign(DocGenerator, {
       { heading: '7. Dashboards', content: (data.dashboards || 'Not specified').split('\n') },
       { heading: '8. On-Call Escalation', content: (data.onCall || 'Not specified').split('\n') }
     ];
-    return this.generateWord(filename, { title: 'Observability Plan – ' + (data.systemName || ''), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Observability Plan – ' + (data.systemName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateObservabilityPlanExcel: function(filename, data) {
@@ -1133,7 +1133,7 @@ Object.assign(DocGenerator, {
       { heading: '6. Key Trade-offs', content: (data.tradeoffs || 'Not specified').split('\n') },
       { heading: '7. Bottlenecks & Mitigation', content: (data.bottlenecks || 'Not specified').split('\n') }
     ];
-    return this.generateWord(filename, { title: 'Case Study – ' + (data.systemName || ''), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Case Study – ' + (data.systemName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateDesignCaseStudyExcel: function(filename, data) {
@@ -1296,7 +1296,7 @@ Object.assign(DocGenerator, {
       { heading: '5. SOLID Principles Applied', content: solidContent.length > 0 ? solidContent : ['Not specified'] },
       { heading: '6. Concurrency / Thread Safety', content: (data.concurrency || 'Not specified').split('\n') }
     ]);
-    return this.generateWord(filename, { title: 'LLD – ' + (data.componentName || ''), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'LLD – ' + (data.componentName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateLowLevelDesignExcel: function(filename, data) {
@@ -1448,7 +1448,7 @@ Object.assign(DocGenerator, {
       { heading: '7. Network Assumptions', content: (data.networkAssumptions || 'Not specified').split('\n') },
       { heading: '8. Storage Architecture', content: ['Architecture: ' + (data.storage || 'N/A')] }
     ];
-    return this.generateWord(filename, { title: 'Distributed Design – ' + (data.systemName || ''), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Distributed Design – ' + (data.systemName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateDistributedDesignExcel: function(filename, data) {
@@ -1541,7 +1541,7 @@ Object.assign(DocGenerator, {
       { heading: '6. Threat Model Summary', content: (data.threatModel || 'Not specified').split('\n') },
       { heading: '7. Zero Trust Considerations', content: (data.zeroTrust || 'Not specified').split('\n') }
     ];
-    return this.generateWord(filename, { title: 'Security Architecture – ' + (data.systemName || ''), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Security Architecture – ' + (data.systemName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateSecurityArchitectureExcel: function(filename, data) {
@@ -1665,7 +1665,7 @@ Object.assign(DocGenerator, {
       { heading: '8. Deep Dive Topics', content: (data.deepDive || 'Not specified').split('\n') },
       { heading: '9. Bottlenecks & Solutions', content: (data.bottlenecks || 'Not specified').split('\n') }
     ];
-    return this.generateWord(filename, { title: 'Interview Worksheet – ' + (data.problem || ''), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Interview Worksheet – ' + (data.problem || ''), author: data.authorName || '', sections: sections });
   },
 
   generateInterviewWorksheetExcel: function(filename, data) {
