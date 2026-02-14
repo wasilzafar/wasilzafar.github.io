@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Doc Generator - Consulting Frameworks Series
  * Extends DocGenerator with consulting frameworks series document generators.
  * Requires: doc-generator-core.js loaded first.
@@ -7,7 +7,7 @@ Object.assign(DocGenerator, {
 
 
   // ============================================================
-  // CONSULTING FRAMEWORKS â€” Porter's Five Forces
+  // CONSULTING FRAMEWORKS — Porter's Five Forces
   // ============================================================
   generatePorterFiveForcesWord: async function(filename, data) {
     var forces = [
@@ -21,7 +21,7 @@ Object.assign(DocGenerator, {
     forces.forEach(function(f) { sections.push({ heading: f.label, content: (data[f.key] || 'Not specified') + '\nRating: ' + (data[f.key + 'Rating'] || 'N/A') + '/5' }); });
     if (data.overallAssessment) sections.push({ heading: 'Overall Assessment', content: data.overallAssessment });
     if (data.strategicImplications) sections.push({ heading: 'Strategic Implications', content: data.strategicImplications });
-    return this.generateWord(filename, { title: "Porter's Five Forces Analysis", author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: "Porter's Five Forces Analysis", author: data.authorName || '', sections: sections });
   },
   generatePorterFiveForcesExcel: function(filename, data) {
     var rows = [
@@ -51,7 +51,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // CONSULTING FRAMEWORKS â€” BCG Growth-Share Matrix
+  // CONSULTING FRAMEWORKS — BCG Growth-Share Matrix
   // ============================================================
   generateBcgMatrixWord: async function(filename, data) {
     var sections = [{ heading: 'BCG Growth-Share Matrix', content: ['Company: ' + (data.companyName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] }];
@@ -63,7 +63,7 @@ Object.assign(DocGenerator, {
     ];
     quads.forEach(function(q) { sections.push({ heading: q.label, content: data[q.key] || 'Not specified' }); });
     if (data.portfolioStrategy) sections.push({ heading: 'Portfolio Strategy', content: data.portfolioStrategy });
-    return this.generateWord(filename, { title: 'BCG Growth-Share Matrix', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'BCG Growth-Share Matrix', author: data.authorName || '', sections: sections });
   },
   generateBcgMatrixExcel: function(filename, data) {
     var rows = [
@@ -89,7 +89,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // CONSULTING FRAMEWORKS â€” Market Entry Assessment
+  // CONSULTING FRAMEWORKS — Market Entry Assessment
   // ============================================================
   generateMarketEntryWord: async function(filename, data) {
     var sections = [
@@ -102,7 +102,7 @@ Object.assign(DocGenerator, {
       { heading: 'Financial Projections', content: data.financialProjections || 'Not specified' },
       { heading: 'Go/No-Go Recommendation', content: data.recommendation || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'Market Entry Assessment', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Market Entry Assessment', author: data.authorName || '', sections: sections });
   },
   generateMarketEntryExcel: function(filename, data) {
     var rows = [
@@ -132,7 +132,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // CONSULTING FRAMEWORKS â€” McKinsey 7S Assessment
+  // CONSULTING FRAMEWORKS — McKinsey 7S Assessment
   // ============================================================
   generateMcKinsey7SWord: async function(filename, data) {
     var elements = [
@@ -143,7 +143,7 @@ Object.assign(DocGenerator, {
     var sections = [{ heading: 'McKinsey 7S Assessment', content: ['Organization: ' + (data.orgName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] }];
     elements.forEach(function(e) { sections.push({ heading: e.label, content: data[e.key] || 'Not specified' }); });
     if (data.alignmentGaps) sections.push({ heading: 'Alignment Gaps', content: data.alignmentGaps });
-    return this.generateWord(filename, { title: 'McKinsey 7S Assessment', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'McKinsey 7S Assessment', author: data.authorName || '', sections: sections });
   },
   generateMcKinsey7SExcel: function(filename, data) {
     var rows = [
@@ -164,7 +164,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // CONSULTING FRAMEWORKS â€” Change Readiness / ADKAR
+  // CONSULTING FRAMEWORKS — Change Readiness / ADKAR
   // ============================================================
   generateChangeReadinessWord: async function(filename, data) {
     var adkar = ['awareness', 'desire', 'knowledge', 'ability', 'reinforcement'];
@@ -173,7 +173,7 @@ Object.assign(DocGenerator, {
     adkar.forEach(function(a, i) { sections.push({ heading: labels[i], content: (data[a] || 'Not specified') + '\nRating: ' + (data[a + 'Rating'] || 'N/A') + '/5' }); });
     if (data.stakeholderImpact) sections.push({ heading: 'Stakeholder Impact', content: data.stakeholderImpact });
     if (data.actionPlan) sections.push({ heading: 'Action Plan', content: data.actionPlan });
-    return this.generateWord(filename, { title: 'Change Readiness Assessment', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Change Readiness Assessment', author: data.authorName || '', sections: sections });
   },
   generateChangeReadinessExcel: function(filename, data) {
     var rows = [
@@ -198,7 +198,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // CONSULTING FRAMEWORKS â€” DCF Valuation Calculator
+  // CONSULTING FRAMEWORKS — DCF Valuation Calculator
   // ============================================================
   generateDcfValuationExcel: function(filename, data) {
     var rows = [
@@ -222,7 +222,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // CONSULTING FRAMEWORKS â€” Due Diligence Checklist
+  // CONSULTING FRAMEWORKS — Due Diligence Checklist
   // ============================================================
   generateDueDiligenceChecklistWord: async function(filename, data) {
     var sections = [
@@ -234,7 +234,7 @@ Object.assign(DocGenerator, {
       { heading: 'HR Items', content: data.hrItems || 'Not specified' },
       { heading: 'Red Flags', content: data.redFlags || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'Due Diligence Checklist', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Due Diligence Checklist', author: data.authorName || '', sections: sections });
   },
   generateDueDiligenceChecklistExcel: function(filename, data) {
     var rows = [
@@ -259,7 +259,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // CONSULTING FRAMEWORKS â€” Problem Definition Canvas
+  // CONSULTING FRAMEWORKS — Problem Definition Canvas
   // ============================================================
   generateProblemDefinitionWord: async function(filename, data) {
     var sections = [
@@ -272,7 +272,7 @@ Object.assign(DocGenerator, {
       { heading: 'Success Criteria', content: data.successCriteria || 'Not specified' },
       { heading: 'Initial Hypotheses', content: data.initialHypotheses || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'Problem Definition Canvas', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Problem Definition Canvas', author: data.authorName || '', sections: sections });
   },
   generateProblemDefinitionExcel: function(filename, data) {
     var rows = [
@@ -299,7 +299,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // CONSULTING FRAMEWORKS â€” Prioritization Matrix
+  // CONSULTING FRAMEWORKS — Prioritization Matrix
   // ============================================================
   generatePrioritizationMatrixExcel: function(filename, data) {
     var rows = [
@@ -329,7 +329,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // CONSULTING FRAMEWORKS â€” Value Chain Analysis
+  // CONSULTING FRAMEWORKS — Value Chain Analysis
   // ============================================================
   generateValueChainAnalysisWord: async function(filename, data) {
     var sections = [
@@ -345,7 +345,7 @@ Object.assign(DocGenerator, {
       { heading: 'Procurement (Support)', content: data.procurement || 'Not specified' },
       { heading: 'Competitive Advantage Sources', content: data.competitiveAdvantage || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'Value Chain Analysis', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Value Chain Analysis', author: data.authorName || '', sections: sections });
   },
   generateValueChainAnalysisExcel: function(filename, data) {
     var rows = [
@@ -380,7 +380,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // CONSULTING FRAMEWORKS â€” Blue Ocean Strategy Canvas
+  // CONSULTING FRAMEWORKS — Blue Ocean Strategy Canvas
   // ============================================================
   generateBlueOceanStrategyWord: async function(filename, data) {
     var sections = [
@@ -391,7 +391,7 @@ Object.assign(DocGenerator, {
       { heading: 'Create', content: data.create || 'Not specified' },
       { heading: 'New Value Curve', content: data.newValueCurve || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'Blue Ocean Strategy Canvas', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Blue Ocean Strategy Canvas', author: data.authorName || '', sections: sections });
   },
   generateBlueOceanStrategyExcel: function(filename, data) {
     var rows = [
@@ -415,7 +415,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // CONSULTING FRAMEWORKS â€” Stakeholder Map
+  // CONSULTING FRAMEWORKS — Stakeholder Map
   // ============================================================
   generateStakeholderMapWord: async function(filename, data) {
     var sections = [
@@ -429,7 +429,7 @@ Object.assign(DocGenerator, {
       { heading: 'Monitor (Low Power, Low Interest)', content: data.monitor || 'Not specified' },
       { heading: '  Strategy', content: data.monitorStrategy || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'Stakeholder Map', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Stakeholder Map', author: data.authorName || '', sections: sections });
   },
   generateStakeholderMapExcel: function(filename, data) {
     var rows = [
@@ -457,7 +457,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // CONSULTING FRAMEWORKS â€” Case Interview Framework Builder
+  // CONSULTING FRAMEWORKS — Case Interview Framework Builder
   // ============================================================
   generateCaseInterviewFrameworkWord: async function(filename, data) {
     var sections = [
@@ -468,7 +468,7 @@ Object.assign(DocGenerator, {
     for (var i = 1; i <= 4; i++) { var b = data['frameworkBranch' + i]; if (b && b.trim()) sections.push({ heading: 'Framework Branch ' + i, content: b }); }
     sections.push({ heading: 'Hypothesis', content: data.hypothesis || 'Not specified' });
     sections.push({ heading: 'Recommendation', content: data.recommendation || 'Not specified' });
-    return this.generateWord(filename, { title: 'Case Interview Framework', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Case Interview Framework', author: data.authorName || '', sections: sections });
   },
   generateCaseInterviewFrameworkExcel: function(filename, data) {
     var rows = [
@@ -492,7 +492,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // CONSULTING FRAMEWORKS â€” Jobs-to-be-Done (JTBD)
+  // CONSULTING FRAMEWORKS — Jobs-to-be-Done (JTBD)
   // ============================================================
   generateJobsToBeDoneWord: async function(filename, data) {
     var sections = [
@@ -505,7 +505,7 @@ Object.assign(DocGenerator, {
       { heading: 'Desired Outcomes', content: data.desiredOutcomes || 'Not specified' },
       { heading: 'Innovation Opportunities', content: data.innovationOpp || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'Jobs-to-be-Done Analysis', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Jobs-to-be-Done Analysis', author: data.authorName || '', sections: sections });
   },
   generateJobsToBeDoneExcel: function(filename, data) {
     var rows = [
@@ -532,7 +532,7 @@ Object.assign(DocGenerator, {
 
 
   // ============================================================
-  // PPTX â€” Consulting Frameworks (12 generators)
+  // PPTX — Consulting Frameworks (12 generators)
   // ============================================================
   generatePorterFiveForcesPPTX: async function(filename, data) {
     return this._generateSectionsPPTX(filename, { title: "Porter's Five Forces Analysis", entityName: data.companyName || 'Company', sections: [

@@ -23,7 +23,7 @@ Object.assign(DocGenerator, {
       { heading: 'Key Metrics & KPIs', content: data.metrics || 'Not specified' },
       { heading: 'Growth Strategy', content: data.growthStrategy || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'Marketing Strategy Canvas', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Marketing Strategy Canvas', author: data.authorName || '', sections: sections });
   },
 
   generateMarketingStrategyExcel: function(filename, data) {
@@ -147,7 +147,7 @@ Object.assign(DocGenerator, {
       { heading: 'Pricing Psychology Tactics', content: data.pricingStrategy || 'Not specified' },
       { heading: 'Improvement Opportunities', content: data.improvements || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'Buyer Psychology Audit', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Buyer Psychology Audit', author: data.authorName || '', sections: sections });
   },
 
   generateBuyerPsychologyExcel: function(filename, data) {
@@ -261,7 +261,7 @@ Object.assign(DocGenerator, {
       { heading: 'Voice & Tone', content: data.voiceTone || 'Not specified' },
       { heading: 'Brand Story', content: data.brandStory || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'Brand Building Canvas', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Brand Building Canvas', author: data.authorName || '', sections: sections });
   },
 
   generateBrandCanvasExcel: function(filename, data) {
@@ -383,7 +383,7 @@ Object.assign(DocGenerator, {
       { heading: 'Top Competitors', content: data.competitors || 'Not specified' },
       { heading: 'Priority Action Plan', content: data.actionPlan || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'SEO Audit Canvas', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'SEO Audit Canvas', author: data.authorName || '', sections: sections });
   },
 
   generateSeoAuditExcel: function(filename, data) {
@@ -504,7 +504,7 @@ Object.assign(DocGenerator, {
       { heading: 'Key Metrics', content: data.metrics || 'Not specified' },
       { heading: '90-Day Growth Goals', content: data.growthGoals || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'Social Media Strategy Canvas', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Social Media Strategy Canvas', author: data.authorName || '', sections: sections });
   },
 
   generateSocialStrategyExcel: function(filename, data) {
@@ -623,7 +623,7 @@ Object.assign(DocGenerator, {
       { heading: 'Team & Budget', content: data.teamResources || 'Not specified' },
       { heading: '90-Day Content Goals', content: data.contentGoals || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'Content Strategy Canvas', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Content Strategy Canvas', author: data.authorName || '', sections: sections });
   },
 
   generateContentStrategyExcel: function(filename, data) {
@@ -749,7 +749,7 @@ Object.assign(DocGenerator, {
     var contentChildren = [
       new docxLib.Table({ rows: rows })
     ];
-    DocStyles.docxPackage(filename, 'Email Strategy Canvas', 'Generated from wasilzafar.com', contentChildren);
+    DocStyles.docxPackage(filename, 'Email Strategy Canvas', (data.authorName || ''), contentChildren);
   },
 
   generateEmailStrategyExcel: function(filename, data) {
@@ -872,7 +872,7 @@ Object.assign(DocGenerator, {
     var contentChildren = [
       new docxLib.Table({ rows: rows })
     ];
-    DocStyles.docxPackage(filename, 'Ad Campaign Strategy Canvas', 'Generated from wasilzafar.com', contentChildren);
+    DocStyles.docxPackage(filename, 'Ad Campaign Strategy Canvas', (data.authorName || ''), contentChildren);
   },
 
   generateAdCampaignExcel: function(filename, data) {

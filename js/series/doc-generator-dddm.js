@@ -1,11 +1,11 @@
-﻿/**
+/**
  * Doc Generator - Data-Driven Decision Making Series
  * Extends DocGenerator with data-driven decision making series document generators.
  * Requires: doc-generator-core.js loaded first.
  */
 Object.assign(DocGenerator, {
   // ============================================================
-  // DDDM â€” KPI Definition Worksheet
+  // DDDM — KPI Definition Worksheet
   // ============================================================
   generateKpiWorksheetWord: async function(filename, data) {
     var sections = [
@@ -18,7 +18,7 @@ Object.assign(DocGenerator, {
       }
     }
     if (data.notes) sections.push({ heading: 'Notes', content: data.notes });
-    return this.generateWord(filename, { title: 'KPI Definition Worksheet', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'KPI Definition Worksheet', author: data.authorName || '', sections: sections });
   },
   generateKpiWorksheetExcel: function(filename, data) {
     var rows = [['Department', data.department || ''], ['Owner', data.ownerName || ''], ['Date', new Date().toLocaleDateString()], ['', '']];
@@ -47,7 +47,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // DDDM â€” Balanced Scorecard Generator
+  // DDDM — Balanced Scorecard Generator
   // ============================================================
   generateBalancedScorecardWord: async function(filename, data) {
     var perspectives = [
@@ -61,7 +61,7 @@ Object.assign(DocGenerator, {
       sections.push({ heading: p.label, content: 'Objective: ' + (data[p.key + 'Objective'] || 'N/A') + '\nMeasure: ' + (data[p.key + 'Measure'] || 'N/A') + '\nTarget: ' + (data[p.key + 'Target'] || 'N/A') + '\nInitiative: ' + (data[p.key + 'Initiative'] || 'N/A') });
     });
     if (data.strategicTheme) sections.push({ heading: 'Strategic Theme', content: data.strategicTheme });
-    return this.generateWord(filename, { title: 'Balanced Scorecard', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Balanced Scorecard', author: data.authorName || '', sections: sections });
   },
   generateBalancedScorecardExcel: function(filename, data) {
     var rows = [['Organization', data.orgName || ''], ['Period', data.period || ''], ['Date', new Date().toLocaleDateString()], ['', '', '', '', '']];
@@ -85,7 +85,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // DDDM â€” Decision Matrix Generator
+  // DDDM — Decision Matrix Generator
   // ============================================================
   generateDecisionMatrixExcel: function(filename, data) {
     var rows = [['Decision', data.decisionName || ''], ['Owner', data.ownerName || ''], ['Date', new Date().toLocaleDateString()], ['', '', '', '']];
@@ -114,7 +114,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // DDDM â€” RACI Matrix Generator
+  // DDDM — RACI Matrix Generator
   // ============================================================
   generateRaciMatrixWord: async function(filename, data) {
     var sections = [{ heading: 'RACI Matrix', content: ['Project: ' + (data.projectName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] }];
@@ -124,7 +124,7 @@ Object.assign(DocGenerator, {
         sections.push({ heading: task, content: 'Responsible: ' + (data['task' + i + 'R'] || 'N/A') + '\nAccountable: ' + (data['task' + i + 'A'] || 'N/A') + '\nConsulted: ' + (data['task' + i + 'C'] || 'N/A') + '\nInformed: ' + (data['task' + i + 'I'] || 'N/A') });
       }
     }
-    return this.generateWord(filename, { title: 'RACI Matrix', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'RACI Matrix', author: data.authorName || '', sections: sections });
   },
   generateRaciMatrixExcel: function(filename, data) {
     var rows = [['Project', data.projectName || ''], ['Date', new Date().toLocaleDateString()], ['', '', '', '', '']];
@@ -150,7 +150,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // DDDM â€” A/B Test Planner
+  // DDDM — A/B Test Planner
   // ============================================================
   generateAbTestPlannerWord: async function(filename, data) {
     var sections = [
@@ -164,7 +164,7 @@ Object.assign(DocGenerator, {
       { heading: 'Sample Size & Duration', content: 'Sample Size: ' + (data.sampleSize || 'N/A') + '\nDuration: ' + (data.duration || 'N/A') },
       { heading: 'Success Criteria', content: data.successCriteria || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'A/B Test Plan', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'A/B Test Plan', author: data.authorName || '', sections: sections });
   },
   generateAbTestPlannerExcel: function(filename, data) {
     var rows = [
@@ -193,7 +193,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // DDDM â€” Sample Size Calculator
+  // DDDM — Sample Size Calculator
   // ============================================================
   generateSampleSizeExcel: function(filename, data) {
     var rows = [
@@ -217,7 +217,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // DDDM â€” Data Quality Assessment
+  // DDDM — Data Quality Assessment
   // ============================================================
   generateDataQualityWord: async function(filename, data) {
     var dimensions = [
@@ -228,7 +228,7 @@ Object.assign(DocGenerator, {
     var sections = [{ heading: 'Data Quality Assessment', content: ['Dataset: ' + (data.datasetName || 'N/A'), 'Assessor: ' + (data.assessorName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] }];
     dimensions.forEach(function(d) { sections.push({ heading: d.label, content: (data[d.key] || 'Not specified') + '\nRating: ' + (data[d.key + 'Rating'] || 'N/A') + '/5' }); });
     if (data.remediationPlan) sections.push({ heading: 'Remediation Plan', content: data.remediationPlan });
-    return this.generateWord(filename, { title: 'Data Quality Assessment', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Data Quality Assessment', author: data.authorName || '', sections: sections });
   },
   generateDataQualityExcel: function(filename, data) {
     var rows = [
@@ -253,7 +253,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // DDDM â€” Dashboard Requirements Document
+  // DDDM — Dashboard Requirements Document
   // ============================================================
   generateDashboardRequirementsWord: async function(filename, data) {
     var sections = [
@@ -266,7 +266,7 @@ Object.assign(DocGenerator, {
       { heading: 'Refresh Frequency', content: data.refreshFrequency || 'Not specified' },
       { heading: 'Access & Permissions', content: data.accessPermissions || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'Dashboard Requirements Document', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Dashboard Requirements Document', author: data.authorName || '', sections: sections });
   },
   generateDashboardRequirementsPDF: function(filename, data) {
     var sections = [
@@ -283,7 +283,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // DDDM â€” Data Maturity Assessment
+  // DDDM — Data Maturity Assessment
   // ============================================================
   generateDataMaturityWord: async function(filename, data) {
     var pillars = [
@@ -296,7 +296,7 @@ Object.assign(DocGenerator, {
     var sections = [{ heading: 'Data Maturity Assessment', content: ['Organization: ' + (data.orgName || 'N/A'), 'Assessor: ' + (data.assessorName || 'N/A'), 'Date: ' + new Date().toLocaleDateString()] }];
     pillars.forEach(function(p) { sections.push({ heading: p.label, content: (data[p.key] || 'Not specified') + '\nMaturity Level: ' + (data[p.key + 'Level'] || 'N/A') + '/5' }); });
     if (data.roadmap) sections.push({ heading: 'Improvement Roadmap', content: data.roadmap });
-    return this.generateWord(filename, { title: 'Data Maturity Assessment', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Data Maturity Assessment', author: data.authorName || '', sections: sections });
   },
   generateDataMaturityExcel: function(filename, data) {
     var rows = [
@@ -320,7 +320,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // DDDM â€” Data Story Outline
+  // DDDM — Data Story Outline
   // ============================================================
   generateDataStoryWord: async function(filename, data) {
     var sections = [
@@ -332,7 +332,7 @@ Object.assign(DocGenerator, {
       { heading: 'Visualization Plan', content: data.visualizationPlan || 'Not specified' },
       { heading: 'Call to Action', content: data.callToAction || 'Not specified' }
     ];
-    return this.generateWord(filename, { title: 'Data Story Outline', author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'Data Story Outline', author: data.authorName || '', sections: sections });
   },
   generateDataStoryPDF: function(filename, data) {
     var sections = [
@@ -349,7 +349,7 @@ Object.assign(DocGenerator, {
 
 
   // ============================================================
-  // PPTX â€” DDDM (9 generators)
+  // PPTX — DDDM (9 generators)
   // ============================================================
   generateKpiWorksheetPPTX: async function(filename, data) {
     var secs = []; for (var i = 1; i <= 4; i++) { var n = data['kpi' + i + 'Name']; if (n && n.trim()) secs.push({ heading: n, content: 'Definition: ' + (data['kpi' + i + 'Definition'] || 'N/A') + '\nTarget: ' + (data['kpi' + i + 'Target'] || 'N/A') + '\nSource: ' + (data['kpi' + i + 'Source'] || 'N/A') + '\nFrequency: ' + (data['kpi' + i + 'Frequency'] || 'N/A') }); }

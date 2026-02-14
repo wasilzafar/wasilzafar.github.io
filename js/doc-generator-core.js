@@ -146,7 +146,7 @@ var DocStyles = {
     if (!lib) return null;
     var S = this;
     return new lib.Document({
-      creator: config.author || 'Generated from wasilzafar.com',
+      creator: config.author || '',
       title: config.title || '',
       description: config.description || '',
       features: { updateFields: true },
@@ -230,7 +230,7 @@ var DocStyles = {
     var S = this;
     var align = lib.AlignmentType ? lib.AlignmentType.CENTER : 'center';
     var dateStr = date || new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    var authorStr = author || 'Generated from wasilzafar.com';
+    var authorStr = author || '';
 
     var children = [
       // Vertical spacer to push content toward center
@@ -258,18 +258,21 @@ var DocStyles = {
       }));
     }
 
-    // Decorative bottom line + author + date
+    // Decorative bottom line + optional author + date
     children.push(
       new lib.Paragraph({
         children: [new lib.TextRun({ text: '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501', size: 16, color: S.colors.teal })],
         alignment: align,
         spacing: { after: 600 }
-      }),
-      new lib.Paragraph({
+      }));
+    if (authorStr) {
+      children.push(new lib.Paragraph({
         children: [new lib.TextRun({ text: authorStr, size: 24, color: S.colors.blue, font: S.fonts.primary })],
         alignment: align,
         spacing: { after: 200 }
-      }),
+      }));
+    }
+    children.push(
       new lib.Paragraph({
         children: [new lib.TextRun({ text: dateStr, size: 20, color: S.colors.gray, font: S.fonts.primary })],
         alignment: align
@@ -650,7 +653,7 @@ var DocStyles = {
   createPres: function(title, author) {
     var pptx = this._getPptx(); if (!pptx) return null;
     pptx.layout = this.pptx.layout;
-    pptx.author = author || 'Generated from wasilzafar.com';
+    pptx.author = author || '';
     pptx.title = title || '';
     return pptx;
   },
@@ -855,7 +858,7 @@ var DocGenerator = {
       ];
 
       var doc = new Document({
-        creator: config.author || 'Generated from wasilzafar.com',
+        creator: config.author || '',
         title: config.title,
         features: { updateFields: true },
         styles: {
@@ -1485,6 +1488,16 @@ CanvasFormHandler.prototype = {
     return true;
   },
 
+  // Read author name from a standard form field (convention: 'authorName' element inside the form)
+  _getAuthorName: function() {
+    var form = document.getElementById(this.formId);
+    if (form) {
+      var el = form.querySelector('#authorName') || form.querySelector('[data-author]');
+      if (el && el.value && el.value.trim()) return el.value.trim();
+    }
+    return '';
+  },
+
   // Build filename from data (sanitised, max 60 chars)
   _buildFilename: function(data) {
     var raw = (data[this.filenameField] || 'canvas');
@@ -1513,6 +1526,7 @@ CanvasFormHandler.prototype = {
   generateWord: function() {
     if (!this._validate()) return;
     var data = this.persistence.collectData();
+    data.authorName = this._getAuthorName();
     var filename = this._buildFilename(data);
     var self = this;
     var method = 'generate' + this.docType + 'Word';
@@ -1528,6 +1542,7 @@ CanvasFormHandler.prototype = {
   generateExcel: function() {
     if (!this._validate()) return;
     var data = this.persistence.collectData();
+    data.authorName = this._getAuthorName();
     var filename = this._buildFilename(data);
     var method = 'generate' + this.docType + 'Excel';
     try {
@@ -1543,6 +1558,7 @@ CanvasFormHandler.prototype = {
   generatePDF: function() {
     if (!this._validate()) return;
     var data = this.persistence.collectData();
+    data.authorName = this._getAuthorName();
     var filename = this._buildFilename(data);
     var method = 'generate' + this.docType + 'PDF';
     try {
@@ -1558,6 +1574,7 @@ CanvasFormHandler.prototype = {
   generatePPTX: function() {
     if (!this._validate()) return;
     var data = this.persistence.collectData();
+    data.authorName = this._getAuthorName();
     var filename = this._buildFilename(data);
     var self = this;
     var method = 'generate' + this.docType + 'PPTX';
