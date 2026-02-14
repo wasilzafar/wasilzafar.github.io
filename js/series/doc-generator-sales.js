@@ -1,11 +1,11 @@
-﻿/**
+/**
  * Doc Generator - Sales Mastery Series
  * Extends DocGenerator with sales mastery series document generators.
  * Requires: doc-generator-core.js loaded first.
  */
 Object.assign(DocGenerator, {
   // ============================================================
-  // Trust Building Scorecard â€” Sales Psychology Tool
+  // Trust Building Scorecard — Sales Psychology Tool
   // ============================================================
   generateTrustScorecardWord: async function(filename, data) {
     var c = parseInt(data.credibility) || 0;
@@ -142,7 +142,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // Sales Mindset Assessment â€” Sales Psychology Tool
+  // Sales Mindset Assessment — Sales Psychology Tool
   // ============================================================
   generateMindsetAssessmentWord: async function(filename, data) {
     var dims = [
@@ -264,7 +264,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // ICP Builder Canvas â€” Sales Prospecting Tool
+  // ICP Builder Canvas — Sales Prospecting Tool
   // ============================================================
   generateICPBuilderWord: async function(filename, data) {
     var sections = [
@@ -399,7 +399,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // MEDDIC Scorecard â€” Sales Qualification Tool
+  // MEDDIC Scorecard — Sales Qualification Tool
   // ============================================================
   generateMeddicScorecardWord: async function(filename, data) {
     var totalScore = (parseInt(data.metrics) || 0) + 
@@ -538,7 +538,7 @@ Object.assign(DocGenerator, {
 
 
   // ============================================================
-  // Discovery Call Planner â€” Word, Excel, PDF, PPTX
+  // Discovery Call Planner — Word, Excel, PDF, PPTX
   // ============================================================
 
   generateDiscoveryCallPlannerWord: async function(filename, data) {
@@ -766,10 +766,7 @@ Object.assign(DocGenerator, {
     pptx.layout = 'LAYOUT_16x9';
     pptx.title = 'Discovery Call Planner - ' + (data.companyName || '');
     
-    var palette = {
-      navy: '132440', crimson: 'BF092F', teal: '3B9797',
-      blue: '16476A', light: 'F8F9FA', white: 'FFFFFF'
-    };
+    var palette = DocStyles.colors;
     
     // Title slide
     var slide1 = pptx.addSlide();
@@ -786,7 +783,7 @@ Object.assign(DocGenerator, {
     slide2.addText(data.callObjective || '', { x: 0.4, y: 1.0, w: 9.2, h: 1.5, fontSize: 18, color: palette.blue, wrap: true, valign: 'top' });
     if (data.knownPains) {
       slide2.addText('Known Pain Points:', { x: 0.4, y: 2.8, w: 9, h: 0.4, fontSize: 16, bold: true, color: palette.crimson });
-      slide2.addText(data.knownPains, { x: 0.4, y: 3.3, w: 9.2, h: 2, fontSize: 14, color: '333333', wrap: true, valign: 'top' });
+      slide2.addText(data.knownPains, { x: 0.4, y: 3.3, w: 9.2, h: 2, fontSize: 14, color: DocStyles.colors.darkGray, wrap: true, valign: 'top' });
     }
     
     // SPIN Questions - 2 per slide
@@ -990,7 +987,7 @@ Object.assign(DocGenerator, {
     pptx.title = 'Sales Presentation Planner - ' + (data.companyName || 'Presentation');
     pptx.author = data.presenterName || 'Sales Professional';
 
-    var palette = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var palette = DocStyles.colors;
 
     // Slide 1: Title
     var slide1 = pptx.addSlide();
@@ -1054,12 +1051,12 @@ Object.assign(DocGenerator, {
         properties: {},
         children: [
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: 'Objection Handling Playbook', bold: true, size: 48, color: '132440' })],
+            children: [new docx.TextRun({ text: 'Objection Handling Playbook', bold: true, size: 48, color: DocStyles.colors.navy })],
             heading: docx.HeadingLevel.HEADING_1,
             spacing: { after: 200 }
           }),
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: data.companyName || 'Company', bold: true, size: 28, color: '3B9797' })],
+            children: [new docx.TextRun({ text: data.companyName || 'Company', bold: true, size: 28, color: DocStyles.colors.teal })],
             spacing: { after: 100 }
           }),
           new docx.Paragraph({
@@ -1069,7 +1066,7 @@ Object.assign(DocGenerator, {
 
           // Price Objections
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: 'Price Objections', bold: true, size: 28, color: 'BF092F' })],
+            children: [new docx.TextRun({ text: 'Price Objections', bold: true, size: 28, color: DocStyles.colors.crimson })],
             spacing: { before: 300, after: 200 }
           }),
           new docx.Paragraph({
@@ -1081,7 +1078,7 @@ Object.assign(DocGenerator, {
             spacing: { after: 200 }
           }),
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: 'Response Strategy:', bold: true, size: 22, color: '3B9797' })],
+            children: [new docx.TextRun({ text: 'Response Strategy:', bold: true, size: 22, color: DocStyles.colors.teal })],
             spacing: { after: 100 }
           }),
           new docx.Paragraph({
@@ -1091,7 +1088,7 @@ Object.assign(DocGenerator, {
 
           // Timing Objections
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: 'Timing Objections', bold: true, size: 28, color: 'BF092F' })],
+            children: [new docx.TextRun({ text: 'Timing Objections', bold: true, size: 28, color: DocStyles.colors.crimson })],
             spacing: { before: 300, after: 200 }
           }),
           new docx.Paragraph({
@@ -1103,7 +1100,7 @@ Object.assign(DocGenerator, {
             spacing: { after: 200 }
           }),
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: 'Response Strategy:', bold: true, size: 22, color: '3B9797' })],
+            children: [new docx.TextRun({ text: 'Response Strategy:', bold: true, size: 22, color: DocStyles.colors.teal })],
             spacing: { after: 100 }
           }),
           new docx.Paragraph({
@@ -1113,7 +1110,7 @@ Object.assign(DocGenerator, {
 
           // Authority Objections
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: 'Authority Objections', bold: true, size: 28, color: 'BF092F' })],
+            children: [new docx.TextRun({ text: 'Authority Objections', bold: true, size: 28, color: DocStyles.colors.crimson })],
             spacing: { before: 300, after: 200 }
           }),
           new docx.Paragraph({
@@ -1125,7 +1122,7 @@ Object.assign(DocGenerator, {
             spacing: { after: 200 }
           }),
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: 'Response Strategy:', bold: true, size: 22, color: '3B9797' })],
+            children: [new docx.TextRun({ text: 'Response Strategy:', bold: true, size: 22, color: DocStyles.colors.teal })],
             spacing: { after: 100 }
           }),
           new docx.Paragraph({
@@ -1135,7 +1132,7 @@ Object.assign(DocGenerator, {
 
           // Competitor Objections
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: 'Competitor Objections', bold: true, size: 28, color: 'BF092F' })],
+            children: [new docx.TextRun({ text: 'Competitor Objections', bold: true, size: 28, color: DocStyles.colors.crimson })],
             spacing: { before: 300, after: 200 }
           }),
           new docx.Paragraph({
@@ -1147,7 +1144,7 @@ Object.assign(DocGenerator, {
             spacing: { after: 200 }
           }),
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: 'Response Strategy:', bold: true, size: 22, color: '3B9797' })],
+            children: [new docx.TextRun({ text: 'Response Strategy:', bold: true, size: 22, color: DocStyles.colors.teal })],
             spacing: { after: 100 }
           }),
           new docx.Paragraph({
@@ -1157,7 +1154,7 @@ Object.assign(DocGenerator, {
 
           // Status Quo Objections
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: 'Status Quo Objections', bold: true, size: 28, color: 'BF092F' })],
+            children: [new docx.TextRun({ text: 'Status Quo Objections', bold: true, size: 28, color: DocStyles.colors.crimson })],
             spacing: { before: 300, after: 200 }
           }),
           new docx.Paragraph({
@@ -1169,7 +1166,7 @@ Object.assign(DocGenerator, {
             spacing: { after: 200 }
           }),
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: 'Response Strategy:', bold: true, size: 22, color: '3B9797' })],
+            children: [new docx.TextRun({ text: 'Response Strategy:', bold: true, size: 22, color: DocStyles.colors.teal })],
             spacing: { after: 100 }
           }),
           new docx.Paragraph({
@@ -1226,19 +1223,19 @@ Object.assign(DocGenerator, {
 
     // Title
     pdf.setFontSize(24);
-    pdf.setTextColor(19, 36, 64);
+    pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Objection Handling Playbook', margin, y);
     y += 12;
 
     // Company
     pdf.setFontSize(16);
-    pdf.setTextColor(59, 151, 151);
+    pdf.setTextColor(...DocStyles.rgb.teal);
     pdf.text(data.companyName || 'Company', margin, y);
     y += 8;
 
     // Created by
     pdf.setFontSize(11);
-    pdf.setTextColor(100, 100, 100);
+    pdf.setTextColor(...DocStyles.rgb.gray);
     pdf.text('Created by: ' + (data.createdBy || ''), margin, y);
     y += 15;
 
@@ -1259,26 +1256,26 @@ Object.assign(DocGenerator, {
 
       // Category title
       pdf.setFontSize(14);
-      pdf.setTextColor(191, 9, 47);
+      pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(cat.title, margin, y);
       y += 8;
 
       // Objection
       pdf.setFontSize(11);
-      pdf.setTextColor(19, 36, 64);
+      pdf.setTextColor(...DocStyles.rgb.navy);
       pdf.text('Objection:', margin, y);
       y += 5;
-      pdf.setTextColor(80, 80, 80);
+      pdf.setTextColor(...DocStyles.rgb.gray);
       var objLines = pdf.splitTextToSize(cat.objection || 'Not specified', pageWidth - 2 * margin);
       pdf.text(objLines, margin, y);
       y += objLines.length * 5 + 5;
 
       // Response
       pdf.setFontSize(11);
-      pdf.setTextColor(59, 151, 151);
+      pdf.setTextColor(...DocStyles.rgb.teal);
       pdf.text('Response Strategy:', margin, y);
       y += 5;
-      pdf.setTextColor(80, 80, 80);
+      pdf.setTextColor(...DocStyles.rgb.gray);
       var respLines = pdf.splitTextToSize(cat.response || 'Not specified', pageWidth - 2 * margin);
       pdf.text(respLines, margin, y);
       y += respLines.length * 5 + 12;
@@ -1293,14 +1290,7 @@ Object.assign(DocGenerator, {
     pptx.title = 'Objection Handling Playbook';
     pptx.author = data.createdBy || '';
 
-    var palette = {
-      navy: '132440',
-      crimson: 'BF092F',
-      teal: '3B9797',
-      blue: '16476A',
-      white: 'FFFFFF',
-      light: 'F8F9FA'
-    };
+    var palette = DocStyles.colors;
 
     // Slide 1: Title
     var slide1 = pptx.addSlide();
@@ -1365,12 +1355,12 @@ Object.assign(DocGenerator, {
         properties: {},
         children: [
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: 'Negotiation & Closing Strategy', bold: true, size: 48, color: '132440' })],
+            children: [new docx.TextRun({ text: 'Negotiation & Closing Strategy', bold: true, size: 48, color: DocStyles.colors.navy })],
             heading: docx.HeadingLevel.HEADING_1,
             spacing: { after: 200 }
           }),
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: data.companyName || 'Deal', bold: true, size: 28, color: '3B9797' })],
+            children: [new docx.TextRun({ text: data.companyName || 'Deal', bold: true, size: 28, color: DocStyles.colors.teal })],
             spacing: { after: 100 }
           }),
           new docx.Paragraph({
@@ -1380,7 +1370,7 @@ Object.assign(DocGenerator, {
 
           // BATNA Section
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: 'BATNA Analysis', bold: true, size: 28, color: 'BF092F' })],
+            children: [new docx.TextRun({ text: 'BATNA Analysis', bold: true, size: 28, color: DocStyles.colors.crimson })],
             spacing: { before: 300, after: 200 }
           }),
           new docx.Paragraph({
@@ -1402,7 +1392,7 @@ Object.assign(DocGenerator, {
 
           // Negotiation Strategy
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: 'Negotiation Strategy', bold: true, size: 28, color: 'BF092F' })],
+            children: [new docx.TextRun({ text: 'Negotiation Strategy', bold: true, size: 28, color: DocStyles.colors.crimson })],
             spacing: { before: 300, after: 200 }
           }),
           new docx.Paragraph({
@@ -1424,7 +1414,7 @@ Object.assign(DocGenerator, {
 
           // Closing Strategy
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: 'Closing Strategy', bold: true, size: 28, color: 'BF092F' })],
+            children: [new docx.TextRun({ text: 'Closing Strategy', bold: true, size: 28, color: DocStyles.colors.crimson })],
             spacing: { before: 300, after: 200 }
           }),
           new docx.Paragraph({
@@ -1446,7 +1436,7 @@ Object.assign(DocGenerator, {
 
           // Stakeholders & Blockers
           new docx.Paragraph({
-            children: [new docx.TextRun({ text: 'Stakeholders & Risks', bold: true, size: 28, color: 'BF092F' })],
+            children: [new docx.TextRun({ text: 'Stakeholders & Risks', bold: true, size: 28, color: DocStyles.colors.crimson })],
             spacing: { before: 300, after: 200 }
           }),
           new docx.Paragraph({
@@ -1508,19 +1498,19 @@ Object.assign(DocGenerator, {
 
     // Title
     pdf.setFontSize(24);
-    pdf.setTextColor(19, 36, 64);
+    pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Negotiation & Closing Strategy', margin, y);
     y += 12;
 
     // Company
     pdf.setFontSize(16);
-    pdf.setTextColor(59, 151, 151);
+    pdf.setTextColor(...DocStyles.rgb.teal);
     pdf.text(data.companyName || 'Deal', margin, y);
     y += 8;
 
     // Deal Value
     pdf.setFontSize(11);
-    pdf.setTextColor(100, 100, 100);
+    pdf.setTextColor(...DocStyles.rgb.gray);
     pdf.text('Deal Value: ' + (data.dealValue || 'TBD'), margin, y);
     y += 15;
 
@@ -1542,12 +1532,12 @@ Object.assign(DocGenerator, {
       }
 
       pdf.setFontSize(12);
-      pdf.setTextColor(191, 9, 47);
+      pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(section.title, margin, y);
       y += 6;
 
       pdf.setFontSize(10);
-      pdf.setTextColor(80, 80, 80);
+      pdf.setTextColor(...DocStyles.rgb.gray);
       var lines = pdf.splitTextToSize(section.content || 'Not specified', pageWidth - 2 * margin);
       pdf.text(lines, margin, y);
       y += lines.length * 5 + 8;
@@ -1561,14 +1551,7 @@ Object.assign(DocGenerator, {
     pptx.layout = 'LAYOUT_16x9';
     pptx.title = 'Negotiation & Closing Strategy';
 
-    var palette = {
-      navy: '132440',
-      crimson: 'BF092F',
-      teal: '3B9797',
-      blue: '16476A',
-      white: 'FFFFFF',
-      light: 'F8F9FA'
-    };
+    var palette = DocStyles.colors;
 
     // Slide 1: Title
     var slide1 = pptx.addSlide();
@@ -1626,7 +1609,7 @@ Object.assign(DocGenerator, {
 
 
   // ============================================================
-  // ENTERPRISE ACCOUNT STRATEGY CANVAS â€” Word, Excel, PDF, PPTX
+  // ENTERPRISE ACCOUNT STRATEGY CANVAS — Word, Excel, PDF, PPTX
   // ============================================================
 
   /**
@@ -1777,7 +1760,7 @@ Object.assign(DocGenerator, {
     var maxWidth = 170;
 
     doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(DocStyles.fonts.pdf, 'bold');
     doc.text('Enterprise Account Strategy Canvas', margin, y);
     y += 12;
 
@@ -1791,10 +1774,10 @@ Object.assign(DocGenerator, {
         y = 20;
       }
       doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(DocStyles.fonts.pdf, 'bold');
       doc.text(title, margin, y);
       y += lineHeight;
-      doc.setFont('helvetica', 'normal');
+      doc.setFont(DocStyles.fonts.pdf, 'normal');
       doc.setFontSize(10);
       var lines = doc.splitTextToSize(content || '', maxWidth);
       lines.forEach(function(line) {
@@ -1809,7 +1792,7 @@ Object.assign(DocGenerator, {
     }
 
     doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(DocStyles.fonts.pdf, 'normal');
     doc.text('Account Tier: ' + (data.accountTier || ''), margin, y);
     y += lineHeight;
     doc.text('Current ARR: ' + (data.currentARR || ''), margin, y);
@@ -1835,15 +1818,7 @@ Object.assign(DocGenerator, {
     pptx.layout = 'LAYOUT_16x9';
     pptx.title = 'Enterprise Account Strategy Canvas';
 
-    var palette = {
-      navy: '132440',
-      crimson: 'BF092F',
-      teal: '3B9797',
-      blue: '16476A',
-      light: 'F8F9FA',
-      white: 'FFFFFF',
-      gray: '666666'
-    };
+    var palette = DocStyles.colors;
 
     // Slide 1: Title
     var slide1 = pptx.addSlide();
@@ -1900,7 +1875,7 @@ Object.assign(DocGenerator, {
 
 
   // ============================================================
-  // B2C SALES STRATEGY CANVAS â€” Word, Excel, PDF, PPTX
+  // B2C SALES STRATEGY CANVAS — Word, Excel, PDF, PPTX
   // ============================================================
 
   /**
@@ -2027,7 +2002,7 @@ Object.assign(DocGenerator, {
     var maxWidth = 170;
 
     doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(DocStyles.fonts.pdf, 'bold');
     doc.text('B2C Sales Strategy Canvas', margin, y);
     y += 12;
 
@@ -2036,7 +2011,7 @@ Object.assign(DocGenerator, {
     y += 10;
 
     doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(DocStyles.fonts.pdf, 'normal');
     doc.text('Target Customer: ' + (data.targetCustomer || ''), margin, y);
     y += 10;
 
@@ -2046,10 +2021,10 @@ Object.assign(DocGenerator, {
         y = 20;
       }
       doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(DocStyles.fonts.pdf, 'bold');
       doc.text(title, margin, y);
       y += lineHeight;
-      doc.setFont('helvetica', 'normal');
+      doc.setFont(DocStyles.fonts.pdf, 'normal');
       doc.setFontSize(10);
       var lines = doc.splitTextToSize(content || '', maxWidth);
       lines.forEach(function(line) {
@@ -2081,15 +2056,7 @@ Object.assign(DocGenerator, {
     pptx.layout = 'LAYOUT_16x9';
     pptx.title = 'B2C Sales Strategy Canvas';
 
-    var palette = {
-      navy: '132440',
-      crimson: 'BF092F',
-      teal: '3B9797',
-      blue: '16476A',
-      light: 'F8F9FA',
-      white: 'FFFFFF',
-      gray: '666666'
-    };
+    var palette = DocStyles.colors;
 
     // Slide 1: Title
     var slide1 = pptx.addSlide();
@@ -2145,11 +2112,11 @@ Object.assign(DocGenerator, {
         properties: {},
         children: [
           new window.docx.Paragraph({
-            children: [new window.docx.TextRun({ text: 'HIGH-TICKET OFFER CANVAS', bold: true, size: 36, color: '132440' })],
+            children: [new window.docx.TextRun({ text: 'HIGH-TICKET OFFER CANVAS', bold: true, size: 36, color: DocStyles.colors.navy })],
             spacing: { after: 200 }
           }),
           new window.docx.Paragraph({
-            children: [new window.docx.TextRun({ text: data.offerName || 'Untitled Offer', bold: true, size: 28, color: 'BF092F' })],
+            children: [new window.docx.TextRun({ text: data.offerName || 'Untitled Offer', bold: true, size: 28, color: DocStyles.colors.crimson })],
             spacing: { after: 100 }
           }),
           new window.docx.Paragraph({
@@ -2158,7 +2125,7 @@ Object.assign(DocGenerator, {
           }),
 
           new window.docx.Paragraph({
-            children: [new window.docx.TextRun({ text: 'IDEAL CLIENT PROFILE', bold: true, size: 24, color: '16476A' })],
+            children: [new window.docx.TextRun({ text: 'IDEAL CLIENT PROFILE', bold: true, size: 24, color: DocStyles.colors.blue })],
             spacing: { before: 200, after: 100 }
           }),
           new window.docx.Paragraph({
@@ -2167,7 +2134,7 @@ Object.assign(DocGenerator, {
           }),
 
           new window.docx.Paragraph({
-            children: [new window.docx.TextRun({ text: 'CORE TRANSFORMATION', bold: true, size: 24, color: '16476A' })],
+            children: [new window.docx.TextRun({ text: 'CORE TRANSFORMATION', bold: true, size: 24, color: DocStyles.colors.blue })],
             spacing: { before: 200, after: 100 }
           }),
           new window.docx.Paragraph({
@@ -2176,7 +2143,7 @@ Object.assign(DocGenerator, {
           }),
 
           new window.docx.Paragraph({
-            children: [new window.docx.TextRun({ text: 'VALUE STACK', bold: true, size: 24, color: '16476A' })],
+            children: [new window.docx.TextRun({ text: 'VALUE STACK', bold: true, size: 24, color: DocStyles.colors.blue })],
             spacing: { before: 200, after: 100 }
           }),
           new window.docx.Paragraph({
@@ -2185,7 +2152,7 @@ Object.assign(DocGenerator, {
           }),
 
           new window.docx.Paragraph({
-            children: [new window.docx.TextRun({ text: 'AUTHORITY POSITIONING', bold: true, size: 24, color: '16476A' })],
+            children: [new window.docx.TextRun({ text: 'AUTHORITY POSITIONING', bold: true, size: 24, color: DocStyles.colors.blue })],
             spacing: { before: 200, after: 100 }
           }),
           new window.docx.Paragraph({
@@ -2194,7 +2161,7 @@ Object.assign(DocGenerator, {
           }),
 
           new window.docx.Paragraph({
-            children: [new window.docx.TextRun({ text: 'SALES PROCESS', bold: true, size: 24, color: '16476A' })],
+            children: [new window.docx.TextRun({ text: 'SALES PROCESS', bold: true, size: 24, color: DocStyles.colors.blue })],
             spacing: { before: 200, after: 100 }
           }),
           new window.docx.Paragraph({
@@ -2203,7 +2170,7 @@ Object.assign(DocGenerator, {
           }),
 
           new window.docx.Paragraph({
-            children: [new window.docx.TextRun({ text: 'TOP OBJECTIONS & RESPONSES', bold: true, size: 24, color: '16476A' })],
+            children: [new window.docx.TextRun({ text: 'TOP OBJECTIONS & RESPONSES', bold: true, size: 24, color: DocStyles.colors.blue })],
             spacing: { before: 200, after: 100 }
           }),
           new window.docx.Paragraph({
@@ -2212,7 +2179,7 @@ Object.assign(DocGenerator, {
           }),
 
           new window.docx.Paragraph({
-            children: [new window.docx.TextRun({ text: 'Generated by Sales Mastery Series - wasilzafar.com', italics: true, size: 18, color: '666666' })],
+            children: [new window.docx.TextRun({ text: 'Generated by Sales Mastery Series - wasilzafar.com', italics: true, size: 18, color: DocStyles.colors.gray })],
             spacing: { before: 400 }
           })
         ]
@@ -2269,19 +2236,19 @@ Object.assign(DocGenerator, {
 
     // Title
     pdf.setFontSize(18);
-    pdf.setTextColor(19, 36, 64);
+    pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('HIGH-TICKET OFFER CANVAS', margin, y);
     y += 12;
 
     // Offer Name
     pdf.setFontSize(14);
-    pdf.setTextColor(191, 9, 47);
+    pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text(data.offerName || 'Untitled Offer', margin, y);
     y += 8;
 
     // Price Point
     pdf.setFontSize(11);
-    pdf.setTextColor(0, 0, 0);
+    pdf.setTextColor(...DocStyles.rgb.black);
     pdf.text('Price Point: ' + (data.pricePoint || ''), margin, y);
     y += 12;
 
@@ -2289,12 +2256,12 @@ Object.assign(DocGenerator, {
     var addSection = function(title, content) {
       if (y > 260) { pdf.addPage(); y = 20; }
       pdf.setFontSize(12);
-      pdf.setTextColor(22, 71, 106);
+      pdf.setTextColor(...DocStyles.rgb.blue);
       pdf.text(title, margin, y);
       y += lineHeight;
       
       pdf.setFontSize(10);
-      pdf.setTextColor(0, 0, 0);
+      pdf.setTextColor(...DocStyles.rgb.black);
       var lines = pdf.splitTextToSize(content || '', maxWidth);
       lines.forEach(function(line) {
         if (y > 280) { pdf.addPage(); y = 20; }
@@ -2313,7 +2280,7 @@ Object.assign(DocGenerator, {
 
     // Footer
     pdf.setFontSize(9);
-    pdf.setTextColor(102, 102, 102);
+    pdf.setTextColor(...DocStyles.rgb.gray);
     pdf.text('Generated by Sales Mastery Series - wasilzafar.com', margin, 285);
 
     pdf.save(filename + '.pdf');
@@ -2325,7 +2292,7 @@ Object.assign(DocGenerator, {
     pptx.title = 'High-Ticket Offer Canvas';
     pptx.author = 'Sales Mastery Series';
 
-    var palette = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', white: 'FFFFFF', light: 'F8F9FA' };
+    var palette = DocStyles.colors;
 
     // Slide 1: Title
     var slide1 = pptx.addSlide();
@@ -2513,29 +2480,29 @@ Object.assign(DocGenerator, {
 
     // Title
     pdf.setFontSize(20);
-    pdf.setTextColor(19, 36, 64);
+    pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Pipeline Health Review', margin, y);
     y += 15;
 
     // Header
     pdf.setFontSize(12);
-    pdf.setTextColor(22, 71, 106);
+    pdf.setTextColor(...DocStyles.rgb.blue);
     pdf.text('Team: ' + (data.teamName || '') + '  |  Period: ' + (data.period || ''), margin, y);
     y += 15;
 
     // Summary Box
-    pdf.setFillColor(248, 249, 250);
+    pdf.setFillColor(...DocStyles.rgb.light);
     pdf.rect(margin, y, contentWidth, 50, 'F');
-    pdf.setDrawColor(59, 151, 151);
+    pdf.setDrawColor(...DocStyles.rgb.teal);
     pdf.setLineWidth(0.5);
     pdf.rect(margin, y, contentWidth, 50, 'S');
     
     pdf.setFontSize(14);
-    pdf.setTextColor(19, 36, 64);
+    pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Pipeline Summary', margin + 5, y + 10);
     
     pdf.setFontSize(10);
-    pdf.setTextColor(0, 0, 0);
+    pdf.setTextColor(...DocStyles.rgb.black);
     const summaryY = y + 20;
     pdf.text('Total Pipeline Value: ' + (data.pipelineValue || ''), margin + 5, summaryY);
     pdf.text('Period Quota: ' + (data.quota || ''), margin + 5, summaryY + 8);
@@ -2545,11 +2512,11 @@ Object.assign(DocGenerator, {
 
     // Stage Breakdown
     pdf.setFontSize(14);
-    pdf.setTextColor(191, 9, 47);
+    pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('Stage Breakdown', margin, y);
     y += 8;
     pdf.setFontSize(10);
-    pdf.setTextColor(0, 0, 0);
+    pdf.setTextColor(...DocStyles.rgb.black);
     const stageLines = pdf.splitTextToSize(data.stageBreakdown || '', contentWidth);
     pdf.text(stageLines, margin, y);
     y += stageLines.length * 5 + 10;
@@ -2562,11 +2529,11 @@ Object.assign(DocGenerator, {
 
     // Risks
     pdf.setFontSize(14);
-    pdf.setTextColor(191, 9, 47);
+    pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('Pipeline Risks', margin, y);
     y += 8;
     pdf.setFontSize(10);
-    pdf.setTextColor(0, 0, 0);
+    pdf.setTextColor(...DocStyles.rgb.black);
     const riskLines = pdf.splitTextToSize(data.risks || '', contentWidth);
     pdf.text(riskLines, margin, y);
     y += riskLines.length * 5 + 10;
@@ -2579,11 +2546,11 @@ Object.assign(DocGenerator, {
 
     // Actions
     pdf.setFontSize(14);
-    pdf.setTextColor(59, 151, 151);
+    pdf.setTextColor(...DocStyles.rgb.teal);
     pdf.text('Action Items', margin, y);
     y += 8;
     pdf.setFontSize(10);
-    pdf.setTextColor(0, 0, 0);
+    pdf.setTextColor(...DocStyles.rgb.black);
     const actionLines = pdf.splitTextToSize(data.actions || '', contentWidth);
     pdf.text(actionLines, margin, y);
 
@@ -2593,7 +2560,7 @@ Object.assign(DocGenerator, {
   generatePipelineHealthPPTX: function(filename, data) {
     const pptx = new PptxGenJS();
     pptx.layout = 'LAYOUT_16x9';
-    const palette = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF' };
+    var palette = DocStyles.colors;
 
     // Slide 1: Title
     const slide1 = pptx.addSlide();
@@ -2625,7 +2592,7 @@ Object.assign(DocGenerator, {
 
     // Stage Breakdown
     slide2.addText('Stage Breakdown', { x: 0.4, y: 4.2, w: 4, h: 0.4, fontSize: 14, bold: true, color: palette.crimson });
-    slide2.addText(data.stageBreakdown || '', { x: 0.4, y: 4.65, w: 9, h: 0.8, fontSize: 10, wrap: true, valign: 'top', fit: 'shrink', color: '333333' });
+    slide2.addText(data.stageBreakdown || '', { x: 0.4, y: 4.65, w: 9, h: 0.8, fontSize: 10, wrap: true, valign: 'top', fit: 'shrink', color: DocStyles.colors.darkGray });
 
     // Slide 3: Risks & Actions
     const slide3 = pptx.addSlide();
@@ -2792,42 +2759,42 @@ Object.assign(DocGenerator, {
 
     // Title
     pdf.setFontSize(20);
-    pdf.setTextColor(19, 36, 64);
+    pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Sales & Marketing Alignment Strategy', margin, y);
     y += 15;
 
     // Header
     pdf.setFontSize(12);
-    pdf.setTextColor(22, 71, 106);
+    pdf.setTextColor(...DocStyles.rgb.blue);
     pdf.text('Company: ' + (data.company || ''), margin, y);
     y += 8;
     pdf.text('Primary Goal: ' + (data.sharedGoal || ''), margin, y);
     y += 15;
 
     // MQL/SQL Definitions
-    pdf.setFillColor(248, 249, 250);
+    pdf.setFillColor(...DocStyles.rgb.light);
     pdf.rect(margin, y, contentWidth, 50, 'F');
-    pdf.setDrawColor(59, 151, 151);
+    pdf.setDrawColor(...DocStyles.rgb.teal);
     pdf.setLineWidth(0.5);
     pdf.rect(margin, y, contentWidth, 50, 'S');
     
     pdf.setFontSize(14);
-    pdf.setTextColor(191, 9, 47);
+    pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('Lead Qualification', margin + 5, y + 10);
     
     pdf.setFontSize(10);
-    pdf.setTextColor(0, 0, 0);
+    pdf.setTextColor(...DocStyles.rgb.black);
     pdf.text('MQL: ' + (data.mqlCriteria || '').substring(0, 80), margin + 5, y + 22);
     pdf.text('SQL: ' + (data.sqlCriteria || '').substring(0, 80), margin + 5, y + 34);
     y += 60;
 
     // SLAs
     pdf.setFontSize(14);
-    pdf.setTextColor(191, 9, 47);
+    pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('Service Level Agreements', margin, y);
     y += 10;
     pdf.setFontSize(10);
-    pdf.setTextColor(0, 0, 0);
+    pdf.setTextColor(...DocStyles.rgb.black);
     pdf.text('Marketing SLA:', margin, y);
     y += 6;
     const mktgLines = pdf.splitTextToSize(data.marketingSla || '', contentWidth - 5);
@@ -2847,22 +2814,22 @@ Object.assign(DocGenerator, {
 
     // Handoff
     pdf.setFontSize(14);
-    pdf.setTextColor(59, 151, 151);
+    pdf.setTextColor(...DocStyles.rgb.teal);
     pdf.text('Lead Handoff Process', margin, y);
     y += 8;
     pdf.setFontSize(10);
-    pdf.setTextColor(0, 0, 0);
+    pdf.setTextColor(...DocStyles.rgb.black);
     const handoffLines = pdf.splitTextToSize(data.handoff || '', contentWidth);
     pdf.text(handoffLines.slice(0, 5), margin, y);
     y += Math.min(handoffLines.length, 5) * 5 + 10;
 
     // Enablement
     pdf.setFontSize(14);
-    pdf.setTextColor(59, 151, 151);
+    pdf.setTextColor(...DocStyles.rgb.teal);
     pdf.text('Key Enablement Assets', margin, y);
     y += 8;
     pdf.setFontSize(10);
-    pdf.setTextColor(0, 0, 0);
+    pdf.setTextColor(...DocStyles.rgb.black);
     const enableLines = pdf.splitTextToSize(data.enablement || '', contentWidth);
     pdf.text(enableLines.slice(0, 5), margin, y);
 
@@ -2872,7 +2839,7 @@ Object.assign(DocGenerator, {
   generateAlignmentStrategyPPTX: function(filename, data) {
     const pptx = new PptxGenJS();
     pptx.layout = 'LAYOUT_16x9';
-    const palette = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF' };
+    var palette = DocStyles.colors;
 
     // Slide 1: Title
     const slide1 = pptx.addSlide();
@@ -2926,7 +2893,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // Sales Leadership Canvas â€” Word / Excel / PDF / PPTX
+  // Sales Leadership Canvas — Word / Excel / PDF / PPTX
   // ============================================================
 
   generateSalesLeadershipWord: function(filename, data) {
@@ -2991,11 +2958,11 @@ Object.assign(DocGenerator, {
     var maxW = 170;
 
     pdf.setFontSize(18);
-    pdf.setTextColor(19, 36, 64);
+    pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Sales Leadership Canvas', 20, y); y += 10;
 
     pdf.setFontSize(11);
-    pdf.setTextColor(80, 80, 80);
+    pdf.setTextColor(...DocStyles.rgb.gray);
     pdf.text('Team: ' + (data.teamName || 'N/A'), 20, y); y += 6;
     pdf.text('Vision: ' + (data.vision || 'N/A'), 20, y); y += 10;
 
@@ -3011,11 +2978,11 @@ Object.assign(DocGenerator, {
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
       pdf.setFontSize(13);
-      pdf.setTextColor(22, 71, 106);
+      pdf.setTextColor(...DocStyles.rgb.blue);
       pdf.text(s.title, 20, y); y += 7;
 
       pdf.setFontSize(10);
-      pdf.setTextColor(60, 60, 60);
+      pdf.setTextColor(...DocStyles.rgb.darkGray);
       var lines = pdf.splitTextToSize(s.value || 'N/A', maxW);
       lines.forEach(function(line) {
         if (y > 275) { pdf.addPage(); y = 20; }
@@ -3029,13 +2996,13 @@ Object.assign(DocGenerator, {
 
   generateSalesLeadershipPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var colors = DocStyles.colors;
 
     // Title slide
     var slide1 = pptx.addSlide();
     slide1.background = { color: colors.navy };
     slide1.addText('Sales Leadership Canvas', { x: 0.5, y: 1.5, w: 9, h: 1.2, fontSize: 32, color: colors.white, bold: true, align: 'center' });
-    slide1.addText((data.teamName || '') + ' â€” ' + (data.vision || ''), { x: 0.5, y: 2.8, w: 9, h: 0.6, fontSize: 16, color: colors.teal, align: 'center' });
+    slide1.addText((data.teamName || '') + ' — ' + (data.vision || ''), { x: 0.5, y: 2.8, w: 9, h: 0.6, fontSize: 16, color: colors.teal, align: 'center' });
 
     // Culture & Hiring
     var slide2 = pptx.addSlide();
@@ -3069,7 +3036,7 @@ Object.assign(DocGenerator, {
 
 
   // ============================================================
-  // Sales Analytics Canvas â€” Word / Excel / PDF / PPTX
+  // Sales Analytics Canvas — Word / Excel / PDF / PPTX
   // ============================================================
 
   generateSalesAnalyticsWord: function(filename, data) {
@@ -3134,11 +3101,11 @@ Object.assign(DocGenerator, {
     var maxW = 170;
 
     pdf.setFontSize(18);
-    pdf.setTextColor(19, 36, 64);
+    pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Sales Analytics Canvas', 20, y); y += 10;
 
     pdf.setFontSize(11);
-    pdf.setTextColor(80, 80, 80);
+    pdf.setTextColor(...DocStyles.rgb.gray);
     pdf.text('Team: ' + (data.teamName || 'N/A'), 20, y); y += 6;
     pdf.text('Period: ' + (data.period || 'N/A'), 20, y); y += 10;
 
@@ -3154,11 +3121,11 @@ Object.assign(DocGenerator, {
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
       pdf.setFontSize(13);
-      pdf.setTextColor(22, 71, 106);
+      pdf.setTextColor(...DocStyles.rgb.blue);
       pdf.text(s.title, 20, y); y += 7;
 
       pdf.setFontSize(10);
-      pdf.setTextColor(60, 60, 60);
+      pdf.setTextColor(...DocStyles.rgb.darkGray);
       var lines = pdf.splitTextToSize(s.value || 'N/A', maxW);
       lines.forEach(function(line) {
         if (y > 275) { pdf.addPage(); y = 20; }
@@ -3172,13 +3139,13 @@ Object.assign(DocGenerator, {
 
   generateSalesAnalyticsPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var colors = DocStyles.colors;
 
     // Title slide
     var slide1 = pptx.addSlide();
     slide1.background = { color: colors.navy };
     slide1.addText('Sales Analytics Canvas', { x: 0.5, y: 1.5, w: 9, h: 1.2, fontSize: 32, color: colors.white, bold: true, align: 'center' });
-    slide1.addText((data.teamName || '') + ' â€” ' + (data.period || ''), { x: 0.5, y: 2.8, w: 9, h: 0.6, fontSize: 16, color: colors.teal, align: 'center' });
+    slide1.addText((data.teamName || '') + ' — ' + (data.period || ''), { x: 0.5, y: 2.8, w: 9, h: 0.6, fontSize: 16, color: colors.teal, align: 'center' });
 
     // Key Metrics & Dashboards
     var slide2 = pptx.addSlide();
@@ -3212,13 +3179,13 @@ Object.assign(DocGenerator, {
 
 
   // ============================================================
-  // Strategic Account Canvas â€” Word / Excel / PDF / PPTX
+  // Strategic Account Canvas — Word / Excel / PDF / PPTX
   // ============================================================
 
   generateStrategicAccountWord: function(filename, data) {
     var children = [];
     children.push(new docx.Paragraph({ text: 'Strategic Account Canvas', heading: docx.HeadingLevel.TITLE }));
-    children.push(new docx.Paragraph({ text: 'Account: ' + (data.accountName || '') + ' â€” Tier: ' + (data.accountTier || ''), spacing: { after: 200 } }));
+    children.push(new docx.Paragraph({ text: 'Account: ' + (data.accountName || '') + ' — Tier: ' + (data.accountTier || ''), spacing: { after: 200 } }));
 
     var sections = [
       { title: 'Current Footprint', value: data.currentFootprint },
@@ -3268,12 +3235,12 @@ Object.assign(DocGenerator, {
     var pdf = new jspdf.jsPDF();
     var y = 20;
     pdf.setFontSize(20);
-    pdf.setTextColor(19, 36, 64);
+    pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Strategic Account Canvas', 105, y, { align: 'center' });
     y += 10;
     pdf.setFontSize(12);
-    pdf.setTextColor(59, 151, 151);
-    pdf.text((data.accountName || '') + ' â€” ' + (data.accountTier || ''), 105, y, { align: 'center' });
+    pdf.setTextColor(...DocStyles.rgb.teal);
+    pdf.text((data.accountName || '') + ' — ' + (data.accountTier || ''), 105, y, { align: 'center' });
     y += 15;
 
     var sections = [
@@ -3286,14 +3253,14 @@ Object.assign(DocGenerator, {
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
       pdf.setFontSize(14);
-      pdf.setTextColor(19, 36, 64);
+      pdf.setTextColor(...DocStyles.rgb.navy);
       pdf.text(s.title, 14, y);
       y += 2;
-      pdf.setDrawColor(59, 151, 151);
+      pdf.setDrawColor(...DocStyles.rgb.teal);
       pdf.line(14, y, 80, y);
       y += 8;
       pdf.setFontSize(11);
-      pdf.setTextColor(60, 60, 60);
+      pdf.setTextColor(...DocStyles.rgb.darkGray);
       var lines = pdf.splitTextToSize(s.value || 'N/A', 180);
       lines.forEach(function(line) {
         if (y > 275) { pdf.addPage(); y = 20; }
@@ -3308,13 +3275,13 @@ Object.assign(DocGenerator, {
 
   generateStrategicAccountPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var colors = DocStyles.colors;
 
     // Title slide
     var slide1 = pptx.addSlide();
     slide1.background = { color: colors.navy };
     slide1.addText('Strategic Account Canvas', { x: 0.5, y: 1.5, w: 9, h: 1.2, fontSize: 32, color: colors.white, bold: true, align: 'center' });
-    slide1.addText((data.accountName || '') + ' â€” ' + (data.accountTier || ''), { x: 0.5, y: 2.8, w: 9, h: 0.6, fontSize: 16, color: colors.teal, align: 'center' });
+    slide1.addText((data.accountName || '') + ' — ' + (data.accountTier || ''), { x: 0.5, y: 2.8, w: 9, h: 0.6, fontSize: 16, color: colors.teal, align: 'center' });
 
     // Footprint & Whitespace
     var slide2 = pptx.addSlide();
@@ -3339,7 +3306,7 @@ Object.assign(DocGenerator, {
 
 
   // ============================================================
-  // Ethics & Reputation Canvas â€” Word / Excel / PDF / PPTX
+  // Ethics & Reputation Canvas — Word / Excel / PDF / PPTX
   // ============================================================
 
   generateEthicsReputationWord: function(filename, data) {
@@ -3396,11 +3363,11 @@ Object.assign(DocGenerator, {
     var pdf = new jspdf.jsPDF();
     var y = 20;
     pdf.setFontSize(20);
-    pdf.setTextColor(19, 36, 64);
+    pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Ethics & Reputation Canvas', 105, y, { align: 'center' });
     y += 10;
     pdf.setFontSize(12);
-    pdf.setTextColor(59, 151, 151);
+    pdf.setTextColor(...DocStyles.rgb.teal);
     pdf.text(data.teamName || '', 105, y, { align: 'center' });
     y += 15;
 
@@ -3415,14 +3382,14 @@ Object.assign(DocGenerator, {
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
       pdf.setFontSize(14);
-      pdf.setTextColor(19, 36, 64);
+      pdf.setTextColor(...DocStyles.rgb.navy);
       pdf.text(s.title, 14, y);
       y += 2;
-      pdf.setDrawColor(59, 151, 151);
+      pdf.setDrawColor(...DocStyles.rgb.teal);
       pdf.line(14, y, 80, y);
       y += 8;
       pdf.setFontSize(11);
-      pdf.setTextColor(60, 60, 60);
+      pdf.setTextColor(...DocStyles.rgb.darkGray);
       var lines = pdf.splitTextToSize(s.value || 'N/A', 180);
       lines.forEach(function(line) {
         if (y > 275) { pdf.addPage(); y = 20; }
@@ -3437,7 +3404,7 @@ Object.assign(DocGenerator, {
 
   generateEthicsReputationPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var colors = DocStyles.colors;
 
     // Title slide
     var slide1 = pptx.addSlide();
@@ -3467,7 +3434,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // CHANNEL STRATEGY â€” Word, Excel, PDF, PPTX
+  // CHANNEL STRATEGY — Word, Excel, PDF, PPTX
   // ============================================================
 
   generateChannelStrategyWord: function(filename, data) {
@@ -3476,23 +3443,23 @@ Object.assign(DocGenerator, {
       sections: [{
         properties: {},
         children: [
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Channel Strategy Canvas', bold: true, size: 36, color: '132440' })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Company: ' + (data.companyName || ''), bold: true, size: 24, color: '16476A' })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: '666666' })], spacing: { after: 400 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Channel Strategy Canvas', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Company: ' + (data.companyName || ''), bold: true, size: 24, color: DocStyles.colors.blue })], spacing: { after: 200 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: DocStyles.colors.gray })], spacing: { after: 400 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Channel Types & Architecture', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Channel Types & Architecture', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.channelTypes || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Ideal Partner Profile', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Ideal Partner Profile', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.partnerProfile || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Enablement Plan', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Enablement Plan', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.enablementPlan || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Incentive Structure', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Incentive Structure', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.incentives || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Success Metrics', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Success Metrics', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.metrics || 'Not specified', size: 20 })], spacing: { after: 300 } })
         ]
       }]
@@ -3523,11 +3490,11 @@ Object.assign(DocGenerator, {
   generateChannelStrategyPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     var y = 20;
-    pdf.setFontSize(20); pdf.setTextColor(19, 36, 64);
+    pdf.setFontSize(20); pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Channel Strategy Canvas', 20, y); y += 12;
-    pdf.setFontSize(14); pdf.setTextColor(22, 71, 106);
+    pdf.setFontSize(14); pdf.setTextColor(...DocStyles.rgb.blue);
     pdf.text('Company: ' + (data.companyName || ''), 20, y); y += 8;
-    pdf.setFontSize(10); pdf.setTextColor(100, 100, 100);
+    pdf.setFontSize(10); pdf.setTextColor(...DocStyles.rgb.gray);
     pdf.text('Generated: ' + new Date().toLocaleDateString(), 20, y); y += 14;
 
     var sections = [
@@ -3540,9 +3507,9 @@ Object.assign(DocGenerator, {
 
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
-      pdf.setFontSize(13); pdf.setTextColor(191, 9, 47);
+      pdf.setFontSize(13); pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.title, 20, y); y += 8;
-      pdf.setFontSize(11); pdf.setTextColor(50, 50, 50);
+      pdf.setFontSize(11); pdf.setTextColor(...DocStyles.rgb.darkGray);
       var lines = pdf.splitTextToSize(s.content || 'Not specified', 170);
       pdf.text(lines, 20, y); y += lines.length * 6 + 8;
     });
@@ -3552,7 +3519,7 @@ Object.assign(DocGenerator, {
 
   generateChannelStrategyPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var colors = DocStyles.colors;
 
     // Title slide
     var slide1 = pptx.addSlide();
@@ -3589,7 +3556,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // CAPSTONE STRATEGY â€” Word, Excel, PDF, PPTX
+  // CAPSTONE STRATEGY — Word, Excel, PDF, PPTX
   // ============================================================
 
   generateCapstoneStrategyWord: function(filename, data) {
@@ -3598,20 +3565,20 @@ Object.assign(DocGenerator, {
       sections: [{
         properties: {},
         children: [
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Capstone Sales Strategy', bold: true, size: 36, color: '132440' })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: (data.companyName || '') + ' â€” ' + (data.salesContext || ''), bold: true, size: 24, color: '16476A' })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: '666666' })], spacing: { after: 400 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Capstone Sales Strategy', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: (data.companyName || '') + ' — ' + (data.salesContext || ''), bold: true, size: 24, color: DocStyles.colors.blue })], spacing: { after: 200 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: DocStyles.colors.gray })], spacing: { after: 400 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Sales Process Summary', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Sales Process Summary', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.salesProcess || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Team & Organization', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Team & Organization', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.teamOrganization || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Key Metrics & Targets', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Key Metrics & Targets', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.metricsTargets || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Risks & Contingencies', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Risks & Contingencies', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.risksContingencies || 'Not specified', size: 20 })], spacing: { after: 300 } })
         ]
       }]
@@ -3642,11 +3609,11 @@ Object.assign(DocGenerator, {
   generateCapstoneStrategyPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     var y = 20;
-    pdf.setFontSize(20); pdf.setTextColor(19, 36, 64);
+    pdf.setFontSize(20); pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Capstone Sales Strategy', 20, y); y += 12;
-    pdf.setFontSize(14); pdf.setTextColor(22, 71, 106);
-    pdf.text((data.companyName || '') + ' â€” ' + (data.salesContext || ''), 20, y); y += 8;
-    pdf.setFontSize(10); pdf.setTextColor(100, 100, 100);
+    pdf.setFontSize(14); pdf.setTextColor(...DocStyles.rgb.blue);
+    pdf.text((data.companyName || '') + ' — ' + (data.salesContext || ''), 20, y); y += 8;
+    pdf.setFontSize(10); pdf.setTextColor(...DocStyles.rgb.gray);
     pdf.text('Generated: ' + new Date().toLocaleDateString(), 20, y); y += 14;
 
     var sections = [
@@ -3658,9 +3625,9 @@ Object.assign(DocGenerator, {
 
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
-      pdf.setFontSize(13); pdf.setTextColor(191, 9, 47);
+      pdf.setFontSize(13); pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.title, 20, y); y += 8;
-      pdf.setFontSize(11); pdf.setTextColor(50, 50, 50);
+      pdf.setFontSize(11); pdf.setTextColor(...DocStyles.rgb.darkGray);
       var lines = pdf.splitTextToSize(s.content || 'Not specified', 170);
       pdf.text(lines, 20, y); y += lines.length * 6 + 8;
     });
@@ -3670,7 +3637,7 @@ Object.assign(DocGenerator, {
 
   generateCapstoneStrategyPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var colors = DocStyles.colors;
 
     // Title slide
     var slide1 = pptx.addSlide();

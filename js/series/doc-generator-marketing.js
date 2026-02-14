@@ -1,10 +1,10 @@
-﻿/**
+/**
  * Doc Generator - Marketing Strategy Series
  * Extends DocGenerator with marketing strategy series document generators.
  * Requires: doc-generator-core.js loaded first.
  */
 Object.assign(DocGenerator, {
-  // MARKETING STRATEGY CANVAS â€” Word, Excel, PDF, PPTX
+  // MARKETING STRATEGY CANVAS — Word, Excel, PDF, PPTX
   // ============================================================
 
   generateMarketingStrategyWord: function(filename, data) {
@@ -13,32 +13,32 @@ Object.assign(DocGenerator, {
       sections: [{
         properties: {},
         children: [
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Marketing Strategy Canvas', bold: true, size: 36, color: '132440' })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: (data.companyName || '') + ' â€” ' + (data.industry || ''), bold: true, size: 24, color: '16476A' })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: '666666' })], spacing: { after: 400 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Marketing Strategy Canvas', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: (data.companyName || '') + ' — ' + (data.industry || ''), bold: true, size: 24, color: DocStyles.colors.blue })], spacing: { after: 200 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: DocStyles.colors.gray })], spacing: { after: 400 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Segment', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Segment', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.targetSegment || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Customer Pain Points', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Customer Pain Points', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.customerPain || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Positioning Statement', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Positioning Statement', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.positioning || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Value Proposition', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Value Proposition', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.valueProp || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Competitive Landscape', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Competitive Landscape', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.competitors || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Marketing Channels', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Marketing Channels', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.channels || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Key Metrics & KPIs', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Key Metrics & KPIs', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.metrics || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Growth Strategy', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Growth Strategy', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.growthStrategy || 'Not specified', size: 20 })], spacing: { after: 300 } })
         ]
       }]
@@ -73,11 +73,11 @@ Object.assign(DocGenerator, {
   generateMarketingStrategyPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     var y = 20;
-    pdf.setFontSize(20); pdf.setTextColor(19, 36, 64);
+    pdf.setFontSize(20); pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Marketing Strategy Canvas', 20, y); y += 12;
-    pdf.setFontSize(14); pdf.setTextColor(22, 71, 106);
-    pdf.text((data.companyName || '') + ' â€” ' + (data.industry || ''), 20, y); y += 8;
-    pdf.setFontSize(10); pdf.setTextColor(100, 100, 100);
+    pdf.setFontSize(14); pdf.setTextColor(...DocStyles.rgb.blue);
+    pdf.text((data.companyName || '') + ' — ' + (data.industry || ''), 20, y); y += 8;
+    pdf.setFontSize(10); pdf.setTextColor(...DocStyles.rgb.gray);
     pdf.text('Generated: ' + new Date().toLocaleDateString(), 20, y); y += 14;
 
     var sections = [
@@ -93,9 +93,9 @@ Object.assign(DocGenerator, {
 
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
-      pdf.setFontSize(13); pdf.setTextColor(191, 9, 47);
+      pdf.setFontSize(13); pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.title, 20, y); y += 8;
-      pdf.setFontSize(11); pdf.setTextColor(50, 50, 50);
+      pdf.setFontSize(11); pdf.setTextColor(...DocStyles.rgb.darkGray);
       var lines = pdf.splitTextToSize(s.content || 'Not specified', 170);
       pdf.text(lines, 20, y); y += lines.length * 6 + 8;
     });
@@ -105,7 +105,7 @@ Object.assign(DocGenerator, {
 
   generateMarketingStrategyPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var colors = DocStyles.colors;
 
     // Title slide
     var slide1 = pptx.addSlide();
@@ -150,7 +150,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // BUYER PSYCHOLOGY AUDIT â€” Word, Excel, PDF, PPTX
+  // BUYER PSYCHOLOGY AUDIT — Word, Excel, PDF, PPTX
   // ============================================================
 
   generateBuyerPsychologyWord: function(filename, data) {
@@ -159,26 +159,26 @@ Object.assign(DocGenerator, {
       sections: [{
         properties: {},
         children: [
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Buyer Psychology Audit', bold: true, size: 36, color: '132440' })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: (data.companyName || '') + ' â€” ' + (data.targetAudience || ''), bold: true, size: 24, color: '16476A' })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: '666666' })], spacing: { after: 400 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Buyer Psychology Audit', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: (data.companyName || '') + ' — ' + (data.targetAudience || ''), bold: true, size: 24, color: DocStyles.colors.blue })], spacing: { after: 200 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: DocStyles.colors.gray })], spacing: { after: 400 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'System 1 Triggers Used', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'System 1 Triggers Used', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.system1Triggers || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'System 2 Content Available', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'System 2 Content Available', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.system2Content || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Trust Signals Deployed', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Trust Signals Deployed', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.trustSignals || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Cognitive Biases Leveraged', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Cognitive Biases Leveraged', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.cognitiveBiases || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Pricing Psychology Tactics', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Pricing Psychology Tactics', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.pricingStrategy || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Improvement Opportunities', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Improvement Opportunities', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.improvements || 'Not specified', size: 20 })], spacing: { after: 300 } })
         ]
       }]
@@ -211,11 +211,11 @@ Object.assign(DocGenerator, {
   generateBuyerPsychologyPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     var y = 20;
-    pdf.setFontSize(20); pdf.setTextColor(19, 36, 64);
+    pdf.setFontSize(20); pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Buyer Psychology Audit', 20, y); y += 12;
-    pdf.setFontSize(14); pdf.setTextColor(22, 71, 106);
-    pdf.text((data.companyName || '') + ' â€” ' + (data.targetAudience || ''), 20, y); y += 8;
-    pdf.setFontSize(10); pdf.setTextColor(100, 100, 100);
+    pdf.setFontSize(14); pdf.setTextColor(...DocStyles.rgb.blue);
+    pdf.text((data.companyName || '') + ' — ' + (data.targetAudience || ''), 20, y); y += 8;
+    pdf.setFontSize(10); pdf.setTextColor(...DocStyles.rgb.gray);
     pdf.text('Generated: ' + new Date().toLocaleDateString(), 20, y); y += 14;
 
     var sections = [
@@ -229,9 +229,9 @@ Object.assign(DocGenerator, {
 
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
-      pdf.setFontSize(13); pdf.setTextColor(191, 9, 47);
+      pdf.setFontSize(13); pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.title, 20, y); y += 8;
-      pdf.setFontSize(11); pdf.setTextColor(50, 50, 50);
+      pdf.setFontSize(11); pdf.setTextColor(...DocStyles.rgb.darkGray);
       var lines = pdf.splitTextToSize(s.content || 'Not specified', 170);
       pdf.text(lines, 20, y); y += lines.length * 6 + 8;
     });
@@ -241,7 +241,7 @@ Object.assign(DocGenerator, {
 
   generateBuyerPsychologyPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var colors = DocStyles.colors;
 
     var slide1 = pptx.addSlide();
     slide1.background = { color: colors.navy };
@@ -278,7 +278,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // BRAND BUILDING CANVAS â€” Word, Excel, PDF, PPTX
+  // BRAND BUILDING CANVAS — Word, Excel, PDF, PPTX
   // ============================================================
 
   generateBrandCanvasWord: function(filename, data) {
@@ -287,32 +287,32 @@ Object.assign(DocGenerator, {
       sections: [{
         properties: {},
         children: [
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Brand Building Canvas', bold: true, size: 36, color: '132440' })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: (data.brandName || '') + ' â€” ' + (data.industry || ''), bold: true, size: 24, color: '16476A' })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: '666666' })], spacing: { after: 400 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Brand Building Canvas', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: (data.brandName || '') + ' — ' + (data.industry || ''), bold: true, size: 24, color: DocStyles.colors.blue })], spacing: { after: 200 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: DocStyles.colors.gray })], spacing: { after: 400 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Mission Statement', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Mission Statement', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.mission || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Core Values', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Core Values', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.values || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Brand Personality', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Brand Personality', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.personality || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Audience', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Audience', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.targetAudience || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Positioning Statement', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Positioning Statement', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.positioning || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Key Differentiators', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Key Differentiators', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.differentiators || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Voice & Tone', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Voice & Tone', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.voiceTone || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Brand Story', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Brand Story', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.brandStory || 'Not specified', size: 20 })], spacing: { after: 300 } })
         ]
       }]
@@ -347,11 +347,11 @@ Object.assign(DocGenerator, {
   generateBrandCanvasPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     var y = 20;
-    pdf.setFontSize(20); pdf.setTextColor(19, 36, 64);
+    pdf.setFontSize(20); pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Brand Building Canvas', 20, y); y += 12;
-    pdf.setFontSize(14); pdf.setTextColor(22, 71, 106);
-    pdf.text((data.brandName || '') + ' â€” ' + (data.industry || ''), 20, y); y += 8;
-    pdf.setFontSize(10); pdf.setTextColor(100, 100, 100);
+    pdf.setFontSize(14); pdf.setTextColor(...DocStyles.rgb.blue);
+    pdf.text((data.brandName || '') + ' — ' + (data.industry || ''), 20, y); y += 8;
+    pdf.setFontSize(10); pdf.setTextColor(...DocStyles.rgb.gray);
     pdf.text('Generated: ' + new Date().toLocaleDateString(), 20, y); y += 14;
 
     var sections = [
@@ -367,9 +367,9 @@ Object.assign(DocGenerator, {
 
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
-      pdf.setFontSize(13); pdf.setTextColor(191, 9, 47);
+      pdf.setFontSize(13); pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.title, 20, y); y += 8;
-      pdf.setFontSize(11); pdf.setTextColor(50, 50, 50);
+      pdf.setFontSize(11); pdf.setTextColor(...DocStyles.rgb.darkGray);
       var lines = pdf.splitTextToSize(s.content || 'Not specified', 170);
       pdf.text(lines, 20, y); y += lines.length * 6 + 8;
     });
@@ -379,7 +379,7 @@ Object.assign(DocGenerator, {
 
   generateBrandCanvasPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var colors = DocStyles.colors;
 
     var slide1 = pptx.addSlide();
     slide1.background = { color: colors.navy };
@@ -420,7 +420,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // SEO AUDIT CANVAS â€” Word, Excel, PDF, PPTX
+  // SEO AUDIT CANVAS — Word, Excel, PDF, PPTX
   // ============================================================
 
   generateSeoAuditWord: function(filename, data) {
@@ -429,32 +429,32 @@ Object.assign(DocGenerator, {
       sections: [{
         properties: {},
         children: [
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'SEO Audit Canvas', bold: true, size: 36, color: '132440' })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: (data.siteUrl || '') + ' â€” ' + (data.industry || ''), bold: true, size: 24, color: '16476A' })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: '666666' })], spacing: { after: 400 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'SEO Audit Canvas', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: (data.siteUrl || '') + ' — ' + (data.industry || ''), bold: true, size: 24, color: DocStyles.colors.blue })], spacing: { after: 200 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: DocStyles.colors.gray })], spacing: { after: 400 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Keywords', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Keywords', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.targetKeywords || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Current Rankings', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Current Rankings', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.currentRankings || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Technical Issues', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Technical Issues', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.technicalIssues || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Content Gaps', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Content Gaps', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.contentGaps || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Backlink Profile', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Backlink Profile', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.backlinkProfile || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Local SEO Presence', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Local SEO Presence', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.localPresence || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Top Competitors', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Top Competitors', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.competitors || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Priority Action Plan', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Priority Action Plan', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.actionPlan || 'Not specified', size: 20 })], spacing: { after: 300 } })
         ]
       }]
@@ -489,11 +489,11 @@ Object.assign(DocGenerator, {
   generateSeoAuditPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     var y = 20;
-    pdf.setFontSize(20); pdf.setTextColor(19, 36, 64);
+    pdf.setFontSize(20); pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('SEO Audit Canvas', 20, y); y += 12;
-    pdf.setFontSize(14); pdf.setTextColor(22, 71, 106);
-    pdf.text((data.siteUrl || '') + ' â€” ' + (data.industry || ''), 20, y); y += 8;
-    pdf.setFontSize(10); pdf.setTextColor(100, 100, 100);
+    pdf.setFontSize(14); pdf.setTextColor(...DocStyles.rgb.blue);
+    pdf.text((data.siteUrl || '') + ' — ' + (data.industry || ''), 20, y); y += 8;
+    pdf.setFontSize(10); pdf.setTextColor(...DocStyles.rgb.gray);
     pdf.text('Generated: ' + new Date().toLocaleDateString(), 20, y); y += 14;
 
     var sections = [
@@ -509,9 +509,9 @@ Object.assign(DocGenerator, {
 
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
-      pdf.setFontSize(13); pdf.setTextColor(191, 9, 47);
+      pdf.setFontSize(13); pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.title, 20, y); y += 8;
-      pdf.setFontSize(11); pdf.setTextColor(50, 50, 50);
+      pdf.setFontSize(11); pdf.setTextColor(...DocStyles.rgb.darkGray);
       var lines = pdf.splitTextToSize(s.content || 'Not specified', 170);
       pdf.text(lines, 20, y); y += lines.length * 6 + 8;
     });
@@ -521,7 +521,7 @@ Object.assign(DocGenerator, {
 
   generateSeoAuditPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var colors = DocStyles.colors;
 
     var slide1 = pptx.addSlide();
     slide1.background = { color: colors.navy };
@@ -561,7 +561,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // SOCIAL STRATEGY CANVAS â€” Word, Excel, PDF, PPTX
+  // SOCIAL STRATEGY CANVAS — Word, Excel, PDF, PPTX
   // ============================================================
 
   generateSocialStrategyWord: function(filename, data) {
@@ -570,35 +570,35 @@ Object.assign(DocGenerator, {
       sections: [{
         properties: {},
         children: [
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Social Media Strategy Canvas', bold: true, size: 36, color: '132440' })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.companyName || '', bold: true, size: 24, color: '16476A' })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: '666666' })], spacing: { after: 400 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Social Media Strategy Canvas', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.companyName || '', bold: true, size: 24, color: DocStyles.colors.blue })], spacing: { after: 200 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: DocStyles.colors.gray })], spacing: { after: 400 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Platforms', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Platforms', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.platforms || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Audience', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Audience', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.audience || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Content Pillars', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Content Pillars', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.contentPillars || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Posting Cadence', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Posting Cadence', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.postingCadence || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Community Strategy', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Community Strategy', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.communityStrategy || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Influencer Plan', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Influencer Plan', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.influencerPlan || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Engagement Tactics', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Engagement Tactics', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.engagementTactics || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Key Metrics', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Key Metrics', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.metrics || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: '90-Day Growth Goals', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: '90-Day Growth Goals', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.growthGoals || 'Not specified', size: 20 })], spacing: { after: 300 } })
         ]
       }]
@@ -633,11 +633,11 @@ Object.assign(DocGenerator, {
   generateSocialStrategyPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     var y = 20;
-    pdf.setFontSize(20); pdf.setTextColor(19, 36, 64);
+    pdf.setFontSize(20); pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Social Media Strategy Canvas', 20, y); y += 12;
-    pdf.setFontSize(14); pdf.setTextColor(22, 71, 106);
+    pdf.setFontSize(14); pdf.setTextColor(...DocStyles.rgb.blue);
     pdf.text(data.companyName || '', 20, y); y += 8;
-    pdf.setFontSize(10); pdf.setTextColor(100, 100, 100);
+    pdf.setFontSize(10); pdf.setTextColor(...DocStyles.rgb.gray);
     pdf.text('Generated: ' + new Date().toLocaleDateString(), 20, y); y += 14;
 
     var sections = [
@@ -654,9 +654,9 @@ Object.assign(DocGenerator, {
 
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
-      pdf.setFontSize(13); pdf.setTextColor(191, 9, 47);
+      pdf.setFontSize(13); pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.title, 20, y); y += 8;
-      pdf.setFontSize(11); pdf.setTextColor(50, 50, 50);
+      pdf.setFontSize(11); pdf.setTextColor(...DocStyles.rgb.darkGray);
       var lines = pdf.splitTextToSize(s.content || 'Not specified', 170);
       pdf.text(lines, 20, y); y += lines.length * 6 + 8;
     });
@@ -666,7 +666,7 @@ Object.assign(DocGenerator, {
 
   generateSocialStrategyPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var colors = DocStyles.colors;
 
     var slide1 = pptx.addSlide();
     slide1.background = { color: colors.navy };
@@ -703,7 +703,7 @@ Object.assign(DocGenerator, {
 
 
   // ============================================================
-  // CONTENT STRATEGY CANVAS â€” Word, Excel, PDF, PPTX
+  // CONTENT STRATEGY CANVAS — Word, Excel, PDF, PPTX
   // ============================================================
 
   generateContentStrategyWord: function(filename, data) {
@@ -712,35 +712,35 @@ Object.assign(DocGenerator, {
       sections: [{
         properties: {},
         children: [
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Content Strategy Canvas', bold: true, size: 36, color: '132440' })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.companyName || '', bold: true, size: 24, color: '16476A' })], spacing: { after: 200 } }),
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: '666666' })], spacing: { after: 400 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Content Strategy Canvas', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.companyName || '', bold: true, size: 24, color: DocStyles.colors.blue })], spacing: { after: 200 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 18, color: DocStyles.colors.gray })], spacing: { after: 400 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Audience', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Target Audience', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.audience || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Content Pillars', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Content Pillars', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.contentPillars || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Content Formats', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Content Formats', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.contentFormats || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Distribution Channels', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Distribution Channels', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.distribution || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Editorial Cadence', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Editorial Cadence', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.editorialCadence || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Competitor Content Gaps', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Competitor Content Gaps', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.competitorGaps || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Success Metrics', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Success Metrics', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.successMetrics || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Team & Budget', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Team & Budget', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.teamResources || 'Not specified', size: 20 })], spacing: { after: 300 } }),
 
-          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: '90-Day Content Goals', bold: true, size: 26, color: 'BF092F' })], spacing: { after: 100 } }),
+          new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: '90-Day Content Goals', bold: true, size: 26, color: DocStyles.colors.crimson })], spacing: { after: 100 } }),
           new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: data.contentGoals || 'Not specified', size: 20 })], spacing: { after: 300 } })
         ]
       }]
@@ -775,11 +775,11 @@ Object.assign(DocGenerator, {
   generateContentStrategyPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     var y = 20;
-    pdf.setFontSize(20); pdf.setTextColor(19, 36, 64);
+    pdf.setFontSize(20); pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Content Strategy Canvas', 20, y); y += 12;
-    pdf.setFontSize(14); pdf.setTextColor(22, 71, 106);
+    pdf.setFontSize(14); pdf.setTextColor(...DocStyles.rgb.blue);
     pdf.text(data.companyName || '', 20, y); y += 8;
-    pdf.setFontSize(10); pdf.setTextColor(100, 100, 100);
+    pdf.setFontSize(10); pdf.setTextColor(...DocStyles.rgb.gray);
     pdf.text('Generated: ' + new Date().toLocaleDateString(), 20, y); y += 14;
 
     var sections = [
@@ -796,9 +796,9 @@ Object.assign(DocGenerator, {
 
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
-      pdf.setFontSize(13); pdf.setTextColor(191, 9, 47);
+      pdf.setFontSize(13); pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.title, 20, y); y += 8;
-      pdf.setFontSize(11); pdf.setTextColor(50, 50, 50);
+      pdf.setFontSize(11); pdf.setTextColor(...DocStyles.rgb.darkGray);
       var lines = pdf.splitTextToSize(s.content || 'Not specified', 170);
       pdf.text(lines, 20, y); y += lines.length * 6 + 8;
     });
@@ -808,7 +808,7 @@ Object.assign(DocGenerator, {
 
   generateContentStrategyPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var colors = DocStyles.colors;
 
     var slide1 = pptx.addSlide();
     slide1.background = { color: colors.navy };
@@ -844,7 +844,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // EMAIL STRATEGY CANVAS â€” Word, Excel, PDF, PPTX
+  // EMAIL STRATEGY CANVAS — Word, Excel, PDF, PPTX
   // ============================================================
 
   generateEmailStrategyWord: function(filename, data) {
@@ -864,14 +864,14 @@ Object.assign(DocGenerator, {
     var rows = [];
     sections.forEach(function(s) {
       rows.push(new docxLib.TableRow({ children: [
-        new docxLib.TableCell({ children: [new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: s.label, bold: true, size: 22, color: 'BF092F' })] })], width: { size: 28, type: docxLib.WidthType.PERCENTAGE } }),
+        new docxLib.TableCell({ children: [new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: s.label, bold: true, size: 22, color: DocStyles.colors.crimson })] })], width: { size: 28, type: docxLib.WidthType.PERCENTAGE } }),
         new docxLib.TableCell({ children: [new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: s.value || '', size: 22 })] })], width: { size: 72, type: docxLib.WidthType.PERCENTAGE } })
       ] }));
     });
     var doc = new docxLib.Document({
       sections: [{ children: [
-        new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Email Strategy Canvas', bold: true, size: 36, color: '132440' })], spacing: { after: 200 } }),
-        new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Company: ' + (data.companyName || ''), size: 24, color: '16476A' })], spacing: { after: 300 } }),
+        new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Email Strategy Canvas', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
+        new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Company: ' + (data.companyName || ''), size: 24, color: DocStyles.colors.blue })], spacing: { after: 300 } }),
         new docxLib.Table({ rows: rows })
       ] }]
     });
@@ -904,9 +904,9 @@ Object.assign(DocGenerator, {
   generateEmailStrategyPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     var y = 20;
-    pdf.setFontSize(20); pdf.setTextColor(19, 36, 64);
+    pdf.setFontSize(20); pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Email Strategy Canvas', 20, y); y += 12;
-    pdf.setFontSize(12); pdf.setTextColor(22, 71, 106);
+    pdf.setFontSize(12); pdf.setTextColor(...DocStyles.rgb.blue);
     pdf.text('Company: ' + (data.companyName || ''), 20, y); y += 14;
     var sections = [
       { label: 'List Size & Growth', value: data.listSize },
@@ -921,9 +921,9 @@ Object.assign(DocGenerator, {
     ];
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
-      pdf.setFontSize(12); pdf.setTextColor(191, 9, 47);
+      pdf.setFontSize(12); pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.label, 20, y); y += 7;
-      pdf.setFontSize(11); pdf.setTextColor(60, 60, 60);
+      pdf.setFontSize(11); pdf.setTextColor(...DocStyles.rgb.darkGray);
       var lines = pdf.splitTextToSize(s.value || 'N/A', 170);
       pdf.text(lines, 20, y); y += lines.length * 6 + 6;
     });
@@ -932,16 +932,16 @@ Object.assign(DocGenerator, {
 
   generateEmailStrategyPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var colors = DocStyles.colors;
 
-    // Slide 1 â€” Title
+    // Slide 1 — Title
     var slide1 = pptx.addSlide();
     slide1.background = { color: colors.navy };
     slide1.addText('Email Strategy Canvas', { x: 0.5, y: 1.3, w: 9, h: 1.2, fontSize: 32, color: colors.white, bold: true, align: 'center' });
     slide1.addText(data.companyName || 'Company Name', { x: 0.5, y: 2.6, w: 9, h: 0.8, fontSize: 20, color: colors.teal, align: 'center' });
     slide1.addShape(pptx.shapes.RECTANGLE, { x: 3.5, y: 3.6, w: 3, h: 0.05, fill: { color: colors.crimson } });
 
-    // Slide 2 â€” Acquisition & Nurture
+    // Slide 2 — Acquisition & Nurture
     var slide2 = pptx.addSlide();
     slide2.addShape(pptx.shapes.RECTANGLE, { x: 0, y: 0, w: 10, h: 0.6, fill: { color: colors.teal } });
     slide2.addText('Acquisition & Nurture Strategy', { x: 0.5, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: colors.white, bold: true });
@@ -954,7 +954,7 @@ Object.assign(DocGenerator, {
     slide2.addText('Nurture Flows', { x: 5.2, y: 3.2, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true });
     slide2.addText(data.nurtureFlows || '', { x: 5.2, y: 3.6, w: 4.3, h: 1.5, fontSize: 11, wrap: true, valign: 'top', fit: 'shrink' });
 
-    // Slide 3 â€” Operations & Metrics
+    // Slide 3 — Operations & Metrics
     var slide3 = pptx.addSlide();
     slide3.addShape(pptx.shapes.RECTANGLE, { x: 0, y: 0, w: 10, h: 0.6, fill: { color: colors.teal } });
     slide3.addText('Operations & Metrics', { x: 0.5, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: colors.white, bold: true });
@@ -971,7 +971,7 @@ Object.assign(DocGenerator, {
   },
 
   // ============================================================
-  // AD CAMPAIGN STRATEGY CANVAS â€” Word, Excel, PDF, PPTX
+  // AD CAMPAIGN STRATEGY CANVAS — Word, Excel, PDF, PPTX
   // ============================================================
 
   generateAdCampaignWord: function(filename, data) {
@@ -991,14 +991,14 @@ Object.assign(DocGenerator, {
     var rows = [];
     sections.forEach(function(s) {
       rows.push(new docxLib.TableRow({ children: [
-        new docxLib.TableCell({ children: [new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: s.label, bold: true, size: 22, color: 'BF092F' })] })], width: { size: 28, type: docxLib.WidthType.PERCENTAGE } }),
+        new docxLib.TableCell({ children: [new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: s.label, bold: true, size: 22, color: DocStyles.colors.crimson })] })], width: { size: 28, type: docxLib.WidthType.PERCENTAGE } }),
         new docxLib.TableCell({ children: [new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: s.value || '', size: 22 })] })], width: { size: 72, type: docxLib.WidthType.PERCENTAGE } })
       ] }));
     });
     var doc = new docxLib.Document({
       sections: [{ children: [
-        new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Ad Campaign Strategy Canvas', bold: true, size: 36, color: '132440' })], spacing: { after: 200 } }),
-        new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Company: ' + (data.companyName || ''), size: 24, color: '16476A' })], spacing: { after: 300 } }),
+        new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Ad Campaign Strategy Canvas', bold: true, size: 36, color: DocStyles.colors.navy })], spacing: { after: 200 } }),
+        new docxLib.Paragraph({ children: [new docxLib.TextRun({ text: 'Company: ' + (data.companyName || ''), size: 24, color: DocStyles.colors.blue })], spacing: { after: 300 } }),
         new docxLib.Table({ rows: rows })
       ] }]
     });
@@ -1031,9 +1031,9 @@ Object.assign(DocGenerator, {
   generateAdCampaignPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     var y = 20;
-    pdf.setFontSize(20); pdf.setTextColor(19, 36, 64);
+    pdf.setFontSize(20); pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Ad Campaign Strategy Canvas', 20, y); y += 12;
-    pdf.setFontSize(12); pdf.setTextColor(22, 71, 106);
+    pdf.setFontSize(12); pdf.setTextColor(...DocStyles.rgb.blue);
     pdf.text('Company: ' + (data.companyName || ''), 20, y); y += 14;
     var sections = [
       { label: 'Advertising Platforms', value: data.platforms },
@@ -1048,9 +1048,9 @@ Object.assign(DocGenerator, {
     ];
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
-      pdf.setFontSize(12); pdf.setTextColor(191, 9, 47);
+      pdf.setFontSize(12); pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.label, 20, y); y += 7;
-      pdf.setFontSize(11); pdf.setTextColor(60, 60, 60);
+      pdf.setFontSize(11); pdf.setTextColor(...DocStyles.rgb.darkGray);
       var lines = pdf.splitTextToSize(s.value || 'N/A', 170);
       pdf.text(lines, 20, y); y += lines.length * 6 + 6;
     });
@@ -1059,7 +1059,7 @@ Object.assign(DocGenerator, {
 
   generateAdCampaignPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var colors = DocStyles.colors;
 
     var slide1 = pptx.addSlide();
     slide1.background = { color: colors.navy };
@@ -1102,25 +1102,25 @@ Object.assign(DocGenerator, {
     var doc = new window.docx.Document({
       sections: [{
         children: [
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'INTEGRATED MARKETING STRATEGY CAPSTONE', bold: true, size: 36, color: 'BF092F' })], spacing: { after: 200 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'INTEGRATED MARKETING STRATEGY CAPSTONE', bold: true, size: 36, color: DocStyles.colors.crimson })], spacing: { after: 200 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Company: ' + (data.companyName || ''), bold: true, size: 24 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Business Model', bold: true, size: 22, color: '16476A' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Business Model', bold: true, size: 22, color: DocStyles.colors.blue })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.businessModel || 'Not specified' })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Target Audience & Buyer Persona', bold: true, size: 22, color: '16476A' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Target Audience & Buyer Persona', bold: true, size: 22, color: DocStyles.colors.blue })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.targetAudience || 'Not specified' })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Channel Strategy', bold: true, size: 22, color: '16476A' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Channel Strategy', bold: true, size: 22, color: DocStyles.colors.blue })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.channelStrategy || 'Not specified' })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Launch / GTM Plan', bold: true, size: 22, color: '16476A' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Launch / GTM Plan', bold: true, size: 22, color: DocStyles.colors.blue })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.launchPlan || 'Not specified' })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Growth Engine & Loops', bold: true, size: 22, color: '16476A' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Growth Engine & Loops', bold: true, size: 22, color: DocStyles.colors.blue })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.growthEngine || 'Not specified' })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Measurement Framework', bold: true, size: 22, color: '16476A' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Measurement Framework', bold: true, size: 22, color: DocStyles.colors.blue })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.measurement || 'Not specified' })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Budget Allocation', bold: true, size: 22, color: '16476A' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Budget Allocation', bold: true, size: 22, color: DocStyles.colors.blue })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.budget || 'Not specified' })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Implementation Timeline', bold: true, size: 22, color: '16476A' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Implementation Timeline', bold: true, size: 22, color: DocStyles.colors.blue })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.timeline || 'Not specified' })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Growth Goals & Success Metrics', bold: true, size: 22, color: '16476A' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Growth Goals & Success Metrics', bold: true, size: 22, color: DocStyles.colors.blue })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.growthGoals || 'Not specified' })], spacing: { after: 200 } })
         ]
       }]
@@ -1153,10 +1153,10 @@ Object.assign(DocGenerator, {
   generateIntegratedCapstonePDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     pdf.setFontSize(20);
-    pdf.setTextColor(191, 9, 47);
+    pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('INTEGRATED MARKETING STRATEGY CAPSTONE', 20, 25);
     pdf.setFontSize(14);
-    pdf.setTextColor(0, 0, 0);
+    pdf.setTextColor(...DocStyles.rgb.black);
     pdf.text('Company: ' + (data.companyName || ''), 20, 38);
     var sections = [
       { label: 'Business Model', value: data.businessModel },
@@ -1173,10 +1173,10 @@ Object.assign(DocGenerator, {
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
       pdf.setFontSize(12);
-      pdf.setTextColor(22, 71, 106);
+      pdf.setTextColor(...DocStyles.rgb.blue);
       pdf.text(s.label, 20, y);
       pdf.setFontSize(11);
-      pdf.setTextColor(0, 0, 0);
+      pdf.setTextColor(...DocStyles.rgb.black);
       var lines = pdf.splitTextToSize(s.value || 'Not specified', 170);
       pdf.text(lines, 20, y + 7);
       y += 7 + lines.length * 6 + 8;
@@ -1186,38 +1186,38 @@ Object.assign(DocGenerator, {
 
   generateIntegratedCapstonePPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var colors = DocStyles.colors;
     pptx.title = 'Integrated Marketing Strategy Capstone';
     pptx.author = 'Marketing Strategy Series';
-    // Slide 1 â€“ Title
+    // Slide 1 – Title
     var slide1 = pptx.addSlide();
     slide1.background = { color: colors.navy };
-    slide1.addText('Integrated Marketing Strategy Capstone', { x: 0.5, y: 1.5, w: 9, h: 1.2, fontSize: 32, color: colors.white, bold: true, align: 'center', fontFace: 'Arial' });
-    slide1.addText(data.companyName || 'Company Name', { x: 0.5, y: 3.0, w: 9, h: 0.8, fontSize: 22, color: colors.teal, align: 'center', fontFace: 'Arial' });
-    // Slide 2 â€“ Strategy Overview
+    slide1.addText('Integrated Marketing Strategy Capstone', { x: 0.5, y: 1.5, w: 9, h: 1.2, fontSize: 32, color: colors.white, bold: true, align: 'center', fontFace: DocStyles.fonts.secondary });
+    slide1.addText(data.companyName || 'Company Name', { x: 0.5, y: 3.0, w: 9, h: 0.8, fontSize: 22, color: colors.teal, align: 'center', fontFace: DocStyles.fonts.secondary });
+    // Slide 2 – Strategy Overview
     var slide2 = pptx.addSlide();
     slide2.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.6, fill: { color: colors.teal } });
-    slide2.addText('Strategy Overview', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: colors.white, bold: true, fontFace: 'Arial' });
-    slide2.addText('Business Model', { x: 0.4, y: 0.9, w: 4.2, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide2.addText(data.businessModel || 'Not specified', { x: 0.4, y: 1.3, w: 4.2, h: 1.5, fontSize: 11, color: colors.gray, fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide2.addText('Target Audience', { x: 5.2, y: 0.9, w: 4.4, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide2.addText(data.targetAudience || 'Not specified', { x: 5.2, y: 1.3, w: 4.4, h: 1.5, fontSize: 11, color: colors.gray, fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide2.addText('Channel Strategy', { x: 0.4, y: 3.0, w: 4.2, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide2.addText(data.channelStrategy || 'Not specified', { x: 0.4, y: 3.4, w: 4.2, h: 1.8, fontSize: 11, color: colors.gray, fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide2.addText('Launch / GTM Plan', { x: 5.2, y: 3.0, w: 4.4, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide2.addText(data.launchPlan || 'Not specified', { x: 5.2, y: 3.4, w: 4.4, h: 1.8, fontSize: 11, color: colors.gray, fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    // Slide 3 â€“ Growth & Measurement
+    slide2.addText('Strategy Overview', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: colors.white, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText('Business Model', { x: 0.4, y: 0.9, w: 4.2, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.businessModel || 'Not specified', { x: 0.4, y: 1.3, w: 4.2, h: 1.5, fontSize: 11, color: colors.gray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide2.addText('Target Audience', { x: 5.2, y: 0.9, w: 4.4, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.targetAudience || 'Not specified', { x: 5.2, y: 1.3, w: 4.4, h: 1.5, fontSize: 11, color: colors.gray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide2.addText('Channel Strategy', { x: 0.4, y: 3.0, w: 4.2, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.channelStrategy || 'Not specified', { x: 0.4, y: 3.4, w: 4.2, h: 1.8, fontSize: 11, color: colors.gray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide2.addText('Launch / GTM Plan', { x: 5.2, y: 3.0, w: 4.4, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.launchPlan || 'Not specified', { x: 5.2, y: 3.4, w: 4.4, h: 1.8, fontSize: 11, color: colors.gray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    // Slide 3 – Growth & Measurement
     var slide3 = pptx.addSlide();
     slide3.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.6, fill: { color: colors.teal } });
-    slide3.addText('Growth & Measurement', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: colors.white, bold: true, fontFace: 'Arial' });
-    slide3.addText('Growth Engine', { x: 0.4, y: 0.9, w: 4.2, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide3.addText(data.growthEngine || 'Not specified', { x: 0.4, y: 1.3, w: 4.2, h: 1.5, fontSize: 11, color: colors.gray, fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide3.addText('Measurement Framework', { x: 5.2, y: 0.9, w: 4.4, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide3.addText(data.measurement || 'Not specified', { x: 5.2, y: 1.3, w: 4.4, h: 1.5, fontSize: 11, color: colors.gray, fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide3.addText('Budget Allocation', { x: 0.4, y: 3.0, w: 4.2, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide3.addText(data.budget || 'Not specified', { x: 0.4, y: 3.4, w: 4.2, h: 1.5, fontSize: 11, color: colors.gray, fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide3.addText('Growth Goals', { x: 5.2, y: 3.0, w: 4.4, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide3.addText(data.growthGoals || 'Not specified', { x: 5.2, y: 3.4, w: 4.4, h: 1.5, fontSize: 11, color: colors.gray, fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide3.addText('Growth & Measurement', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: colors.white, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText('Growth Engine', { x: 0.4, y: 0.9, w: 4.2, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.growthEngine || 'Not specified', { x: 0.4, y: 1.3, w: 4.2, h: 1.5, fontSize: 11, color: colors.gray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide3.addText('Measurement Framework', { x: 5.2, y: 0.9, w: 4.4, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.measurement || 'Not specified', { x: 5.2, y: 1.3, w: 4.4, h: 1.5, fontSize: 11, color: colors.gray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide3.addText('Budget Allocation', { x: 0.4, y: 3.0, w: 4.2, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.budget || 'Not specified', { x: 0.4, y: 3.4, w: 4.2, h: 1.5, fontSize: 11, color: colors.gray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide3.addText('Growth Goals', { x: 5.2, y: 3.0, w: 4.4, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.growthGoals || 'Not specified', { x: 5.2, y: 3.4, w: 4.4, h: 1.5, fontSize: 11, color: colors.gray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     pptx.writeFile({ fileName: filename + '.pptx' });
   },
 
@@ -1229,26 +1229,26 @@ Object.assign(DocGenerator, {
     var doc = new window.docx.Document({
       sections: [{
         children: [
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'SCALING & LEADERSHIP CANVAS', bold: true, size: 36, color: 'BF092F' })], spacing: { after: 200 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'SCALING & LEADERSHIP CANVAS', bold: true, size: 36, color: DocStyles.colors.crimson })], spacing: { after: 200 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Company: ' + (data.companyName || 'N/A'), size: 24 })], spacing: { after: 100 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 20, color: '666666' })], spacing: { after: 300 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'GLOBAL STRATEGY', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 20, color: DocStyles.colors.gray })], spacing: { after: 300 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'GLOBAL STRATEGY', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.globalStrategy || 'Not specified', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'LOCALIZATION', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'LOCALIZATION', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.localization || 'Not specified', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'TEAM STRUCTURE', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'TEAM STRUCTURE', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.teamStructure || 'Not specified', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'HIRING PLAN', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'HIRING PLAN', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.hiringPlan || 'Not specified', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'MARKETING OPERATIONS', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'MARKETING OPERATIONS', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.marketingOps || 'Not specified', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'LEADERSHIP MODEL', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'LEADERSHIP MODEL', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.leadershipModel || 'Not specified', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'BOARD REPORTING', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'BOARD REPORTING', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.boardReporting || 'Not specified', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'TRANSFORMATION ROADMAP', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'TRANSFORMATION ROADMAP', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.transformation || 'Not specified', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'GROWTH GOALS', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'GROWTH GOALS', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.growthGoals || 'Not specified', size: 22 })], spacing: { after: 200 } })
         ]
       }]
@@ -1282,10 +1282,10 @@ Object.assign(DocGenerator, {
   generateScalingLeadershipPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     pdf.setFontSize(22);
-    pdf.setTextColor(191, 9, 47);
+    pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('SCALING & LEADERSHIP CANVAS', 20, 25);
     pdf.setFontSize(12);
-    pdf.setTextColor(0, 0, 0);
+    pdf.setTextColor(...DocStyles.rgb.black);
     pdf.text('Company: ' + (data.companyName || 'N/A'), 20, 35);
     pdf.text('Generated: ' + new Date().toLocaleDateString(), 20, 42);
     var sections = [
@@ -1303,11 +1303,11 @@ Object.assign(DocGenerator, {
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
       pdf.setFontSize(13);
-      pdf.setTextColor(191, 9, 47);
+      pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.label, 20, y);
       y += 7;
       pdf.setFontSize(11);
-      pdf.setTextColor(0, 0, 0);
+      pdf.setTextColor(...DocStyles.rgb.black);
       var lines = pdf.splitTextToSize(s.value || 'Not specified', 170);
       pdf.text(lines, 20, y);
       y += lines.length * 6 + 8;
@@ -1318,37 +1318,37 @@ Object.assign(DocGenerator, {
   generateScalingLeadershipPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
     pptx.title = 'Scaling & Leadership Canvas';
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', white: 'FFFFFF', light: 'F8F9FA' };
+    var colors = DocStyles.colors;
 
     var slide1 = pptx.addSlide();
     slide1.background = { fill: colors.navy };
-    slide1.addText('Scaling & Leadership Canvas', { x: 0.5, y: 1.5, w: 9, h: 1.2, fontSize: 32, color: colors.white, bold: true, align: 'center', fontFace: 'Arial' });
-    slide1.addText(data.companyName || 'Company', { x: 0.5, y: 2.8, w: 9, h: 0.8, fontSize: 20, color: colors.teal, align: 'center', fontFace: 'Arial' });
-    slide1.addText(new Date().toLocaleDateString(), { x: 0.5, y: 3.8, w: 9, h: 0.5, fontSize: 14, color: colors.white, align: 'center', fontFace: 'Arial' });
+    slide1.addText('Scaling & Leadership Canvas', { x: 0.5, y: 1.5, w: 9, h: 1.2, fontSize: 32, color: colors.white, bold: true, align: 'center', fontFace: DocStyles.fonts.secondary });
+    slide1.addText(data.companyName || 'Company', { x: 0.5, y: 2.8, w: 9, h: 0.8, fontSize: 20, color: colors.teal, align: 'center', fontFace: DocStyles.fonts.secondary });
+    slide1.addText(new Date().toLocaleDateString(), { x: 0.5, y: 3.8, w: 9, h: 0.5, fontSize: 14, color: colors.white, align: 'center', fontFace: DocStyles.fonts.secondary });
 
     var slide2 = pptx.addSlide();
     slide2.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.6, fill: { color: colors.teal } });
-    slide2.addText('Global Strategy & Organization', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: colors.white, bold: true, fontFace: 'Arial' });
-    slide2.addText('Global Strategy', { x: 0.4, y: 0.9, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide2.addText(data.globalStrategy || 'Not specified', { x: 0.4, y: 1.3, w: 4.3, h: 1.6, fontSize: 10, color: '333333', fontFace: 'Arial', wrap: true, fit: 'shrink', valign: 'top' });
-    slide2.addText('Localization', { x: 5.3, y: 0.9, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide2.addText(data.localization || 'Not specified', { x: 5.3, y: 1.3, w: 4.3, h: 1.6, fontSize: 10, color: '333333', fontFace: 'Arial', wrap: true, fit: 'shrink', valign: 'top' });
-    slide2.addText('Team Structure', { x: 0.4, y: 3.1, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide2.addText(data.teamStructure || 'Not specified', { x: 0.4, y: 3.5, w: 4.3, h: 1.6, fontSize: 10, color: '333333', fontFace: 'Arial', wrap: true, fit: 'shrink', valign: 'top' });
-    slide2.addText('Hiring Plan', { x: 5.3, y: 3.1, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide2.addText(data.hiringPlan || 'Not specified', { x: 5.3, y: 3.5, w: 4.3, h: 1.6, fontSize: 10, color: '333333', fontFace: 'Arial', wrap: true, fit: 'shrink', valign: 'top' });
+    slide2.addText('Global Strategy & Organization', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: colors.white, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText('Global Strategy', { x: 0.4, y: 0.9, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.globalStrategy || 'Not specified', { x: 0.4, y: 1.3, w: 4.3, h: 1.6, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, fit: 'shrink', valign: 'top' });
+    slide2.addText('Localization', { x: 5.3, y: 0.9, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.localization || 'Not specified', { x: 5.3, y: 1.3, w: 4.3, h: 1.6, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, fit: 'shrink', valign: 'top' });
+    slide2.addText('Team Structure', { x: 0.4, y: 3.1, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.teamStructure || 'Not specified', { x: 0.4, y: 3.5, w: 4.3, h: 1.6, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, fit: 'shrink', valign: 'top' });
+    slide2.addText('Hiring Plan', { x: 5.3, y: 3.1, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.hiringPlan || 'Not specified', { x: 5.3, y: 3.5, w: 4.3, h: 1.6, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, fit: 'shrink', valign: 'top' });
 
     var slide3 = pptx.addSlide();
     slide3.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.6, fill: { color: colors.teal } });
-    slide3.addText('Leadership & Transformation', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: colors.white, bold: true, fontFace: 'Arial' });
-    slide3.addText('Marketing Operations', { x: 0.4, y: 0.9, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide3.addText(data.marketingOps || 'Not specified', { x: 0.4, y: 1.3, w: 4.3, h: 1.6, fontSize: 10, color: '333333', fontFace: 'Arial', wrap: true, fit: 'shrink', valign: 'top' });
-    slide3.addText('Leadership Model', { x: 5.3, y: 0.9, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide3.addText(data.leadershipModel || 'Not specified', { x: 5.3, y: 1.3, w: 4.3, h: 1.6, fontSize: 10, color: '333333', fontFace: 'Arial', wrap: true, fit: 'shrink', valign: 'top' });
-    slide3.addText('Transformation / Board', { x: 0.4, y: 3.1, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide3.addText((data.transformation || '') + '\n\n' + (data.boardReporting || 'Not specified'), { x: 0.4, y: 3.5, w: 4.3, h: 1.6, fontSize: 10, color: '333333', fontFace: 'Arial', wrap: true, fit: 'shrink', valign: 'top' });
-    slide3.addText('Growth Goals', { x: 5.3, y: 3.1, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide3.addText(data.growthGoals || 'Not specified', { x: 5.3, y: 3.5, w: 4.3, h: 1.6, fontSize: 10, color: '333333', fontFace: 'Arial', wrap: true, fit: 'shrink', valign: 'top' });
+    slide3.addText('Leadership & Transformation', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: colors.white, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText('Marketing Operations', { x: 0.4, y: 0.9, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.marketingOps || 'Not specified', { x: 0.4, y: 1.3, w: 4.3, h: 1.6, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, fit: 'shrink', valign: 'top' });
+    slide3.addText('Leadership Model', { x: 5.3, y: 0.9, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.leadershipModel || 'Not specified', { x: 5.3, y: 1.3, w: 4.3, h: 1.6, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, fit: 'shrink', valign: 'top' });
+    slide3.addText('Transformation / Board', { x: 0.4, y: 3.1, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText((data.transformation || '') + '\n\n' + (data.boardReporting || 'Not specified'), { x: 0.4, y: 3.5, w: 4.3, h: 1.6, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, fit: 'shrink', valign: 'top' });
+    slide3.addText('Growth Goals', { x: 5.3, y: 3.1, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.growthGoals || 'Not specified', { x: 5.3, y: 3.5, w: 4.3, h: 1.6, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, fit: 'shrink', valign: 'top' });
 
     pptx.writeFile({ fileName: filename + '.pptx' });
   },
@@ -1361,26 +1361,26 @@ Object.assign(DocGenerator, {
     var doc = new window.docx.Document({
       sections: [{
         children: [
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'OFFLINE MARKETING CANVAS', bold: true, size: 36, color: 'BF092F' })], spacing: { after: 200 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'OFFLINE MARKETING CANVAS', bold: true, size: 36, color: DocStyles.colors.crimson })], spacing: { after: 200 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Company: ' + (data.companyName || 'N/A'), size: 24 })], spacing: { after: 100 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 20, color: '666666' })], spacing: { after: 300 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'EVENT STRATEGY', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 20, color: DocStyles.colors.gray })], spacing: { after: 300 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'EVENT STRATEGY', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.eventStrategy || 'Not specified', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'TRADE SHOWS', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'TRADE SHOWS', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.tradeShows || 'Not specified', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'PR STRATEGY', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'PR STRATEGY', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.prStrategy || 'Not specified', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'MEDIA RELATIONS', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'MEDIA RELATIONS', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.mediaRelations || 'Not specified', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'BROADCAST & TRADITIONAL', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'BROADCAST & TRADITIONAL', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.broadcast || 'Not specified', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'DIRECT MAIL', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'DIRECT MAIL', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.directMail || 'Not specified', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'OOH ADVERTISING', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'OOH ADVERTISING', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.ooh || 'Not specified', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'OMNICHANNEL INTEGRATION', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'OMNICHANNEL INTEGRATION', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.omnichannel || 'Not specified', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'GROWTH GOALS', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'GROWTH GOALS', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.growthGoals || 'Not specified', size: 22 })], spacing: { after: 200 } })
         ]
       }]
@@ -1414,10 +1414,10 @@ Object.assign(DocGenerator, {
   generateOfflineMarketingPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     pdf.setFontSize(22);
-    pdf.setTextColor(191, 9, 47);
+    pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('OFFLINE MARKETING CANVAS', 20, 25);
     pdf.setFontSize(12);
-    pdf.setTextColor(0, 0, 0);
+    pdf.setTextColor(...DocStyles.rgb.black);
     pdf.text('Company: ' + (data.companyName || 'N/A'), 20, 35);
     pdf.text('Generated: ' + new Date().toLocaleDateString(), 20, 42);
     var sections = [
@@ -1435,11 +1435,11 @@ Object.assign(DocGenerator, {
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
       pdf.setFontSize(13);
-      pdf.setTextColor(191, 9, 47);
+      pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.label, 20, y);
       y += 7;
       pdf.setFontSize(11);
-      pdf.setTextColor(0, 0, 0);
+      pdf.setTextColor(...DocStyles.rgb.black);
       var lines = pdf.splitTextToSize(s.value || 'Not specified', 170);
       pdf.text(lines, 20, y);
       y += lines.length * 6 + 8;
@@ -1450,37 +1450,37 @@ Object.assign(DocGenerator, {
   generateOfflineMarketingPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
     pptx.title = 'Offline Marketing Canvas';
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', white: 'FFFFFF', light: 'F8F9FA' };
+    var colors = DocStyles.colors;
 
     var slide1 = pptx.addSlide();
     slide1.background = { fill: colors.navy };
-    slide1.addText('Offline Marketing Canvas', { x: 0.5, y: 1.5, w: 9, h: 1.2, fontSize: 32, color: colors.white, bold: true, align: 'center', fontFace: 'Arial' });
-    slide1.addText(data.companyName || 'Company', { x: 0.5, y: 2.8, w: 9, h: 0.8, fontSize: 20, color: colors.teal, align: 'center', fontFace: 'Arial' });
-    slide1.addText(new Date().toLocaleDateString(), { x: 0.5, y: 3.8, w: 9, h: 0.5, fontSize: 14, color: colors.white, align: 'center', fontFace: 'Arial' });
+    slide1.addText('Offline Marketing Canvas', { x: 0.5, y: 1.5, w: 9, h: 1.2, fontSize: 32, color: colors.white, bold: true, align: 'center', fontFace: DocStyles.fonts.secondary });
+    slide1.addText(data.companyName || 'Company', { x: 0.5, y: 2.8, w: 9, h: 0.8, fontSize: 20, color: colors.teal, align: 'center', fontFace: DocStyles.fonts.secondary });
+    slide1.addText(new Date().toLocaleDateString(), { x: 0.5, y: 3.8, w: 9, h: 0.5, fontSize: 14, color: colors.white, align: 'center', fontFace: DocStyles.fonts.secondary });
 
     var slide2 = pptx.addSlide();
     slide2.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.6, fill: { color: colors.teal } });
-    slide2.addText('Events & PR Strategy', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: colors.white, bold: true, fontFace: 'Arial' });
-    slide2.addText('Event Strategy', { x: 0.4, y: 0.9, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide2.addText(data.eventStrategy || 'Not specified', { x: 0.4, y: 1.3, w: 4.3, h: 1.6, fontSize: 10, color: '333333', fontFace: 'Arial', wrap: true, fit: 'shrink', valign: 'top' });
-    slide2.addText('Trade Shows', { x: 5.3, y: 0.9, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide2.addText(data.tradeShows || 'Not specified', { x: 5.3, y: 1.3, w: 4.3, h: 1.6, fontSize: 10, color: '333333', fontFace: 'Arial', wrap: true, fit: 'shrink', valign: 'top' });
-    slide2.addText('PR Strategy', { x: 0.4, y: 3.1, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide2.addText(data.prStrategy || 'Not specified', { x: 0.4, y: 3.5, w: 4.3, h: 1.6, fontSize: 10, color: '333333', fontFace: 'Arial', wrap: true, fit: 'shrink', valign: 'top' });
-    slide2.addText('Media Relations', { x: 5.3, y: 3.1, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide2.addText(data.mediaRelations || 'Not specified', { x: 5.3, y: 3.5, w: 4.3, h: 1.6, fontSize: 10, color: '333333', fontFace: 'Arial', wrap: true, fit: 'shrink', valign: 'top' });
+    slide2.addText('Events & PR Strategy', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: colors.white, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText('Event Strategy', { x: 0.4, y: 0.9, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.eventStrategy || 'Not specified', { x: 0.4, y: 1.3, w: 4.3, h: 1.6, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, fit: 'shrink', valign: 'top' });
+    slide2.addText('Trade Shows', { x: 5.3, y: 0.9, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.tradeShows || 'Not specified', { x: 5.3, y: 1.3, w: 4.3, h: 1.6, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, fit: 'shrink', valign: 'top' });
+    slide2.addText('PR Strategy', { x: 0.4, y: 3.1, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.prStrategy || 'Not specified', { x: 0.4, y: 3.5, w: 4.3, h: 1.6, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, fit: 'shrink', valign: 'top' });
+    slide2.addText('Media Relations', { x: 5.3, y: 3.1, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.mediaRelations || 'Not specified', { x: 5.3, y: 3.5, w: 4.3, h: 1.6, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, fit: 'shrink', valign: 'top' });
 
     var slide3 = pptx.addSlide();
     slide3.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.6, fill: { color: colors.teal } });
-    slide3.addText('Traditional & Direct Marketing', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: colors.white, bold: true, fontFace: 'Arial' });
-    slide3.addText('Broadcast & Traditional', { x: 0.4, y: 0.9, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide3.addText(data.broadcast || 'Not specified', { x: 0.4, y: 1.3, w: 4.3, h: 1.6, fontSize: 10, color: '333333', fontFace: 'Arial', wrap: true, fit: 'shrink', valign: 'top' });
-    slide3.addText('Direct Mail', { x: 5.3, y: 0.9, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide3.addText(data.directMail || 'Not specified', { x: 5.3, y: 1.3, w: 4.3, h: 1.6, fontSize: 10, color: '333333', fontFace: 'Arial', wrap: true, fit: 'shrink', valign: 'top' });
-    slide3.addText('OOH Advertising', { x: 0.4, y: 3.1, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide3.addText(data.ooh || 'Not specified', { x: 0.4, y: 3.5, w: 4.3, h: 1.6, fontSize: 10, color: '333333', fontFace: 'Arial', wrap: true, fit: 'shrink', valign: 'top' });
-    slide3.addText('Omnichannel / Goals', { x: 5.3, y: 3.1, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: 'Arial' });
-    slide3.addText((data.omnichannel || '') + '\n\n' + (data.growthGoals || 'Not specified'), { x: 5.3, y: 3.5, w: 4.3, h: 1.6, fontSize: 10, color: '333333', fontFace: 'Arial', wrap: true, fit: 'shrink', valign: 'top' });
+    slide3.addText('Traditional & Direct Marketing', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: colors.white, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText('Broadcast & Traditional', { x: 0.4, y: 0.9, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.broadcast || 'Not specified', { x: 0.4, y: 1.3, w: 4.3, h: 1.6, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, fit: 'shrink', valign: 'top' });
+    slide3.addText('Direct Mail', { x: 5.3, y: 0.9, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.directMail || 'Not specified', { x: 5.3, y: 1.3, w: 4.3, h: 1.6, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, fit: 'shrink', valign: 'top' });
+    slide3.addText('OOH Advertising', { x: 0.4, y: 3.1, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.ooh || 'Not specified', { x: 0.4, y: 3.5, w: 4.3, h: 1.6, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, fit: 'shrink', valign: 'top' });
+    slide3.addText('Omnichannel / Goals', { x: 5.3, y: 3.1, w: 4.3, h: 0.4, fontSize: 13, color: colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText((data.omnichannel || '') + '\n\n' + (data.growthGoals || 'Not specified'), { x: 5.3, y: 3.5, w: 4.3, h: 1.6, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, fit: 'shrink', valign: 'top' });
 
     pptx.writeFile({ fileName: filename + '.pptx' });
   },
@@ -1493,25 +1493,25 @@ Object.assign(DocGenerator, {
     var doc = new window.docx.Document({
       sections: [{
         children: [
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'PERSONAL BRAND CANVAS', bold: true, size: 36, color: 'BF092F' })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: filename, size: 24, color: '16476A' })], spacing: { after: 400 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Niche & Positioning', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'PERSONAL BRAND CANVAS', bold: true, size: 36, color: DocStyles.colors.crimson })], spacing: { after: 200 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: filename, size: 24, color: DocStyles.colors.blue })], spacing: { after: 400 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Niche & Positioning', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.niche || 'Not specified', size: 20 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Positioning Statement', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Positioning Statement', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.positioning || 'Not specified', size: 20 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Platform Strategy', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Platform Strategy', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.platforms || 'Not specified', size: 20 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Content Pillars', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Content Pillars', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.contentPillars || 'Not specified', size: 20 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Audience Profile', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Audience Profile', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.audienceProfile || 'Not specified', size: 20 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Monetization Strategy', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Monetization Strategy', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.monetization || 'Not specified', size: 20 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Revenue Model', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Revenue Model', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.revenueModel || 'Not specified', size: 20 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Scaling Plan', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Scaling Plan', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.scaling || 'Not specified', size: 20 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Growth Goals', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Growth Goals', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.growthGoals || 'Not specified', size: 20 })], spacing: { after: 200 } }),
         ]
       }]
@@ -1543,10 +1543,10 @@ Object.assign(DocGenerator, {
   generatePersonalBrandPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     pdf.setFontSize(20);
-    pdf.setTextColor(191, 9, 47);
+    pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('PERSONAL BRAND CANVAS', 20, 25);
     pdf.setFontSize(14);
-    pdf.setTextColor(22, 71, 106);
+    pdf.setTextColor(...DocStyles.rgb.blue);
     pdf.text(filename, 20, 35);
     var sections = [
       { title: 'Niche & Positioning', content: data.niche },
@@ -1563,11 +1563,11 @@ Object.assign(DocGenerator, {
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
       pdf.setFontSize(13);
-      pdf.setTextColor(191, 9, 47);
+      pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.title, 20, y);
       y += 8;
       pdf.setFontSize(11);
-      pdf.setTextColor(0, 0, 0);
+      pdf.setTextColor(...DocStyles.rgb.black);
       var lines = pdf.splitTextToSize(s.content || 'Not specified', 170);
       pdf.text(lines, 20, y);
       y += lines.length * 6 + 10;
@@ -1580,33 +1580,33 @@ Object.assign(DocGenerator, {
     pptx.title = 'Personal Brand Canvas';
 
     var slide1 = pptx.addSlide();
-    slide1.background = { color: '132440' };
-    slide1.addText('Personal Brand Canvas', { x: 0.5, y: 1.5, w: 9, h: 1.2, fontSize: 32, color: 'FFFFFF', bold: true, align: 'center', fontFace: 'Arial' });
-    slide1.addText(data.companyName || filename, { x: 0.5, y: 2.8, w: 9, h: 0.8, fontSize: 20, color: '3B9797', align: 'center', fontFace: 'Arial' });
+    slide1.background = { color: DocStyles.colors.navy };
+    slide1.addText('Personal Brand Canvas', { x: 0.5, y: 1.5, w: 9, h: 1.2, fontSize: 32, color: DocStyles.colors.white, bold: true, align: 'center', fontFace: DocStyles.fonts.secondary });
+    slide1.addText(data.companyName || filename, { x: 0.5, y: 2.8, w: 9, h: 0.8, fontSize: 20, color: DocStyles.colors.teal, align: 'center', fontFace: DocStyles.fonts.secondary });
 
     var slide2 = pptx.addSlide();
-    slide2.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.6, fill: { color: '3B9797' } });
-    slide2.addText('Positioning & Content', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: 'FFFFFF', bold: true, fontFace: 'Arial' });
-    slide2.addText('Niche & Positioning', { x: 0.4, y: 0.8, w: 4.3, h: 0.4, fontSize: 13, color: 'BF092F', bold: true, fontFace: 'Arial' });
-    slide2.addText(data.niche || 'Not specified', { x: 0.4, y: 1.2, w: 4.3, h: 1.5, fontSize: 10, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide2.addText('Platform Strategy', { x: 5.3, y: 0.8, w: 4.3, h: 0.4, fontSize: 13, color: 'BF092F', bold: true, fontFace: 'Arial' });
-    slide2.addText(data.platforms || 'Not specified', { x: 5.3, y: 1.2, w: 4.3, h: 1.5, fontSize: 10, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide2.addText('Content Pillars', { x: 0.4, y: 2.9, w: 4.3, h: 0.4, fontSize: 13, color: 'BF092F', bold: true, fontFace: 'Arial' });
-    slide2.addText(data.contentPillars || 'Not specified', { x: 0.4, y: 3.3, w: 4.3, h: 1.5, fontSize: 10, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide2.addText('Audience Profile', { x: 5.3, y: 2.9, w: 4.3, h: 0.4, fontSize: 13, color: 'BF092F', bold: true, fontFace: 'Arial' });
-    slide2.addText(data.audienceProfile || 'Not specified', { x: 5.3, y: 3.3, w: 4.3, h: 1.5, fontSize: 10, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide2.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.6, fill: { color: DocStyles.colors.teal } });
+    slide2.addText('Positioning & Content', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: DocStyles.colors.white, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText('Niche & Positioning', { x: 0.4, y: 0.8, w: 4.3, h: 0.4, fontSize: 13, color: DocStyles.colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.niche || 'Not specified', { x: 0.4, y: 1.2, w: 4.3, h: 1.5, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide2.addText('Platform Strategy', { x: 5.3, y: 0.8, w: 4.3, h: 0.4, fontSize: 13, color: DocStyles.colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.platforms || 'Not specified', { x: 5.3, y: 1.2, w: 4.3, h: 1.5, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide2.addText('Content Pillars', { x: 0.4, y: 2.9, w: 4.3, h: 0.4, fontSize: 13, color: DocStyles.colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.contentPillars || 'Not specified', { x: 0.4, y: 3.3, w: 4.3, h: 1.5, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide2.addText('Audience Profile', { x: 5.3, y: 2.9, w: 4.3, h: 0.4, fontSize: 13, color: DocStyles.colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.audienceProfile || 'Not specified', { x: 5.3, y: 3.3, w: 4.3, h: 1.5, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
 
     var slide3 = pptx.addSlide();
-    slide3.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.6, fill: { color: '3B9797' } });
-    slide3.addText('Monetization & Growth', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: 'FFFFFF', bold: true, fontFace: 'Arial' });
-    slide3.addText('Monetization Strategy', { x: 0.4, y: 0.8, w: 4.3, h: 0.4, fontSize: 13, color: 'BF092F', bold: true, fontFace: 'Arial' });
-    slide3.addText(data.monetization || 'Not specified', { x: 0.4, y: 1.2, w: 4.3, h: 1.5, fontSize: 10, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide3.addText('Revenue Model', { x: 5.3, y: 0.8, w: 4.3, h: 0.4, fontSize: 13, color: 'BF092F', bold: true, fontFace: 'Arial' });
-    slide3.addText(data.revenueModel || 'Not specified', { x: 5.3, y: 1.2, w: 4.3, h: 1.5, fontSize: 10, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide3.addText('Scaling Plan', { x: 0.4, y: 2.9, w: 4.3, h: 0.4, fontSize: 13, color: 'BF092F', bold: true, fontFace: 'Arial' });
-    slide3.addText(data.scaling || 'Not specified', { x: 0.4, y: 3.3, w: 4.3, h: 1.5, fontSize: 10, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide3.addText('Growth Goals', { x: 5.3, y: 2.9, w: 4.3, h: 0.4, fontSize: 13, color: 'BF092F', bold: true, fontFace: 'Arial' });
-    slide3.addText(data.growthGoals || 'Not specified', { x: 5.3, y: 3.3, w: 4.3, h: 1.5, fontSize: 10, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide3.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.6, fill: { color: DocStyles.colors.teal } });
+    slide3.addText('Monetization & Growth', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: DocStyles.colors.white, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText('Monetization Strategy', { x: 0.4, y: 0.8, w: 4.3, h: 0.4, fontSize: 13, color: DocStyles.colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.monetization || 'Not specified', { x: 0.4, y: 1.2, w: 4.3, h: 1.5, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide3.addText('Revenue Model', { x: 5.3, y: 0.8, w: 4.3, h: 0.4, fontSize: 13, color: DocStyles.colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.revenueModel || 'Not specified', { x: 5.3, y: 1.2, w: 4.3, h: 1.5, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide3.addText('Scaling Plan', { x: 0.4, y: 2.9, w: 4.3, h: 0.4, fontSize: 13, color: DocStyles.colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.scaling || 'Not specified', { x: 0.4, y: 3.3, w: 4.3, h: 1.5, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide3.addText('Growth Goals', { x: 5.3, y: 2.9, w: 4.3, h: 0.4, fontSize: 13, color: DocStyles.colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.growthGoals || 'Not specified', { x: 5.3, y: 3.3, w: 4.3, h: 1.5, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
 
     pptx.writeFile({ fileName: filename + '.pptx' });
   },
@@ -1619,25 +1619,25 @@ Object.assign(DocGenerator, {
     var doc = new window.docx.Document({
       sections: [{
         children: [
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'MARKETING FINANCE CANVAS', bold: true, size: 36, color: 'BF092F' })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: filename, size: 24, color: '16476A' })], spacing: { after: 400 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Annual Budget', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'MARKETING FINANCE CANVAS', bold: true, size: 36, color: DocStyles.colors.crimson })], spacing: { after: 200 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: filename, size: 24, color: DocStyles.colors.blue })], spacing: { after: 400 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Annual Budget', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.annualBudget || 'Not specified', size: 20 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Channel Allocation', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Channel Allocation', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.channelAllocation || 'Not specified', size: 20 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'CAC Metrics', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'CAC Metrics', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.cacMetrics || 'Not specified', size: 20 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'LTV Model', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'LTV Model', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.ltvModel || 'Not specified', size: 20 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Payback Period', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Payback Period', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.paybackPeriod || 'Not specified', size: 20 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'ROI Targets', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'ROI Targets', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.roiTargets || 'Not specified', size: 20 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Revenue Forecast', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Revenue Forecast', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.forecast || 'Not specified', size: 20 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Scenario Planning', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Scenario Planning', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.scenarios || 'Not specified', size: 20 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Growth Goals', bold: true, size: 22, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Growth Goals', bold: true, size: 22, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.growthGoals || 'Not specified', size: 20 })], spacing: { after: 200 } }),
         ]
       }]
@@ -1669,10 +1669,10 @@ Object.assign(DocGenerator, {
   generateMarketingFinancePDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     pdf.setFontSize(20);
-    pdf.setTextColor(191, 9, 47);
+    pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('MARKETING FINANCE CANVAS', 20, 25);
     pdf.setFontSize(14);
-    pdf.setTextColor(22, 71, 106);
+    pdf.setTextColor(...DocStyles.rgb.blue);
     pdf.text(filename, 20, 35);
     var sections = [
       { title: 'Annual Budget', content: data.annualBudget },
@@ -1689,11 +1689,11 @@ Object.assign(DocGenerator, {
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
       pdf.setFontSize(13);
-      pdf.setTextColor(191, 9, 47);
+      pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.title, 20, y);
       y += 8;
       pdf.setFontSize(11);
-      pdf.setTextColor(0, 0, 0);
+      pdf.setTextColor(...DocStyles.rgb.black);
       var lines = pdf.splitTextToSize(s.content || 'Not specified', 170);
       pdf.text(lines, 20, y);
       y += lines.length * 6 + 10;
@@ -1706,33 +1706,33 @@ Object.assign(DocGenerator, {
     pptx.title = 'Marketing Finance Canvas';
 
     var slide1 = pptx.addSlide();
-    slide1.background = { color: '132440' };
-    slide1.addText('Marketing Finance Canvas', { x: 0.5, y: 1.5, w: 9, h: 1.2, fontSize: 32, color: 'FFFFFF', bold: true, align: 'center', fontFace: 'Arial' });
-    slide1.addText(data.companyName || filename, { x: 0.5, y: 2.8, w: 9, h: 0.8, fontSize: 20, color: '3B9797', align: 'center', fontFace: 'Arial' });
+    slide1.background = { color: DocStyles.colors.navy };
+    slide1.addText('Marketing Finance Canvas', { x: 0.5, y: 1.5, w: 9, h: 1.2, fontSize: 32, color: DocStyles.colors.white, bold: true, align: 'center', fontFace: DocStyles.fonts.secondary });
+    slide1.addText(data.companyName || filename, { x: 0.5, y: 2.8, w: 9, h: 0.8, fontSize: 20, color: DocStyles.colors.teal, align: 'center', fontFace: DocStyles.fonts.secondary });
 
     var slide2 = pptx.addSlide();
-    slide2.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.6, fill: { color: '3B9797' } });
-    slide2.addText('Budget & Unit Economics', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: 'FFFFFF', bold: true, fontFace: 'Arial' });
-    slide2.addText('Annual Budget', { x: 0.4, y: 0.8, w: 4.3, h: 0.4, fontSize: 13, color: 'BF092F', bold: true, fontFace: 'Arial' });
-    slide2.addText(data.annualBudget || 'Not specified', { x: 0.4, y: 1.2, w: 4.3, h: 1.5, fontSize: 10, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide2.addText('Channel Allocation', { x: 5.3, y: 0.8, w: 4.3, h: 0.4, fontSize: 13, color: 'BF092F', bold: true, fontFace: 'Arial' });
-    slide2.addText(data.channelAllocation || 'Not specified', { x: 5.3, y: 1.2, w: 4.3, h: 1.5, fontSize: 10, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide2.addText('CAC Metrics', { x: 0.4, y: 2.9, w: 4.3, h: 0.4, fontSize: 13, color: 'BF092F', bold: true, fontFace: 'Arial' });
-    slide2.addText(data.cacMetrics || 'Not specified', { x: 0.4, y: 3.3, w: 4.3, h: 1.5, fontSize: 10, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide2.addText('LTV Model', { x: 5.3, y: 2.9, w: 4.3, h: 0.4, fontSize: 13, color: 'BF092F', bold: true, fontFace: 'Arial' });
-    slide2.addText(data.ltvModel || 'Not specified', { x: 5.3, y: 3.3, w: 4.3, h: 1.5, fontSize: 10, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide2.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.6, fill: { color: DocStyles.colors.teal } });
+    slide2.addText('Budget & Unit Economics', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: DocStyles.colors.white, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText('Annual Budget', { x: 0.4, y: 0.8, w: 4.3, h: 0.4, fontSize: 13, color: DocStyles.colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.annualBudget || 'Not specified', { x: 0.4, y: 1.2, w: 4.3, h: 1.5, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide2.addText('Channel Allocation', { x: 5.3, y: 0.8, w: 4.3, h: 0.4, fontSize: 13, color: DocStyles.colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.channelAllocation || 'Not specified', { x: 5.3, y: 1.2, w: 4.3, h: 1.5, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide2.addText('CAC Metrics', { x: 0.4, y: 2.9, w: 4.3, h: 0.4, fontSize: 13, color: DocStyles.colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.cacMetrics || 'Not specified', { x: 0.4, y: 3.3, w: 4.3, h: 1.5, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide2.addText('LTV Model', { x: 5.3, y: 2.9, w: 4.3, h: 0.4, fontSize: 13, color: DocStyles.colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide2.addText(data.ltvModel || 'Not specified', { x: 5.3, y: 3.3, w: 4.3, h: 1.5, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
 
     var slide3 = pptx.addSlide();
-    slide3.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.6, fill: { color: '3B9797' } });
-    slide3.addText('Planning & Forecasting', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: 'FFFFFF', bold: true, fontFace: 'Arial' });
-    slide3.addText('ROI Targets', { x: 0.4, y: 0.8, w: 4.3, h: 0.4, fontSize: 13, color: 'BF092F', bold: true, fontFace: 'Arial' });
-    slide3.addText(data.roiTargets || 'Not specified', { x: 0.4, y: 1.2, w: 4.3, h: 1.5, fontSize: 10, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide3.addText('Revenue Forecast', { x: 5.3, y: 0.8, w: 4.3, h: 0.4, fontSize: 13, color: 'BF092F', bold: true, fontFace: 'Arial' });
-    slide3.addText(data.forecast || 'Not specified', { x: 5.3, y: 1.2, w: 4.3, h: 1.5, fontSize: 10, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide3.addText('Scenario Planning', { x: 0.4, y: 2.9, w: 4.3, h: 0.4, fontSize: 13, color: 'BF092F', bold: true, fontFace: 'Arial' });
-    slide3.addText(data.scenarios || 'Not specified', { x: 0.4, y: 3.3, w: 4.3, h: 1.5, fontSize: 10, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    slide3.addText('Growth Goals', { x: 5.3, y: 2.9, w: 4.3, h: 0.4, fontSize: 13, color: 'BF092F', bold: true, fontFace: 'Arial' });
-    slide3.addText(data.growthGoals || 'Not specified', { x: 5.3, y: 3.3, w: 4.3, h: 1.5, fontSize: 10, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide3.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.6, fill: { color: DocStyles.colors.teal } });
+    slide3.addText('Planning & Forecasting', { x: 0.3, y: 0.05, w: 9, h: 0.5, fontSize: 18, color: DocStyles.colors.white, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText('ROI Targets', { x: 0.4, y: 0.8, w: 4.3, h: 0.4, fontSize: 13, color: DocStyles.colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.roiTargets || 'Not specified', { x: 0.4, y: 1.2, w: 4.3, h: 1.5, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide3.addText('Revenue Forecast', { x: 5.3, y: 0.8, w: 4.3, h: 0.4, fontSize: 13, color: DocStyles.colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.forecast || 'Not specified', { x: 5.3, y: 1.2, w: 4.3, h: 1.5, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide3.addText('Scenario Planning', { x: 0.4, y: 2.9, w: 4.3, h: 0.4, fontSize: 13, color: DocStyles.colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.scenarios || 'Not specified', { x: 0.4, y: 3.3, w: 4.3, h: 1.5, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    slide3.addText('Growth Goals', { x: 5.3, y: 2.9, w: 4.3, h: 0.4, fontSize: 13, color: DocStyles.colors.crimson, bold: true, fontFace: DocStyles.fonts.secondary });
+    slide3.addText(data.growthGoals || 'Not specified', { x: 5.3, y: 3.3, w: 4.3, h: 1.5, fontSize: 10, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
 
     pptx.writeFile({ fileName: filename + '.pptx' });
   },
@@ -1745,25 +1745,25 @@ Object.assign(DocGenerator, {
     var doc = new window.docx.Document({
       sections: [{
         children: [
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'PRODUCT GTM CANVAS', bold: true, size: 36, color: 'BF092F' })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: filename, size: 24, color: '132440' })], spacing: { after: 400 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Target Market & ICP', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'PRODUCT GTM CANVAS', bold: true, size: 36, color: DocStyles.colors.crimson })], spacing: { after: 200 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: filename, size: 24, color: DocStyles.colors.navy })], spacing: { after: 400 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Target Market & ICP', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.targetMarket || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Positioning Statement', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Positioning Statement', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.positioning || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Messaging Architecture', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Messaging Architecture', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.messaging || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Competitive Battlecards', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Competitive Battlecards', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.battlecards || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Launch Plan', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Launch Plan', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.launchPlan || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Sales Enablement', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Sales Enablement', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.salesEnablement || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'GTM Motion & Channels', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'GTM Motion & Channels', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.channelStrategy || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Success Metrics', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Success Metrics', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.successMetrics || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Growth Goals', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Growth Goals', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.growthGoals || 'N/A', size: 22 })], spacing: { after: 200 } })
         ]
       }]
@@ -1796,10 +1796,10 @@ Object.assign(DocGenerator, {
   generateProductGtmPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     pdf.setFontSize(20);
-    pdf.setTextColor(191, 9, 47);
+    pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('PRODUCT GTM CANVAS', 20, 25);
     pdf.setFontSize(14);
-    pdf.setTextColor(19, 36, 64);
+    pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text(filename, 20, 35);
     var sections = [
       { label: 'Target Market & ICP', value: data.targetMarket },
@@ -1816,11 +1816,11 @@ Object.assign(DocGenerator, {
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
       pdf.setFontSize(12);
-      pdf.setTextColor(191, 9, 47);
+      pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.label, 20, y);
       y += 8;
       pdf.setFontSize(11);
-      pdf.setTextColor(0, 0, 0);
+      pdf.setTextColor(...DocStyles.rgb.black);
       var lines = pdf.splitTextToSize(s.value || 'N/A', 170);
       pdf.text(lines, 20, y);
       y += lines.length * 6 + 10;
@@ -1831,37 +1831,37 @@ Object.assign(DocGenerator, {
   generateProductGtmPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
     pptx.title = 'Product GTM Canvas';
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF' };
-    // Slide 1 â€” Title
+    var colors = DocStyles.colors;
+    // Slide 1 — Title
     var s1 = pptx.addSlide();
     s1.background = { color: colors.navy };
     s1.addText('PRODUCT GTM\nCANVAS', { x: 0.5, y: 0.8, w: 9, h: 2, fontSize: 36, bold: true, color: colors.white, align: 'center', lineSpacingMultiple: 1.2 });
     s1.addText(data.companyName || filename, { x: 0.5, y: 3.0, w: 9, h: 0.8, fontSize: 20, color: colors.teal, align: 'center' });
     s1.addShape(pptx.ShapeType.rect, { x: 3.5, y: 4.0, w: 3, h: 0.05, fill: { color: colors.crimson } });
-    // Slide 2 â€” Positioning & Messaging
+    // Slide 2 — Positioning & Messaging
     var s2 = pptx.addSlide();
     s2.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.8, fill: { color: colors.teal } });
     s2.addText('Positioning & Messaging', { x: 0.4, y: 0.1, w: 9, h: 0.6, fontSize: 22, bold: true, color: colors.white });
     s2.addText('Target Market & ICP', { x: 0.4, y: 1.1, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s2.addText(data.targetMarket || 'N/A', { x: 0.4, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s2.addText(data.targetMarket || 'N/A', { x: 0.4, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s2.addText('Positioning Statement', { x: 5.3, y: 1.1, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s2.addText(data.positioning || 'N/A', { x: 5.3, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s2.addText(data.positioning || 'N/A', { x: 5.3, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s2.addText('Messaging Architecture', { x: 0.4, y: 3.2, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s2.addText(data.messaging || 'N/A', { x: 0.4, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s2.addText(data.messaging || 'N/A', { x: 0.4, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s2.addText('Competitive Battlecards', { x: 5.3, y: 3.2, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s2.addText(data.battlecards || 'N/A', { x: 5.3, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    // Slide 3 â€” Launch & Enablement
+    s2.addText(data.battlecards || 'N/A', { x: 5.3, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    // Slide 3 — Launch & Enablement
     var s3 = pptx.addSlide();
     s3.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.8, fill: { color: colors.teal } });
     s3.addText('Launch & Enablement', { x: 0.4, y: 0.1, w: 9, h: 0.6, fontSize: 22, bold: true, color: colors.white });
     s3.addText('Launch Plan', { x: 0.4, y: 1.1, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s3.addText(data.launchPlan || 'N/A', { x: 0.4, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s3.addText(data.launchPlan || 'N/A', { x: 0.4, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s3.addText('Sales Enablement', { x: 5.3, y: 1.1, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s3.addText(data.salesEnablement || 'N/A', { x: 5.3, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s3.addText(data.salesEnablement || 'N/A', { x: 5.3, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s3.addText('GTM Motion & Channels', { x: 0.4, y: 3.2, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s3.addText(data.channelStrategy || 'N/A', { x: 0.4, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s3.addText(data.channelStrategy || 'N/A', { x: 0.4, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s3.addText('Growth Goals', { x: 5.3, y: 3.2, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s3.addText(data.growthGoals || 'N/A', { x: 5.3, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s3.addText(data.growthGoals || 'N/A', { x: 5.3, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     pptx.writeFile({ fileName: filename + '.pptx' });
   },
 
@@ -1873,25 +1873,25 @@ Object.assign(DocGenerator, {
     var doc = new window.docx.Document({
       sections: [{
         children: [
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'STRATEGIC ANALYSIS CANVAS', bold: true, size: 36, color: 'BF092F' })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: filename, size: 24, color: '132440' })], spacing: { after: 400 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: "Porter's Five Forces", bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'STRATEGIC ANALYSIS CANVAS', bold: true, size: 36, color: DocStyles.colors.crimson })], spacing: { after: 200 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: filename, size: 24, color: DocStyles.colors.navy })], spacing: { after: 400 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: "Porter's Five Forces", bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.porterForces || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Industry Lifecycle', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Industry Lifecycle', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.industryLifecycle || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'PESTLE Factors', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'PESTLE Factors', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.pestle || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'SWOT / TOWS Strategies', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'SWOT / TOWS Strategies', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.swot || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Competitive Positioning', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Competitive Positioning', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.competitivePosition || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Blue Ocean Opportunities', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Blue Ocean Opportunities', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.blueOcean || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Scenario Planning', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Scenario Planning', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.scenarios || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Strategic Initiatives / OKRs', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Strategic Initiatives / OKRs', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.strategicInitiatives || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Strategic Goals', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Strategic Goals', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.growthGoals || 'N/A', size: 22 })], spacing: { after: 200 } })
         ]
       }]
@@ -1924,10 +1924,10 @@ Object.assign(DocGenerator, {
   generateStrategicAnalysisPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     pdf.setFontSize(20);
-    pdf.setTextColor(191, 9, 47);
+    pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('STRATEGIC ANALYSIS CANVAS', 20, 25);
     pdf.setFontSize(14);
-    pdf.setTextColor(19, 36, 64);
+    pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text(filename, 20, 35);
     var sections = [
       { label: "Porter's Five Forces", value: data.porterForces },
@@ -1944,11 +1944,11 @@ Object.assign(DocGenerator, {
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
       pdf.setFontSize(12);
-      pdf.setTextColor(191, 9, 47);
+      pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.label, 20, y);
       y += 8;
       pdf.setFontSize(11);
-      pdf.setTextColor(0, 0, 0);
+      pdf.setTextColor(...DocStyles.rgb.black);
       var lines = pdf.splitTextToSize(s.value || 'N/A', 170);
       pdf.text(lines, 20, y);
       y += lines.length * 6 + 10;
@@ -1959,37 +1959,37 @@ Object.assign(DocGenerator, {
   generateStrategicAnalysisPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
     pptx.title = 'Strategic Analysis Canvas';
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF' };
-    // Slide 1 â€” Title
+    var colors = DocStyles.colors;
+    // Slide 1 — Title
     var s1 = pptx.addSlide();
     s1.background = { color: colors.navy };
     s1.addText('STRATEGIC ANALYSIS\nCANVAS', { x: 0.5, y: 0.8, w: 9, h: 2, fontSize: 36, bold: true, color: colors.white, align: 'center', lineSpacingMultiple: 1.2 });
     s1.addText(data.companyName || filename, { x: 0.5, y: 3.0, w: 9, h: 0.8, fontSize: 20, color: colors.teal, align: 'center' });
     s1.addShape(pptx.ShapeType.rect, { x: 3.5, y: 4.0, w: 3, h: 0.05, fill: { color: colors.crimson } });
-    // Slide 2 â€” Industry & Environment
+    // Slide 2 — Industry & Environment
     var s2 = pptx.addSlide();
     s2.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.8, fill: { color: colors.teal } });
     s2.addText('Industry & Environment', { x: 0.4, y: 0.1, w: 9, h: 0.6, fontSize: 22, bold: true, color: colors.white });
     s2.addText("Porter's Five Forces", { x: 0.4, y: 1.1, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s2.addText(data.porterForces || 'N/A', { x: 0.4, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s2.addText(data.porterForces || 'N/A', { x: 0.4, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s2.addText('Industry Lifecycle', { x: 5.3, y: 1.1, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s2.addText(data.industryLifecycle || 'N/A', { x: 5.3, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s2.addText(data.industryLifecycle || 'N/A', { x: 5.3, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s2.addText('PESTLE Factors', { x: 0.4, y: 3.2, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s2.addText(data.pestle || 'N/A', { x: 0.4, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s2.addText(data.pestle || 'N/A', { x: 0.4, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s2.addText('SWOT / TOWS', { x: 5.3, y: 3.2, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s2.addText(data.swot || 'N/A', { x: 5.3, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    // Slide 3 â€” Competitive & Strategic
+    s2.addText(data.swot || 'N/A', { x: 5.3, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    // Slide 3 — Competitive & Strategic
     var s3 = pptx.addSlide();
     s3.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.8, fill: { color: colors.teal } });
     s3.addText('Competitive & Strategic Plan', { x: 0.4, y: 0.1, w: 9, h: 0.6, fontSize: 22, bold: true, color: colors.white });
     s3.addText('Competitive Positioning', { x: 0.4, y: 1.1, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s3.addText(data.competitivePosition || 'N/A', { x: 0.4, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s3.addText(data.competitivePosition || 'N/A', { x: 0.4, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s3.addText('Blue Ocean Opportunities', { x: 5.3, y: 1.1, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s3.addText(data.blueOcean || 'N/A', { x: 5.3, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s3.addText(data.blueOcean || 'N/A', { x: 5.3, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s3.addText('Scenario Planning', { x: 0.4, y: 3.2, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s3.addText(data.scenarios || 'N/A', { x: 0.4, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s3.addText(data.scenarios || 'N/A', { x: 0.4, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s3.addText('Strategic Goals', { x: 5.3, y: 3.2, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s3.addText(data.growthGoals || 'N/A', { x: 5.3, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s3.addText(data.growthGoals || 'N/A', { x: 5.3, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     pptx.writeFile({ fileName: filename + '.pptx' });
   },
 
@@ -2001,25 +2001,25 @@ Object.assign(DocGenerator, {
     var doc = new window.docx.Document({
       sections: [{
         children: [
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'DISTRIBUTION STRATEGY CANVAS', bold: true, size: 36, color: 'BF092F' })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: filename, size: 24, color: '132440' })], spacing: { after: 400 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Channel Mix', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'DISTRIBUTION STRATEGY CANVAS', bold: true, size: 36, color: DocStyles.colors.crimson })], spacing: { after: 200 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: filename, size: 24, color: DocStyles.colors.navy })], spacing: { after: 400 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Channel Mix', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.channelMix || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Direct Strategy', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Direct Strategy', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.directStrategy || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Partner Program', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Partner Program', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.partnerProgram || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Affiliate Program', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Affiliate Program', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.affiliateDesign || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Marketplace Strategy', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Marketplace Strategy', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.marketplace || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Integration Strategy', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Integration Strategy', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.integrations || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Co-Marketing Plan', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Co-Marketing Plan', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.coMarketing || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Ecosystem Positioning', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Ecosystem Positioning', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.ecosystem || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Distribution Goals', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Distribution Goals', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.growthGoals || 'N/A', size: 22 })], spacing: { after: 200 } })
         ]
       }]
@@ -2052,10 +2052,10 @@ Object.assign(DocGenerator, {
   generateDistributionStrategyPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     pdf.setFontSize(20);
-    pdf.setTextColor(191, 9, 47);
+    pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('DISTRIBUTION STRATEGY CANVAS', 20, 25);
     pdf.setFontSize(14);
-    pdf.setTextColor(19, 36, 64);
+    pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text(filename, 20, 35);
     var sections = [
       { label: 'Channel Mix', value: data.channelMix },
@@ -2072,11 +2072,11 @@ Object.assign(DocGenerator, {
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
       pdf.setFontSize(12);
-      pdf.setTextColor(191, 9, 47);
+      pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.label, 20, y);
       y += 8;
       pdf.setFontSize(11);
-      pdf.setTextColor(0, 0, 0);
+      pdf.setTextColor(...DocStyles.rgb.black);
       var lines = pdf.splitTextToSize(s.value || 'N/A', 170);
       pdf.text(lines, 20, y);
       y += lines.length * 6 + 10;
@@ -2087,37 +2087,37 @@ Object.assign(DocGenerator, {
   generateDistributionStrategyPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
     pptx.title = 'Distribution Strategy Canvas';
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF' };
-    // Slide 1 â€” Title
+    var colors = DocStyles.colors;
+    // Slide 1 — Title
     var s1 = pptx.addSlide();
     s1.background = { color: colors.navy };
     s1.addText('DISTRIBUTION STRATEGY\nCANVAS', { x: 0.5, y: 0.8, w: 9, h: 2, fontSize: 36, bold: true, color: colors.white, align: 'center', lineSpacingMultiple: 1.2 });
     s1.addText(data.companyName || filename, { x: 0.5, y: 3.0, w: 9, h: 0.8, fontSize: 20, color: colors.teal, align: 'center' });
     s1.addShape(pptx.ShapeType.rect, { x: 3.5, y: 4.0, w: 3, h: 0.05, fill: { color: colors.crimson } });
-    // Slide 2 â€” Channel Mix & Partners
+    // Slide 2 — Channel Mix & Partners
     var s2 = pptx.addSlide();
     s2.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.8, fill: { color: colors.teal } });
     s2.addText('Channel Architecture', { x: 0.4, y: 0.1, w: 9, h: 0.6, fontSize: 22, bold: true, color: colors.white });
     s2.addText('Channel Mix', { x: 0.4, y: 1.1, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s2.addText(data.channelMix || 'N/A', { x: 0.4, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s2.addText(data.channelMix || 'N/A', { x: 0.4, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s2.addText('Direct Strategy', { x: 5.3, y: 1.1, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s2.addText(data.directStrategy || 'N/A', { x: 5.3, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s2.addText(data.directStrategy || 'N/A', { x: 5.3, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s2.addText('Partner Program', { x: 0.4, y: 3.2, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s2.addText(data.partnerProgram || 'N/A', { x: 0.4, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s2.addText(data.partnerProgram || 'N/A', { x: 0.4, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s2.addText('Affiliate Program', { x: 5.3, y: 3.2, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s2.addText(data.affiliateDesign || 'N/A', { x: 5.3, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    // Slide 3 â€” Ecosystem & Goals
+    s2.addText(data.affiliateDesign || 'N/A', { x: 5.3, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    // Slide 3 — Ecosystem & Goals
     var s3 = pptx.addSlide();
     s3.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.8, fill: { color: colors.teal } });
     s3.addText('Ecosystem & Growth', { x: 0.4, y: 0.1, w: 9, h: 0.6, fontSize: 22, bold: true, color: colors.white });
     s3.addText('Marketplace Strategy', { x: 0.4, y: 1.1, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s3.addText(data.marketplace || 'N/A', { x: 0.4, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s3.addText(data.marketplace || 'N/A', { x: 0.4, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s3.addText('Integration Strategy', { x: 5.3, y: 1.1, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s3.addText(data.integrations || 'N/A', { x: 5.3, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s3.addText(data.integrations || 'N/A', { x: 5.3, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s3.addText('Ecosystem Positioning', { x: 0.4, y: 3.2, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s3.addText(data.ecosystem || 'N/A', { x: 0.4, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s3.addText(data.ecosystem || 'N/A', { x: 0.4, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s3.addText('Distribution Goals', { x: 5.3, y: 3.2, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s3.addText(data.growthGoals || 'N/A', { x: 5.3, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s3.addText(data.growthGoals || 'N/A', { x: 5.3, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     pptx.writeFile({ fileName: filename + '.pptx' });
   },
 
@@ -2129,25 +2129,25 @@ Object.assign(DocGenerator, {
     var doc = new window.docx.Document({
       sections: [{
         children: [
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'PRICING STRATEGY CANVAS', bold: true, size: 36, color: 'BF092F' })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: filename, size: 24, color: '132440' })], spacing: { after: 400 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Value Metric', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'PRICING STRATEGY CANVAS', bold: true, size: 36, color: DocStyles.colors.crimson })], spacing: { after: 200 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: filename, size: 24, color: DocStyles.colors.navy })], spacing: { after: 400 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Value Metric', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.valueMetric || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Pricing Model', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Pricing Model', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.pricingModel || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Tier / Plan Design', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Tier / Plan Design', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.tierDesign || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Pricing Psychology', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Pricing Psychology', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.psychology || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Bundling Strategy', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Bundling Strategy', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.bundling || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Discounting Policy', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Discounting Policy', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.discounting || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'International Pricing', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'International Pricing', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.international || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Price Testing Plan', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Price Testing Plan', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.testingPlan || 'N/A', size: 22 })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Revenue Goals', bold: true, size: 24, color: 'BF092F' })], spacing: { before: 300, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Revenue Goals', bold: true, size: 24, color: DocStyles.colors.crimson })], spacing: { before: 300, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.growthGoals || 'N/A', size: 22 })], spacing: { after: 200 } })
         ]
       }]
@@ -2180,10 +2180,10 @@ Object.assign(DocGenerator, {
   generatePricingStrategyPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     pdf.setFontSize(20);
-    pdf.setTextColor(191, 9, 47);
+    pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('PRICING STRATEGY CANVAS', 20, 25);
     pdf.setFontSize(14);
-    pdf.setTextColor(19, 36, 64);
+    pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text(filename, 20, 35);
     var sections = [
       { label: 'Value Metric', value: data.valueMetric },
@@ -2200,11 +2200,11 @@ Object.assign(DocGenerator, {
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
       pdf.setFontSize(12);
-      pdf.setTextColor(191, 9, 47);
+      pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.label, 20, y);
       y += 8;
       pdf.setFontSize(11);
-      pdf.setTextColor(0, 0, 0);
+      pdf.setTextColor(...DocStyles.rgb.black);
       var lines = pdf.splitTextToSize(s.value || 'N/A', 170);
       pdf.text(lines, 20, y);
       y += lines.length * 6 + 10;
@@ -2215,37 +2215,37 @@ Object.assign(DocGenerator, {
   generatePricingStrategyPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
     pptx.title = 'Pricing Strategy Canvas';
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF' };
-    // Slide 1 â€” Title
+    var colors = DocStyles.colors;
+    // Slide 1 — Title
     var s1 = pptx.addSlide();
     s1.background = { color: colors.navy };
     s1.addText('PRICING STRATEGY\nCANVAS', { x: 0.5, y: 0.8, w: 9, h: 2, fontSize: 36, bold: true, color: colors.white, align: 'center', lineSpacingMultiple: 1.2 });
     s1.addText(data.companyName || filename, { x: 0.5, y: 3.0, w: 9, h: 0.8, fontSize: 20, color: colors.teal, align: 'center' });
     s1.addShape(pptx.ShapeType.rect, { x: 3.5, y: 4.0, w: 3, h: 0.05, fill: { color: colors.crimson } });
-    // Slide 2 â€” Pricing Model & Tiers
+    // Slide 2 — Pricing Model & Tiers
     var s2 = pptx.addSlide();
     s2.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.8, fill: { color: colors.teal } });
     s2.addText('Pricing Architecture', { x: 0.4, y: 0.1, w: 9, h: 0.6, fontSize: 22, bold: true, color: colors.white });
     s2.addText('Value Metric', { x: 0.4, y: 1.1, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s2.addText(data.valueMetric || 'N/A', { x: 0.4, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s2.addText(data.valueMetric || 'N/A', { x: 0.4, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s2.addText('Pricing Model', { x: 5.3, y: 1.1, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s2.addText(data.pricingModel || 'N/A', { x: 5.3, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s2.addText(data.pricingModel || 'N/A', { x: 5.3, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s2.addText('Tier / Plan Design', { x: 0.4, y: 3.2, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s2.addText(data.tierDesign || 'N/A', { x: 0.4, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s2.addText(data.tierDesign || 'N/A', { x: 0.4, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s2.addText('Pricing Psychology', { x: 5.3, y: 3.2, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s2.addText(data.psychology || 'N/A', { x: 5.3, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
-    // Slide 3 â€” Revenue Optimization
+    s2.addText(data.psychology || 'N/A', { x: 5.3, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    // Slide 3 — Revenue Optimization
     var s3 = pptx.addSlide();
     s3.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.8, fill: { color: colors.teal } });
     s3.addText('Revenue Optimization', { x: 0.4, y: 0.1, w: 9, h: 0.6, fontSize: 22, bold: true, color: colors.white });
     s3.addText('Bundling Strategy', { x: 0.4, y: 1.1, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s3.addText(data.bundling || 'N/A', { x: 0.4, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s3.addText(data.bundling || 'N/A', { x: 0.4, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s3.addText('Discounting Policy', { x: 5.3, y: 1.1, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s3.addText(data.discounting || 'N/A', { x: 5.3, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s3.addText(data.discounting || 'N/A', { x: 5.3, y: 1.5, w: 4.3, h: 1.5, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s3.addText('International Pricing', { x: 0.4, y: 3.2, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s3.addText(data.international || 'N/A', { x: 0.4, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s3.addText(data.international || 'N/A', { x: 0.4, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     s3.addText('Revenue Goals', { x: 5.3, y: 3.2, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: colors.crimson });
-    s3.addText(data.growthGoals || 'N/A', { x: 5.3, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: '333333', valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
+    s3.addText(data.growthGoals || 'N/A', { x: 5.3, y: 3.6, w: 4.3, h: 1.7, fontSize: 11, color: DocStyles.colors.darkGray, valign: 'top', wrap: true, fit: 'shrink', margin: [4,4,4,4] });
     pptx.writeFile({ fileName: filename + '.pptx' });
   },
 
@@ -2258,8 +2258,8 @@ Object.assign(DocGenerator, {
       sections: [{
         properties: {},
         children: [
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'B2B Marketing Strategy Canvas', bold: true, size: 48, color: 'BF092F' })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Company: ' + (data.companyName || ''), size: 28, color: '132440' })], spacing: { after: 300 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'B2B Marketing Strategy Canvas', bold: true, size: 48, color: DocStyles.colors.crimson })], spacing: { after: 200 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Company: ' + (data.companyName || ''), size: 28, color: DocStyles.colors.navy })], spacing: { after: 300 } }),
           ...[ { t: 'Target Industry', v: data.industry },
                { t: 'Ideal Customer Profile (ICP)', v: data.icp },
                { t: 'Buying Committee Map', v: data.buyingCommittee },
@@ -2271,7 +2271,7 @@ Object.assign(DocGenerator, {
                { t: 'Growth Goals', v: data.growthGoals }
           ].flatMap(function(s) {
             return [
-              new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: s.t, bold: true, size: 26, color: '16476A' })], spacing: { before: 200, after: 100 } }),
+              new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: s.t, bold: true, size: 26, color: DocStyles.colors.blue })], spacing: { before: 200, after: 100 } }),
               new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: s.v || 'Not specified', size: 22 })], spacing: { after: 150 } })
             ];
           })
@@ -2306,9 +2306,9 @@ Object.assign(DocGenerator, {
 
   generateB2bStrategyPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
-    pdf.setFontSize(22); pdf.setTextColor(191, 9, 47);
+    pdf.setFontSize(22); pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('B2B Marketing Strategy Canvas', 20, 25);
-    pdf.setFontSize(14); pdf.setTextColor(19, 36, 64);
+    pdf.setFontSize(14); pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Company: ' + (data.companyName || ''), 20, 38);
     var y = 55;
     var sections = [
@@ -2324,9 +2324,9 @@ Object.assign(DocGenerator, {
     ];
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 25; }
-      pdf.setFontSize(13); pdf.setTextColor(22, 71, 106);
+      pdf.setFontSize(13); pdf.setTextColor(...DocStyles.rgb.blue);
       pdf.text(s.t, 20, y); y += 8;
-      pdf.setFontSize(11); pdf.setTextColor(60, 60, 60);
+      pdf.setFontSize(11); pdf.setTextColor(...DocStyles.rgb.darkGray);
       var lines = pdf.splitTextToSize(s.v || 'Not specified', 170);
       pdf.text(lines, 20, y); y += lines.length * 6 + 10;
     });
@@ -2335,7 +2335,7 @@ Object.assign(DocGenerator, {
 
   generateB2bStrategyPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF' };
+    var colors = DocStyles.colors;
 
     var slide1 = pptx.addSlide();
     slide1.background = { fill: colors.navy };
@@ -2379,8 +2379,8 @@ Object.assign(DocGenerator, {
       sections: [{
         properties: {},
         children: [
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Growth Strategy Canvas', bold: true, size: 48, color: 'BF092F' })], spacing: { after: 200 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Company: ' + (data.companyName || ''), size: 28, color: '132440' })], spacing: { after: 300 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Growth Strategy Canvas', bold: true, size: 48, color: DocStyles.colors.crimson })], spacing: { after: 200 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Company: ' + (data.companyName || ''), size: 28, color: DocStyles.colors.navy })], spacing: { after: 300 } }),
           ...[ { t: 'North Star Metric', v: data.northStar },
                { t: 'Growth Loops', v: data.growthLoops },
                { t: 'Viral Mechanics', v: data.viralMechanics },
@@ -2392,7 +2392,7 @@ Object.assign(DocGenerator, {
                { t: 'Growth Goals', v: data.growthGoals }
           ].flatMap(function(s) {
             return [
-              new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: s.t, bold: true, size: 26, color: '16476A' })], spacing: { before: 200, after: 100 } }),
+              new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: s.t, bold: true, size: 26, color: DocStyles.colors.blue })], spacing: { before: 200, after: 100 } }),
               new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: s.v || 'Not specified', size: 22 })], spacing: { after: 150 } })
             ];
           })
@@ -2427,9 +2427,9 @@ Object.assign(DocGenerator, {
 
   generateGrowthStrategyPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
-    pdf.setFontSize(22); pdf.setTextColor(191, 9, 47);
+    pdf.setFontSize(22); pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('Growth Strategy Canvas', 20, 25);
-    pdf.setFontSize(14); pdf.setTextColor(19, 36, 64);
+    pdf.setFontSize(14); pdf.setTextColor(...DocStyles.rgb.navy);
     pdf.text('Company: ' + (data.companyName || ''), 20, 38);
     var y = 55;
     var sections = [
@@ -2445,9 +2445,9 @@ Object.assign(DocGenerator, {
     ];
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 25; }
-      pdf.setFontSize(13); pdf.setTextColor(22, 71, 106);
+      pdf.setFontSize(13); pdf.setTextColor(...DocStyles.rgb.blue);
       pdf.text(s.t, 20, y); y += 8;
-      pdf.setFontSize(11); pdf.setTextColor(60, 60, 60);
+      pdf.setFontSize(11); pdf.setTextColor(...DocStyles.rgb.darkGray);
       var lines = pdf.splitTextToSize(s.v || 'Not specified', 170);
       pdf.text(lines, 20, y); y += lines.length * 6 + 10;
     });
@@ -2456,7 +2456,7 @@ Object.assign(DocGenerator, {
 
   generateGrowthStrategyPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF' };
+    var colors = DocStyles.colors;
 
     var slide1 = pptx.addSlide();
     slide1.background = { fill: colors.navy };
@@ -2500,35 +2500,35 @@ Object.assign(DocGenerator, {
       sections: [{
         properties: {},
         children: [
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'CRO Audit Canvas', bold: true, size: 48, color: 'BF092F' })], spacing: { after: 200 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'CRO Audit Canvas', bold: true, size: 48, color: DocStyles.colors.crimson })], spacing: { after: 200 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Company: ' + (data.companyName || ''), size: 28 })], spacing: { after: 100 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 22, color: '666666' })], spacing: { after: 300 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 22, color: DocStyles.colors.gray })], spacing: { after: 300 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Current Conversion Rate', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Current Conversion Rate', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.currentCR || '', size: 24 })], spacing: { after: 200 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Landing Page Issues', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Landing Page Issues', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.landingPages || '', size: 24 })], spacing: { after: 200 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Copy & Messaging Strategy', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Copy & Messaging Strategy', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.copyStrategy || '', size: 24 })], spacing: { after: 200 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Form & Checkout Optimization', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Form & Checkout Optimization', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.formDesign || '', size: 24 })], spacing: { after: 200 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Testing Roadmap', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Testing Roadmap', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.testPlan || '', size: 24 })], spacing: { after: 200 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'UX Research Findings', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'UX Research Findings', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.uxFindings || '', size: 24 })], spacing: { after: 200 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Funnel Gap Analysis', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Funnel Gap Analysis', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.funnelGaps || '', size: 24 })], spacing: { after: 200 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Test Prioritization (PIE Scores)', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Test Prioritization (PIE Scores)', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.prioritization || '', size: 24 })], spacing: { after: 200 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Growth Goals', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Growth Goals', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.growthGoals || '', size: 24 })], spacing: { after: 200 } })
         ]
       }]
@@ -2563,7 +2563,7 @@ Object.assign(DocGenerator, {
   generateCroAuditPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     pdf.setFontSize(22);
-    pdf.setTextColor(191, 9, 47);
+    pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('CRO Audit Canvas', 20, 25);
     pdf.setFontSize(14);
     pdf.setTextColor(0);
@@ -2588,7 +2588,7 @@ Object.assign(DocGenerator, {
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
       pdf.setFontSize(13);
-      pdf.setTextColor(191, 9, 47);
+      pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.title, 20, y);
       y += 8;
       pdf.setFontSize(11);
@@ -2603,7 +2603,7 @@ Object.assign(DocGenerator, {
 
   generateCroAuditPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF' };
+    var colors = DocStyles.colors;
 
     var slide1 = pptx.addSlide();
     slide1.background = { fill: colors.navy };
@@ -2648,35 +2648,35 @@ Object.assign(DocGenerator, {
       sections: [{
         properties: {},
         children: [
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Analytics Dashboard Canvas', bold: true, size: 48, color: 'BF092F' })], spacing: { after: 200 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Analytics Dashboard Canvas', bold: true, size: 48, color: DocStyles.colors.crimson })], spacing: { after: 200 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Company: ' + (data.companyName || ''), size: 28 })], spacing: { after: 100 } }),
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 22, color: '666666' })], spacing: { after: 300 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Generated: ' + new Date().toLocaleDateString(), size: 22, color: DocStyles.colors.gray })], spacing: { after: 300 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'North Star Metric', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'North Star Metric', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.northStar || '', size: 24 })], spacing: { after: 200 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Funnel Metrics', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Funnel Metrics', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.funnelMetrics || '', size: 24 })], spacing: { after: 200 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Attribution Model', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Attribution Model', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.attributionModel || '', size: 24 })], spacing: { after: 200 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Channel Performance KPIs', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Channel Performance KPIs', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.channelPerformance || '', size: 24 })], spacing: { after: 200 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Experiment Priorities', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Experiment Priorities', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.experiments || '', size: 24 })], spacing: { after: 200 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Data Stack & Tools', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Data Stack & Tools', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.dataStack || '', size: 24 })], spacing: { after: 200 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Reporting Cadence', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Reporting Cadence', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.reportingCadence || '', size: 24 })], spacing: { after: 200 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Privacy & Compliance', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Privacy & Compliance', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.privacyCompliance || '', size: 24 })], spacing: { after: 200 } }),
 
-          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Growth Goals', bold: true, size: 28, color: 'BF092F' })], spacing: { before: 200, after: 100 } }),
+          new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: 'Growth Goals', bold: true, size: 28, color: DocStyles.colors.crimson })], spacing: { before: 200, after: 100 } }),
           new window.docx.Paragraph({ children: [new window.docx.TextRun({ text: data.growthGoals || '', size: 24 })], spacing: { after: 200 } })
         ]
       }]
@@ -2711,7 +2711,7 @@ Object.assign(DocGenerator, {
   generateAnalyticsDashboardPDF: function(filename, data) {
     var pdf = new jspdf.jsPDF();
     pdf.setFontSize(22);
-    pdf.setTextColor(191, 9, 47);
+    pdf.setTextColor(...DocStyles.rgb.crimson);
     pdf.text('Analytics Dashboard Canvas', 20, 25);
     pdf.setFontSize(14);
     pdf.setTextColor(0);
@@ -2736,7 +2736,7 @@ Object.assign(DocGenerator, {
     sections.forEach(function(s) {
       if (y > 260) { pdf.addPage(); y = 20; }
       pdf.setFontSize(13);
-      pdf.setTextColor(191, 9, 47);
+      pdf.setTextColor(...DocStyles.rgb.crimson);
       pdf.text(s.title, 20, y);
       y += 8;
       pdf.setFontSize(11);
@@ -2751,7 +2751,7 @@ Object.assign(DocGenerator, {
 
   generateAnalyticsDashboardPPTX: function(filename, data) {
     var pptx = new PptxGenJS();
-    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF' };
+    var colors = DocStyles.colors;
 
     var slide1 = pptx.addSlide();
     slide1.background = { fill: colors.navy };

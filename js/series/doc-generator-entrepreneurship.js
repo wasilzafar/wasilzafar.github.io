@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Doc Generator - Entrepreneurship Series
  * Extends DocGenerator with entrepreneurship series document generators.
  * Requires: doc-generator-core.js loaded first.
@@ -182,24 +182,24 @@ Object.assign(DocGenerator, {
     if (!window.PptxGenJS) { alert('PptxGenJS library not loaded.'); return false; }
     var pres = new window.PptxGenJS();
     pres.layout = 'LAYOUT_16x9'; pres.author = 'Generated from wasilzafar.com';
-    pres.title = (data.companyName || 'Company') + ' â€” Business Model Canvas';
-    var C = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    pres.title = (data.companyName || 'Company') + ' — Business Model Canvas';
+    var C = DocStyles.colors;
 
     // Title slide
     var s1 = pres.addSlide(); s1.background = { color: C.navy };
     s1.addShape(pres.ShapeType.rect, { x: 0, y: 2.2, w: '100%', h: 0.06, fill: { color: C.teal } });
-    s1.addText(data.companyName || 'Company Name', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 40, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    s1.addText('Business Model Canvas', { x: 0.6, y: 2.5, w: 8.8, h: 0.7, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center', italic: true });
-    s1.addText(new Date().toLocaleDateString(), { x: 0.6, y: 4.2, w: 8.8, h: 0.5, fontSize: 14, color: C.gray, fontFace: 'Arial', align: 'center' });
+    s1.addText(data.companyName || 'Company Name', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 40, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    s1.addText('Business Model Canvas', { x: 0.6, y: 2.5, w: 8.8, h: 0.7, fontSize: 22, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center', italic: true });
+    s1.addText(new Date().toLocaleDateString(), { x: 0.6, y: 4.2, w: 8.8, h: 0.5, fontSize: 14, color: C.gray, fontFace: DocStyles.fonts.secondary, align: 'center' });
 
     // Helper: content slide with accent bar
     function addSlide(title, bodyText, accent) {
       accent = accent || C.teal;
       var sl = pres.addSlide(); sl.background = { color: C.white };
       sl.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: accent } });
-      sl.addText(title, { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 26, bold: true, color: C.navy, fontFace: 'Arial' });
+      sl.addText(title, { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 26, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary });
       sl.addShape(pres.ShapeType.rect, { x: 0.6, y: 1.0, w: 2.0, h: 0.04, fill: { color: accent } });
-      sl.addText(bodyText || 'Not specified', { x: 0.6, y: 1.3, w: 8.8, h: 3.8, fontSize: 16, color: '333333', fontFace: 'Arial', wrap: true, valign: 'top', lineSpacingMultiple: 1.4 });
+      sl.addText(bodyText || 'Not specified', { x: 0.6, y: 1.3, w: 8.8, h: 3.8, fontSize: 16, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, valign: 'top', lineSpacingMultiple: 1.4 });
       sl.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray };
       return sl;
     }
@@ -214,8 +214,8 @@ Object.assign(DocGenerator, {
     // Closing slide
     var end = pres.addSlide(); end.background = { color: C.navy };
     end.addShape(pres.ShapeType.rect, { x: 0, y: 2.6, w: '100%', h: 0.06, fill: { color: C.teal } });
-    end.addText(data.companyName || 'Company', { x: 0.6, y: 1.8, w: 8.8, h: 1.0, fontSize: 36, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    end.addText('Business Model Canvas', { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 18, color: C.teal, fontFace: 'Arial', align: 'center' });
+    end.addText(data.companyName || 'Company', { x: 0.6, y: 1.8, w: 8.8, h: 1.0, fontSize: 36, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    end.addText('Business Model Canvas', { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 18, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center' });
 
     return pres.writeFile({ fileName: filename + '.pptx' });
   },
@@ -252,23 +252,23 @@ Object.assign(DocGenerator, {
     if (!window.PptxGenJS) { alert('PptxGenJS library not loaded.'); return false; }
     var pres = new window.PptxGenJS();
     pres.layout = 'LAYOUT_16x9'; pres.author = 'Generated from wasilzafar.com';
-    pres.title = (data.productName || 'Startup') + ' â€” Lean Canvas';
-    var C = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    pres.title = (data.productName || 'Startup') + ' — Lean Canvas';
+    var C = DocStyles.colors;
 
     // Title slide
     var s1 = pres.addSlide(); s1.background = { color: C.navy };
     s1.addShape(pres.ShapeType.rect, { x: 0, y: 2.2, w: '100%', h: 0.06, fill: { color: C.crimson } });
-    s1.addText(data.productName || 'Product Name', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 40, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    s1.addText('Lean Canvas', { x: 0.6, y: 2.5, w: 8.8, h: 0.7, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center', italic: true });
-    if (data.founderName) s1.addText('Founder: ' + data.founderName, { x: 0.6, y: 3.5, w: 8.8, h: 0.4, fontSize: 16, color: C.gray, fontFace: 'Arial', align: 'center' });
+    s1.addText(data.productName || 'Product Name', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 40, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    s1.addText('Lean Canvas', { x: 0.6, y: 2.5, w: 8.8, h: 0.7, fontSize: 22, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center', italic: true });
+    if (data.founderName) s1.addText('Founder: ' + data.founderName, { x: 0.6, y: 3.5, w: 8.8, h: 0.4, fontSize: 16, color: C.gray, fontFace: DocStyles.fonts.secondary, align: 'center' });
 
     function addSlide(title, bodyText, accent) {
       accent = accent || C.teal;
       var sl = pres.addSlide(); sl.background = { color: C.white };
       sl.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: accent } });
-      sl.addText(title, { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 26, bold: true, color: C.navy, fontFace: 'Arial' });
+      sl.addText(title, { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 26, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary });
       sl.addShape(pres.ShapeType.rect, { x: 0.6, y: 1.0, w: 2.0, h: 0.04, fill: { color: accent } });
-      sl.addText(bodyText || 'Not specified', { x: 0.6, y: 1.3, w: 8.8, h: 3.8, fontSize: 16, color: '333333', fontFace: 'Arial', wrap: true, valign: 'top', lineSpacingMultiple: 1.4 });
+      sl.addText(bodyText || 'Not specified', { x: 0.6, y: 1.3, w: 8.8, h: 3.8, fontSize: 16, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, valign: 'top', lineSpacingMultiple: 1.4 });
       sl.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray };
     }
 
@@ -282,8 +282,8 @@ Object.assign(DocGenerator, {
 
     var end = pres.addSlide(); end.background = { color: C.navy };
     end.addShape(pres.ShapeType.rect, { x: 0, y: 2.6, w: '100%', h: 0.06, fill: { color: C.teal } });
-    end.addText(data.productName || 'Product', { x: 0.6, y: 1.8, w: 8.8, h: 1.0, fontSize: 36, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    end.addText('Lean Canvas', { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 18, color: C.teal, fontFace: 'Arial', align: 'center' });
+    end.addText(data.productName || 'Product', { x: 0.6, y: 1.8, w: 8.8, h: 1.0, fontSize: 36, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    end.addText('Lean Canvas', { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 18, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center' });
 
     return pres.writeFile({ fileName: filename + '.pptx' });
   },
@@ -382,10 +382,10 @@ Object.assign(DocGenerator, {
       { heading: 'Opportunities (External)', content: (data.opportunities || 'Not specified').split('\n') },
       { heading: 'Threats (External)', content: (data.threats || 'Not specified').split('\n') },
       { heading: 'Strategic Actions', content: [
-          'SO Strategies (Strengths â†’ Opportunities): ' + (data.soStrategies || 'Not specified'),
-          'WO Strategies (Weaknesses â†’ Opportunities): ' + (data.woStrategies || 'Not specified'),
-          'ST Strategies (Strengths â†’ Threats): ' + (data.stStrategies || 'Not specified'),
-          'WT Strategies (Weaknesses â†’ Threats): ' + (data.wtStrategies || 'Not specified')
+          'SO Strategies (Strengths → Opportunities): ' + (data.soStrategies || 'Not specified'),
+          'WO Strategies (Weaknesses → Opportunities): ' + (data.woStrategies || 'Not specified'),
+          'ST Strategies (Strengths → Threats): ' + (data.stStrategies || 'Not specified'),
+          'WT Strategies (Weaknesses → Threats): ' + (data.wtStrategies || 'Not specified')
       ]}
     ];
     return this.generateWord(filename, { title: 'SWOT Analysis', author: 'Generated from wasilzafar.com', sections: sections });
@@ -430,59 +430,59 @@ Object.assign(DocGenerator, {
     if (!window.PptxGenJS) { alert('PptxGenJS library not loaded.'); return false; }
     var pres = new window.PptxGenJS();
     pres.layout = 'LAYOUT_16x9'; pres.author = 'Generated from wasilzafar.com';
-    pres.title = (data.companyName || 'Company') + ' â€” SWOT Analysis';
-    var C = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    pres.title = (data.companyName || 'Company') + ' — SWOT Analysis';
+    var C = DocStyles.colors;
 
     // Title slide
     var s1 = pres.addSlide(); s1.background = { color: C.navy };
     s1.addShape(pres.ShapeType.rect, { x: 0, y: 2.2, w: '100%', h: 0.06, fill: { color: C.teal } });
-    s1.addText(data.companyName || 'Company Name', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 40, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    s1.addText('SWOT Analysis', { x: 0.6, y: 2.5, w: 8.8, h: 0.7, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center', italic: true });
+    s1.addText(data.companyName || 'Company Name', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 40, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    s1.addText('SWOT Analysis', { x: 0.6, y: 2.5, w: 8.8, h: 0.7, fontSize: 22, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center', italic: true });
 
     // 2x2 SWOT grid on one slide
     var grid = pres.addSlide(); grid.background = { color: C.white };
     grid.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: C.teal } });
-    grid.addText('SWOT Matrix', { x: 0.6, y: 0.2, w: 8.8, h: 0.6, fontSize: 24, bold: true, color: C.navy, fontFace: 'Arial' });
+    grid.addText('SWOT Matrix', { x: 0.6, y: 0.2, w: 8.8, h: 0.6, fontSize: 24, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary });
     grid.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray };
     // Strengths (top-left)
-    grid.addText('STRENGTHS', { x: 0.4, y: 1.0, w: 4.5, h: 0.4, fontSize: 14, bold: true, color: C.white, fontFace: 'Arial', fill: { color: C.teal }, align: 'center' });
-    grid.addText(data.strengths || 'Not specified', { x: 0.4, y: 1.4, w: 4.5, h: 1.7, fontSize: 12, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, line: { color: 'CCCCCC', width: 1 }, margin: [6, 6, 6, 6] });
+    grid.addText('STRENGTHS', { x: 0.4, y: 1.0, w: 4.5, h: 0.4, fontSize: 14, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, fill: { color: C.teal }, align: 'center' });
+    grid.addText(data.strengths || 'Not specified', { x: 0.4, y: 1.4, w: 4.5, h: 1.7, fontSize: 12, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, line: { color: 'CCCCCC', width: 1 }, margin: [6, 6, 6, 6] });
     // Weaknesses (top-right)
-    grid.addText('WEAKNESSES', { x: 5.1, y: 1.0, w: 4.5, h: 0.4, fontSize: 14, bold: true, color: C.white, fontFace: 'Arial', fill: { color: C.crimson }, align: 'center' });
-    grid.addText(data.weaknesses || 'Not specified', { x: 5.1, y: 1.4, w: 4.5, h: 1.7, fontSize: 12, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, line: { color: 'CCCCCC', width: 1 }, margin: [6, 6, 6, 6] });
+    grid.addText('WEAKNESSES', { x: 5.1, y: 1.0, w: 4.5, h: 0.4, fontSize: 14, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, fill: { color: C.crimson }, align: 'center' });
+    grid.addText(data.weaknesses || 'Not specified', { x: 5.1, y: 1.4, w: 4.5, h: 1.7, fontSize: 12, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, line: { color: 'CCCCCC', width: 1 }, margin: [6, 6, 6, 6] });
     // Opportunities (bottom-left)
-    grid.addText('OPPORTUNITIES', { x: 0.4, y: 3.2, w: 4.5, h: 0.4, fontSize: 14, bold: true, color: C.white, fontFace: 'Arial', fill: { color: C.blue }, align: 'center' });
-    grid.addText(data.opportunities || 'Not specified', { x: 0.4, y: 3.6, w: 4.5, h: 1.7, fontSize: 12, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, line: { color: 'CCCCCC', width: 1 }, margin: [6, 6, 6, 6] });
+    grid.addText('OPPORTUNITIES', { x: 0.4, y: 3.2, w: 4.5, h: 0.4, fontSize: 14, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, fill: { color: C.blue }, align: 'center' });
+    grid.addText(data.opportunities || 'Not specified', { x: 0.4, y: 3.6, w: 4.5, h: 1.7, fontSize: 12, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, line: { color: 'CCCCCC', width: 1 }, margin: [6, 6, 6, 6] });
     // Threats (bottom-right)
-    grid.addText('THREATS', { x: 5.1, y: 3.2, w: 4.5, h: 0.4, fontSize: 14, bold: true, color: C.white, fontFace: 'Arial', fill: { color: C.navy }, align: 'center' });
-    grid.addText(data.threats || 'Not specified', { x: 5.1, y: 3.6, w: 4.5, h: 1.7, fontSize: 12, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, line: { color: 'CCCCCC', width: 1 }, margin: [6, 6, 6, 6] });
+    grid.addText('THREATS', { x: 5.1, y: 3.2, w: 4.5, h: 0.4, fontSize: 14, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, fill: { color: C.navy }, align: 'center' });
+    grid.addText(data.threats || 'Not specified', { x: 5.1, y: 3.6, w: 4.5, h: 1.7, fontSize: 12, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, line: { color: 'CCCCCC', width: 1 }, margin: [6, 6, 6, 6] });
 
     // Strategic Actions slide
     var strat = pres.addSlide(); strat.background = { color: C.white };
     strat.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: C.blue } });
-    strat.addText('Strategic Actions', { x: 0.6, y: 0.3, w: 8.8, h: 0.6, fontSize: 26, bold: true, color: C.navy, fontFace: 'Arial' });
+    strat.addText('Strategic Actions', { x: 0.6, y: 0.3, w: 8.8, h: 0.6, fontSize: 26, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary });
     strat.addShape(pres.ShapeType.rect, { x: 0.6, y: 0.95, w: 2.0, h: 0.04, fill: { color: C.blue } });
     strat.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray };
     var strategies = [
-      { text: 'SO (Strengths â†’ Opportunities)', options: { fontSize: 14, bold: true, color: C.teal, breakLine: true } },
-      { text: data.soStrategies || 'Not specified', options: { fontSize: 13, color: '333333', breakLine: true, lineSpacingMultiple: 1.2 } },
+      { text: 'SO (Strengths → Opportunities)', options: { fontSize: 14, bold: true, color: C.teal, breakLine: true } },
+      { text: data.soStrategies || 'Not specified', options: { fontSize: 13, color: DocStyles.colors.darkGray, breakLine: true, lineSpacingMultiple: 1.2 } },
       { text: '', options: { fontSize: 8, breakLine: true } },
-      { text: 'WO (Weaknesses â†’ Opportunities)', options: { fontSize: 14, bold: true, color: C.blue, breakLine: true } },
-      { text: data.woStrategies || 'Not specified', options: { fontSize: 13, color: '333333', breakLine: true, lineSpacingMultiple: 1.2 } },
+      { text: 'WO (Weaknesses → Opportunities)', options: { fontSize: 14, bold: true, color: C.blue, breakLine: true } },
+      { text: data.woStrategies || 'Not specified', options: { fontSize: 13, color: DocStyles.colors.darkGray, breakLine: true, lineSpacingMultiple: 1.2 } },
       { text: '', options: { fontSize: 8, breakLine: true } },
-      { text: 'ST (Strengths â†’ Threats)', options: { fontSize: 14, bold: true, color: C.crimson, breakLine: true } },
-      { text: data.stStrategies || 'Not specified', options: { fontSize: 13, color: '333333', breakLine: true, lineSpacingMultiple: 1.2 } },
+      { text: 'ST (Strengths → Threats)', options: { fontSize: 14, bold: true, color: C.crimson, breakLine: true } },
+      { text: data.stStrategies || 'Not specified', options: { fontSize: 13, color: DocStyles.colors.darkGray, breakLine: true, lineSpacingMultiple: 1.2 } },
       { text: '', options: { fontSize: 8, breakLine: true } },
-      { text: 'WT (Weaknesses â†’ Threats)', options: { fontSize: 14, bold: true, color: C.navy, breakLine: true } },
-      { text: data.wtStrategies || 'Not specified', options: { fontSize: 13, color: '333333', breakLine: true, lineSpacingMultiple: 1.2 } }
+      { text: 'WT (Weaknesses → Threats)', options: { fontSize: 14, bold: true, color: C.navy, breakLine: true } },
+      { text: data.wtStrategies || 'Not specified', options: { fontSize: 13, color: DocStyles.colors.darkGray, breakLine: true, lineSpacingMultiple: 1.2 } }
     ];
-    strat.addText(strategies, { x: 0.6, y: 1.2, w: 8.8, h: 3.9, fontFace: 'Arial', valign: 'top' });
+    strat.addText(strategies, { x: 0.6, y: 1.2, w: 8.8, h: 3.9, fontFace: DocStyles.fonts.secondary, valign: 'top' });
 
     // Closing
     var end = pres.addSlide(); end.background = { color: C.navy };
     end.addShape(pres.ShapeType.rect, { x: 0, y: 2.6, w: '100%', h: 0.06, fill: { color: C.teal } });
-    end.addText(data.companyName || 'Company', { x: 0.6, y: 1.8, w: 8.8, h: 1.0, fontSize: 36, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    end.addText('SWOT Analysis', { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 18, color: C.teal, fontFace: 'Arial', align: 'center' });
+    end.addText(data.companyName || 'Company', { x: 0.6, y: 1.8, w: 8.8, h: 1.0, fontSize: 36, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    end.addText('SWOT Analysis', { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 18, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center' });
 
     return pres.writeFile({ fileName: filename + '.pptx' });
   },
@@ -501,7 +501,7 @@ Object.assign(DocGenerator, {
       { heading: 'ICE Scoring Calculator', content: [
           'Prepared by: ' + (data.evaluatorName || 'N/A'),
           'Date: ' + new Date().toLocaleDateString(),
-          'Formula: ICE Score = (Impact Ã— Confidence Ã— Ease) / 10'
+          'Formula: ICE Score = (Impact × Confidence × Ease) / 10'
       ]}
     ];
     scored.forEach(function(idea, i) {
@@ -528,13 +528,13 @@ Object.assign(DocGenerator, {
     scored.sort(function(a, b) { return b.score - a.score; });
     var rows = [['Rank', 'Idea', 'Impact (1-10)', 'Confidence (1-10)', 'Ease (1-10)', 'ICE Score', 'Priority']];
     scored.forEach(function(idea, i) {
-      var priority = i === 0 ? 'â˜… TOP PRIORITY' : (i < 3 ? 'High' : 'Consider');
+      var priority = i === 0 ? '★ TOP PRIORITY' : (i < 3 ? 'High' : 'Consider');
       rows.push([i + 1, idea.name, idea.impact, idea.confidence, idea.ease, idea.score, priority]);
     });
     rows.push([]);
     rows.push(['Evaluator', data.evaluatorName || 'N/A']);
     rows.push(['Date', new Date().toLocaleDateString()]);
-    rows.push(['Formula', 'ICE Score = (Impact Ã— Confidence Ã— Ease) / 10']);
+    rows.push(['Formula', 'ICE Score = (Impact × Confidence × Ease) / 10']);
     if (data.notes) { rows.push([]); rows.push(['Notes', data.notes]); }
     return this.generateExcel(filename, { title: 'ICE Scoring Calculator', rows: rows });
   },
@@ -549,13 +549,13 @@ Object.assign(DocGenerator, {
     var lines = [
       { text: 'ICE SCORING CALCULATOR', size: 18, bold: true },
       { text: 'Evaluator: ' + (data.evaluatorName || 'N/A') + '  |  Date: ' + new Date().toLocaleDateString(), size: 10 },
-      { text: 'Formula: ICE Score = (Impact Ã— Confidence Ã— Ease) / 10', size: 10 },
+      { text: 'Formula: ICE Score = (Impact × Confidence × Ease) / 10', size: 10 },
       { text: ' ', size: 8 },
       { text: 'RANKED RESULTS', size: 14, bold: true }
     ];
     scored.forEach(function(idea, i) {
-      var star = i === 0 ? ' â˜…' : '';
-      lines.push({ text: '#' + (i + 1) + ': ' + idea.name + ' â€” Score: ' + idea.score + star, size: 12, bold: true });
+      var star = i === 0 ? ' ★' : '';
+      lines.push({ text: '#' + (i + 1) + ': ' + idea.name + ' — Score: ' + idea.score + star, size: 12, bold: true });
       lines.push({ text: '    Impact: ' + idea.impact + '  |  Confidence: ' + idea.confidence + '  |  Ease: ' + idea.ease, size: 10 });
     });
     if (data.notes) {
@@ -610,7 +610,7 @@ Object.assign(DocGenerator, {
       { text: 'PROBLEM-SOLUTION FIT CANVAS', size: 18, bold: true },
       { text: 'Company: ' + (data.companyName || 'N/A') + '  |  Date: ' + new Date().toLocaleDateString(), size: 10 },
       { text: ' ', size: 8 },
-      { text: 'â”€â”€ PROBLEM SIDE â”€â”€', size: 14, bold: true },
+      { text: '── PROBLEM SIDE ──', size: 14, bold: true },
       { text: ' ', size: 4 },
       { text: 'CUSTOMER SEGMENT', size: 12, bold: true },
       { text: data.customerSegment || 'Not defined', size: 10 },
@@ -621,7 +621,7 @@ Object.assign(DocGenerator, {
       { text: 'PAINS', size: 12, bold: true },
       { text: data.pains || 'Not defined', size: 10 },
       { text: ' ', size: 8 },
-      { text: 'â”€â”€ SOLUTION SIDE â”€â”€', size: 14, bold: true },
+      { text: '── SOLUTION SIDE ──', size: 14, bold: true },
       { text: ' ', size: 4 },
       { text: 'VALUE PROPOSITION', size: 12, bold: true },
       { text: data.valueProposition || 'Not defined', size: 10 },
@@ -644,22 +644,22 @@ Object.assign(DocGenerator, {
     if (!window.PptxGenJS) { alert('PptxGenJS library not loaded.'); return false; }
     var pres = new window.PptxGenJS();
     pres.layout = 'LAYOUT_16x9'; pres.author = 'Generated from wasilzafar.com';
-    pres.title = (data.companyName || 'Company') + ' â€” Problem-Solution Fit';
-    var C = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    pres.title = (data.companyName || 'Company') + ' — Problem-Solution Fit';
+    var C = DocStyles.colors;
 
     // Title slide
     var s1 = pres.addSlide(); s1.background = { color: C.navy };
     s1.addShape(pres.ShapeType.rect, { x: 0, y: 2.2, w: '100%', h: 0.06, fill: { color: C.crimson } });
-    s1.addText(data.companyName || 'Company Name', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 40, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    s1.addText('Problem-Solution Fit Canvas', { x: 0.6, y: 2.5, w: 8.8, h: 0.7, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center', italic: true });
+    s1.addText(data.companyName || 'Company Name', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 40, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    s1.addText('Problem-Solution Fit Canvas', { x: 0.6, y: 2.5, w: 8.8, h: 0.7, fontSize: 22, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center', italic: true });
 
     function addSlide(title, bodyText, accent) {
       accent = accent || C.teal;
       var sl = pres.addSlide(); sl.background = { color: C.white };
       sl.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: accent } });
-      sl.addText(title, { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 26, bold: true, color: C.navy, fontFace: 'Arial' });
+      sl.addText(title, { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 26, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary });
       sl.addShape(pres.ShapeType.rect, { x: 0.6, y: 1.0, w: 2.0, h: 0.04, fill: { color: accent } });
-      sl.addText(bodyText || 'Not specified', { x: 0.6, y: 1.3, w: 8.8, h: 3.8, fontSize: 16, color: '333333', fontFace: 'Arial', wrap: true, valign: 'top', lineSpacingMultiple: 1.4 });
+      sl.addText(bodyText || 'Not specified', { x: 0.6, y: 1.3, w: 8.8, h: 3.8, fontSize: 16, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, valign: 'top', lineSpacingMultiple: 1.4 });
       sl.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray };
     }
 
@@ -674,8 +674,8 @@ Object.assign(DocGenerator, {
 
     var end = pres.addSlide(); end.background = { color: C.navy };
     end.addShape(pres.ShapeType.rect, { x: 0, y: 2.6, w: '100%', h: 0.06, fill: { color: C.teal } });
-    end.addText(data.companyName || 'Company', { x: 0.6, y: 1.8, w: 8.8, h: 1.0, fontSize: 36, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    end.addText('Problem-Solution Fit', { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 18, color: C.teal, fontFace: 'Arial', align: 'center' });
+    end.addText(data.companyName || 'Company', { x: 0.6, y: 1.8, w: 8.8, h: 1.0, fontSize: 36, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    end.addText('Problem-Solution Fit', { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 18, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center' });
 
     return pres.writeFile({ fileName: filename + '.pptx' });
   },
@@ -710,7 +710,7 @@ Object.assign(DocGenerator, {
           'MRR: $' + DocGenerator._fmt(m.mrr),
           'Acquisition Cost: $' + DocGenerator._fmt(m.acqCost),
           'Fixed Costs: $' + DocGenerator._fmt(m.fixedCosts),
-          'Net P&L: $' + DocGenerator._fmt(m.pnl) + (m.pnl >= 0 ? ' âœ“ Profitable' : ' âœ— Loss')
+          'Net P&L: $' + DocGenerator._fmt(m.pnl) + (m.pnl >= 0 ? ' ✓ Profitable' : ' ✗ Loss')
         ]
       });
     });
@@ -826,7 +826,7 @@ Object.assign(DocGenerator, {
           'Post-Money Valuation: $' + DocGenerator._fmt(parseFloat(data.preMoneyValuation || 0) + parseFloat(data.investmentAmount || 0)),
           'Price Per Share: $' + (this._calcPricePerShare(data) || 'N/A')
       ]},
-      { heading: 'Cap Table (Post-Round)', content: rows.map(function(r) { return r.name + ': ' + DocGenerator._fmt(r.shares) + ' shares (' + r.percent.toFixed(1) + '%) â€” ' + r.class; }) }
+      { heading: 'Cap Table (Post-Round)', content: rows.map(function(r) { return r.name + ': ' + DocGenerator._fmt(r.shares) + ' shares (' + r.percent.toFixed(1) + '%) — ' + r.class; }) }
     ];
     if (data.notes) sections.push({ heading: 'Notes', content: [data.notes] });
     return this.generateWord(filename, { title: 'Cap Table Calculator', author: 'Generated from wasilzafar.com', sections: sections });
@@ -1029,55 +1029,55 @@ Object.assign(DocGenerator, {
     if (!window.PptxGenJS) { alert('PptxGenJS library not loaded.'); return false; }
     var pres = new window.PptxGenJS();
     pres.layout = 'LAYOUT_16x9'; pres.author = 'Generated from wasilzafar.com';
-    pres.title = (data.productName || 'Product') + ' â€” Positioning Statement';
-    var C = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    pres.title = (data.productName || 'Product') + ' — Positioning Statement';
+    var C = DocStyles.colors;
     var statement = 'For ' + (data.targetCustomer || '[target customer]') + ' who ' + (data.category || '[need]') + ', ' + (data.productName || '[product]') + ' is a ' + (data.productCategory || '[category]') + ' that ' + (data.keyBenefit || '[key benefit]') + '. Unlike ' + (data.competitor || '[competitor]') + ', we ' + (data.differentiator || '[differentiator]') + '.';
 
     // Title slide
     var s1 = pres.addSlide(); s1.background = { color: C.navy };
     s1.addShape(pres.ShapeType.rect, { x: 0, y: 2.2, w: '100%', h: 0.06, fill: { color: C.teal } });
-    s1.addText(data.productName || 'Product', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 40, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    s1.addText('Positioning Statement', { x: 0.6, y: 2.5, w: 8.8, h: 0.7, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center', italic: true });
+    s1.addText(data.productName || 'Product', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 40, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    s1.addText('Positioning Statement', { x: 0.6, y: 2.5, w: 8.8, h: 0.7, fontSize: 22, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center', italic: true });
 
     // Full statement slide
     var s2 = pres.addSlide(); s2.background = { color: C.white };
     s2.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: C.crimson } });
-    s2.addText('Positioning Statement', { x: 0.6, y: 0.3, w: 8.8, h: 0.6, fontSize: 26, bold: true, color: C.navy, fontFace: 'Arial' });
+    s2.addText('Positioning Statement', { x: 0.6, y: 0.3, w: 8.8, h: 0.6, fontSize: 26, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary });
     s2.addShape(pres.ShapeType.rect, { x: 0.6, y: 0.95, w: 2.0, h: 0.04, fill: { color: C.crimson } });
     s2.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray };
-    s2.addText(statement, { x: 1.0, y: 1.5, w: 8.0, h: 2.5, fontSize: 22, color: '333333', fontFace: 'Arial', italic: true, valign: 'middle', align: 'center', fill: { color: C.light }, line: { color: C.teal, width: 2 }, rectRadius: 0.15 });
+    s2.addText(statement, { x: 1.0, y: 1.5, w: 8.0, h: 2.5, fontSize: 22, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, italic: true, valign: 'middle', align: 'center', fill: { color: C.light }, line: { color: C.teal, width: 2 }, rectRadius: 0.15 });
 
     // Components breakdown slide
     var s3 = pres.addSlide(); s3.background = { color: C.white };
     s3.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: C.teal } });
-    s3.addText('Components', { x: 0.6, y: 0.3, w: 8.8, h: 0.6, fontSize: 26, bold: true, color: C.navy, fontFace: 'Arial' });
+    s3.addText('Components', { x: 0.6, y: 0.3, w: 8.8, h: 0.6, fontSize: 26, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary });
     s3.addShape(pres.ShapeType.rect, { x: 0.6, y: 0.95, w: 2.0, h: 0.04, fill: { color: C.teal } });
     s3.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray };
     var components = [
-      { text: 'Target Customer: ', options: { fontSize: 15, bold: true, color: C.teal } }, { text: (data.targetCustomer || 'N/A') + '\n', options: { fontSize: 15, color: '333333' } },
-      { text: 'Need/Opportunity: ', options: { fontSize: 15, bold: true, color: C.blue } }, { text: (data.category || 'N/A') + '\n', options: { fontSize: 15, color: '333333' } },
-      { text: 'Product Category: ', options: { fontSize: 15, bold: true, color: C.teal } }, { text: (data.productCategory || 'N/A') + '\n', options: { fontSize: 15, color: '333333' } },
-      { text: 'Key Benefit: ', options: { fontSize: 15, bold: true, color: C.crimson } }, { text: (data.keyBenefit || 'N/A') + '\n', options: { fontSize: 15, color: '333333' } },
-      { text: 'Competitor: ', options: { fontSize: 15, bold: true, color: C.navy } }, { text: (data.competitor || 'N/A') + '\n', options: { fontSize: 15, color: '333333' } },
-      { text: 'Differentiator: ', options: { fontSize: 15, bold: true, color: C.crimson } }, { text: (data.differentiator || 'N/A'), options: { fontSize: 15, color: '333333' } }
+      { text: 'Target Customer: ', options: { fontSize: 15, bold: true, color: C.teal } }, { text: (data.targetCustomer || 'N/A') + '\n', options: { fontSize: 15, color: DocStyles.colors.darkGray } },
+      { text: 'Need/Opportunity: ', options: { fontSize: 15, bold: true, color: C.blue } }, { text: (data.category || 'N/A') + '\n', options: { fontSize: 15, color: DocStyles.colors.darkGray } },
+      { text: 'Product Category: ', options: { fontSize: 15, bold: true, color: C.teal } }, { text: (data.productCategory || 'N/A') + '\n', options: { fontSize: 15, color: DocStyles.colors.darkGray } },
+      { text: 'Key Benefit: ', options: { fontSize: 15, bold: true, color: C.crimson } }, { text: (data.keyBenefit || 'N/A') + '\n', options: { fontSize: 15, color: DocStyles.colors.darkGray } },
+      { text: 'Competitor: ', options: { fontSize: 15, bold: true, color: C.navy } }, { text: (data.competitor || 'N/A') + '\n', options: { fontSize: 15, color: DocStyles.colors.darkGray } },
+      { text: 'Differentiator: ', options: { fontSize: 15, bold: true, color: C.crimson } }, { text: (data.differentiator || 'N/A'), options: { fontSize: 15, color: DocStyles.colors.darkGray } }
     ];
-    s3.addText(components, { x: 0.6, y: 1.2, w: 8.8, h: 3.5, fontFace: 'Arial', valign: 'top', lineSpacingMultiple: 1.5 });
+    s3.addText(components, { x: 0.6, y: 1.2, w: 8.8, h: 3.5, fontFace: DocStyles.fonts.secondary, valign: 'top', lineSpacingMultiple: 1.5 });
 
     // Elevator Pitch slide
     if (data.elevatorPitch) {
       var s4 = pres.addSlide(); s4.background = { color: C.light };
       s4.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: C.blue } });
-      s4.addText('Elevator Pitch', { x: 0.6, y: 0.3, w: 8.8, h: 0.6, fontSize: 26, bold: true, color: C.navy, fontFace: 'Arial' });
+      s4.addText('Elevator Pitch', { x: 0.6, y: 0.3, w: 8.8, h: 0.6, fontSize: 26, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary });
       s4.addShape(pres.ShapeType.rect, { x: 0.6, y: 0.95, w: 2.0, h: 0.04, fill: { color: C.blue } });
       s4.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray };
-      s4.addText(data.elevatorPitch, { x: 1.0, y: 1.5, w: 8.0, h: 2.5, fontSize: 20, color: '333333', fontFace: 'Arial', italic: true, valign: 'middle', align: 'center', fill: { color: C.white }, line: { color: C.blue, width: 2 }, rectRadius: 0.15 });
+      s4.addText(data.elevatorPitch, { x: 1.0, y: 1.5, w: 8.0, h: 2.5, fontSize: 20, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, italic: true, valign: 'middle', align: 'center', fill: { color: C.white }, line: { color: C.blue, width: 2 }, rectRadius: 0.15 });
     }
 
     // Closing
     var end = pres.addSlide(); end.background = { color: C.navy };
     end.addShape(pres.ShapeType.rect, { x: 0, y: 2.6, w: '100%', h: 0.06, fill: { color: C.teal } });
-    end.addText(data.productName || 'Product', { x: 0.6, y: 1.8, w: 8.8, h: 1.0, fontSize: 36, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    end.addText('Positioning Statement', { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 18, color: C.teal, fontFace: 'Arial', align: 'center' });
+    end.addText(data.productName || 'Product', { x: 0.6, y: 1.8, w: 8.8, h: 1.0, fontSize: 36, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    end.addText('Positioning Statement', { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 18, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center' });
 
     return pres.writeFile({ fileName: filename + '.pptx' });
   },
@@ -1139,7 +1139,7 @@ Object.assign(DocGenerator, {
     var labels = ['Complementary Skills', 'Shared Values', 'Work Style', 'Conflict Handling', 'Commitment', 'Trust Level', 'Risk Tolerance', 'Communication'];
     var total = 0; dims.forEach(function(d) { total += parseFloat(data[d]) || 0; });
     var avg = total / dims.length;
-    var rec = avg >= 8 ? 'Strong Match â€” Proceed with confidence' : avg >= 6 ? 'Proceed with Caution â€” Address gaps first' : 'Red Flag â€” Significant compatibility concerns';
+    var rec = avg >= 8 ? 'Strong Match — Proceed with confidence' : avg >= 6 ? 'Proceed with Caution — Address gaps first' : 'Red Flag — Significant compatibility concerns';
     var content = ['Candidate: ' + (data.candidateName || 'N/A'), 'Overall Score: ' + avg.toFixed(1) + '/10', 'Assessment: ' + rec, ''];
     dims.forEach(function(d, i) { content.push(labels[i] + ': ' + (data[d] || 'N/A') + '/10'); });
     return this.generateWord(filename, { title: 'Co-Founder Compatibility Scorecard', author: 'Generated from wasilzafar.com', sections: [{ heading: 'Co-Founder Compatibility', content: content }] });
@@ -1161,7 +1161,7 @@ Object.assign(DocGenerator, {
     var lines = [{ text: 'Candidate: ' + (data.candidateName || 'N/A'), size: 13, bold: true }, { text: '', size: 4 }];
     dims.forEach(function(d, i) { lines.push({ text: labels[i] + ': ' + (data[d] || 'N/A') + '/10', size: 11 }); });
     lines.push({ text: '', size: 6 }, { text: 'Overall Score: ' + avg.toFixed(1) + '/10', size: 13, bold: true });
-    lines.push({ text: avg >= 8 ? 'Strong Match' : avg >= 6 ? 'Proceed with Caution' : 'Red Flag â€” Address concerns', size: 12, bold: true });
+    lines.push({ text: avg >= 8 ? 'Strong Match' : avg >= 6 ? 'Proceed with Caution' : 'Red Flag — Address concerns', size: 12, bold: true });
     return this.generatePDF(filename, { title: 'Co-Founder Compatibility', lines: lines });
   },
 
@@ -1173,7 +1173,7 @@ Object.assign(DocGenerator, {
     return this.generateWord(filename, { title: 'Burn Rate & Runway Analysis', author: 'Generated from wasilzafar.com', sections: [
       { heading: 'Cash Position', content: ['Cash on Hand: $' + this._fmt(data.cashOnHand), 'Monthly Revenue: $' + this._fmt(data.monthlyRevenue), 'Monthly Expenses: $' + this._fmt(data.monthlyExpenses)] },
       { heading: 'Burn Analysis', content: ['Gross Burn Rate: $' + this._fmt(r.grossBurn) + '/mo', 'Net Burn Rate: $' + this._fmt(r.netBurn) + '/mo', 'Runway: ' + r.runway + ' months'] },
-      { heading: 'Assessment', content: [r.status, r.runway < 6 ? 'URGENT: Begin fundraising immediately.' : r.runway < 12 ? 'Start fundraising prep â€” 6+ month process.' : 'Comfortable runway. Focus on growth.'] }
+      { heading: 'Assessment', content: [r.status, r.runway < 6 ? 'URGENT: Begin fundraising immediately.' : r.runway < 12 ? 'Start fundraising prep — 6+ month process.' : 'Comfortable runway. Focus on growth.'] }
     ]});
   },
   generateBurnRateExcel: function(filename, data) {
@@ -1210,7 +1210,7 @@ Object.assign(DocGenerator, {
     var cash = parseFloat(data.cashOnHand) || 0;
     var netBurn = expenses - revenue;
     var runway = netBurn > 0 ? Math.floor(cash / netBurn) : (revenue >= expenses ? 999 : 0);
-    var status = revenue >= expenses ? 'Default Alive â€” Revenue covers expenses' : 'Default Dead â€” Burning cash at $' + this._fmt(netBurn) + '/mo';
+    var status = revenue >= expenses ? 'Default Alive — Revenue covers expenses' : 'Default Dead — Burning cash at $' + this._fmt(netBurn) + '/mo';
     return { grossBurn: expenses, netBurn: Math.max(netBurn, 0), runway: Math.min(runway, 999), status: status };
   },
 
@@ -1244,7 +1244,7 @@ Object.assign(DocGenerator, {
       { text: 'Revenue: ' + (data.expectedRevenue || 'N/A'), size: 11 },
       { text: '', size: 6 },
       { text: 'Recommended: ' + rec.type, size: 14, bold: true }];
-    rec.reasons.forEach(function(r) { lines.push({ text: 'â€¢ ' + r, size: 11 }); });
+    rec.reasons.forEach(function(r) { lines.push({ text: '• ' + r, size: 11 }); });
     lines.push({ text: '', size: 6 }, { text: 'Alternative: ' + rec.alternative, size: 11 });
     return this.generatePDF(filename, { title: 'Business Structure Recommendation', lines: lines });
   },
@@ -1260,7 +1260,7 @@ Object.assign(DocGenerator, {
   // Hypothesis Card Builder (Part 4 - Lean Startup)
   // ============================================================
   generateHypothesisCardWord: async function(filename, data) {
-    return this.generateWord(filename, { title: 'Hypothesis Card â€” ' + (data.hypothesisName || 'Untitled'), author: 'Generated from wasilzafar.com', sections: [
+    return this.generateWord(filename, { title: 'Hypothesis Card — ' + (data.hypothesisName || 'Untitled'), author: 'Generated from wasilzafar.com', sections: [
       { heading: 'Hypothesis', content: ['Name: ' + (data.hypothesisName || 'N/A'), 'Type: ' + (data.hypothesisType || 'N/A'), 'We Believe That: ' + (data.weBelieveThat || 'N/A')] },
       { heading: 'Expected Outcome', content: ['For Segment: ' + (data.forSegment || 'N/A'), 'Will Result In: ' + (data.willResultIn || 'N/A')] },
       { heading: 'Validation', content: ['Success Criteria: ' + (data.successCriteria || 'N/A'), 'Test Method: ' + (data.testMethod || 'N/A'), 'Time Box: ' + (data.timeBox || 'N/A')] }
@@ -1291,54 +1291,54 @@ Object.assign(DocGenerator, {
     if (!window.PptxGenJS) { alert('PptxGenJS library not loaded.'); return false; }
     var pres = new window.PptxGenJS();
     pres.layout = 'LAYOUT_16x9'; pres.author = 'Generated from wasilzafar.com';
-    pres.title = 'Hypothesis Card â€” ' + (data.hypothesisName || 'Untitled');
-    var C = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    pres.title = 'Hypothesis Card — ' + (data.hypothesisName || 'Untitled');
+    var C = DocStyles.colors;
 
     // Title slide
     var s1 = pres.addSlide(); s1.background = { color: C.navy };
     s1.addShape(pres.ShapeType.rect, { x: 0, y: 2.2, w: '100%', h: 0.06, fill: { color: C.teal } });
-    s1.addText(data.hypothesisName || 'Hypothesis', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 38, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    s1.addText('Hypothesis Card', { x: 0.6, y: 2.5, w: 8.8, h: 0.7, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center', italic: true });
-    if (data.hypothesisType) s1.addText('Type: ' + data.hypothesisType, { x: 0.6, y: 3.5, w: 8.8, h: 0.4, fontSize: 16, color: C.gray, fontFace: 'Arial', align: 'center' });
+    s1.addText(data.hypothesisName || 'Hypothesis', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 38, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    s1.addText('Hypothesis Card', { x: 0.6, y: 2.5, w: 8.8, h: 0.7, fontSize: 22, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center', italic: true });
+    if (data.hypothesisType) s1.addText('Type: ' + data.hypothesisType, { x: 0.6, y: 3.5, w: 8.8, h: 0.4, fontSize: 16, color: C.gray, fontFace: DocStyles.fonts.secondary, align: 'center' });
 
     // Hypothesis statement slide
     var s2 = pres.addSlide(); s2.background = { color: C.white };
     s2.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: C.crimson } });
-    s2.addText('We Believe That...', { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 26, bold: true, color: C.navy, fontFace: 'Arial' });
+    s2.addText('We Believe That...', { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 26, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary });
     s2.addShape(pres.ShapeType.rect, { x: 0.6, y: 1.0, w: 2.0, h: 0.04, fill: { color: C.crimson } });
     s2.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray };
     // Statement in a highlight box
-    s2.addText(data.weBelieveThat || 'Not defined', { x: 1.0, y: 1.4, w: 8.0, h: 1.5, fontSize: 20, color: '333333', fontFace: 'Arial', italic: true, valign: 'middle', align: 'center', fill: { color: C.light }, line: { color: C.teal, width: 2 }, rectRadius: 0.1 });
+    s2.addText(data.weBelieveThat || 'Not defined', { x: 1.0, y: 1.4, w: 8.0, h: 1.5, fontSize: 20, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, italic: true, valign: 'middle', align: 'center', fill: { color: C.light }, line: { color: C.teal, width: 2 }, rectRadius: 0.1 });
     // Segment + outcome
     var details = [
       { text: 'For Segment: ' + (data.forSegment || 'N/A'), options: { fontSize: 16, color: C.blue, bold: true, breakLine: true } },
       { text: '', options: { fontSize: 6, breakLine: true } },
-      { text: 'Will Result In: ' + (data.willResultIn || 'N/A'), options: { fontSize: 16, color: '333333', breakLine: true } }
+      { text: 'Will Result In: ' + (data.willResultIn || 'N/A'), options: { fontSize: 16, color: DocStyles.colors.darkGray, breakLine: true } }
     ];
-    s2.addText(details, { x: 0.6, y: 3.2, w: 8.8, h: 1.5, fontFace: 'Arial', valign: 'top' });
+    s2.addText(details, { x: 0.6, y: 3.2, w: 8.8, h: 1.5, fontFace: DocStyles.fonts.secondary, valign: 'top' });
 
     // Validation slide
     var s3 = pres.addSlide(); s3.background = { color: C.white };
     s3.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: C.teal } });
-    s3.addText('Validation Plan', { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 26, bold: true, color: C.navy, fontFace: 'Arial' });
+    s3.addText('Validation Plan', { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 26, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary });
     s3.addShape(pres.ShapeType.rect, { x: 0.6, y: 1.0, w: 2.0, h: 0.04, fill: { color: C.teal } });
     s3.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray };
     var validation = [
       { text: 'Success Criteria', options: { fontSize: 16, bold: true, color: C.teal, breakLine: true } },
-      { text: data.successCriteria || 'N/A', options: { fontSize: 15, color: '333333', breakLine: true, lineSpacingMultiple: 1.2 } },
+      { text: data.successCriteria || 'N/A', options: { fontSize: 15, color: DocStyles.colors.darkGray, breakLine: true, lineSpacingMultiple: 1.2 } },
       { text: '', options: { fontSize: 10, breakLine: true } },
       { text: 'Test Method', options: { fontSize: 16, bold: true, color: C.blue, breakLine: true } },
-      { text: data.testMethod || 'N/A', options: { fontSize: 15, color: '333333', breakLine: true, lineSpacingMultiple: 1.2 } },
+      { text: data.testMethod || 'N/A', options: { fontSize: 15, color: DocStyles.colors.darkGray, breakLine: true, lineSpacingMultiple: 1.2 } },
       { text: '', options: { fontSize: 10, breakLine: true } },
       { text: 'Time Box: ' + (data.timeBox || 'N/A'), options: { fontSize: 16, bold: true, color: C.crimson, breakLine: true } }
     ];
-    s3.addText(validation, { x: 0.6, y: 1.3, w: 8.8, h: 3.5, fontFace: 'Arial', valign: 'top' });
+    s3.addText(validation, { x: 0.6, y: 1.3, w: 8.8, h: 3.5, fontFace: DocStyles.fonts.secondary, valign: 'top' });
 
     // Closing
     var end = pres.addSlide(); end.background = { color: C.navy };
     end.addShape(pres.ShapeType.rect, { x: 0, y: 2.6, w: '100%', h: 0.06, fill: { color: C.teal } });
-    end.addText(data.hypothesisName || 'Hypothesis', { x: 0.6, y: 1.8, w: 8.8, h: 1.0, fontSize: 36, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    end.addText('Ready for Validation', { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 18, color: C.teal, fontFace: 'Arial', align: 'center' });
+    end.addText(data.hypothesisName || 'Hypothesis', { x: 0.6, y: 1.8, w: 8.8, h: 1.0, fontSize: 36, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    end.addText('Ready for Validation', { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 18, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center' });
 
     return pres.writeFile({ fileName: filename + '.pptx' });
   },
@@ -1360,7 +1360,7 @@ Object.assign(DocGenerator, {
   },
   generateExperimentTrackerPDF: function(filename, data) {
     var experiments = this._collectExperiments(data);
-    var lines = [{ text: 'Experiment Log â€” ' + experiments.length + ' Experiments', size: 14, bold: true }, { text: '', size: 6 }];
+    var lines = [{ text: 'Experiment Log — ' + experiments.length + ' Experiments', size: 14, bold: true }, { text: '', size: 6 }];
     experiments.forEach(function(e, i) {
       lines.push({ text: 'Experiment ' + (i + 1) + ': ' + e.name, size: 13, bold: true });
       lines.push({ text: 'Hypothesis: ' + e.hypothesis, size: 10 });
@@ -1437,7 +1437,7 @@ Object.assign(DocGenerator, {
     var cycle = parseFloat(data.viralCycles) || 14;
     var cyclesPerMonth = 30 / cycle;
     var project = function(months) { var u = users; for (var i = 0; i < months * cyclesPerMonth; i++) u += u * kFactor; return Math.round(u); };
-    var status = kFactor >= 1 ? 'Viral! (K â‰¥ 1) â€” Exponential growth' : kFactor >= 0.5 ? 'Sub-viral (K 0.5-1) â€” Amplifies paid growth' : 'Low virality (K < 0.5) â€” Needs improvement';
+    var status = kFactor >= 1 ? 'Viral! (K ≥ 1) — Exponential growth' : kFactor >= 0.5 ? 'Sub-viral (K 0.5-1) — Amplifies paid growth' : 'Low virality (K < 0.5) — Needs improvement';
     return { kFactor: kFactor, status: status, m1: project(1), m3: project(3), m6: project(6) };
   },
 
@@ -1499,7 +1499,7 @@ Object.assign(DocGenerator, {
     var grossChurn = mrr > 0 ? (churned / mrr) * 100 : 0;
     var nrr = mrr > 0 ? ((mrr - churned + expansion) / mrr) * 100 : 100;
     var logoChurn = totalCust > 0 ? (churnedCust / totalCust) * 100 : 0;
-    var health = quickRatio >= 4 ? 'Excellent (Quick Ratio â‰¥ 4)' : quickRatio >= 2 ? 'Good (Quick Ratio 2-4)' : 'Needs Improvement (Quick Ratio < 2)';
+    var health = quickRatio >= 4 ? 'Excellent (Quick Ratio ≥ 4)' : quickRatio >= 2 ? 'Good (Quick Ratio 2-4)' : 'Needs Improvement (Quick Ratio < 2)';
     return { mrr: mrr, arr: mrr * 12, netNewMRR: netNewMRR, quickRatio: quickRatio, grossChurn: grossChurn, nrr: nrr, logoChurn: logoChurn, health: health };
   },
 
@@ -1543,7 +1543,7 @@ Object.assign(DocGenerator, {
     var total = p + pa + d || 1;
     var pPct = (p / total) * 100, dPct = (d / total) * 100, paPct = (pa / total) * 100;
     var nps = Math.round(pPct - dPct);
-    var rating = nps >= 70 ? 'World-Class' : nps >= 50 ? 'Excellent' : nps >= 30 ? 'Good' : nps >= 0 ? 'Needs Improvement' : 'Critical â€” Urgent action needed';
+    var rating = nps >= 70 ? 'World-Class' : nps >= 50 ? 'Excellent' : nps >= 30 ? 'Good' : nps >= 0 ? 'Needs Improvement' : 'Critical — Urgent action needed';
     return { promoters: p, passives: pa, detractors: d, total: total, promoterPct: pPct, passivePct: paPct, detractorPct: dPct, nps: nps, rating: rating };
   },
 
@@ -1610,7 +1610,7 @@ Object.assign(DocGenerator, {
       { heading: 'Team', content: [data.teamHighlights || 'N/A'] },
       { heading: 'The Ask', content: [data.theAsk || 'N/A'] }
     ];
-    return this.generateWord(filename, { title: 'Pitch Deck â€” ' + (data.companyName || 'Startup') + (data.tagline ? '\n' + data.tagline : ''), author: 'Generated from wasilzafar.com', sections: slides });
+    return this.generateWord(filename, { title: 'Pitch Deck — ' + (data.companyName || 'Startup') + (data.tagline ? '\n' + data.tagline : ''), author: 'Generated from wasilzafar.com', sections: slides });
   },
   generatePitchDeckExcel: function(filename, data) {
     return this.generateExcel(filename, { sheetName: 'Pitch Deck', headers: ['Slide', 'Content'], data: [
@@ -1632,7 +1632,7 @@ Object.assign(DocGenerator, {
   /**
    * Generate a Pitch Deck PowerPoint presentation (.pptx)
    * Creates a professional multi-slide pitch deck using PptxGenJS.
-   * Reusable pattern â€” can be adapted for other presentation types.
+   * Reusable pattern — can be adapted for other presentation types.
    * @param {string} filename - Output filename (without extension)
    * @param {Object} data - Pitch deck data from form
    */
@@ -1642,10 +1642,10 @@ Object.assign(DocGenerator, {
     var pres = new window.PptxGenJS();
     pres.layout = 'LAYOUT_16x9';
     pres.author = 'Generated from wasilzafar.com';
-    pres.title = (data.companyName || 'Startup') + ' â€” Pitch Deck';
+    pres.title = (data.companyName || 'Startup') + ' — Pitch Deck';
 
     // Color palette (matches site CSS variables)
-    var C = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var C = DocStyles.colors;
 
     // Helper: add a styled content slide with title bar + body
     function addContentSlide(title, bodyLines, accent) {
@@ -1657,23 +1657,23 @@ Object.assign(DocGenerator, {
       // Slide number
       slide.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray };
       // Title
-      slide.addText(title, { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 28, bold: true, color: C.navy, fontFace: 'Arial' });
+      slide.addText(title, { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 28, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary });
       // Underline accent
       slide.addShape(pres.ShapeType.rect, { x: 0.6, y: 1.05, w: 2.0, h: 0.04, fill: { color: accent } });
       // Body content
       if (typeof bodyLines === 'string') {
-        slide.addText(bodyLines, { x: 0.6, y: 1.3, w: 8.8, h: 3.8, fontSize: 18, color: '333333', fontFace: 'Arial', wrap: true, valign: 'top', lineSpacingMultiple: 1.3 });
+        slide.addText(bodyLines, { x: 0.6, y: 1.3, w: 8.8, h: 3.8, fontSize: 18, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, valign: 'top', lineSpacingMultiple: 1.3 });
       } else if (Array.isArray(bodyLines)) {
         var textObjs = [];
         bodyLines.forEach(function(line, idx) {
           if (typeof line === 'string') {
-            textObjs.push({ text: line, options: { fontSize: 18, color: '333333', bullet: true, breakLine: true, lineSpacingMultiple: 1.3 } });
+            textObjs.push({ text: line, options: { fontSize: 18, color: DocStyles.colors.darkGray, bullet: true, breakLine: true, lineSpacingMultiple: 1.3 } });
           } else {
             // Object with {text, bold, fontSize, color, bullet}
-            textObjs.push({ text: line.text || '', options: { fontSize: line.fontSize || 18, color: line.color || '333333', bold: !!line.bold, bullet: line.bullet !== false, breakLine: true, lineSpacingMultiple: 1.3 } });
+            textObjs.push({ text: line.text || '', options: { fontSize: line.fontSize || 18, color: line.color || DocStyles.colors.darkGray, bold: !!line.bold, bullet: line.bullet !== false, breakLine: true, lineSpacingMultiple: 1.3 } });
           }
         });
-        slide.addText(textObjs, { x: 0.6, y: 1.3, w: 8.8, h: 3.8, fontFace: 'Arial', valign: 'top' });
+        slide.addText(textObjs, { x: 0.6, y: 1.3, w: 8.8, h: 3.8, fontFace: DocStyles.fonts.secondary, valign: 'top' });
       }
       return slide;
     }
@@ -1683,11 +1683,11 @@ Object.assign(DocGenerator, {
     titleSlide.background = { color: C.navy };
     // Accent stripe
     titleSlide.addShape(pres.ShapeType.rect, { x: 0, y: 2.2, w: '100%', h: 0.06, fill: { color: C.teal } });
-    titleSlide.addText(data.companyName || 'Company Name', { x: 0.6, y: 1.0, w: 8.8, h: 1.2, fontSize: 44, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
+    titleSlide.addText(data.companyName || 'Company Name', { x: 0.6, y: 1.0, w: 8.8, h: 1.2, fontSize: 44, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
     if (data.tagline) {
-      titleSlide.addText(data.tagline, { x: 0.6, y: 2.5, w: 8.8, h: 0.8, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center', italic: true });
+      titleSlide.addText(data.tagline, { x: 0.6, y: 2.5, w: 8.8, h: 0.8, fontSize: 22, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center', italic: true });
     }
-    titleSlide.addText('PITCH DECK', { x: 0.6, y: 4.2, w: 8.8, h: 0.5, fontSize: 14, color: C.gray, fontFace: 'Arial', align: 'center', charSpacing: 6 });
+    titleSlide.addText('PITCH DECK', { x: 0.6, y: 4.2, w: 8.8, h: 0.5, fontSize: 14, color: C.gray, fontFace: DocStyles.fonts.secondary, align: 'center', charSpacing: 6 });
 
     // --- Slide 2: Problem ---
     if (data.problem) {
@@ -1732,20 +1732,20 @@ Object.assign(DocGenerator, {
       askSlide.background = { color: C.light };
       askSlide.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: C.crimson } });
       askSlide.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray };
-      askSlide.addText('The Ask', { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 28, bold: true, color: C.navy, fontFace: 'Arial' });
+      askSlide.addText('The Ask', { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 28, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary });
       askSlide.addShape(pres.ShapeType.rect, { x: 0.6, y: 1.05, w: 2.0, h: 0.04, fill: { color: C.crimson } });
       // Big ask number/text centered
-      askSlide.addText(data.theAsk, { x: 1.0, y: 1.8, w: 8.0, h: 2.0, fontSize: 32, bold: true, color: C.crimson, fontFace: 'Arial', align: 'center', valign: 'middle', fill: { color: C.white }, line: { color: C.crimson, width: 2 }, rectRadius: 0.15 });
+      askSlide.addText(data.theAsk, { x: 1.0, y: 1.8, w: 8.0, h: 2.0, fontSize: 32, bold: true, color: C.crimson, fontFace: DocStyles.fonts.secondary, align: 'center', valign: 'middle', fill: { color: C.white }, line: { color: C.crimson, width: 2 }, rectRadius: 0.15 });
     }
 
     // --- Slide 10: Thank You ---
     var endSlide = pres.addSlide();
     endSlide.background = { color: C.navy };
     endSlide.addShape(pres.ShapeType.rect, { x: 0, y: 2.6, w: '100%', h: 0.06, fill: { color: C.teal } });
-    endSlide.addText('Thank You', { x: 0.6, y: 1.5, w: 8.8, h: 1.0, fontSize: 44, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    endSlide.addText(data.companyName || '', { x: 0.6, y: 3.0, w: 8.8, h: 0.6, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center' });
+    endSlide.addText('Thank You', { x: 0.6, y: 1.5, w: 8.8, h: 1.0, fontSize: 44, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    endSlide.addText(data.companyName || '', { x: 0.6, y: 3.0, w: 8.8, h: 0.6, fontSize: 22, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center' });
     if (data.tagline) {
-      endSlide.addText(data.tagline, { x: 0.6, y: 3.6, w: 8.8, h: 0.5, fontSize: 16, color: C.gray, fontFace: 'Arial', align: 'center', italic: true });
+      endSlide.addText(data.tagline, { x: 0.6, y: 3.6, w: 8.8, h: 0.5, fontSize: 16, color: C.gray, fontFace: DocStyles.fonts.secondary, align: 'center', italic: true });
     }
 
     return pres.writeFile({ fileName: filename + '.pptx' });
@@ -1793,13 +1793,13 @@ Object.assign(DocGenerator, {
       var kr = data['keyResult' + i]; if (!kr || !kr.trim()) continue;
       var prog = data['kr' + i + 'Progress'] || '0';
       var status = data['kr' + i + 'Status'] || 'Not Started';
-      sections[1].content.push('KR ' + i + ': ' + kr + ' â€” Progress: ' + prog + '% â€” Status: ' + status);
+      sections[1].content.push('KR ' + i + ': ' + kr + ' — Progress: ' + prog + '% — Status: ' + status);
     }
     if (sections[1].content.length === 0) sections[1].content.push('No key results defined');
     return this.generateWord(filename, { title: 'OKR Plan', author: 'Generated from wasilzafar.com', sections: sections });
   },
   generateOkrPlannerExcel: function(filename, data) {
-    var rows = [['OKR Plan â€” ' + (data.quarter || 'Q1')], ['Owner: ' + (data.owner || '')], [''],
+    var rows = [['OKR Plan — ' + (data.quarter || 'Q1')], ['Owner: ' + (data.owner || '')], [''],
       ['Objective', data.objective || ''], [''],
       ['Key Result', 'Progress (%)', 'Status']];
     for (var i = 1; i <= 3; i++) {
@@ -1824,14 +1824,14 @@ Object.assign(DocGenerator, {
     var pres = new window.PptxGenJS();
     pres.layout = 'LAYOUT_16x9'; pres.author = 'Generated from wasilzafar.com';
     pres.title = (data.quarter || 'Q1') + ' OKR Plan';
-    var C = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var C = DocStyles.colors;
 
     // Title slide
     var s1 = pres.addSlide(); s1.background = { color: C.navy };
     s1.addShape(pres.ShapeType.rect, { x: 0, y: 2.2, w: '100%', h: 0.06, fill: { color: C.teal } });
-    s1.addText((data.quarter || 'Q1') + ' OKR Plan', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 40, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    s1.addText('Objectives & Key Results', { x: 0.6, y: 2.5, w: 8.8, h: 0.7, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center', italic: true });
-    if (data.owner) s1.addText('Owner: ' + data.owner, { x: 0.6, y: 3.5, w: 8.8, h: 0.4, fontSize: 16, color: C.gray, fontFace: 'Arial', align: 'center' });
+    s1.addText((data.quarter || 'Q1') + ' OKR Plan', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 40, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    s1.addText('Objectives & Key Results', { x: 0.6, y: 2.5, w: 8.8, h: 0.7, fontSize: 22, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center', italic: true });
+    if (data.owner) s1.addText('Owner: ' + data.owner, { x: 0.6, y: 3.5, w: 8.8, h: 0.4, fontSize: 16, color: C.gray, fontFace: DocStyles.fonts.secondary, align: 'center' });
 
     // Collect KRs
     var krs = [];
@@ -1844,22 +1844,22 @@ Object.assign(DocGenerator, {
     var s2 = pres.addSlide(); s2.background = { color: C.white };
     s2.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: C.teal } });
     s2.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray };
-    s2.addText('OBJECTIVE', { x: 0.6, y: 0.25, w: 8.8, h: 0.35, fontSize: 12, color: C.gray, fontFace: 'Arial', charSpacing: 3 });
-    s2.addText(data.objective || 'Not defined', { x: 0.6, y: 0.6, w: 8.8, h: 0.9, fontSize: 20, bold: true, color: C.navy, fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [4, 4, 4, 4] });
+    s2.addText('OBJECTIVE', { x: 0.6, y: 0.25, w: 8.8, h: 0.35, fontSize: 12, color: C.gray, fontFace: DocStyles.fonts.secondary, charSpacing: 3 });
+    s2.addText(data.objective || 'Not defined', { x: 0.6, y: 0.6, w: 8.8, h: 0.9, fontSize: 20, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [4, 4, 4, 4] });
     s2.addShape(pres.ShapeType.rect, { x: 0.6, y: 1.6, w: 2.0, h: 0.04, fill: { color: C.teal } });
-    s2.addText('KEY RESULTS', { x: 0.6, y: 1.8, w: 8.8, h: 0.35, fontSize: 12, color: C.gray, fontFace: 'Arial', charSpacing: 3 });
+    s2.addText('KEY RESULTS', { x: 0.6, y: 1.8, w: 8.8, h: 0.35, fontSize: 12, color: C.gray, fontFace: DocStyles.fonts.secondary, charSpacing: 3 });
 
-    // Key Results â€” each gets a roomy card-like block
+    // Key Results — each gets a roomy card-like block
     var yPos = 2.3;
     for (var j = 0; j < krs.length; j++) {
       var item = krs[j];
-      var statusColor = item.status === 'Complete' ? C.teal : item.status === 'On Track' ? C.blue : item.status === 'At Risk' ? 'CC8800' : C.crimson;
+      var statusColor = item.status === 'Complete' ? C.teal : item.status === 'On Track' ? C.blue : item.status === 'At Risk' ? C.amber : C.crimson;
       // KR card background
       s2.addShape(pres.ShapeType.rect, { x: 0.5, y: yPos - 0.1, w: 9.1, h: 1.45, fill: { color: C.light }, rectRadius: 0.08 });
       // KR number badge
-      s2.addText('KR ' + (j + 1), { x: 0.7, y: yPos, w: 0.65, h: 0.35, fontSize: 11, bold: true, color: C.white, fontFace: 'Arial', align: 'center', valign: 'middle', fill: { color: statusColor }, rectRadius: 0.06 });
+      s2.addText('KR ' + (j + 1), { x: 0.7, y: yPos, w: 0.65, h: 0.35, fontSize: 11, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center', valign: 'middle', fill: { color: statusColor }, rectRadius: 0.06 });
       // KR label text
-      s2.addText(item.label, { x: 1.5, y: yPos - 0.05, w: 8.0, h: 0.5, fontSize: 14, bold: true, color: '333333', fontFace: 'Arial', valign: 'top', wrap: true, fit: 'shrink', margin: [2, 4, 2, 4] });
+      s2.addText(item.label, { x: 1.5, y: yPos - 0.05, w: 8.0, h: 0.5, fontSize: 14, bold: true, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, valign: 'top', wrap: true, fit: 'shrink', margin: [2, 4, 2, 4] });
       // Progress bar row
       var barY = yPos + 0.55;
       // Progress bar background
@@ -1867,22 +1867,22 @@ Object.assign(DocGenerator, {
       // Progress bar fill
       if (item.progress > 0) s2.addShape(pres.ShapeType.rect, { x: 1.5, y: barY, w: Math.min(5.5, 5.5 * item.progress / 100), h: 0.28, fill: { color: statusColor }, rectRadius: 0.05 });
       // Progress percentage
-      s2.addText(item.progress + '%', { x: 7.2, y: barY - 0.03, w: 0.85, h: 0.35, fontSize: 13, bold: true, color: statusColor, fontFace: 'Arial', valign: 'middle' });
+      s2.addText(item.progress + '%', { x: 7.2, y: barY - 0.03, w: 0.85, h: 0.35, fontSize: 13, bold: true, color: statusColor, fontFace: DocStyles.fonts.secondary, valign: 'middle' });
       // Status badge
-      s2.addText(item.status, { x: 8.1, y: barY - 0.03, w: 1.4, h: 0.35, fontSize: 11, color: C.white, fontFace: 'Arial', align: 'center', valign: 'middle', fill: { color: statusColor }, rectRadius: 0.08 });
+      s2.addText(item.status, { x: 8.1, y: barY - 0.03, w: 1.4, h: 0.35, fontSize: 11, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center', valign: 'middle', fill: { color: statusColor }, rectRadius: 0.08 });
       yPos += 1.65;
     }
 
     // If no KRs, show placeholder
     if (krs.length === 0) {
-      s2.addText('No key results defined', { x: 0.6, y: 2.5, w: 8.8, h: 0.5, fontSize: 16, color: C.gray, fontFace: 'Arial', italic: true, align: 'center' });
+      s2.addText('No key results defined', { x: 0.6, y: 2.5, w: 8.8, h: 0.5, fontSize: 16, color: C.gray, fontFace: DocStyles.fonts.secondary, italic: true, align: 'center' });
     }
 
     // Closing slide
     var end = pres.addSlide(); end.background = { color: C.navy };
     end.addShape(pres.ShapeType.rect, { x: 0, y: 2.6, w: '100%', h: 0.06, fill: { color: C.teal } });
-    end.addText((data.quarter || 'Q1') + ' OKR Plan', { x: 0.6, y: 1.8, w: 8.8, h: 1.0, fontSize: 36, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    if (data.owner) end.addText('Owner: ' + data.owner, { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 18, color: C.teal, fontFace: 'Arial', align: 'center' });
+    end.addText((data.quarter || 'Q1') + ' OKR Plan', { x: 0.6, y: 1.8, w: 8.8, h: 1.0, fontSize: 36, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    if (data.owner) end.addText('Owner: ' + data.owner, { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 18, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center' });
 
     return pres.writeFile({ fileName: filename + '.pptx' });
   },
@@ -1895,7 +1895,7 @@ Object.assign(DocGenerator, {
     var labels = ['Stage Readiness', 'Team Strength', 'Traction', 'Market Opportunity', 'Product Readiness', 'Scalability', 'Coachability', 'Network Need', 'Fundraising Timeline'];
     var total = 0; dims.forEach(function(d) { total += parseFloat(data[d]) || 0; });
     var avg = total / dims.length;
-    var rec = avg >= 4 ? 'Strong Fit â€” Apply to accelerators!' : avg >= 3 ? 'Moderate Fit â€” Strengthen weak areas first' : 'Weak Fit â€” Build fundamentals before applying';
+    var rec = avg >= 4 ? 'Strong Fit — Apply to accelerators!' : avg >= 3 ? 'Moderate Fit — Strengthen weak areas first' : 'Weak Fit — Build fundamentals before applying';
     var content = ['Company: ' + (data.companyName || 'N/A'), 'Overall Score: ' + avg.toFixed(1) + '/5', 'Recommendation: ' + rec, ''];
     dims.forEach(function(d, i) { content.push(labels[i] + ': ' + (data[d] || 'N/A') + '/5'); });
     return this.generateWord(filename, { title: 'Accelerator Readiness Assessment', author: 'Generated from wasilzafar.com', sections: [{ heading: 'Accelerator Readiness Assessment', content: content }] });
@@ -1917,7 +1917,7 @@ Object.assign(DocGenerator, {
     var lines = [{ text: 'Company: ' + (data.companyName || 'N/A'), size: 13, bold: true }, { text: '', size: 4 }];
     dims.forEach(function(d, i) { lines.push({ text: labels[i] + ': ' + (data[d] || 'N/A') + '/5', size: 11 }); });
     lines.push({ text: '', size: 6 }, { text: 'Overall Score: ' + avg.toFixed(1) + '/5', size: 13, bold: true });
-    lines.push({ text: avg >= 4 ? 'Strong Fit â€” Apply!' : avg >= 3 ? 'Moderate â€” Strengthen first' : 'Weak â€” Build fundamentals', size: 12, bold: true });
+    lines.push({ text: avg >= 4 ? 'Strong Fit — Apply!' : avg >= 3 ? 'Moderate — Strengthen first' : 'Weak — Build fundamentals', size: 12, bold: true });
     return this.generatePDF(filename, { title: 'Accelerator Readiness', lines: lines });
   },
 
@@ -1929,7 +1929,7 @@ Object.assign(DocGenerator, {
     var labels = ['Core Technology', 'Data Infrastructure', 'AI/ML Capability', 'Cloud Scalability', 'Security & Compliance', 'API Integration', 'Technical Team', 'IP Defensibility', 'DevOps & Automation'];
     var total = 0; dims.forEach(function(d) { total += parseFloat(data[d]) || 0; });
     var avg = total / dims.length;
-    var rec = avg >= 4 ? 'Strong â€” Technology stack is mature and scalable' : avg >= 3 ? 'Moderate â€” Invest in weak areas' : 'Weak â€” Significant technical debt to address';
+    var rec = avg >= 4 ? 'Strong — Technology stack is mature and scalable' : avg >= 3 ? 'Moderate — Invest in weak areas' : 'Weak — Significant technical debt to address';
     var content = ['Company: ' + (data.companyName || 'N/A'), 'Readiness Score: ' + avg.toFixed(1) + '/5', 'Assessment: ' + rec, ''];
     dims.forEach(function(d, i) { content.push(labels[i] + ': ' + (data[d] || 'N/A') + '/5'); });
     return this.generateWord(filename, { title: 'Technology Readiness Assessment', author: 'Generated from wasilzafar.com', sections: [{ heading: 'Technology Readiness', content: content }] });
@@ -1951,7 +1951,7 @@ Object.assign(DocGenerator, {
     var lines = [{ text: 'Company: ' + (data.companyName || 'N/A'), size: 13, bold: true }, { text: '', size: 4 }];
     dims.forEach(function(d, i) { lines.push({ text: labels[i] + ': ' + (data[d] || 'N/A') + '/5', size: 11 }); });
     lines.push({ text: '', size: 6 }, { text: 'Readiness Score: ' + avg.toFixed(1) + '/5', size: 13, bold: true });
-    lines.push({ text: avg >= 4 ? 'Strong â€” Mature stack' : avg >= 3 ? 'Moderate â€” Invest in gaps' : 'Weak â€” Address tech debt', size: 12, bold: true });
+    lines.push({ text: avg >= 4 ? 'Strong — Mature stack' : avg >= 3 ? 'Moderate — Invest in gaps' : 'Weak — Address tech debt', size: 12, bold: true });
     return this.generatePDF(filename, { title: 'Tech Readiness Assessment', lines: lines });
   },
 
@@ -2059,7 +2059,7 @@ Object.assign(DocGenerator, {
   // ============================================================
   generateVCPitchDeckWord: async function(filename, data) {
     var sections = [
-      { heading: '1. Title', content: [(data.companyName || 'Company') + (data.tagline ? ' â€” ' + data.tagline : '') + (data.founderNames ? '\nPrepared by: ' + data.founderNames : '')] },
+      { heading: '1. Title', content: [(data.companyName || 'Company') + (data.tagline ? ' — ' + data.tagline : '') + (data.founderNames ? '\nPrepared by: ' + data.founderNames : '')] },
       { heading: '2. Problem', content: [data.problem || 'N/A'] },
       { heading: '3. Solution', content: [data.solution || 'N/A'] },
       { heading: '4. Demo / Product', content: [data.demoProduct || 'N/A'] },
@@ -2080,7 +2080,7 @@ Object.assign(DocGenerator, {
         data.appendixPress ? 'Press & Awards:\n' + data.appendixPress : ''
       ].filter(Boolean) });
     }
-    return this.generateWord(filename, { title: 'VC Pitch Deck â€” ' + (data.companyName || 'Startup'), author: 'Generated from wasilzafar.com', sections: sections });
+    return this.generateWord(filename, { title: 'VC Pitch Deck — ' + (data.companyName || 'Startup'), author: 'Generated from wasilzafar.com', sections: sections });
   },
 
   generateVCPitchDeckExcel: function(filename, data) {
@@ -2112,7 +2112,7 @@ Object.assign(DocGenerator, {
       { text: data.companyName || 'Startup', size: 18, bold: true },
       { text: data.tagline || '', size: 12 },
       { text: data.founderNames ? 'Prepared by: ' + data.founderNames : '', size: 10 },
-      { text: 'VC Pitch Deck â€” 12-Slide Format', size: 13, bold: true },
+      { text: 'VC Pitch Deck — 12-Slide Format', size: 13, bold: true },
       { text: '', size: 6 }
     ];
     var slides = [
@@ -2147,9 +2147,9 @@ Object.assign(DocGenerator, {
     var pres = new window.PptxGenJS();
     pres.layout = 'LAYOUT_16x9';
     pres.author = 'Generated from wasilzafar.com';
-    pres.title = (data.companyName || 'Startup') + ' â€” VC Pitch Deck';
+    pres.title = (data.companyName || 'Startup') + ' — VC Pitch Deck';
 
-    var C = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666', darkGray: '333333' };
+    var C = DocStyles.colors;
 
     // Slide number on all content slides
     function slideNum(slide) { slide.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray }; }
@@ -2161,9 +2161,9 @@ Object.assign(DocGenerator, {
       slide.background = { color: C.white };
       slide.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: accent } });
       slideNum(slide);
-      slide.addText(title, { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 28, bold: true, color: C.navy, fontFace: 'Arial' });
+      slide.addText(title, { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 28, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary });
       slide.addShape(pres.ShapeType.rect, { x: 0.6, y: 1.05, w: 2.0, h: 0.04, fill: { color: accent } });
-      slide.addText(body || 'N/A', { x: 0.6, y: 1.3, w: 8.8, h: 3.9, fontSize: 18, color: C.darkGray, fontFace: 'Arial', wrap: true, valign: 'top', lineSpacingMultiple: 1.3, fit: 'shrink', margin: [4, 4, 4, 4] });
+      slide.addText(body || 'N/A', { x: 0.6, y: 1.3, w: 8.8, h: 3.9, fontSize: 18, color: C.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, valign: 'top', lineSpacingMultiple: 1.3, fit: 'shrink', margin: [4, 4, 4, 4] });
       return slide;
     }
 
@@ -2171,14 +2171,14 @@ Object.assign(DocGenerator, {
     var ts = pres.addSlide();
     ts.background = { color: C.navy };
     ts.addShape(pres.ShapeType.rect, { x: 0, y: 2.4, w: '100%', h: 0.06, fill: { color: C.teal } });
-    ts.addText(data.companyName || 'Company Name', { x: 0.6, y: 0.6, w: 8.8, h: 1.2, fontSize: 44, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
+    ts.addText(data.companyName || 'Company Name', { x: 0.6, y: 0.6, w: 8.8, h: 1.2, fontSize: 44, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
     if (data.tagline) {
-      ts.addText(data.tagline, { x: 0.6, y: 1.9, w: 8.8, h: 0.5, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center', italic: true });
+      ts.addText(data.tagline, { x: 0.6, y: 1.9, w: 8.8, h: 0.5, fontSize: 22, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center', italic: true });
     }
     if (data.founderNames) {
-      ts.addText(data.founderNames, { x: 0.6, y: 2.7, w: 8.8, h: 0.5, fontSize: 16, color: C.gray, fontFace: 'Arial', align: 'center' });
+      ts.addText(data.founderNames, { x: 0.6, y: 2.7, w: 8.8, h: 0.5, fontSize: 16, color: C.gray, fontFace: DocStyles.fonts.secondary, align: 'center' });
     }
-    ts.addText('INVESTOR PITCH DECK', { x: 0.6, y: 4.2, w: 8.8, h: 0.4, fontSize: 13, color: C.gray, fontFace: 'Arial', align: 'center', charSpacing: 6 });
+    ts.addText('INVESTOR PITCH DECK', { x: 0.6, y: 4.2, w: 8.8, h: 0.4, fontSize: 13, color: C.gray, fontFace: DocStyles.fonts.secondary, align: 'center', charSpacing: 6 });
 
     // --- Slide 2: Problem ---
     if (data.problem) contentSlide('The Problem', data.problem, C.crimson);
@@ -2216,9 +2216,9 @@ Object.assign(DocGenerator, {
       askSlide.background = { color: C.light };
       askSlide.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: C.crimson } });
       slideNum(askSlide);
-      askSlide.addText('The Ask', { x: 0.6, y: 0.3, w: 6.5, h: 0.7, fontSize: 28, bold: true, color: C.navy, fontFace: 'Arial' });
+      askSlide.addText('The Ask', { x: 0.6, y: 0.3, w: 6.5, h: 0.7, fontSize: 28, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary });
       askSlide.addShape(pres.ShapeType.rect, { x: 0.6, y: 1.05, w: 2.0, h: 0.04, fill: { color: C.crimson } });
-      askSlide.addText(data.theAsk, { x: 1.0, y: 1.6, w: 8.0, h: 2.4, fontSize: 24, bold: true, color: C.crimson, fontFace: 'Arial', align: 'center', valign: 'middle', fill: { color: C.white }, line: { color: C.crimson, width: 2 }, rectRadius: 0.15, wrap: true, fit: 'shrink', margin: [6, 6, 6, 6] });
+      askSlide.addText(data.theAsk, { x: 1.0, y: 1.6, w: 8.0, h: 2.4, fontSize: 24, bold: true, color: C.crimson, fontFace: DocStyles.fonts.secondary, align: 'center', valign: 'middle', fill: { color: C.white }, line: { color: C.crimson, width: 2 }, rectRadius: 0.15, wrap: true, fit: 'shrink', margin: [6, 6, 6, 6] });
     }
 
     // --- Slide 12: Closing ---
@@ -2229,7 +2229,7 @@ Object.assign(DocGenerator, {
     if (hasAppendix) {
       var apxTitle = pres.addSlide();
       apxTitle.background = { color: C.navy };
-      apxTitle.addText('APPENDIX', { x: 0.6, y: 2.0, w: 8.8, h: 1.0, fontSize: 40, bold: true, color: C.white, fontFace: 'Arial', align: 'center', charSpacing: 8 });
+      apxTitle.addText('APPENDIX', { x: 0.6, y: 2.0, w: 8.8, h: 1.0, fontSize: 40, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center', charSpacing: 8 });
       apxTitle.addShape(pres.ShapeType.rect, { x: 3.5, y: 3.2, w: 3.0, h: 0.05, fill: { color: C.teal } });
 
       if (data.appendixFinancials) contentSlide('Appendix: Detailed Financials', data.appendixFinancials, C.blue);
@@ -2242,12 +2242,12 @@ Object.assign(DocGenerator, {
     var endSlide = pres.addSlide();
     endSlide.background = { color: C.navy };
     endSlide.addShape(pres.ShapeType.rect, { x: 0, y: 2.8, w: '100%', h: 0.06, fill: { color: C.teal } });
-    endSlide.addText('Thank You', { x: 0.6, y: 1.3, w: 8.8, h: 1.0, fontSize: 44, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    endSlide.addText(data.companyName || '', { x: 0.6, y: 3.2, w: 8.8, h: 0.6, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center' });
+    endSlide.addText('Thank You', { x: 0.6, y: 1.3, w: 8.8, h: 1.0, fontSize: 44, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    endSlide.addText(data.companyName || '', { x: 0.6, y: 3.2, w: 8.8, h: 0.6, fontSize: 22, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center' });
     if (data.tagline) {
-      endSlide.addText(data.tagline, { x: 0.6, y: 3.8, w: 8.8, h: 0.5, fontSize: 16, color: C.gray, fontFace: 'Arial', align: 'center', italic: true });
+      endSlide.addText(data.tagline, { x: 0.6, y: 3.8, w: 8.8, h: 0.5, fontSize: 16, color: C.gray, fontFace: DocStyles.fonts.secondary, align: 'center', italic: true });
     }
-    endSlide.addText('Q&A', { x: 0.6, y: 4.5, w: 8.8, h: 0.4, fontSize: 14, color: C.gray, fontFace: 'Arial', align: 'center', charSpacing: 6 });
+    endSlide.addText('Q&A', { x: 0.6, y: 4.5, w: 8.8, h: 0.4, fontSize: 14, color: C.gray, fontFace: DocStyles.fonts.secondary, align: 'center', charSpacing: 6 });
 
     return pres.writeFile({ fileName: filename + '.pptx' });
   },
@@ -2267,7 +2267,7 @@ Object.assign(DocGenerator, {
       { heading: 'The Ask', content: [data.theAsk || 'N/A'] },
       { heading: 'Why Now', content: [data.whyNow || 'N/A'] }
     ];
-    return this.generateWord(filename, { title: 'Angel Pitch â€” ' + (data.companyName || 'Startup') + (data.tagline ? '\n' + data.tagline : ''), author: 'Generated from wasilzafar.com', sections: slides });
+    return this.generateWord(filename, { title: 'Angel Pitch — ' + (data.companyName || 'Startup') + (data.tagline ? '\n' + data.tagline : ''), author: 'Generated from wasilzafar.com', sections: slides });
   },
 
   generateAngelPitchExcel: function(filename, data) {
@@ -2296,7 +2296,7 @@ Object.assign(DocGenerator, {
     ];
     var lines = [{ text: data.companyName || 'Startup', size: 16, bold: true }];
     if (data.tagline) lines.push({ text: data.tagline, size: 11 });
-    lines.push({ text: 'Angel Pitch â€” 10-Minute Format', size: 12, bold: true });
+    lines.push({ text: 'Angel Pitch — 10-Minute Format', size: 12, bold: true });
     lines.push({ text: '', size: 6 });
     items.forEach(function(item) {
       lines.push({ text: item[0], size: 13, bold: true });
@@ -2312,9 +2312,9 @@ Object.assign(DocGenerator, {
     var pres = new window.PptxGenJS();
     pres.layout = 'LAYOUT_16x9';
     pres.author = 'Generated from wasilzafar.com';
-    pres.title = (data.companyName || 'Startup') + ' â€” Angel Pitch';
+    pres.title = (data.companyName || 'Startup') + ' — Angel Pitch';
 
-    var C = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var C = DocStyles.colors;
 
     function addSlide(title, body, accent, timing) {
       accent = accent || C.teal;
@@ -2322,12 +2322,12 @@ Object.assign(DocGenerator, {
       slide.background = { color: C.white };
       slide.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: accent } });
       slide.slideNumber = { x: 9.2, y: '93%', fontSize: 9, color: C.gray };
-      slide.addText(title, { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 28, bold: true, color: C.navy, fontFace: 'Arial' });
+      slide.addText(title, { x: 0.6, y: 0.3, w: 8.8, h: 0.7, fontSize: 28, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary });
       slide.addShape(pres.ShapeType.rect, { x: 0.6, y: 1.05, w: 2.0, h: 0.04, fill: { color: accent } });
       if (timing) {
-        slide.addText(timing, { x: 7.5, y: 0.35, w: 2.2, h: 0.4, fontSize: 11, color: C.white, fontFace: 'Arial', align: 'center', valign: 'middle', fill: { color: accent }, rectRadius: 0.12 });
+        slide.addText(timing, { x: 7.5, y: 0.35, w: 2.2, h: 0.4, fontSize: 11, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center', valign: 'middle', fill: { color: accent }, rectRadius: 0.12 });
       }
-      slide.addText(body || 'N/A', { x: 0.6, y: 1.3, w: 8.8, h: 3.8, fontSize: 18, color: '333333', fontFace: 'Arial', wrap: true, valign: 'top', lineSpacingMultiple: 1.3, fit: 'shrink', margin: [4, 4, 4, 4] });
+      slide.addText(body || 'N/A', { x: 0.6, y: 1.3, w: 8.8, h: 3.8, fontSize: 18, color: DocStyles.colors.darkGray, fontFace: DocStyles.fonts.secondary, wrap: true, valign: 'top', lineSpacingMultiple: 1.3, fit: 'shrink', margin: [4, 4, 4, 4] });
       return slide;
     }
 
@@ -2335,19 +2335,19 @@ Object.assign(DocGenerator, {
     var ts = pres.addSlide();
     ts.background = { color: C.navy };
     ts.addShape(pres.ShapeType.rect, { x: 0, y: 2.2, w: '100%', h: 0.06, fill: { color: C.teal } });
-    ts.addText(data.companyName || 'Company Name', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 44, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
+    ts.addText(data.companyName || 'Company Name', { x: 0.6, y: 0.8, w: 8.8, h: 1.2, fontSize: 44, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
     if (data.tagline) {
-      ts.addText(data.tagline, { x: 0.6, y: 2.5, w: 8.8, h: 0.8, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center', italic: true });
+      ts.addText(data.tagline, { x: 0.6, y: 2.5, w: 8.8, h: 0.8, fontSize: 22, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center', italic: true });
     }
-    ts.addText('ANGEL PITCH', { x: 0.6, y: 4.0, w: 8.8, h: 0.5, fontSize: 14, color: C.gray, fontFace: 'Arial', align: 'center', charSpacing: 6 });
+    ts.addText('ANGEL PITCH', { x: 0.6, y: 4.0, w: 8.8, h: 0.5, fontSize: 14, color: C.gray, fontFace: DocStyles.fonts.secondary, align: 'center', charSpacing: 6 });
 
     // Hook slide
     if (data.hook) {
       var hookSlide = pres.addSlide();
       hookSlide.background = { color: C.light };
       hookSlide.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: C.crimson } });
-      hookSlide.addText('30 sec', { x: 7.5, y: 0.35, w: 2.2, h: 0.4, fontSize: 11, color: C.white, fontFace: 'Arial', align: 'center', valign: 'middle', fill: { color: C.crimson }, rectRadius: 0.12 });
-      hookSlide.addText(data.hook, { x: 1.0, y: 1.5, w: 8.0, h: 2.5, fontSize: 28, bold: true, color: C.navy, fontFace: 'Arial', align: 'center', valign: 'middle', fill: { color: C.white }, line: { color: C.teal, width: 2 }, rectRadius: 0.15, wrap: true, fit: 'shrink', margin: [8, 8, 8, 8] });
+      hookSlide.addText('30 sec', { x: 7.5, y: 0.35, w: 2.2, h: 0.4, fontSize: 11, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center', valign: 'middle', fill: { color: C.crimson }, rectRadius: 0.12 });
+      hookSlide.addText(data.hook, { x: 1.0, y: 1.5, w: 8.0, h: 2.5, fontSize: 28, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary, align: 'center', valign: 'middle', fill: { color: C.white }, line: { color: C.teal, width: 2 }, rectRadius: 0.15, wrap: true, fit: 'shrink', margin: [8, 8, 8, 8] });
     }
 
     // Content slides
@@ -2363,10 +2363,10 @@ Object.assign(DocGenerator, {
       var askSlide = pres.addSlide();
       askSlide.background = { color: C.light };
       askSlide.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.08, fill: { color: C.crimson } });
-      askSlide.addText('30 sec', { x: 7.5, y: 0.35, w: 2.2, h: 0.4, fontSize: 11, color: C.white, fontFace: 'Arial', align: 'center', valign: 'middle', fill: { color: C.crimson }, rectRadius: 0.12 });
-      askSlide.addText('The Ask', { x: 0.6, y: 0.3, w: 6.5, h: 0.7, fontSize: 28, bold: true, color: C.navy, fontFace: 'Arial' });
+      askSlide.addText('30 sec', { x: 7.5, y: 0.35, w: 2.2, h: 0.4, fontSize: 11, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center', valign: 'middle', fill: { color: C.crimson }, rectRadius: 0.12 });
+      askSlide.addText('The Ask', { x: 0.6, y: 0.3, w: 6.5, h: 0.7, fontSize: 28, bold: true, color: C.navy, fontFace: DocStyles.fonts.secondary });
       askSlide.addShape(pres.ShapeType.rect, { x: 0.6, y: 1.05, w: 2.0, h: 0.04, fill: { color: C.crimson } });
-      askSlide.addText(data.theAsk, { x: 1.0, y: 1.8, w: 8.0, h: 2.0, fontSize: 32, bold: true, color: C.crimson, fontFace: 'Arial', align: 'center', valign: 'middle', fill: { color: C.white }, line: { color: C.crimson, width: 2 }, rectRadius: 0.15, wrap: true, fit: 'shrink' });
+      askSlide.addText(data.theAsk, { x: 1.0, y: 1.8, w: 8.0, h: 2.0, fontSize: 32, bold: true, color: C.crimson, fontFace: DocStyles.fonts.secondary, align: 'center', valign: 'middle', fill: { color: C.white }, line: { color: C.crimson, width: 2 }, rectRadius: 0.15, wrap: true, fit: 'shrink' });
     }
 
     // Why Now slide
@@ -2376,12 +2376,12 @@ Object.assign(DocGenerator, {
     var endSlide = pres.addSlide();
     endSlide.background = { color: C.navy };
     endSlide.addShape(pres.ShapeType.rect, { x: 0, y: 2.6, w: '100%', h: 0.06, fill: { color: C.teal } });
-    endSlide.addText('Thank You', { x: 0.6, y: 1.5, w: 8.8, h: 1.0, fontSize: 44, bold: true, color: C.white, fontFace: 'Arial', align: 'center' });
-    endSlide.addText(data.companyName || '', { x: 0.6, y: 3.0, w: 8.8, h: 0.6, fontSize: 22, color: C.teal, fontFace: 'Arial', align: 'center' });
+    endSlide.addText('Thank You', { x: 0.6, y: 1.5, w: 8.8, h: 1.0, fontSize: 44, bold: true, color: C.white, fontFace: DocStyles.fonts.secondary, align: 'center' });
+    endSlide.addText(data.companyName || '', { x: 0.6, y: 3.0, w: 8.8, h: 0.6, fontSize: 22, color: C.teal, fontFace: DocStyles.fonts.secondary, align: 'center' });
     if (data.tagline) {
-      endSlide.addText(data.tagline, { x: 0.6, y: 3.6, w: 8.8, h: 0.5, fontSize: 16, color: C.gray, fontFace: 'Arial', align: 'center', italic: true });
+      endSlide.addText(data.tagline, { x: 0.6, y: 3.6, w: 8.8, h: 0.5, fontSize: 16, color: C.gray, fontFace: DocStyles.fonts.secondary, align: 'center', italic: true });
     }
-    endSlide.addText('Q&A â€” 5-10 minutes', { x: 0.6, y: 4.3, w: 8.8, h: 0.4, fontSize: 13, color: C.gray, fontFace: 'Arial', align: 'center', charSpacing: 3 });
+    endSlide.addText('Q&A — 5-10 minutes', { x: 0.6, y: 4.3, w: 8.8, h: 0.4, fontSize: 13, color: C.gray, fontFace: DocStyles.fonts.secondary, align: 'center', charSpacing: 3 });
 
     return pres.writeFile({ fileName: filename + '.pptx' });
   },
@@ -2397,7 +2397,7 @@ Object.assign(DocGenerator, {
     var ltv = contribution * lifespan;
     var ratio = cac > 0 ? (ltv / cac).toFixed(1) : 'N/A';
     var payback = contribution > 0 ? Math.ceil(cac / contribution) : 'N/A';
-    var health = ratio >= 3 ? 'Healthy â€” Strong unit economics' : ratio >= 2 ? 'Warning â€” Improve margins or reduce CAC' : 'Critical â€” Unit economics not sustainable';
+    var health = ratio >= 3 ? 'Healthy — Strong unit economics' : ratio >= 2 ? 'Warning — Improve margins or reduce CAC' : 'Critical — Unit economics not sustainable';
     return { contribution: contribution, marginPct: marginPct, ltv: ltv, ratio: ratio, payback: payback, health: health };
   }
 });

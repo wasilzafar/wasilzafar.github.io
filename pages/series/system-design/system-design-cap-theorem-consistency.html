@@ -36,6 +36,12 @@
     <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
     <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
 
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
     <script>
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
@@ -818,6 +824,72 @@ class TimelineService:
                 <div id="next-steps" class="blog-content mt-5">
                     <h2><i class="fas fa-arrow-right me-2 text-teal"></i>Next Steps</h2>
                     
+                    <!-- Interactive Tool: Architecture Decision Record (ADR) Generator -->
+                    <div class="canvas-form" id="adrForm">
+                        <h4 class="canvas-form-title"><i class="fas fa-balance-scale me-2"></i>Architecture Decision Record (ADR) Generator</h4>
+                        <p class="form-help-text">Document your architecture trade-offs and CAP theorem choices. Download as Word, Excel, PDF, or PowerPoint.</p>
+                        <div id="adrBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="adrTitle">Decision Title *</label>
+                                <input type="text" id="adrTitle" placeholder="e.g., ADR-001: Choose AP over CP for User Feed">
+                            </div>
+                            <div class="form-group">
+                                <label for="adrStatus">Status</label>
+                                <select id="adrStatus">
+                                    <option value="">Select status...</option>
+                                    <option value="Proposed">Proposed</option>
+                                    <option value="Accepted">Accepted</option>
+                                    <option value="Deprecated">Deprecated</option>
+                                    <option value="Superseded">Superseded</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="adrContext">Context / Problem Statement *</label>
+                                <textarea id="adrContext" rows="4" placeholder="Describe the problem or architectural challenge that requires a decision..."></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="adrDecision">Decision *</label>
+                                <textarea id="adrDecision" rows="4" placeholder="We will use eventual consistency for the user feed service because..."></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="adrOptions">Options Considered</label>
+                                <textarea id="adrOptions" rows="4" placeholder="Option A: Strong consistency (CP)&#10;Option B: Eventual consistency (AP)&#10;Option C: Hybrid approach"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="adrConsequences">Consequences / Trade-offs</label>
+                                <textarea id="adrConsequences" rows="4" placeholder="+ Higher availability during partitions&#10;+ Better user experience for reads&#10;- Stale data possible for ~5 seconds&#10;- More complex conflict resolution"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="adrCapChoice">CAP Theorem Choice</label>
+                                <select id="adrCapChoice">
+                                    <option value="">Select preference...</option>
+                                    <option value="CP (Consistency + Partition Tolerance)">CP</option>
+                                    <option value="AP (Availability + Partition Tolerance)">AP</option>
+                                    <option value="CA (Consistency + Availability)">CA (no partitions)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="adrStakeholders">Decision Makers</label>
+                                <input type="text" id="adrStakeholders" placeholder="e.g., Backend Lead, CTO, Sr. Architect">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="adrHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="adrHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="adrHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-generate" onclick="adrHandler.generatePPTX()"><i class="fas fa-file-powerpoint me-1"></i>PPTX</button>
+                            <button class="btn-reset" onclick="adrHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="adrSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="adrSuccessText"></span></div>
+                    </div>
+
                     <div class="related-posts">
                         <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
                         <div class="related-post-item">
@@ -910,10 +982,42 @@ class TimelineService:
     </div>
     <script src="../../../js/cookie-consent.js"></script>
     <script src="../../../js/main.js"></script>
+
+    <!-- Document Generators -->
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-system-design.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- Architecture Decision Record Generator Initialization -->
+    <script>
+        var adrPersistence = new FormPersistence('sd-adr-draft', {
+            'adrTitle': 'title',
+            'adrStatus': 'status',
+            'adrContext': 'context',
+            'adrDecision': 'decision',
+            'adrOptions': 'optionsConsidered',
+            'adrConsequences': 'consequences',
+            'adrCapChoice': 'capChoice',
+            'adrStakeholders': 'stakeholders'
+        }, 'adrBadge');
+
+        var adrHandler = new CanvasFormHandler({
+            formId: 'adrForm',
+            successId: 'adrSuccess',
+            successTextId: 'adrSuccessText',
+            persistence: adrPersistence,
+            filenameField: 'title',
+            filenameSuffix: '-architecture-decision',
+            requiredFields: ['adrTitle', 'adrContext', 'adrDecision'],
+            requiredMessage: 'Please fill in Decision Title, Context, and Decision.',
+            docType: 'ArchitectureDecision'
+        });
+
+        document.addEventListener('DOMContentLoaded', function() { adrPersistence.init(); });
+    </script>
 
             </body>
 </html>
