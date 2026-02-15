@@ -1660,18 +1660,21 @@ Object.assign(DocGenerator, {
         'System: ' + (data.systemName || 'N/A'),
         'Date: ' + new Date().toLocaleDateString()
       ]},
-      { heading: '1. Cluster Configuration', content: [
-        'Nodes / Clusters: ' + (data.nodes || 'N/A'),
-        'Replication Factor: ' + (data.replicationFactor || 'N/A'),
-        'Fault Tolerance Target: ' + (data.faultTolerance || 'N/A')
+      { heading: '1. Consensus & Consistency', content: [
+        'Consensus Protocol: ' + (data.consensus || 'N/A'),
+        'Consistency Model: ' + (data.consistencyModel || 'N/A')
       ]},
-      { heading: '2. Consensus Algorithm', content: ['Algorithm: ' + (data.consensus || 'N/A')] },
-      { heading: '3. Coordination Service', content: ['Service: ' + (data.coordination || 'N/A')] },
-      { heading: '4. Leader Election', content: ['Strategy: ' + (data.leaderElection || 'N/A')] },
-      { heading: '5. Clock Synchronization', content: ['Method: ' + (data.clockSync || 'N/A')] },
-      { heading: '6. Data Partitioning', content: (data.partitioning || 'Not specified').split('\n') },
-      { heading: '7. Network Assumptions', content: (data.networkAssumptions || 'Not specified').split('\n') },
-      { heading: '8. Storage Architecture', content: ['Architecture: ' + (data.storage || 'N/A')] }
+      { heading: '2. Replication Strategy', content: [
+        'Strategy: ' + (data.replication || 'N/A')
+      ]},
+      { heading: '3. Data Partitioning', content: (data.partitioning || 'Not specified').split('\n') },
+      { heading: '4. Fault Tolerance Mechanisms', content: (data.faultTolerance || 'Not specified').split('\n') },
+      { heading: '5. Clock / Ordering Mechanism', content: [
+        'Mechanism: ' + (data.clocks || 'N/A')
+      ]},
+      { heading: '6. Conflict Resolution', content: [
+        'Strategy: ' + (data.conflictResolution || 'N/A')
+      ]}
     ];
     return this.generateWord(filename, { title: 'Distributed Design – ' + (data.systemName || ''), author: data.authorName || '', sections: sections });
   },
@@ -1683,24 +1686,21 @@ Object.assign(DocGenerator, {
       ['System', data.systemName || ''],
       ['Date', new Date().toLocaleDateString()],
       [],
-      ['CLUSTER CONFIGURATION'],
+      ['CONSENSUS & CONSISTENCY'],
       ['Parameter', 'Value'],
-      ['Nodes / Clusters', data.nodes || ''],
-      ['Replication Factor', data.replicationFactor || ''],
-      ['Fault Tolerance', data.faultTolerance || ''],
+      ['Consensus Protocol', data.consensus || ''],
+      ['Consistency Model', data.consistencyModel || ''],
       [],
-      ['DISTRIBUTED ALGORITHMS'],
-      ['Consensus', data.consensus || ''],
-      ['Coordination Service', data.coordination || ''],
-      ['Leader Election', data.leaderElection || ''],
-      ['Clock Synchronization', data.clockSync || ''],
-      ['Storage Architecture', data.storage || ''],
+      ['REPLICATION & PARTITIONING'],
+      ['Replication Strategy', data.replication || ''],
+      ['Clock / Ordering', data.clocks || ''],
+      ['Conflict Resolution', data.conflictResolution || ''],
       [],
       ['DATA PARTITIONING'],
       [data.partitioning || ''],
       [],
-      ['NETWORK ASSUMPTIONS'],
-      [data.networkAssumptions || '']
+      ['FAULT TOLERANCE MECHANISMS'],
+      [data.faultTolerance || '']
     ];
     var ws = XLSX.utils.aoa_to_sheet(rows);
     ws['!cols'] = [{ wch: 28 }, { wch: 50 }];
@@ -1714,24 +1714,20 @@ Object.assign(DocGenerator, {
       { text: (data.systemName || ''), size: 13 },
       { text: 'Generated: ' + new Date().toLocaleDateString(), size: 9 },
       { text: ' ', size: 6 },
-      { text: '── CLUSTER CONFIGURATION ──', size: 14, bold: true },
-      { text: 'Nodes: ' + (data.nodes || 'N/A') + '  |  Replication Factor: ' + (data.replicationFactor || 'N/A'), size: 10 },
-      { text: 'Fault Tolerance: ' + (data.faultTolerance || 'N/A'), size: 10 },
+      { text: '── CONSENSUS & CONSISTENCY ──', size: 14, bold: true },
+      { text: 'Consensus Protocol: ' + (data.consensus || 'N/A'), size: 10 },
+      { text: 'Consistency Model: ' + (data.consistencyModel || 'N/A'), size: 10 },
       { text: ' ', size: 6 },
-      { text: '── DISTRIBUTED ALGORITHMS ──', size: 14, bold: true },
-      { text: 'Consensus: ' + (data.consensus || 'N/A'), size: 10 },
-      { text: 'Coordination: ' + (data.coordination || 'N/A'), size: 10 },
-      { text: 'Leader Election: ' + (data.leaderElection || 'N/A'), size: 10 },
-      { text: 'Clock Sync: ' + (data.clockSync || 'N/A'), size: 10 },
+      { text: '── REPLICATION & ORDERING ──', size: 14, bold: true },
+      { text: 'Replication Strategy: ' + (data.replication || 'N/A'), size: 10 },
+      { text: 'Clock / Ordering: ' + (data.clocks || 'N/A'), size: 10 },
+      { text: 'Conflict Resolution: ' + (data.conflictResolution || 'N/A'), size: 10 },
       { text: ' ', size: 6 },
       { text: '── DATA PARTITIONING ──', size: 14, bold: true },
       { text: data.partitioning || 'Not specified', size: 10 },
       { text: ' ', size: 6 },
-      { text: '── NETWORK ASSUMPTIONS ──', size: 14, bold: true },
-      { text: data.networkAssumptions || 'Not specified', size: 10 },
-      { text: ' ', size: 6 },
-      { text: '── STORAGE ARCHITECTURE ──', size: 14, bold: true },
-      { text: data.storage || 'Not specified', size: 10 }
+      { text: '── FAULT TOLERANCE ──', size: 14, bold: true },
+      { text: data.faultTolerance || 'Not specified', size: 10 }
     ];
     return this.generatePDF(filename, { title: 'Distributed Architecture Design', lines: lines });
   },
