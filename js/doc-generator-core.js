@@ -149,7 +149,6 @@ var DocStyles = {
       creator: config.author || '',
       title: config.title || '',
       description: config.description || '',
-      features: { updateFields: true },
       styles: {
         default: {
           document: {
@@ -283,28 +282,59 @@ var DocStyles = {
   },
 
   /**
-   * Generate Table of Contents section children.
-   * Returns an array with a heading + TOC field for use as a document section.
-   * Requires features: { updateFields: true } on the Document for auto-population.
+   * Generate a sanitised bookmark name from heading text and index.
+   * @param {string} text  - Heading text
+   * @param {number} index - Unique numeric index
+   * @returns {string} Bookmark ID safe for OOXML
    */
-  docxTocChildren: function() {
+  _tocBookmarkId: function(text, index) {
+    return 'toc' + index + '_' + (text || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').substring(0, 40);
+  },
+
+  /**
+   * Generate Table of Contents section children.
+   * Builds a manual (pre-rendered) TOC from the supplied heading entries,
+   * using InternalHyperlink / Bookmark when the docx library supports them.
+   * No field-update prompt is triggered when the document is opened.
+   * @param {Array} entries - [{text, level, bookmarkId}]  (empty/null = no TOC)
+   */
+  docxTocChildren: function(entries) {
     var lib = this._getDocxLib(); if (!lib) return [];
     var S = this;
+    if (!entries || !entries.length) return [];
+
     var children = [
       new lib.Paragraph({
         children: [new lib.TextRun({ text: 'Table of Contents', bold: true, size: S.docx.titleSize, color: S.docx.titleColor, font: S.fonts.primary })],
-        spacing: { after: 400 }
+        spacing: { after: 300 }
       })
     ];
-    // Add TOC field if supported by docx library version
-    if (lib.TableOfContents) {
-      children.push(
-        new lib.TableOfContents('Table of Contents', {
-          hyperlink: true,
-          headingStyleRange: '1-3'
-        })
-      );
-    }
+
+    entries.forEach(function(entry) {
+      var level  = entry.level || 1;
+      var indent = (level - 1) * 720;  // 0.5 inch per nesting level
+      var fontSize = level === 1 ? 24 : (level === 2 ? 22 : 20);
+      var color    = level === 1 ? S.colors.navy : (level === 2 ? S.colors.blue : S.colors.gray);
+      var isBold   = level === 1;
+
+      var textRun = new lib.TextRun({ text: entry.text, size: fontSize, color: color, font: S.fonts.primary, bold: isBold });
+
+      var paraChildren;
+      if (lib.InternalHyperlink && entry.bookmarkId) {
+        paraChildren = [new lib.InternalHyperlink({ anchor: entry.bookmarkId, children: [textRun] })];
+      } else {
+        paraChildren = [textRun];
+      }
+
+      children.push(new lib.Paragraph({
+        children: paraChildren,
+        indent: { left: indent },
+        spacing: { after: 80 }
+      }));
+    });
+
+    // Spacer before content
+    children.push(new lib.Paragraph({ spacing: { after: 200 } }));
     return children;
   },
 
@@ -316,15 +346,17 @@ var DocStyles = {
    * @param {string} title - Document title for cover page
    * @param {string} author - Author / source attribution
    * @param {Array} contentChildren - Array of docx Paragraph/Table objects
+   * @param {Array} [tocEntries] - Optional [{text, level, bookmarkId}] for manual TOC
    */
-  docxPackage: function(filename, title, author, contentChildren) {
+  docxPackage: function(filename, title, author, contentChildren, tocEntries) {
     var lib = this._getDocxLib(); if (!lib) return;
     var S = this;
+    var tocChildren = S.docxTocChildren(tocEntries || []);
     var docSections = [
-      { children: S.docxTitlePageChildren(title, null, author) },
-      { children: S.docxTocChildren() },
-      { children: contentChildren }
+      { children: S.docxTitlePageChildren(title, null, author) }
     ];
+    if (tocChildren.length) docSections.push({ children: tocChildren });
+    docSections.push({ children: contentChildren });
     var doc = S.createStyledDoc({
       title: title,
       author: author,
@@ -410,12 +442,24 @@ var DocStyles = {
     var S = this;
     // Content fields only (title/subtitle/date are on the title page)
     var contentChildren = this.docxSectionChildren(null, null, false, config.fields);
+    // Extract TOC entries from heading fields
+    var tocEntries = [];
+    var tocIdx = 0;
+    if (config.fields) {
+      config.fields.forEach(function(f) {
+        if (f.type === 'heading') {
+          var lvl = f.level || 1;
+          tocEntries.push({ text: f.text, level: lvl, bookmarkId: S._tocBookmarkId(f.text, tocIdx++) });
+        }
+      });
+    }
+    var tocChildren = S.docxTocChildren(tocEntries);
     // Assemble: Title Page → TOC → Content
     var docSections = [
-      { children: S.docxTitlePageChildren(config.title, config.subtitle, config.author, config.date) },
-      { children: S.docxTocChildren() },
-      { children: contentChildren }
+      { children: S.docxTitlePageChildren(config.title, config.subtitle, config.author, config.date) }
     ];
+    if (tocChildren.length) docSections.push({ children: tocChildren });
+    docSections.push({ children: contentChildren });
     var doc = this.createStyledDoc({
       title: config.title,
       author: config.author,
@@ -797,8 +841,8 @@ if (typeof window !== 'undefined') { window.DocStyles = DocStyles; }
 var DocGenerator = {
   /**
    * Generate a Word document (.docx) — core delegation method.
-   * Automatically prepends a Title Page and Table of Contents.
-   * Section headings use HeadingLevel so Word can build the TOC.
+   * Automatically prepends a Title Page and a manually-built Table of Contents
+   * with clickable InternalHyperlink entries (no field-update prompt on open).
    * @param {string} filename - Output filename (without .docx extension)
    * @param {Object} config - {title, author, sections: [{heading, content}]}
    */
@@ -812,6 +856,7 @@ var DocGenerator = {
       var docxLib = window.docx.default || window.docx;
       var Document = docxLib.Document, Packer = docxLib.Packer, Paragraph = docxLib.Paragraph, TextRun = docxLib.TextRun;
       var HL = docxLib.HeadingLevel;
+      var Bookmark = docxLib.Bookmark;
 
       if (!Document || !Packer || !Paragraph) {
         alert('Word document library failed to initialize properly.');
@@ -819,12 +864,32 @@ var DocGenerator = {
       }
       var DS = DocStyles;
 
-      // Build all content paragraphs merged into one continuous section
-      var contentChildren = [];
+      // ── First pass: collect TOC entries from sections ──
+      var tocEntries = [];
+      var tocIdx = 0;
       config.sections.forEach(function(section) {
-        // Section heading — with HeadingLevel for TOC discovery
+        var bId = DS._tocBookmarkId(section.heading, tocIdx++);
+        tocEntries.push({ text: section.heading, level: 1, bookmarkId: bId });
+        var content = Array.isArray(section.content) ? section.content : [section.content];
+        content.forEach(function(item) {
+          if (typeof item === 'object' && item.type === 'heading') {
+            var subId = DS._tocBookmarkId(item.text, tocIdx++);
+            tocEntries.push({ text: item.text, level: 2, bookmarkId: subId });
+          }
+        });
+      });
+
+      // ── Second pass: build content paragraphs with Bookmarks ──
+      var contentChildren = [];
+      var bmIdx = 0;
+      config.sections.forEach(function(section) {
+        var h1BookmarkId = DS._tocBookmarkId(section.heading, bmIdx++);
+        var h1Run = new TextRun({ text: section.heading, bold: true, size: DS.docx.sectionSize, color: DS.docx.sectionColor, font: DS.fonts.primary });
+        var h1Children = Bookmark
+          ? [new Bookmark({ id: h1BookmarkId, children: [h1Run] })]
+          : [h1Run];
         contentChildren.push(new Paragraph({
-          children: [new TextRun({ text: section.heading, bold: true, size: DS.docx.sectionSize, color: DS.docx.sectionColor, font: DS.fonts.primary })],
+          children: h1Children,
           heading: HL ? HL.HEADING_1 : undefined,
           spacing: { before: DS.docx.spacing.beforeSection, after: DS.docx.spacing.afterSection }
         }));
@@ -838,8 +903,13 @@ var DocGenerator = {
             }));
           } else if (typeof item === 'object') {
             if (item.type === 'heading') {
+              var h2BookmarkId = DS._tocBookmarkId(item.text, bmIdx++);
+              var h2Run = new TextRun({ text: item.text, bold: true, size: DS.docx.subsectionSize, color: DS.docx.subtitleColor, font: DS.fonts.primary });
+              var h2Children = Bookmark
+                ? [new Bookmark({ id: h2BookmarkId, children: [h2Run] })]
+                : [h2Run];
               contentChildren.push(new Paragraph({
-                children: [new TextRun({ text: item.text, bold: true, size: DS.docx.subsectionSize, color: DS.docx.subtitleColor, font: DS.fonts.primary })],
+                children: h2Children,
                 heading: HL ? HL.HEADING_2 : undefined,
                 spacing: { before: 200, after: DS.docx.spacing.afterSmall }
               }));
@@ -850,17 +920,17 @@ var DocGenerator = {
         });
       });
 
-      // Assemble document sections: Title Page → TOC → Content
+      // ── Assemble document sections: Title Page → TOC → Content ──
+      var tocChildren = DS.docxTocChildren(tocEntries);
       var docSections = [
-        { children: DS.docxTitlePageChildren(config.title, null, config.author) },
-        { children: DS.docxTocChildren() },
-        { children: contentChildren }
+        { children: DS.docxTitlePageChildren(config.title, null, config.author) }
       ];
+      if (tocChildren.length) docSections.push({ children: tocChildren });
+      docSections.push({ children: contentChildren });
 
       var doc = new Document({
         creator: config.author || '',
         title: config.title,
-        features: { updateFields: true },
         styles: {
           default: {
             document: { run: { size: DS.docx.bodySize, font: DS.fonts.primary, color: DS.docx.bodyColor } },
