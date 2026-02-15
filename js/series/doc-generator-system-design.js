@@ -1127,101 +1127,214 @@ Object.assign(DocGenerator, {
   // ============================================================
 
   generateObservabilityPlanWord: async function(filename, data) {
+    var metrics = (data.metrics || []).filter(function(m) { return m.metricName && m.metricName.trim(); });
+    var logs = (data.logs || []).filter(function(l) { return l.source && l.source.trim(); });
+    var slos = (data.slos || []).filter(function(s) { return s.sliName && s.sliName.trim(); });
+    var alerts = (data.alerts || []).filter(function(a) { return a.alertName && a.alertName.trim(); });
+    var dashboards = (data.dashboards || []).filter(function(d) { return d.dashName && d.dashName.trim(); });
+
     var sections = [
       { heading: 'Observability & Monitoring Plan', content: [
         'System: ' + (data.systemName || 'N/A'),
         'Monitoring Stack: ' + (data.stack || 'N/A'),
+        'Distributed Tracing: ' + (data.tracing || 'N/A'),
+        'Default Log Format: ' + (data.logFormat || 'N/A'),
         'Date: ' + new Date().toLocaleDateString()
-      ]},
-      { heading: '1. Key Metrics', content: (data.metrics || 'Not specified').split('\n') },
-      { heading: '2. Logging Strategy', content: (data.logs || 'Not specified').split('\n') },
-      { heading: '3. Distributed Tracing', content: [
-        'Tool: ' + (data.tracing || 'N/A')
-      ]},
-      { heading: '4. SLO Targets', content: (data.slos || 'Not specified').split('\n') },
-      { heading: '5. Alerting Rules', content: (data.alerts || 'Not specified').split('\n') },
-      { heading: '6. Dashboard Design', content: (data.dashboards || 'Not specified').split('\n') }
+      ]}
     ];
+
+    // Key Metrics
+    var metricContent = [];
+    metrics.forEach(function(m, i) {
+      metricContent.push('');
+      metricContent.push('Metric ' + (i + 1) + ': ' + m.metricName + (m.metricType ? ' [' + m.metricType + ']' : ''));
+      if (m.unit) metricContent.push('  Unit: ' + m.unit);
+      if (m.threshold) metricContent.push('  Threshold: ' + m.threshold);
+      if (m.notes) metricContent.push('  Notes: ' + m.notes);
+    });
+    sections.push({ heading: '1. Key Metrics (' + metrics.length + ')', content: metricContent.length ? metricContent : ['No metrics defined'] });
+
+    // Log Sources
+    var logContent = [];
+    logs.forEach(function(l, i) {
+      logContent.push('');
+      logContent.push('Source ' + (i + 1) + ': ' + l.source + (l.level ? ' [' + l.level + ']' : ''));
+      if (l.retention) logContent.push('  Retention: ' + l.retention);
+      if (l.destination) logContent.push('  Destination: ' + l.destination);
+      if (l.notes) logContent.push('  Notes: ' + l.notes);
+    });
+    sections.push({ heading: '2. Logging Strategy (' + logs.length + ')', content: logContent.length ? logContent : ['No log sources defined'] });
+
+    // SLO Targets
+    var sloContent = [];
+    slos.forEach(function(s, i) {
+      sloContent.push('');
+      sloContent.push('SLO ' + (i + 1) + ': ' + s.sliName + (s.target ? ' → ' + s.target : ''));
+      if (s.window) sloContent.push('  Window: ' + s.window);
+      if (s.errorBudget) sloContent.push('  Error Budget: ' + s.errorBudget);
+      if (s.notes) sloContent.push('  Notes: ' + s.notes);
+    });
+    sections.push({ heading: '3. SLO Targets (' + slos.length + ')', content: sloContent.length ? sloContent : ['No SLOs defined'] });
+
+    // Alert Rules
+    var alertContent = [];
+    alerts.forEach(function(a, i) {
+      alertContent.push('');
+      alertContent.push('Alert ' + (i + 1) + ': ' + a.alertName + (a.severity ? ' [' + a.severity + ']' : ''));
+      if (a.condition) alertContent.push('  Condition: ' + a.condition);
+      if (a.channel) alertContent.push('  Channel: ' + a.channel);
+      if (a.runbook) alertContent.push('  Runbook: ' + a.runbook);
+      if (a.notes) alertContent.push('  Notes: ' + a.notes);
+    });
+    sections.push({ heading: '4. Alerting Rules (' + alerts.length + ')', content: alertContent.length ? alertContent : ['No alerts defined'] });
+
+    // Dashboards
+    var dashContent = [];
+    dashboards.forEach(function(d, i) {
+      dashContent.push('');
+      dashContent.push('Dashboard ' + (i + 1) + ': ' + d.dashName + (d.dashType ? ' [' + d.dashType + ']' : ''));
+      if (d.audience) dashContent.push('  Audience: ' + d.audience);
+      if (d.refresh) dashContent.push('  Refresh: ' + d.refresh);
+      if (d.panels) dashContent.push('  Panels: ' + d.panels);
+      if (d.notes) dashContent.push('  Notes: ' + d.notes);
+    });
+    sections.push({ heading: '5. Dashboard Design (' + dashboards.length + ')', content: dashContent.length ? dashContent : ['No dashboards defined'] });
+
     return this.generateWord(filename, { title: 'Observability Plan – ' + (data.systemName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateObservabilityPlanExcel: function(filename, data) {
+    var metrics = (data.metrics || []).filter(function(m) { return m.metricName && m.metricName.trim(); });
+    var logs = (data.logs || []).filter(function(l) { return l.source && l.source.trim(); });
+    var slos = (data.slos || []).filter(function(s) { return s.sliName && s.sliName.trim(); });
+    var alerts = (data.alerts || []).filter(function(a) { return a.alertName && a.alertName.trim(); });
+    var dashboards = (data.dashboards || []).filter(function(d) { return d.dashName && d.dashName.trim(); });
     var wb = XLSX.utils.book_new();
+
     // Overview sheet
     var overview = [
       ['OBSERVABILITY & MONITORING PLAN'],
       ['System', data.systemName || ''],
       ['Monitoring Stack', data.stack || ''],
       ['Distributed Tracing', data.tracing || ''],
-      ['Date', new Date().toLocaleDateString()],
-      [],
-      ['KEY METRICS'],
-      ['Metric']
+      ['Default Log Format', data.logFormat || ''],
+      ['Date', new Date().toLocaleDateString()]
     ];
-    (data.metrics || '').split('\n').forEach(function(m) {
-      if (m.trim()) overview.push([m.trim()]);
-    });
-    overview.push([]);
-    overview.push(['LOGGING STRATEGY']);
-    overview.push(['Detail']);
-    (data.logs || '').split('\n').forEach(function(l) {
-      if (l.trim()) overview.push([l.trim()]);
-    });
     var ws1 = XLSX.utils.aoa_to_sheet(overview);
-    ws1['!cols'] = [{ wch: 25 }, { wch: 50 }];
+    ws1['!cols'] = [{ wch: 22 }, { wch: 40 }];
     XLSX.utils.book_append_sheet(wb, ws1, 'Overview');
+
+    // Metrics sheet
+    var metricRows = [['#', 'Metric Name', 'Type', 'Unit / Quantile', 'Threshold / Target', 'Notes']];
+    metrics.forEach(function(m, i) {
+      metricRows.push([i + 1, m.metricName || '', m.metricType || '', m.unit || '', m.threshold || '', m.notes || '']);
+    });
+    var ws2 = XLSX.utils.aoa_to_sheet(metricRows);
+    ws2['!cols'] = [{ wch: 4 }, { wch: 25 }, { wch: 12 }, { wch: 20 }, { wch: 22 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Key Metrics');
+
+    // Logs sheet
+    var logRows = [['#', 'Source / Service', 'Min Level', 'Retention', 'Destination', 'Notes']];
+    logs.forEach(function(l, i) {
+      logRows.push([i + 1, l.source || '', l.level || '', l.retention || '', l.destination || '', l.notes || '']);
+    });
+    var ws3 = XLSX.utils.aoa_to_sheet(logRows);
+    ws3['!cols'] = [{ wch: 4 }, { wch: 22 }, { wch: 10 }, { wch: 22 }, { wch: 22 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, ws3, 'Log Sources');
+
     // SLOs sheet
-    var sloRows = [['SLO Target']];
-    (data.slos || '').split('\n').forEach(function(s) {
-      if (s.trim()) sloRows.push([s.trim()]);
+    var sloRows = [['#', 'SLI Name', 'Target', 'Window', 'Error Budget', 'Notes']];
+    slos.forEach(function(s, i) {
+      sloRows.push([i + 1, s.sliName || '', s.target || '', s.window || '', s.errorBudget || '', s.notes || '']);
     });
-    var ws2 = XLSX.utils.aoa_to_sheet(sloRows);
-    ws2['!cols'] = [{ wch: 60 }];
-    XLSX.utils.book_append_sheet(wb, ws2, 'SLO Targets');
+    var ws4 = XLSX.utils.aoa_to_sheet(sloRows);
+    ws4['!cols'] = [{ wch: 4 }, { wch: 25 }, { wch: 15 }, { wch: 16 }, { wch: 22 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, ws4, 'SLO Targets');
+
     // Alerts sheet
-    var alertRows = [['Alerting Rule']];
-    (data.alerts || '').split('\n').forEach(function(a) {
-      if (a.trim()) alertRows.push([a.trim()]);
+    var alertRows = [['#', 'Alert Name', 'Condition', 'Severity', 'Channel', 'Runbook', 'Notes']];
+    alerts.forEach(function(a, i) {
+      alertRows.push([i + 1, a.alertName || '', a.condition || '', a.severity || '', a.channel || '', a.runbook || '', a.notes || '']);
     });
-    var ws3 = XLSX.utils.aoa_to_sheet(alertRows);
-    ws3['!cols'] = [{ wch: 60 }];
-    XLSX.utils.book_append_sheet(wb, ws3, 'Alerting Rules');
+    var ws5 = XLSX.utils.aoa_to_sheet(alertRows);
+    ws5['!cols'] = [{ wch: 4 }, { wch: 22 }, { wch: 28 }, { wch: 14 }, { wch: 16 }, { wch: 35 }, { wch: 28 }];
+    XLSX.utils.book_append_sheet(wb, ws5, 'Alert Rules');
+
     // Dashboards sheet
-    var dashRows = [['Dashboard']];
-    (data.dashboards || '').split('\n').forEach(function(d) {
-      if (d.trim()) dashRows.push([d.trim()]);
+    var dashRows = [['#', 'Dashboard Name', 'Type', 'Key Panels', 'Audience', 'Refresh', 'Notes']];
+    dashboards.forEach(function(d, i) {
+      dashRows.push([i + 1, d.dashName || '', d.dashType || '', d.panels || '', d.audience || '', d.refresh || '', d.notes || '']);
     });
-    var ws4 = XLSX.utils.aoa_to_sheet(dashRows);
-    ws4['!cols'] = [{ wch: 60 }];
-    XLSX.utils.book_append_sheet(wb, ws4, 'Dashboards');
+    var ws6 = XLSX.utils.aoa_to_sheet(dashRows);
+    ws6['!cols'] = [{ wch: 4 }, { wch: 25 }, { wch: 18 }, { wch: 35 }, { wch: 16 }, { wch: 14 }, { wch: 28 }];
+    XLSX.utils.book_append_sheet(wb, ws6, 'Dashboards');
+
     XLSX.writeFile(wb, filename + '.xlsx');
   },
 
   generateObservabilityPlanPDF: function(filename, data) {
+    var metrics = (data.metrics || []).filter(function(m) { return m.metricName && m.metricName.trim(); });
+    var logs = (data.logs || []).filter(function(l) { return l.source && l.source.trim(); });
+    var slos = (data.slos || []).filter(function(s) { return s.sliName && s.sliName.trim(); });
+    var alerts = (data.alerts || []).filter(function(a) { return a.alertName && a.alertName.trim(); });
+    var dashboards = (data.dashboards || []).filter(function(d) { return d.dashName && d.dashName.trim(); });
+
     var lines = [
       { text: 'OBSERVABILITY & MONITORING PLAN', size: 18, bold: true },
       { text: (data.systemName || ''), size: 13 },
       { text: 'Generated: ' + new Date().toLocaleDateString(), size: 9 },
       { text: ' ', size: 6 },
       { text: '── MONITORING STACK ──', size: 14, bold: true },
-      { text: 'Stack: ' + (data.stack || 'N/A'), size: 10 },
-      { text: 'Distributed Tracing: ' + (data.tracing || 'N/A'), size: 10 },
+      { text: 'Stack: ' + (data.stack || 'N/A') + '  |  Tracing: ' + (data.tracing || 'N/A'), size: 10 },
+      { text: 'Log Format: ' + (data.logFormat || 'N/A'), size: 10 },
       { text: ' ', size: 6 },
-      { text: '── KEY METRICS ──', size: 14, bold: true },
-      { text: data.metrics || 'Not specified', size: 10 },
-      { text: ' ', size: 6 },
-      { text: '── LOGGING STRATEGY ──', size: 14, bold: true },
-      { text: data.logs || 'Not specified', size: 10 },
-      { text: ' ', size: 6 },
-      { text: '── SLO TARGETS ──', size: 14, bold: true },
-      { text: data.slos || 'Not specified', size: 10 },
-      { text: ' ', size: 6 },
-      { text: '── ALERTING RULES ──', size: 14, bold: true },
-      { text: data.alerts || 'Not specified', size: 10 },
-      { text: ' ', size: 6 },
-      { text: '── DASHBOARD DESIGN ──', size: 14, bold: true },
-      { text: data.dashboards || 'Not specified', size: 10 }
+      { text: '── KEY METRICS (' + metrics.length + ') ──', size: 14, bold: true }
     ];
+
+    metrics.forEach(function(m, i) {
+      lines.push({ text: (i + 1) + '. ' + m.metricName + (m.metricType ? '  [' + m.metricType + ']' : ''), size: 11, bold: true });
+      if (m.unit || m.threshold) lines.push({ text: '   ' + (m.unit ? 'Unit: ' + m.unit : '') + (m.unit && m.threshold ? '  |  ' : '') + (m.threshold ? 'Threshold: ' + m.threshold : ''), size: 10 });
+      if (m.notes) lines.push({ text: '   ' + m.notes, size: 9 });
+    });
+
+    lines.push({ text: ' ', size: 6 });
+    lines.push({ text: '── LOG SOURCES (' + logs.length + ') ──', size: 14, bold: true });
+
+    logs.forEach(function(l, i) {
+      lines.push({ text: (i + 1) + '. ' + l.source + (l.level ? '  [' + l.level + ']' : ''), size: 11, bold: true });
+      if (l.retention || l.destination) lines.push({ text: '   ' + (l.retention ? 'Retention: ' + l.retention : '') + (l.retention && l.destination ? '  |  ' : '') + (l.destination ? 'Dest: ' + l.destination : ''), size: 10 });
+      if (l.notes) lines.push({ text: '   ' + l.notes, size: 9 });
+    });
+
+    lines.push({ text: ' ', size: 6 });
+    lines.push({ text: '── SLO TARGETS (' + slos.length + ') ──', size: 14, bold: true });
+
+    slos.forEach(function(s, i) {
+      lines.push({ text: (i + 1) + '. ' + s.sliName + (s.target ? ' → ' + s.target : ''), size: 11, bold: true });
+      if (s.window || s.errorBudget) lines.push({ text: '   ' + (s.window ? 'Window: ' + s.window : '') + (s.window && s.errorBudget ? '  |  ' : '') + (s.errorBudget ? 'Budget: ' + s.errorBudget : ''), size: 10 });
+      if (s.notes) lines.push({ text: '   ' + s.notes, size: 9 });
+    });
+
+    lines.push({ text: ' ', size: 6 });
+    lines.push({ text: '── ALERT RULES (' + alerts.length + ') ──', size: 14, bold: true });
+
+    alerts.forEach(function(a, i) {
+      lines.push({ text: (i + 1) + '. ' + a.alertName + (a.severity ? '  [' + a.severity + ']' : ''), size: 11, bold: true });
+      if (a.condition) lines.push({ text: '   Condition: ' + a.condition, size: 10 });
+      if (a.channel || a.runbook) lines.push({ text: '   ' + (a.channel ? 'Channel: ' + a.channel : '') + (a.channel && a.runbook ? '  |  ' : '') + (a.runbook ? 'Runbook: ' + a.runbook : ''), size: 10 });
+      if (a.notes) lines.push({ text: '   ' + a.notes, size: 9 });
+    });
+
+    lines.push({ text: ' ', size: 6 });
+    lines.push({ text: '── DASHBOARDS (' + dashboards.length + ') ──', size: 14, bold: true });
+
+    dashboards.forEach(function(d, i) {
+      lines.push({ text: (i + 1) + '. ' + d.dashName + (d.dashType ? '  [' + d.dashType + ']' : ''), size: 11, bold: true });
+      if (d.audience || d.refresh) lines.push({ text: '   ' + (d.audience ? 'Audience: ' + d.audience : '') + (d.audience && d.refresh ? '  |  ' : '') + (d.refresh ? 'Refresh: ' + d.refresh : ''), size: 10 });
+      if (d.panels) lines.push({ text: '   Panels: ' + d.panels, size: 10 });
+      if (d.notes) lines.push({ text: '   ' + d.notes, size: 9 });
+    });
+
     return this.generatePDF(filename, { title: 'Observability & Monitoring Plan', lines: lines });
   },
 
