@@ -1130,63 +1130,70 @@ Object.assign(DocGenerator, {
     var sections = [
       { heading: 'Observability & Monitoring Plan', content: [
         'System: ' + (data.systemName || 'N/A'),
+        'Monitoring Stack: ' + (data.stack || 'N/A'),
         'Date: ' + new Date().toLocaleDateString()
       ]},
-      { heading: '1. Logging', content: [
-        'Stack: ' + (data.loggingStack || 'N/A'),
-        'Log Levels & Retention: ' + (data.logRetention || 'N/A')
-      ]},
-      { heading: '2. Metrics', content: [
-        'Stack: ' + (data.metricsStack || 'N/A'),
-        'Key Metrics: ' + (data.keyMetrics || 'N/A')
-      ]},
+      { heading: '1. Key Metrics', content: (data.metrics || 'Not specified').split('\n') },
+      { heading: '2. Logging Strategy', content: (data.logs || 'Not specified').split('\n') },
       { heading: '3. Distributed Tracing', content: [
-        'Stack: ' + (data.tracingStack || 'N/A')
+        'Tool: ' + (data.tracing || 'N/A')
       ]},
-      { heading: '4. SLIs & SLOs', content: (data.slos || 'Not specified').split('\n') },
-      { heading: '5. Alert Rules', content: (data.alertRules || 'Not specified').split('\n') },
-      { heading: '6. Alert Channel', content: ['Channel: ' + (data.alertChannel || 'N/A')] },
-      { heading: '7. Dashboards', content: (data.dashboards || 'Not specified').split('\n') },
-      { heading: '8. On-Call Escalation', content: (data.onCall || 'Not specified').split('\n') }
+      { heading: '4. SLO Targets', content: (data.slos || 'Not specified').split('\n') },
+      { heading: '5. Alerting Rules', content: (data.alerts || 'Not specified').split('\n') },
+      { heading: '6. Dashboard Design', content: (data.dashboards || 'Not specified').split('\n') }
     ];
     return this.generateWord(filename, { title: 'Observability Plan – ' + (data.systemName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateObservabilityPlanExcel: function(filename, data) {
     var wb = XLSX.utils.book_new();
-    // Pillars sheet
-    var pillars = [
+    // Overview sheet
+    var overview = [
       ['OBSERVABILITY & MONITORING PLAN'],
       ['System', data.systemName || ''],
+      ['Monitoring Stack', data.stack || ''],
+      ['Distributed Tracing', data.tracing || ''],
       ['Date', new Date().toLocaleDateString()],
       [],
-      ['THREE PILLARS'],
-      ['Pillar', 'Tool / Stack', 'Details'],
-      ['Logging', data.loggingStack || '', data.logRetention || ''],
-      ['Metrics', data.metricsStack || '', data.keyMetrics || ''],
-      ['Tracing', data.tracingStack || '', ''],
-      [],
-      ['Alert Channel', data.alertChannel || '']
+      ['KEY METRICS'],
+      ['Metric']
     ];
-    var ws1 = XLSX.utils.aoa_to_sheet(pillars);
-    ws1['!cols'] = [{ wch: 20 }, { wch: 30 }, { wch: 40 }];
-    XLSX.utils.book_append_sheet(wb, ws1, 'Pillars');
+    (data.metrics || '').split('\n').forEach(function(m) {
+      if (m.trim()) overview.push([m.trim()]);
+    });
+    overview.push([]);
+    overview.push(['LOGGING STRATEGY']);
+    overview.push(['Detail']);
+    (data.logs || '').split('\n').forEach(function(l) {
+      if (l.trim()) overview.push([l.trim()]);
+    });
+    var ws1 = XLSX.utils.aoa_to_sheet(overview);
+    ws1['!cols'] = [{ wch: 25 }, { wch: 50 }];
+    XLSX.utils.book_append_sheet(wb, ws1, 'Overview');
     // SLOs sheet
-    var sloRows = [['SLI / SLO', 'Target', 'Measurement']];
+    var sloRows = [['SLO Target']];
     (data.slos || '').split('\n').forEach(function(s) {
-      if (s.trim()) sloRows.push([s.trim(), '', '']);
+      if (s.trim()) sloRows.push([s.trim()]);
     });
     var ws2 = XLSX.utils.aoa_to_sheet(sloRows);
-    ws2['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 30 }];
-    XLSX.utils.book_append_sheet(wb, ws2, 'SLIs & SLOs');
+    ws2['!cols'] = [{ wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, ws2, 'SLO Targets');
     // Alerts sheet
-    var alertRows = [['Alert Rule', 'Severity', 'Channel', 'Escalation']];
-    (data.alertRules || '').split('\n').forEach(function(a) {
-      if (a.trim()) alertRows.push([a.trim(), '', data.alertChannel || '', '']);
+    var alertRows = [['Alerting Rule']];
+    (data.alerts || '').split('\n').forEach(function(a) {
+      if (a.trim()) alertRows.push([a.trim()]);
     });
     var ws3 = XLSX.utils.aoa_to_sheet(alertRows);
-    ws3['!cols'] = [{ wch: 35 }, { wch: 12 }, { wch: 18 }, { wch: 25 }];
-    XLSX.utils.book_append_sheet(wb, ws3, 'Alerts');
+    ws3['!cols'] = [{ wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, ws3, 'Alerting Rules');
+    // Dashboards sheet
+    var dashRows = [['Dashboard']];
+    (data.dashboards || '').split('\n').forEach(function(d) {
+      if (d.trim()) dashRows.push([d.trim()]);
+    });
+    var ws4 = XLSX.utils.aoa_to_sheet(dashRows);
+    ws4['!cols'] = [{ wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, ws4, 'Dashboards');
     XLSX.writeFile(wb, filename + '.xlsx');
   },
 
@@ -1196,29 +1203,24 @@ Object.assign(DocGenerator, {
       { text: (data.systemName || ''), size: 13 },
       { text: 'Generated: ' + new Date().toLocaleDateString(), size: 9 },
       { text: ' ', size: 6 },
-      { text: '── LOGGING ──', size: 14, bold: true },
-      { text: 'Stack: ' + (data.loggingStack || 'N/A'), size: 10 },
-      { text: 'Retention: ' + (data.logRetention || 'N/A'), size: 10 },
+      { text: '── MONITORING STACK ──', size: 14, bold: true },
+      { text: 'Stack: ' + (data.stack || 'N/A'), size: 10 },
+      { text: 'Distributed Tracing: ' + (data.tracing || 'N/A'), size: 10 },
       { text: ' ', size: 6 },
-      { text: '── METRICS ──', size: 14, bold: true },
-      { text: 'Stack: ' + (data.metricsStack || 'N/A'), size: 10 },
-      { text: 'Key Metrics: ' + (data.keyMetrics || 'N/A'), size: 10 },
+      { text: '── KEY METRICS ──', size: 14, bold: true },
+      { text: data.metrics || 'Not specified', size: 10 },
       { text: ' ', size: 6 },
-      { text: '── DISTRIBUTED TRACING ──', size: 14, bold: true },
-      { text: 'Stack: ' + (data.tracingStack || 'N/A'), size: 10 },
+      { text: '── LOGGING STRATEGY ──', size: 14, bold: true },
+      { text: data.logs || 'Not specified', size: 10 },
       { text: ' ', size: 6 },
-      { text: '── SLIs & SLOs ──', size: 14, bold: true },
+      { text: '── SLO TARGETS ──', size: 14, bold: true },
       { text: data.slos || 'Not specified', size: 10 },
       { text: ' ', size: 6 },
-      { text: '── ALERT RULES ──', size: 14, bold: true },
-      { text: data.alertRules || 'Not specified', size: 10 },
-      { text: 'Channel: ' + (data.alertChannel || 'N/A'), size: 10 },
+      { text: '── ALERTING RULES ──', size: 14, bold: true },
+      { text: data.alerts || 'Not specified', size: 10 },
       { text: ' ', size: 6 },
-      { text: '── DASHBOARDS ──', size: 14, bold: true },
-      { text: data.dashboards || 'Not specified', size: 10 },
-      { text: ' ', size: 6 },
-      { text: '── ON-CALL ESCALATION ──', size: 14, bold: true },
-      { text: data.onCall || 'Not specified', size: 10 }
+      { text: '── DASHBOARD DESIGN ──', size: 14, bold: true },
+      { text: data.dashboards || 'Not specified', size: 10 }
     ];
     return this.generatePDF(filename, { title: 'Observability & Monitoring Plan', lines: lines });
   },
