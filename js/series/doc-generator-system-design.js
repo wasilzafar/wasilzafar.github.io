@@ -764,31 +764,73 @@ Object.assign(DocGenerator, {
   // ============================================================
 
   generateEventDrivenDesignWord: async function(filename, data) {
+    var events = (data.events || []).filter(function(e) { return e.eventName && e.eventName.trim(); });
+    var services = (data.services || []).filter(function(s) { return s.serviceName && s.serviceName.trim(); });
+
     var sections = [
       { heading: 'Event-Driven Architecture Design', content: [
         'System: ' + (data.systemName || 'N/A'),
         'Date: ' + new Date().toLocaleDateString()
       ]},
       { heading: '1. Messaging Infrastructure', content: [
-        'Technology: ' + (data.msgTech || 'N/A'),
-        'Pattern: ' + (data.pattern || 'N/A'),
-        'Message Format: ' + (data.msgFormat || 'N/A')
+        'Message Broker: ' + (data.broker || 'N/A'),
+        'Messaging Pattern: ' + (data.pattern || 'N/A'),
+        'Delivery Guarantee: ' + (data.delivery || 'N/A'),
+        'Message Ordering: ' + (data.ordering || 'N/A'),
+        'Retention Period: ' + (data.retention || 'N/A'),
+        'Idempotency Strategy: ' + (data.idempotency || 'N/A'),
+        'Expected Throughput: ' + (data.throughput || 'N/A')
       ]},
-      { heading: '2. Guarantees & Ordering', content: [
-        'Delivery Guarantee: ' + (data.deliveryGuarantee || 'N/A'),
-        'Ordering: ' + (data.ordering || 'N/A')
-      ]},
-      { heading: '3. Events / Topics', content: (data.events || 'Not specified').split('\n') },
-      { heading: '4. Consumer Groups', content: (data.consumerGroups || 'Not specified').split('\n') },
-      { heading: '5. Retention Policy', content: [(data.retention || 'Not specified')] },
-      { heading: '6. Dead Letter Queue Strategy', content: (data.dlq || 'Not specified').split('\n') },
-      { heading: '7. Expected Throughput', content: [(data.throughput || 'Not specified')] }
+      { heading: '2. Dead Letter Queue Policy', content: [
+        'Policy: ' + (data.dlqPolicy || 'N/A'),
+        'Notes: ' + (data.dlqNotes || 'N/A')
+      ]}
     ];
+
+    // Event Types section
+    if (events.length) {
+      var eventContent = [];
+      events.forEach(function(e, i) {
+        eventContent.push('');
+        eventContent.push('Event ' + (i + 1) + ': ' + e.eventName);
+        if (e.topic) eventContent.push('  Topic/Queue: ' + e.topic);
+        if (e.serialization) eventContent.push('  Serialization: ' + e.serialization);
+        if (e.partitionKey) eventContent.push('  Partition Key: ' + e.partitionKey);
+        if (e.priority) eventContent.push('  Priority: ' + e.priority);
+        if (e.schema) eventContent.push('  Schema: ' + e.schema);
+        if (e.notes) eventContent.push('  Notes: ' + e.notes);
+      });
+      sections.push({ heading: '3. Event Types & Schemas (' + events.length + ')', content: eventContent });
+    } else {
+      sections.push({ heading: '3. Event Types & Schemas', content: ['No events defined'] });
+    }
+
+    // Services section
+    if (services.length) {
+      var svcContent = [];
+      services.forEach(function(s, i) {
+        svcContent.push('');
+        svcContent.push('Service ' + (i + 1) + ': ' + s.serviceName + (s.role ? ' [' + s.role + ']' : ''));
+        if (s.publishes) svcContent.push('  Publishes: ' + s.publishes);
+        if (s.subscribes) svcContent.push('  Subscribes: ' + s.subscribes);
+        if (s.consumerGroup) svcContent.push('  Consumer Group: ' + s.consumerGroup);
+        if (s.processing) svcContent.push('  Processing: ' + s.processing);
+        if (s.notes) svcContent.push('  Notes: ' + s.notes);
+      });
+      sections.push({ heading: '4. Services – Producers & Consumers (' + services.length + ')', content: svcContent });
+    } else {
+      sections.push({ heading: '4. Services – Producers & Consumers', content: ['No services defined'] });
+    }
+
     return this.generateWord(filename, { title: 'Event-Driven Design – ' + (data.systemName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateEventDrivenDesignExcel: function(filename, data) {
+    var events = (data.events || []).filter(function(e) { return e.eventName && e.eventName.trim(); });
+    var services = (data.services || []).filter(function(s) { return s.serviceName && s.serviceName.trim(); });
     var wb = XLSX.utils.book_new();
+
+    // Overview sheet
     var overview = [
       ['EVENT-DRIVEN ARCHITECTURE DESIGN'],
       ['System', data.systemName || ''],
@@ -796,66 +838,86 @@ Object.assign(DocGenerator, {
       [],
       ['MESSAGING INFRASTRUCTURE'],
       ['Parameter', 'Value'],
-      ['Technology', data.msgTech || ''],
-      ['Pattern', data.pattern || ''],
-      ['Message Format', data.msgFormat || ''],
-      ['Delivery Guarantee', data.deliveryGuarantee || ''],
-      ['Ordering', data.ordering || ''],
-      ['Retention', data.retention || ''],
-      ['Throughput', data.throughput || '']
+      ['Message Broker', data.broker || ''],
+      ['Messaging Pattern', data.pattern || ''],
+      ['Delivery Guarantee', data.delivery || ''],
+      ['Message Ordering', data.ordering || ''],
+      ['Retention Period', data.retention || ''],
+      ['Idempotency Strategy', data.idempotency || ''],
+      ['Expected Throughput', data.throughput || ''],
+      [],
+      ['DEAD LETTER QUEUE'],
+      ['Policy', data.dlqPolicy || ''],
+      ['Notes', data.dlqNotes || '']
     ];
     var ws1 = XLSX.utils.aoa_to_sheet(overview);
-    ws1['!cols'] = [{ wch: 25 }, { wch: 40 }];
+    ws1['!cols'] = [{ wch: 25 }, { wch: 50 }];
     XLSX.utils.book_append_sheet(wb, ws1, 'Overview');
+
     // Events sheet
-    var evts = [['Event / Topic', 'Producer', 'Consumers', 'Partition Key']];
-    (data.events || '').split('\n').forEach(function(e) {
-      if (e.trim()) evts.push([e.trim(), '', '', '']);
+    var evtRows = [['#', 'Event Name', 'Topic / Queue', 'Serialization', 'Partition Key', 'Priority', 'Schema / Payload', 'Notes']];
+    events.forEach(function(e, i) {
+      evtRows.push([i + 1, e.eventName || '', e.topic || '', e.serialization || '', e.partitionKey || '', e.priority || '', e.schema || '', e.notes || '']);
     });
-    var ws2 = XLSX.utils.aoa_to_sheet(evts);
-    ws2['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 25 }, { wch: 20 }];
-    XLSX.utils.book_append_sheet(wb, ws2, 'Events & Topics');
-    // DLQ sheet
-    var dlq = [
-      ['DEAD LETTER QUEUE STRATEGY'],
-      [],
-      [data.dlq || 'Not specified'],
-      [],
-      ['CONSUMER GROUPS'],
-      [],
-      [data.consumerGroups || 'Not specified']
-    ];
-    var ws3 = XLSX.utils.aoa_to_sheet(dlq);
-    ws3['!cols'] = [{ wch: 60 }];
-    XLSX.utils.book_append_sheet(wb, ws3, 'DLQ & Consumers');
+    var ws2 = XLSX.utils.aoa_to_sheet(evtRows);
+    ws2['!cols'] = [{ wch: 4 }, { wch: 22 }, { wch: 25 }, { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 40 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Event Types');
+
+    // Services sheet
+    var svcRows = [['#', 'Service Name', 'Role', 'Publishes', 'Subscribes To', 'Consumer Group', 'Processing', 'Notes']];
+    services.forEach(function(s, i) {
+      svcRows.push([i + 1, s.serviceName || '', s.role || '', s.publishes || '', s.subscribes || '', s.consumerGroup || '', s.processing || '', s.notes || '']);
+    });
+    var ws3 = XLSX.utils.aoa_to_sheet(svcRows);
+    ws3['!cols'] = [{ wch: 4 }, { wch: 22 }, { wch: 12 }, { wch: 28 }, { wch: 28 }, { wch: 20 }, { wch: 12 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, ws3, 'Services');
+
     XLSX.writeFile(wb, filename + '.xlsx');
   },
 
   generateEventDrivenDesignPDF: function(filename, data) {
+    var events = (data.events || []).filter(function(e) { return e.eventName && e.eventName.trim(); });
+    var services = (data.services || []).filter(function(s) { return s.serviceName && s.serviceName.trim(); });
+    var S = DocStyles;
+
     var lines = [
-      { text: 'EVENT-DRIVEN ARCHITECTURE DESIGN', size: 18, bold: true },
-      { text: (data.systemName || ''), size: 13 },
-      { text: 'Generated: ' + new Date().toLocaleDateString(), size: 9 },
+      { text: 'EVENT-DRIVEN ARCHITECTURE DESIGN', size: S.SIZE_TITLE, bold: true },
+      { text: (data.systemName || ''), size: S.SIZE_SUBTITLE },
+      { text: 'Generated: ' + new Date().toLocaleDateString(), size: S.SIZE_SMALL },
       { text: ' ', size: 6 },
-      { text: '── MESSAGING INFRASTRUCTURE ──', size: 14, bold: true },
-      { text: 'Technology: ' + (data.msgTech || 'N/A'), size: 10 },
-      { text: 'Pattern: ' + (data.pattern || 'N/A') + '  |  Format: ' + (data.msgFormat || 'N/A'), size: 10 },
+      { text: '\u2500\u2500 MESSAGING INFRASTRUCTURE \u2500\u2500', size: S.SIZE_SECTION, bold: true },
+      { text: 'Broker: ' + (data.broker || 'N/A'), size: S.SIZE_BODY },
+      { text: 'Pattern: ' + (data.pattern || 'N/A') + '  |  Delivery: ' + (data.delivery || 'N/A'), size: S.SIZE_BODY },
+      { text: 'Ordering: ' + (data.ordering || 'N/A') + '  |  Retention: ' + (data.retention || 'N/A'), size: S.SIZE_BODY },
+      { text: 'Idempotency: ' + (data.idempotency || 'N/A'), size: S.SIZE_BODY },
+      { text: 'Throughput: ' + (data.throughput || 'N/A'), size: S.SIZE_BODY },
       { text: ' ', size: 6 },
-      { text: '── GUARANTEES & ORDERING ──', size: 14, bold: true },
-      { text: 'Delivery: ' + (data.deliveryGuarantee || 'N/A') + '  |  Ordering: ' + (data.ordering || 'N/A'), size: 10 },
+      { text: '\u2500\u2500 DEAD LETTER QUEUE \u2500\u2500', size: S.SIZE_SECTION, bold: true },
+      { text: 'Policy: ' + (data.dlqPolicy || 'N/A'), size: S.SIZE_BODY },
+      { text: (data.dlqNotes || ''), size: S.SIZE_BODY },
       { text: ' ', size: 6 },
-      { text: '── EVENTS / TOPICS ──', size: 14, bold: true },
-      { text: data.events || 'Not specified', size: 10 },
-      { text: ' ', size: 6 },
-      { text: '── CONSUMER GROUPS ──', size: 14, bold: true },
-      { text: data.consumerGroups || 'Not specified', size: 10 },
-      { text: ' ', size: 6 },
-      { text: '── RETENTION & THROUGHPUT ──', size: 14, bold: true },
-      { text: 'Retention: ' + (data.retention || 'N/A') + '  |  Throughput: ' + (data.throughput || 'N/A'), size: 10 },
-      { text: ' ', size: 6 },
-      { text: '── DEAD LETTER QUEUE ──', size: 14, bold: true },
-      { text: data.dlq || 'Not specified', size: 10 }
+      { text: '\u2500\u2500 EVENT TYPES & SCHEMAS (' + events.length + ') \u2500\u2500', size: S.SIZE_SECTION, bold: true }
     ];
+
+    events.forEach(function(e, i) {
+      lines.push({ text: (i + 1) + '. ' + e.eventName + (e.priority ? '  [' + e.priority + ']' : ''), size: S.SIZE_BODY, bold: true });
+      if (e.topic) lines.push({ text: '   Topic: ' + e.topic + (e.serialization ? '  |  Format: ' + e.serialization : ''), size: S.SIZE_BODY });
+      if (e.partitionKey) lines.push({ text: '   Partition: ' + e.partitionKey, size: S.SIZE_BODY });
+      if (e.schema) lines.push({ text: '   Schema: ' + e.schema, size: S.SIZE_SMALL });
+      if (e.notes) lines.push({ text: '   Notes: ' + e.notes, size: S.SIZE_SMALL });
+    });
+
+    lines.push({ text: ' ', size: 6 });
+    lines.push({ text: '\u2500\u2500 SERVICES \u2013 PRODUCERS & CONSUMERS (' + services.length + ') \u2500\u2500', size: S.SIZE_SECTION, bold: true });
+
+    services.forEach(function(s, i) {
+      lines.push({ text: (i + 1) + '. ' + s.serviceName + (s.role ? '  [' + s.role + ']' : ''), size: S.SIZE_BODY, bold: true });
+      if (s.publishes) lines.push({ text: '   Publishes: ' + s.publishes, size: S.SIZE_BODY });
+      if (s.subscribes) lines.push({ text: '   Subscribes: ' + s.subscribes, size: S.SIZE_BODY });
+      if (s.consumerGroup) lines.push({ text: '   Consumer Group: ' + s.consumerGroup + (s.processing ? '  |  ' + s.processing : ''), size: S.SIZE_BODY });
+      if (s.notes) lines.push({ text: '   Notes: ' + s.notes, size: S.SIZE_SMALL });
+    });
+
     return this.generatePDF(filename, { title: 'Event-Driven Architecture Design', lines: lines });
   },
 
