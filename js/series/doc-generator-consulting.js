@@ -315,7 +315,7 @@ Object.assign(DocGenerator, {
     return this.generateExcel(filename, { sheetName: 'Prioritization Matrix', headers: ['Initiative', 'Impact & Effort'], data: rows });
   },
   generatePrioritizationMatrixPDF: function(filename, data) {
-    var lines = [{ text: 'PRIORITIZATION MATRIX', size: 16, bold: true }, { text: 'Project: ' + (data.projectName || 'N/A') + '  |  Date: ' + new Date().toLocaleDateString(), size: 11 }, { text: '', size: 8 }];
+    var lines = [{ text: 'PRIORITIZATION MATRIX', size: 18, bold: true }, { text: 'Project: ' + (data.projectName || 'N/A') + '  |  Date: ' + new Date().toLocaleDateString(), size: 11 }, { text: '', size: 6 }];
     for (var i = 1; i <= 5; i++) {
       var name = data['item' + i + 'Name'];
       if (name && name.trim()) {

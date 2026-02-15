@@ -32,7 +32,7 @@ Object.assign(DocGenerator, {
     return this.generateExcel(filename, { sheetName: 'KPI Worksheet', headers: ['KPI Name', 'Definition / Target / Source / Frequency'], data: rows });
   },
   generateKpiWorksheetPDF: function(filename, data) {
-    var lines = [{ text: 'KPI DEFINITION WORKSHEET', size: 16, bold: true }, { text: 'Department: ' + (data.department || 'N/A') + '  |  Owner: ' + (data.ownerName || 'N/A'), size: 11 }, { text: 'Date: ' + new Date().toLocaleDateString(), size: 11 }, { text: '', size: 8 }];
+    var lines = [{ text: 'KPI DEFINITION WORKSHEET', size: 18, bold: true }, { text: 'Department: ' + (data.department || 'N/A') + '  |  Owner: ' + (data.ownerName || 'N/A'), size: 11 }, { text: 'Date: ' + new Date().toLocaleDateString(), size: 11 }, { text: '', size: 6 }];
     for (var i = 1; i <= 4; i++) {
       var name = data['kpi' + i + 'Name'];
       if (name && name.trim()) {
@@ -99,7 +99,7 @@ Object.assign(DocGenerator, {
     return this.generateExcel(filename, { sheetName: 'Decision Matrix', headers: ['Option', 'Pros', 'Cons', 'Score (1-10)'], data: rows });
   },
   generateDecisionMatrixPDF: function(filename, data) {
-    var lines = [{ text: 'DECISION MATRIX', size: 16, bold: true }, { text: 'Decision: ' + (data.decisionName || 'N/A') + '  |  Owner: ' + (data.ownerName || 'N/A'), size: 11 }, { text: '', size: 8 }];
+    var lines = [{ text: 'DECISION MATRIX', size: 18, bold: true }, { text: 'Decision: ' + (data.decisionName || 'N/A') + '  |  Owner: ' + (data.ownerName || 'N/A'), size: 11 }, { text: '', size: 6 }];
     for (var i = 1; i <= 5; i++) {
       var name = data['option' + i + 'Name'];
       if (name && name.trim()) {
@@ -137,7 +137,7 @@ Object.assign(DocGenerator, {
     return this.generateExcel(filename, { sheetName: 'RACI Matrix', headers: ['Task / Activity', 'Responsible', 'Accountable', 'Consulted', 'Informed'], data: rows });
   },
   generateRaciMatrixPDF: function(filename, data) {
-    var lines = [{ text: 'RACI MATRIX', size: 16, bold: true }, { text: 'Project: ' + (data.projectName || 'N/A') + '  |  Date: ' + new Date().toLocaleDateString(), size: 11 }, { text: '', size: 8 }];
+    var lines = [{ text: 'RACI MATRIX', size: 18, bold: true }, { text: 'Project: ' + (data.projectName || 'N/A') + '  |  Date: ' + new Date().toLocaleDateString(), size: 11 }, { text: '', size: 6 }];
     for (var i = 1; i <= 5; i++) {
       var task = data['task' + i + 'Name'];
       if (task && task.trim()) {
