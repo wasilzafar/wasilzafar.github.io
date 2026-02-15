@@ -1934,6 +1934,489 @@ Object.assign(DocGenerator, {
       { text: data.bottlenecks || 'Not specified', size: 10 }
     ];
     return this.generatePDF(filename, { title: 'System Design Interview Worksheet', lines: lines });
+  },
+
+  // ============================================================
+  // 16. COMPREHENSIVE SYSTEM DESIGN DOCUMENT (Consolidated)
+  // ============================================================
+
+  // ── Helper: build Word sections for each enabled section ──
+  _comprehensiveSectionBuilders: {
+    hld: function(s, sysName) {
+      return [
+        { heading: 'High-Level Design (HLD)', content: [
+          'System: ' + (sysName || 'N/A'),
+          { type: 'heading', text: 'Problem Statement' },
+          s.problemStatement || 'Not specified',
+          { type: 'heading', text: 'Functional Requirements' },
+          s.functionalReqs || 'Not specified',
+          { type: 'heading', text: 'Non-Functional Requirements' },
+          s.nonFunctionalReqs || 'Not specified',
+          { type: 'heading', text: 'Architecture Pattern' },
+          s.archPattern || 'Not specified',
+          { type: 'heading', text: 'Estimated Scale' },
+          s.estimatedScale || 'Not specified',
+          { type: 'heading', text: 'Key Components' },
+          s.keyComponents || 'Not specified',
+          { type: 'heading', text: 'Technology Stack' },
+          s.techStack || 'Not specified',
+          { type: 'heading', text: 'Constraints & Assumptions' },
+          s.constraints || 'Not specified'
+        ]}
+      ];
+    },
+    scl: function(s) {
+      return [
+        { heading: 'Scalability & Reliability', content: [
+          { type: 'heading', text: 'Current Scale' }, s.currentScale || 'Not specified',
+          { type: 'heading', text: 'Target Scale' }, s.targetScale || 'Not specified',
+          'Scaling Strategy: ' + (s.scalingStrategy || 'N/A'),
+          'Redundancy Model: ' + (s.redundancyModel || 'N/A'),
+          { type: 'heading', text: 'Stateful Components' }, s.statefulComponents || 'Not specified',
+          'RTO: ' + (s.rto || 'N/A') + '   |   RPO: ' + (s.rpo || 'N/A'),
+          { type: 'heading', text: 'Single Points of Failure' }, s.spof || 'Not specified',
+          { type: 'heading', text: 'Disaster Recovery Strategy' }, s.drStrategy || 'Not specified'
+        ]}
+      ];
+    },
+    lbc: function(s) {
+      return [
+        { heading: 'Load Balancing & Caching', content: [
+          'LB Type: ' + (s.lbType || 'N/A') + '  |  Algorithm: ' + (s.lbAlgorithm || 'N/A'),
+          { type: 'heading', text: 'Health Check Strategy' }, s.healthCheck || 'Not specified',
+          'Cache Technology: ' + (s.cacheTech || 'N/A') + '  |  Pattern: ' + (s.cachePattern || 'N/A'),
+          'Eviction Policy: ' + (s.evictionPolicy || 'N/A') + '  |  TTL: ' + (s.ttl || 'N/A'),
+          { type: 'heading', text: 'Cache Invalidation' }, s.invalidation || 'Not specified',
+          'CDN Provider: ' + (s.cdnProvider || 'N/A') + '  |  Target Hit Ratio: ' + (s.hitRatio || 'N/A')
+        ]}
+      ];
+    },
+    db: function(s) {
+      var content = [
+        'Database Type: ' + (s.dbType || 'N/A') + '  |  Engine: ' + (s.dbEngine || 'N/A'),
+        'Consistency: ' + (s.consistency || 'N/A') + '  |  Sharding: ' + (s.shardStrategy || 'N/A'),
+        'Shard Key: ' + (s.shardKey || 'N/A') + '  |  Replication: ' + (s.replication || 'N/A'),
+        'Read Replicas: ' + (s.readReplicas || 'N/A') + '  |  Data Size: ' + (s.dataSize || 'N/A'),
+        { type: 'heading', text: 'Indexing Strategy' }, s.indexing || 'Not specified'
+      ];
+      if (s.entities && s.entities.length) {
+        content.push({ type: 'heading', text: 'Entity Definitions' });
+        s.entities.forEach(function(e, i) {
+          content.push('Entity ' + (i + 1) + ': ' + (e.name || 'Unnamed'));
+          if (e.columns) content.push('  Columns: ' + e.columns);
+          if (e.primaryKey) content.push('  PK: ' + e.primaryKey);
+          if (e.relationships) content.push('  Relationships: ' + e.relationships);
+          if (e.accessPatterns) content.push('  Access Patterns: ' + e.accessPatterns);
+          if (e.estimatedRows) content.push('  Est. Rows: ' + e.estimatedRows);
+          if (e.indexes) content.push('  Indexes: ' + e.indexes);
+        });
+      }
+      return [{ heading: 'Database Design', content: content }];
+    },
+    ms: function(s) {
+      return [
+        { heading: 'Microservices Architecture', content: [
+          'Communication: ' + (s.commPattern || 'N/A') + '  |  Service Mesh: ' + (s.serviceMesh || 'N/A'),
+          'Data Strategy: ' + (s.dataStrategy || 'N/A') + '  |  Deployment: ' + (s.deployment || 'N/A'),
+          { type: 'heading', text: 'Services' }, s.services || 'Not specified',
+          { type: 'heading', text: 'Bounded Contexts' }, s.boundedContexts || 'Not specified',
+          { type: 'heading', text: 'Resilience Patterns' }, s.resilience || 'Not specified'
+        ]}
+      ];
+    },
+    api: function(s) {
+      var content = [
+        'API Name: ' + (s.apiName || 'N/A') + '  |  Base URL: ' + (s.baseUrl || 'N/A'),
+        'Type: ' + (s.apiType || 'N/A') + '  |  Versioning: ' + (s.versionStrategy || 'N/A'),
+        'Auth: ' + (s.authMethod || 'N/A') + '  |  Rate Limit: ' + (s.rateLimit || 'N/A'),
+        'Pagination: ' + (s.pagination || 'N/A') + '  |  Content-Type: ' + (s.contentType || 'N/A'),
+        { type: 'heading', text: 'Error Format' }, s.errorFormat || 'Not specified'
+      ];
+      if (s.endpoints && s.endpoints.length) {
+        content.push({ type: 'heading', text: 'API Endpoints' });
+        s.endpoints.forEach(function(ep, i) {
+          content.push((ep.method || 'GET') + ' ' + (ep.path || '/') + ' — ' + (ep.resource || 'Unnamed'));
+          if (ep.description) content.push('  Desc: ' + ep.description);
+          if (ep.requestBody) content.push('  Req: ' + ep.requestBody);
+          if (ep.response) content.push('  Res: ' + ep.response);
+        });
+      }
+      return [{ heading: 'API Design', content: content }];
+    },
+    eda: function(s) {
+      var content = [
+        'Broker: ' + (s.broker || 'N/A') + '  |  Pattern: ' + (s.pattern || 'N/A'),
+        'Delivery: ' + (s.delivery || 'N/A') + '  |  Ordering: ' + (s.ordering || 'N/A'),
+        'Retention: ' + (s.retention || 'N/A') + '  |  Throughput: ' + (s.throughput || 'N/A'),
+        { type: 'heading', text: 'DLQ Policy' }, s.dlqPolicy || 'Not specified',
+        { type: 'heading', text: 'Idempotency Strategy' }, s.idempotency || 'Not specified'
+      ];
+      if (s.events && s.events.length) {
+        content.push({ type: 'heading', text: 'Event Types' });
+        s.events.forEach(function(ev) {
+          content.push(ev.eventType + (ev.topic ? ' → ' + ev.topic : ''));
+          if (ev.schema) content.push('  Schema: ' + ev.schema);
+          if (ev.serialization) content.push('  Format: ' + ev.serialization);
+        });
+      }
+      if (s.services && s.services.length) {
+        content.push({ type: 'heading', text: 'Services' });
+        s.services.forEach(function(svc) {
+          content.push(svc.serviceName + ' [' + (svc.role || '') + ']');
+          if (svc.publishes) content.push('  Publishes: ' + svc.publishes);
+          if (svc.subscribes) content.push('  Subscribes: ' + svc.subscribes);
+        });
+      }
+      return [{ heading: 'Event-Driven Architecture', content: content }];
+    },
+    adr: function(s) {
+      return [
+        { heading: 'Architecture Decision Record', content: [
+          'Title: ' + (s.title || 'N/A') + '  |  Status: ' + (s.status || 'N/A'),
+          'CAP Choice: ' + (s.capChoice || 'N/A') + '  |  Stakeholders: ' + (s.stakeholders || 'N/A'),
+          { type: 'heading', text: 'Context' }, s.context || 'Not specified',
+          { type: 'heading', text: 'Decision' }, s.decision || 'Not specified',
+          { type: 'heading', text: 'Options Considered' }, s.optionsConsidered || 'Not specified',
+          { type: 'heading', text: 'Consequences' }, s.consequences || 'Not specified'
+        ]}
+      ];
+    },
+    rl: function(s) {
+      return [
+        { heading: 'Rate Limiting & API Security', content: [
+          'Service: ' + (s.serviceName || 'N/A') + '  |  Algorithm: ' + (s.algorithm || 'N/A'),
+          'Scope: ' + (s.scope || 'N/A') + '  |  Storage: ' + (s.storage || 'N/A'),
+          { type: 'heading', text: 'Rate Limit Tiers' }, s.tiers || 'Not specified',
+          { type: 'heading', text: 'Rate Limit Headers' }, s.headers || 'Not specified',
+          { type: 'heading', text: 'Throttle Action' }, s.throttleAction || 'Not specified',
+          { type: 'heading', text: 'Security Measures' }, s.security || 'Not specified'
+        ]}
+      ];
+    },
+    obs: function(s) {
+      var content = [
+        'Monitoring Stack: ' + (s.stack || 'N/A'),
+        'Distributed Tracing: ' + (s.tracing || 'N/A'),
+        'Log Format: ' + (s.logFormat || 'N/A')
+      ];
+      if (s.metrics && s.metrics.length) {
+        content.push({ type: 'heading', text: 'Key Metrics' });
+        s.metrics.forEach(function(m) {
+          content.push(m.metricName + ' [' + (m.metricType || '') + '] — Unit: ' + (m.unit || 'N/A') + ', Threshold: ' + (m.threshold || 'N/A'));
+        });
+      }
+      if (s.logs && s.logs.length) {
+        content.push({ type: 'heading', text: 'Log Sources' });
+        s.logs.forEach(function(l) {
+          content.push(l.source + ' — Level: ' + (l.level || 'N/A') + ', Retention: ' + (l.retention || 'N/A'));
+        });
+      }
+      if (s.slos && s.slos.length) {
+        content.push({ type: 'heading', text: 'SLO Targets' });
+        s.slos.forEach(function(sl) {
+          content.push(sl.sliName + ' — Target: ' + (sl.target || 'N/A') + ', Window: ' + (sl.window || 'N/A'));
+        });
+      }
+      if (s.alerts && s.alerts.length) {
+        content.push({ type: 'heading', text: 'Alert Rules' });
+        s.alerts.forEach(function(a) {
+          content.push(a.alertName + ' [' + (a.severity || '') + '] — ' + (a.condition || 'N/A') + ' → ' + (a.channel || 'N/A'));
+        });
+      }
+      if (s.dashboards && s.dashboards.length) {
+        content.push({ type: 'heading', text: 'Dashboards' });
+        s.dashboards.forEach(function(d) {
+          content.push(d.dashName + ' [' + (d.dashType || '') + '] — Audience: ' + (d.audience || 'N/A'));
+        });
+      }
+      return [{ heading: 'Observability & Monitoring', content: content }];
+    },
+    cs: function(s) {
+      return [
+        { heading: 'Case Study Analysis', content: [
+          'Domain: ' + (s.domain || 'N/A'),
+          { type: 'heading', text: 'Scale & Numbers' }, s.scale || 'Not specified',
+          { type: 'heading', text: 'Problem / Challenge' }, s.problem || 'Not specified',
+          { type: 'heading', text: 'Architecture' }, s.architecture || 'Not specified',
+          { type: 'heading', text: 'Key Trade-offs' }, s.tradeoffs || 'Not specified',
+          { type: 'heading', text: 'Lessons Learned' }, s.lessons || 'Not specified',
+          { type: 'heading', text: 'Technology Stack' }, s.techStack || 'Not specified'
+        ]}
+      ];
+    },
+    lld: function(s) {
+      var content = [
+        'Component: ' + (s.componentName || 'N/A') + '  |  Language: ' + (s.language || 'N/A'),
+        { type: 'heading', text: 'Concurrency Model' }, s.concurrency || 'Not specified',
+        { type: 'heading', text: 'Design Patterns' }, s.patterns || 'Not specified'
+      ];
+      if (s.dataModels && s.dataModels.length) {
+        content.push({ type: 'heading', text: 'Data Models' });
+        s.dataModels.forEach(function(dm) {
+          content.push(dm.entityName || 'Unnamed');
+          if (dm.fields) content.push('  Fields: ' + dm.fields);
+          if (dm.relationships) content.push('  Relationships: ' + dm.relationships);
+          if (dm.constraints) content.push('  Constraints: ' + dm.constraints);
+        });
+      }
+      if (s.classes && s.classes.length) {
+        content.push({ type: 'heading', text: 'Classes / Interfaces' });
+        s.classes.forEach(function(c) {
+          content.push(c.className + ' [' + (c.type || 'Class') + ']');
+          if (c.responsibility) content.push('  Responsibility: ' + c.responsibility);
+          if (c.methods) content.push('  Methods: ' + c.methods);
+          if (c.dependencies) content.push('  Dependencies: ' + c.dependencies);
+          if (c.pattern) content.push('  Pattern: ' + c.pattern);
+        });
+      }
+      if (s.apis && s.apis.length) {
+        content.push({ type: 'heading', text: 'API Contracts' });
+        s.apis.forEach(function(a) {
+          content.push((a.method || 'GET') + ' ' + (a.endpoint || '/'));
+          if (a.requestBody) content.push('  Req: ' + a.requestBody);
+          if (a.responseBody) content.push('  Res: ' + a.responseBody);
+          if (a.errorCodes) content.push('  Errors: ' + a.errorCodes);
+        });
+      }
+      if (s.solid && s.solid.length) {
+        content.push({ type: 'heading', text: 'SOLID Principles' });
+        s.solid.forEach(function(p) {
+          content.push(p.principle + ': ' + (p.application || ''));
+          if (p.example) content.push('  Example: ' + p.example);
+        });
+      }
+      return [{ heading: 'Low-Level Design', content: content }];
+    },
+    dist: function(s) {
+      return [
+        { heading: 'Distributed Systems', content: [
+          'Consensus: ' + (s.consensus || 'N/A') + '  |  Consistency: ' + (s.consistencyModel || 'N/A'),
+          'Replication: ' + (s.replication || 'N/A') + '  |  Clocks: ' + (s.clocks || 'N/A'),
+          'Conflict Resolution: ' + (s.conflictResolution || 'N/A'),
+          { type: 'heading', text: 'Data Partitioning' }, s.partitioning || 'Not specified',
+          { type: 'heading', text: 'Fault Tolerance' }, s.faultTolerance || 'Not specified'
+        ]}
+      ];
+    },
+    sec: function(s) {
+      return [
+        { heading: 'Security Architecture', content: [
+          'Authentication: ' + (s.authMethod || 'N/A') + '  |  MFA: ' + (s.mfaStrategy || 'N/A'),
+          'Token Lifetime: ' + (s.tokenLifetime || 'N/A'),
+          { type: 'heading', text: 'Roles & Permissions' }, s.roles || 'Not specified',
+          { type: 'heading', text: 'Threat Model' }, s.threats || 'Not specified',
+          { type: 'heading', text: 'Encryption Strategy' }, s.encryption || 'Not specified',
+          { type: 'heading', text: 'Compliance Requirements' }, s.compliance || 'Not specified'
+        ]}
+      ];
+    },
+    int: function(s) {
+      return [
+        { heading: 'Interview Worksheet', content: [
+          'Problem: ' + (s.problem || 'N/A') + '  |  Time Limit: ' + (s.timeLimit || 'N/A'),
+          { type: 'heading', text: 'Functional Requirements' }, s.functionalReqs || 'Not specified',
+          { type: 'heading', text: 'Non-Functional Requirements' }, s.nonFunctionalReqs || 'Not specified',
+          { type: 'heading', text: 'Back-of-Envelope Estimations' }, s.estimations || 'Not specified',
+          { type: 'heading', text: 'High-Level Design' }, s.highLevelDesign || 'Not specified',
+          { type: 'heading', text: 'Deep Dive Topics' }, s.deepDive || 'Not specified',
+          { type: 'heading', text: 'Bottlenecks & Mitigations' }, s.bottlenecks || 'Not specified'
+        ]}
+      ];
+    }
+  },
+
+  // ── Word Generator ──
+  generateComprehensiveDesignWord: async function(filename, data) {
+    var allSections = [];
+    var builders = this._comprehensiveSectionBuilders;
+    data.enabledSections.forEach(function(key) {
+      var s = data.sections[key];
+      if (s && builders[key]) {
+        var built = builders[key](s, data.systemName);
+        allSections = allSections.concat(built);
+      }
+    });
+    return this.generateWord(filename, {
+      title: 'System Design Document – ' + (data.systemName || ''),
+      author: data.authorName || '',
+      sections: allSections
+    });
+  },
+
+  // ── Excel Generator ──
+  generateComprehensiveDesignExcel: function(filename, data) {
+    var wb = XLSX.utils.book_new();
+    var SECTION_NAMES = {
+      hld:'High-Level Design', scl:'Scalability', lbc:'Load Balancing & Caching',
+      db:'Database Design', ms:'Microservices', api:'API Design',
+      eda:'Event-Driven', adr:'Architecture Decision', rl:'Rate Limiting',
+      obs:'Observability', cs:'Case Study', lld:'Low-Level Design',
+      dist:'Distributed Systems', sec:'Security', int:'Interview Worksheet'
+    };
+
+    // Summary sheet
+    var summary = [
+      ['COMPREHENSIVE SYSTEM DESIGN DOCUMENT'],
+      ['System', data.systemName || ''],
+      ['Author', data.authorName || ''],
+      ['Date', new Date().toLocaleDateString()],
+      ['Sections Included', data.enabledSections.length],
+      [],
+      ['INCLUDED SECTIONS']
+    ];
+    data.enabledSections.forEach(function(key, i) {
+      summary.push([(i + 1) + '. ' + (SECTION_NAMES[key] || key)]);
+    });
+    var wsSummary = XLSX.utils.aoa_to_sheet(summary);
+    wsSummary['!cols'] = [{ wch: 35 }, { wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+    // Per-section sheets
+    data.enabledSections.forEach(function(key) {
+      var s = data.sections[key];
+      if (!s) return;
+      var rows = [[(SECTION_NAMES[key] || key).toUpperCase()], []];
+      var sheetName = (SECTION_NAMES[key] || key).substring(0, 31);
+
+      // Build key-value rows for each field
+      var fields = Object.keys(s);
+      fields.forEach(function(f) {
+        var val = s[f];
+        if (Array.isArray(val)) {
+          // Dynamic group array
+          rows.push([f.toUpperCase()]);
+          if (val.length === 0) { rows.push(['(none)']); return; }
+          // Header row from first item's keys
+          var subKeys = Object.keys(val[0]);
+          rows.push(subKeys.map(function(k) { return k; }));
+          val.forEach(function(item) {
+            rows.push(subKeys.map(function(k) { return item[k] || ''; }));
+          });
+          rows.push([]);
+        } else {
+          var label = f.replace(/([A-Z])/g, ' $1').replace(/^./, function(c) { return c.toUpperCase(); });
+          rows.push([label, val || '']);
+        }
+      });
+      var ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = [{ wch: 25 }, { wch: 50 }, { wch: 30 }, { wch: 30 }, { wch: 30 }, { wch: 30 }, { wch: 30 }, { wch: 30 }];
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    });
+
+    XLSX.writeFile(wb, filename + '.xlsx');
+  },
+
+  // ── PDF Generator ──
+  generateComprehensiveDesignPDF: function(filename, data) {
+    var SECTION_NAMES = {
+      hld:'HIGH-LEVEL DESIGN', scl:'SCALABILITY & RELIABILITY', lbc:'LOAD BALANCING & CACHING',
+      db:'DATABASE DESIGN', ms:'MICROSERVICES ARCHITECTURE', api:'API DESIGN',
+      eda:'EVENT-DRIVEN ARCHITECTURE', adr:'ARCHITECTURE DECISION RECORD', rl:'RATE LIMITING & SECURITY',
+      obs:'OBSERVABILITY & MONITORING', cs:'CASE STUDY ANALYSIS', lld:'LOW-LEVEL DESIGN',
+      dist:'DISTRIBUTED SYSTEMS', sec:'SECURITY ARCHITECTURE', int:'INTERVIEW WORKSHEET'
+    };
+
+    var lines = [
+      { text: 'COMPREHENSIVE SYSTEM DESIGN DOCUMENT', size: 18, bold: true },
+      { text: (data.systemName || '') + (data.authorName ? '  |  ' + data.authorName : ''), size: 13 },
+      { text: 'Generated: ' + new Date().toLocaleDateString() + '  |  Sections: ' + data.enabledSections.length, size: 9 },
+      { text: ' ', size: 6 }
+    ];
+
+    var self = this;
+    var builders = this._comprehensiveSectionBuilders;
+
+    data.enabledSections.forEach(function(key) {
+      var s = data.sections[key];
+      if (!s) return;
+      // Section divider
+      lines.push({ text: '── ' + (SECTION_NAMES[key] || key) + ' ──', size: 14, bold: true });
+
+      // Use the Word builder to get structured content, then flatten to PDF lines
+      if (builders[key]) {
+        var built = builders[key](s, data.systemName);
+        built.forEach(function(section) {
+          var content = Array.isArray(section.content) ? section.content : [section.content];
+          content.forEach(function(item) {
+            if (typeof item === 'string') {
+              lines.push({ text: item, size: 10 });
+            } else if (item && item.type === 'heading') {
+              lines.push({ text: ' ', size: 6 });
+              lines.push({ text: item.text, size: 11, bold: true });
+            }
+          });
+        });
+      }
+      lines.push({ text: ' ', size: 6 });
+    });
+
+    return this.generatePDF(filename, { title: 'System Design – ' + (data.systemName || ''), lines: lines });
+  },
+
+  // ── PPTX Generator ──
+  generateComprehensiveDesignPPTX: async function(filename, data) {
+    var SECTION_NAMES = {
+      hld:'High-Level Design', scl:'Scalability & Reliability', lbc:'Load Balancing & Caching',
+      db:'Database Design', ms:'Microservices Architecture', api:'API Design',
+      eda:'Event-Driven Architecture', adr:'Architecture Decision Record', rl:'Rate Limiting & Security',
+      obs:'Observability & Monitoring', cs:'Case Study Analysis', lld:'Low-Level Design',
+      dist:'Distributed Systems', sec:'Security Architecture', int:'Interview Worksheet'
+    };
+    var colors = { navy: '132440', crimson: 'BF092F', teal: '3B9797', blue: '16476A', light: 'F8F9FA', white: 'FFFFFF', gray: '666666' };
+    var pptx = new PptxGenJS();
+    pptx.layout = 'LAYOUT_16x9';
+
+    // Title slide
+    var titleSlide = pptx.addSlide();
+    titleSlide.background = { color: colors.navy };
+    titleSlide.addText('System Design Document', { x: 0.5, y: 1.0, w: 9.0, h: 1.0, fontSize: 32, bold: true, color: colors.white, fontFace: 'Poppins' });
+    titleSlide.addText(data.systemName || '', { x: 0.5, y: 2.1, w: 9.0, h: 0.7, fontSize: 22, color: colors.teal, fontFace: 'Poppins' });
+    titleSlide.addText((data.authorName || '') + '  |  ' + new Date().toLocaleDateString(), { x: 0.5, y: 3.0, w: 9.0, h: 0.5, fontSize: 12, color: colors.gray, fontFace: 'DM Sans' });
+    titleSlide.addText(data.enabledSections.length + ' sections included', { x: 0.5, y: 3.6, w: 9.0, h: 0.5, fontSize: 11, color: colors.white, fontFace: 'DM Sans' });
+
+    // Overview slide — list of sections
+    var overviewSlide = pptx.addSlide();
+    overviewSlide.addShape(pptx.ShapeType ? pptx.ShapeType.rect : 'rect', { x: 0, y: 0, w: 0.15, h: 5.63, fill: { color: colors.teal } });
+    overviewSlide.addText('Document Overview', { x: 0.4, y: 0.2, w: 9.2, h: 0.6, fontSize: 22, bold: true, color: colors.navy, fontFace: 'Poppins' });
+    var tocText = data.enabledSections.map(function(key, i) {
+      return { text: (i + 1) + '. ' + (SECTION_NAMES[key] || key) + '\n', options: { fontSize: 12, color: colors.blue, fontFace: 'DM Sans' } };
+    });
+    overviewSlide.addText(tocText, { x: 0.5, y: 1.0, w: 9.0, h: 4.2, valign: 'top', wrap: true });
+
+    // Per-section slides
+    var builders = this._comprehensiveSectionBuilders;
+    data.enabledSections.forEach(function(key) {
+      var s = data.sections[key];
+      if (!s || !builders[key]) return;
+      var built = builders[key](s, data.systemName);
+      built.forEach(function(section) {
+        var slide = pptx.addSlide();
+        slide.addShape(pptx.ShapeType ? pptx.ShapeType.rect : 'rect', { x: 0, y: 0, w: 0.15, h: 5.63, fill: { color: colors.teal } });
+        slide.addText(section.heading, { x: 0.4, y: 0.2, w: 9.2, h: 0.6, fontSize: 20, bold: true, color: colors.navy, fontFace: 'Poppins' });
+
+        // Build content text from section content
+        var contentParts = [];
+        var content = Array.isArray(section.content) ? section.content : [section.content];
+        content.forEach(function(item) {
+          if (typeof item === 'string') {
+            contentParts.push({ text: item + '\n', options: { fontSize: 10, color: colors.gray, fontFace: 'DM Sans' } });
+          } else if (item && item.type === 'heading') {
+            contentParts.push({ text: '\n' + item.text + '\n', options: { fontSize: 12, bold: true, color: colors.blue, fontFace: 'Poppins' } });
+          }
+        });
+        if (contentParts.length) {
+          slide.addText(contentParts, { x: 0.4, y: 1.0, w: 9.2, h: 4.3, valign: 'top', wrap: true, fit: 'shrink', margin: [4, 4, 4, 4] });
+        }
+      });
+    });
+
+    // Closing slide
+    var closingSlide = pptx.addSlide();
+    closingSlide.background = { color: colors.navy };
+    closingSlide.addText('End of Document', { x: 0.5, y: 2.0, w: 9.0, h: 0.8, fontSize: 28, bold: true, color: colors.white, fontFace: 'Poppins', align: 'center' });
+    closingSlide.addText(data.systemName || '', { x: 0.5, y: 3.0, w: 9.0, h: 0.5, fontSize: 14, color: colors.teal, fontFace: 'DM Sans', align: 'center' });
+
+    pptx.writeFile({ fileName: filename + '.pptx' });
   }
 
 });
