@@ -1848,19 +1848,15 @@ Object.assign(DocGenerator, {
     var sections = [
       { heading: 'System Design Interview Worksheet', content: [
         'Problem: ' + (data.problem || 'N/A'),
-        'Candidate: ' + (data.candidate || 'N/A'),
-        'Target Level: ' + (data.targetLevel || 'N/A'),
+        'Time Allotted: ' + (data.timeLimit || 'N/A'),
         'Date: ' + new Date().toLocaleDateString()
       ]},
-      { heading: '1. Functional Requirements (Clarified)', content: (data.functionalReqs || 'Not specified').split('\n') },
+      { heading: '1. Functional Requirements', content: (data.functionalReqs || 'Not specified').split('\n') },
       { heading: '2. Non-Functional Requirements', content: (data.nonFunctionalReqs || 'Not specified').split('\n') },
-      { heading: '3. Capacity Estimates', content: (data.capacityEstimates || 'Not specified').split('\n') },
-      { heading: '4. High-Level Components', content: (data.hlComponents || 'Not specified').split('\n') },
-      { heading: '5. API Design', content: (data.apiDesign || 'Not specified').split('\n') },
-      { heading: '6. Database Schema', content: (data.dbSchema || 'Not specified').split('\n') },
-      { heading: '7. Key Trade-offs', content: (data.tradeoffs || 'Not specified').split('\n') },
-      { heading: '8. Deep Dive Topics', content: (data.deepDive || 'Not specified').split('\n') },
-      { heading: '9. Bottlenecks & Solutions', content: (data.bottlenecks || 'Not specified').split('\n') }
+      { heading: '3. Back-of-Envelope Estimations', content: (data.estimations || 'Not specified').split('\n') },
+      { heading: '4. High-Level Design', content: (data.highLevelDesign || 'Not specified').split('\n') },
+      { heading: '5. Deep Dive Topics', content: (data.deepDive || 'Not specified').split('\n') },
+      { heading: '6. Bottlenecks & Mitigations', content: (data.bottlenecks || 'Not specified').split('\n') }
     ];
     return this.generateWord(filename, { title: 'Interview Worksheet – ' + (data.problem || ''), author: data.authorName || '', sections: sections });
   },
@@ -1871,8 +1867,7 @@ Object.assign(DocGenerator, {
     var overview = [
       ['SYSTEM DESIGN INTERVIEW WORKSHEET'],
       ['Problem / Design Question', data.problem || ''],
-      ['Candidate', data.candidate || ''],
-      ['Target Level', data.targetLevel || ''],
+      ['Time Allotted', data.timeLimit || ''],
       ['Date', new Date().toLocaleDateString()]
     ];
     var ws1 = XLSX.utils.aoa_to_sheet(overview);
@@ -1888,8 +1883,8 @@ Object.assign(DocGenerator, {
       ['NON-FUNCTIONAL REQUIREMENTS'],
       [data.nonFunctionalReqs || ''],
       [],
-      ['CAPACITY ESTIMATES'],
-      [data.capacityEstimates || '']
+      ['BACK-OF-ENVELOPE ESTIMATIONS'],
+      [data.estimations || '']
     ];
     var ws2 = XLSX.utils.aoa_to_sheet(reqs);
     ws2['!cols'] = [{ wch: 60 }];
@@ -1898,34 +1893,18 @@ Object.assign(DocGenerator, {
     var design = [
       ['DESIGN'],
       [],
-      ['HIGH-LEVEL COMPONENTS'],
-      [data.hlComponents || ''],
-      [],
-      ['API DESIGN'],
-      [data.apiDesign || ''],
-      [],
-      ['DATABASE SCHEMA'],
-      [data.dbSchema || '']
-    ];
-    var ws3 = XLSX.utils.aoa_to_sheet(design);
-    ws3['!cols'] = [{ wch: 60 }];
-    XLSX.utils.book_append_sheet(wb, ws3, 'Design');
-    // Trade-offs
-    var tradeoff = [
-      ['ANALYSIS'],
-      [],
-      ['KEY TRADE-OFFS'],
-      [data.tradeoffs || ''],
+      ['HIGH-LEVEL DESIGN'],
+      [data.highLevelDesign || ''],
       [],
       ['DEEP DIVE TOPICS'],
       [data.deepDive || ''],
       [],
-      ['BOTTLENECKS & SOLUTIONS'],
+      ['BOTTLENECKS & MITIGATIONS'],
       [data.bottlenecks || '']
     ];
-    var ws4 = XLSX.utils.aoa_to_sheet(tradeoff);
-    ws4['!cols'] = [{ wch: 60 }];
-    XLSX.utils.book_append_sheet(wb, ws4, 'Analysis');
+    var ws3 = XLSX.utils.aoa_to_sheet(design);
+    ws3['!cols'] = [{ wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, ws3, 'Design & Analysis');
     XLSX.writeFile(wb, filename + '.xlsx');
   },
 
@@ -1933,7 +1912,7 @@ Object.assign(DocGenerator, {
     var lines = [
       { text: 'SYSTEM DESIGN INTERVIEW WORKSHEET', size: 18, bold: true },
       { text: 'Problem: ' + (data.problem || ''), size: 13 },
-      { text: 'Candidate: ' + (data.candidate || '') + '  |  Level: ' + (data.targetLevel || 'N/A'), size: 10 },
+      { text: 'Time Allotted: ' + (data.timeLimit || 'N/A'), size: 10 },
       { text: 'Date: ' + new Date().toLocaleDateString(), size: 9 },
       { text: ' ', size: 6 },
       { text: '── FUNCTIONAL REQUIREMENTS ──', size: 14, bold: true },
@@ -1942,25 +1921,16 @@ Object.assign(DocGenerator, {
       { text: '── NON-FUNCTIONAL REQUIREMENTS ──', size: 14, bold: true },
       { text: data.nonFunctionalReqs || 'Not specified', size: 10 },
       { text: ' ', size: 6 },
-      { text: '── CAPACITY ESTIMATES ──', size: 14, bold: true },
-      { text: data.capacityEstimates || 'Not specified', size: 10 },
+      { text: '── BACK-OF-ENVELOPE ESTIMATIONS ──', size: 14, bold: true },
+      { text: data.estimations || 'Not specified', size: 10 },
       { text: ' ', size: 6 },
-      { text: '── HIGH-LEVEL COMPONENTS ──', size: 14, bold: true },
-      { text: data.hlComponents || 'Not specified', size: 10 },
-      { text: ' ', size: 6 },
-      { text: '── API DESIGN ──', size: 14, bold: true },
-      { text: data.apiDesign || 'Not specified', size: 10 },
-      { text: ' ', size: 6 },
-      { text: '── DATABASE SCHEMA ──', size: 14, bold: true },
-      { text: data.dbSchema || 'Not specified', size: 10 },
-      { text: ' ', size: 6 },
-      { text: '── KEY TRADE-OFFS ──', size: 14, bold: true },
-      { text: data.tradeoffs || 'Not specified', size: 10 },
+      { text: '── HIGH-LEVEL DESIGN ──', size: 14, bold: true },
+      { text: data.highLevelDesign || 'Not specified', size: 10 },
       { text: ' ', size: 6 },
       { text: '── DEEP DIVE TOPICS ──', size: 14, bold: true },
       { text: data.deepDive || 'Not specified', size: 10 },
       { text: ' ', size: 6 },
-      { text: '── BOTTLENECKS & SOLUTIONS ──', size: 14, bold: true },
+      { text: '── BOTTLENECKS & MITIGATIONS ──', size: 14, bold: true },
       { text: data.bottlenecks || 'Not specified', size: 10 }
     ];
     return this.generatePDF(filename, { title: 'System Design Interview Worksheet', lines: lines });
