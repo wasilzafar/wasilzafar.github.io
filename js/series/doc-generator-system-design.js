@@ -878,44 +878,43 @@ Object.assign(DocGenerator, {
   generateEventDrivenDesignPDF: function(filename, data) {
     var events = (data.events || []).filter(function(e) { return e.eventName && e.eventName.trim(); });
     var services = (data.services || []).filter(function(s) { return s.serviceName && s.serviceName.trim(); });
-    var S = DocStyles;
 
     var lines = [
-      { text: 'EVENT-DRIVEN ARCHITECTURE DESIGN', size: S.SIZE_TITLE, bold: true },
-      { text: (data.systemName || ''), size: S.SIZE_SUBTITLE },
-      { text: 'Generated: ' + new Date().toLocaleDateString(), size: S.SIZE_SMALL },
+      { text: 'EVENT-DRIVEN ARCHITECTURE DESIGN', size: 18, bold: true },
+      { text: (data.systemName || ''), size: 13 },
+      { text: 'Generated: ' + new Date().toLocaleDateString(), size: 9 },
       { text: ' ', size: 6 },
-      { text: '\u2500\u2500 MESSAGING INFRASTRUCTURE \u2500\u2500', size: S.SIZE_SECTION, bold: true },
-      { text: 'Broker: ' + (data.broker || 'N/A'), size: S.SIZE_BODY },
-      { text: 'Pattern: ' + (data.pattern || 'N/A') + '  |  Delivery: ' + (data.delivery || 'N/A'), size: S.SIZE_BODY },
-      { text: 'Ordering: ' + (data.ordering || 'N/A') + '  |  Retention: ' + (data.retention || 'N/A'), size: S.SIZE_BODY },
-      { text: 'Idempotency: ' + (data.idempotency || 'N/A'), size: S.SIZE_BODY },
-      { text: 'Throughput: ' + (data.throughput || 'N/A'), size: S.SIZE_BODY },
+      { text: '\u2500\u2500 MESSAGING INFRASTRUCTURE \u2500\u2500', size: 14, bold: true },
+      { text: 'Broker: ' + (data.broker || 'N/A'), size: 10 },
+      { text: 'Pattern: ' + (data.pattern || 'N/A') + '  |  Delivery: ' + (data.delivery || 'N/A'), size: 10 },
+      { text: 'Ordering: ' + (data.ordering || 'N/A') + '  |  Retention: ' + (data.retention || 'N/A'), size: 10 },
+      { text: 'Idempotency: ' + (data.idempotency || 'N/A'), size: 10 },
+      { text: 'Throughput: ' + (data.throughput || 'N/A'), size: 10 },
       { text: ' ', size: 6 },
-      { text: '\u2500\u2500 DEAD LETTER QUEUE \u2500\u2500', size: S.SIZE_SECTION, bold: true },
-      { text: 'Policy: ' + (data.dlqPolicy || 'N/A'), size: S.SIZE_BODY },
-      { text: (data.dlqNotes || ''), size: S.SIZE_BODY },
+      { text: '\u2500\u2500 DEAD LETTER QUEUE \u2500\u2500', size: 14, bold: true },
+      { text: 'Policy: ' + (data.dlqPolicy || 'N/A'), size: 10 },
+      { text: (data.dlqNotes || ''), size: 10 },
       { text: ' ', size: 6 },
-      { text: '\u2500\u2500 EVENT TYPES & SCHEMAS (' + events.length + ') \u2500\u2500', size: S.SIZE_SECTION, bold: true }
+      { text: '\u2500\u2500 EVENT TYPES & SCHEMAS (' + events.length + ') \u2500\u2500', size: 14, bold: true }
     ];
 
     events.forEach(function(e, i) {
-      lines.push({ text: (i + 1) + '. ' + e.eventName + (e.priority ? '  [' + e.priority + ']' : ''), size: S.SIZE_BODY, bold: true });
-      if (e.topic) lines.push({ text: '   Topic: ' + e.topic + (e.serialization ? '  |  Format: ' + e.serialization : ''), size: S.SIZE_BODY });
-      if (e.partitionKey) lines.push({ text: '   Partition: ' + e.partitionKey, size: S.SIZE_BODY });
-      if (e.schema) lines.push({ text: '   Schema: ' + e.schema, size: S.SIZE_SMALL });
-      if (e.notes) lines.push({ text: '   Notes: ' + e.notes, size: S.SIZE_SMALL });
+      lines.push({ text: (i + 1) + '. ' + e.eventName + (e.priority ? '  [' + e.priority + ']' : ''), size: 11, bold: true });
+      if (e.topic) lines.push({ text: '   Topic: ' + e.topic + (e.serialization ? '  |  Format: ' + e.serialization : ''), size: 10 });
+      if (e.partitionKey) lines.push({ text: '   Partition: ' + e.partitionKey, size: 10 });
+      if (e.schema) lines.push({ text: '   Schema: ' + e.schema, size: 9 });
+      if (e.notes) lines.push({ text: '   Notes: ' + e.notes, size: 9 });
     });
 
     lines.push({ text: ' ', size: 6 });
-    lines.push({ text: '\u2500\u2500 SERVICES \u2013 PRODUCERS & CONSUMERS (' + services.length + ') \u2500\u2500', size: S.SIZE_SECTION, bold: true });
+    lines.push({ text: '\u2500\u2500 SERVICES \u2013 PRODUCERS & CONSUMERS (' + services.length + ') \u2500\u2500', size: 14, bold: true });
 
     services.forEach(function(s, i) {
-      lines.push({ text: (i + 1) + '. ' + s.serviceName + (s.role ? '  [' + s.role + ']' : ''), size: S.SIZE_BODY, bold: true });
-      if (s.publishes) lines.push({ text: '   Publishes: ' + s.publishes, size: S.SIZE_BODY });
-      if (s.subscribes) lines.push({ text: '   Subscribes: ' + s.subscribes, size: S.SIZE_BODY });
-      if (s.consumerGroup) lines.push({ text: '   Consumer Group: ' + s.consumerGroup + (s.processing ? '  |  ' + s.processing : ''), size: S.SIZE_BODY });
-      if (s.notes) lines.push({ text: '   Notes: ' + s.notes, size: S.SIZE_SMALL });
+      lines.push({ text: (i + 1) + '. ' + s.serviceName + (s.role ? '  [' + s.role + ']' : ''), size: 11, bold: true });
+      if (s.publishes) lines.push({ text: '   Publishes: ' + s.publishes, size: 10 });
+      if (s.subscribes) lines.push({ text: '   Subscribes: ' + s.subscribes, size: 10 });
+      if (s.consumerGroup) lines.push({ text: '   Consumer Group: ' + s.consumerGroup + (s.processing ? '  |  ' + s.processing : ''), size: 10 });
+      if (s.notes) lines.push({ text: '   Notes: ' + s.notes, size: 9 });
     });
 
     return this.generatePDF(filename, { title: 'Event-Driven Architecture Design', lines: lines });
