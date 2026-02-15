@@ -1744,23 +1744,14 @@ Object.assign(DocGenerator, {
         'Date: ' + new Date().toLocaleDateString()
       ]},
       { heading: '1. Authentication', content: [
-        'Method: ' + (data.authMethod || 'N/A')
+        'Method: ' + (data.authMethod || 'N/A'),
+        'MFA Strategy: ' + (data.mfaStrategy || 'N/A'),
+        'Token Lifetime: ' + (data.tokenLifetime || 'N/A')
       ]},
-      { heading: '2. Authorization', content: [
-        'Model: ' + (data.authzModel || 'N/A'),
-        'User Roles: ' + (data.roles || 'N/A')
-      ]},
-      { heading: '3. Encryption', content: [
-        'At Rest: ' + (data.encryptionRest || 'N/A'),
-        'In Transit: ' + (data.encryptionTransit || 'N/A')
-      ]},
-      { heading: '4. Key & Secrets Management', content: [
-        'Key Management: ' + (data.keyMgmt || 'N/A'),
-        'Secrets Management: ' + (data.secretsMgmt || 'N/A')
-      ]},
-      { heading: '5. Compliance Requirements', content: [(data.compliance || 'Not specified')] },
-      { heading: '6. Threat Model Summary', content: (data.threatModel || 'Not specified').split('\n') },
-      { heading: '7. Zero Trust Considerations', content: (data.zeroTrust || 'Not specified').split('\n') }
+      { heading: '2. Roles & Permissions', content: (data.roles || 'Not specified').split('\n') },
+      { heading: '3. Encryption Strategy', content: (data.encryption || 'Not specified').split('\n') },
+      { heading: '4. Threat Mitigations', content: (data.threats || 'Not specified').split('\n') },
+      { heading: '5. Compliance Requirements', content: (data.compliance || 'Not specified').split('\n') }
     ];
     return this.generateWord(filename, { title: 'Security Architecture – ' + (data.systemName || ''), author: data.authorName || '', sections: sections });
   },
@@ -1773,44 +1764,37 @@ Object.assign(DocGenerator, {
       ['System', data.systemName || ''],
       ['Date', new Date().toLocaleDateString()],
       [],
-      ['AUTHENTICATION & AUTHORIZATION'],
+      ['AUTHENTICATION'],
       ['Parameter', 'Value'],
       ['Auth Method', data.authMethod || ''],
-      ['Authz Model', data.authzModel || ''],
+      ['MFA Strategy', data.mfaStrategy || ''],
+      ['Token Lifetime', data.tokenLifetime || ''],
       [],
-      ['ENCRYPTION'],
-      ['At Rest', data.encryptionRest || ''],
-      ['In Transit', data.encryptionTransit || ''],
+      ['ENCRYPTION STRATEGY'],
+      [data.encryption || ''],
       [],
-      ['KEY & SECRETS'],
-      ['Key Management', data.keyMgmt || ''],
-      ['Secrets Management', data.secretsMgmt || ''],
-      [],
-      ['COMPLIANCE'],
+      ['COMPLIANCE REQUIREMENTS'],
       [data.compliance || '']
     ];
     var ws1 = XLSX.utils.aoa_to_sheet(overview);
     ws1['!cols'] = [{ wch: 25 }, { wch: 50 }];
     XLSX.utils.book_append_sheet(wb, ws1, 'Security Overview');
     // Roles sheet
-    var roleRows = [['Role', 'Permissions', 'Access Level']];
+    var roleRows = [['Role / Permission']];
     (data.roles || '').split('\n').forEach(function(r) {
-      if (r.trim()) roleRows.push([r.trim(), '', '']);
+      if (r.trim()) roleRows.push([r.trim()]);
     });
     var ws2 = XLSX.utils.aoa_to_sheet(roleRows);
-    ws2['!cols'] = [{ wch: 20 }, { wch: 35 }, { wch: 20 }];
-    XLSX.utils.book_append_sheet(wb, ws2, 'RBAC Roles');
+    ws2['!cols'] = [{ wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Roles & Permissions');
     // Threats sheet
-    var threats = [
-      ['THREAT MODEL SUMMARY'],
-      [data.threatModel || ''],
-      [],
-      ['ZERO TRUST CONSIDERATIONS'],
-      [data.zeroTrust || '']
-    ];
-    var ws3 = XLSX.utils.aoa_to_sheet(threats);
+    var threatRows = [['Threat Mitigation']];
+    (data.threats || '').split('\n').forEach(function(t) {
+      if (t.trim()) threatRows.push([t.trim()]);
+    });
+    var ws3 = XLSX.utils.aoa_to_sheet(threatRows);
     ws3['!cols'] = [{ wch: 60 }];
-    XLSX.utils.book_append_sheet(wb, ws3, 'Threats & Zero Trust');
+    XLSX.utils.book_append_sheet(wb, ws3, 'Threat Mitigations');
     XLSX.writeFile(wb, filename + '.xlsx');
   },
 
@@ -1822,25 +1806,19 @@ Object.assign(DocGenerator, {
       { text: ' ', size: 6 },
       { text: '── AUTHENTICATION ──', size: 14, bold: true },
       { text: 'Method: ' + (data.authMethod || 'N/A'), size: 10 },
+      { text: 'MFA: ' + (data.mfaStrategy || 'N/A') + '  |  Token Lifetime: ' + (data.tokenLifetime || 'N/A'), size: 10 },
       { text: ' ', size: 6 },
-      { text: '── AUTHORIZATION ──', size: 14, bold: true },
-      { text: 'Model: ' + (data.authzModel || 'N/A'), size: 10 },
-      { text: 'Roles: ' + (data.roles || 'N/A'), size: 10 },
+      { text: '── ROLES & PERMISSIONS ──', size: 14, bold: true },
+      { text: data.roles || 'Not specified', size: 10 },
       { text: ' ', size: 6 },
-      { text: '── ENCRYPTION ──', size: 14, bold: true },
-      { text: 'At Rest: ' + (data.encryptionRest || 'N/A') + '  |  In Transit: ' + (data.encryptionTransit || 'N/A'), size: 10 },
+      { text: '── ENCRYPTION STRATEGY ──', size: 14, bold: true },
+      { text: data.encryption || 'Not specified', size: 10 },
       { text: ' ', size: 6 },
-      { text: '── KEY & SECRETS MANAGEMENT ──', size: 14, bold: true },
-      { text: 'Keys: ' + (data.keyMgmt || 'N/A') + '  |  Secrets: ' + (data.secretsMgmt || 'N/A'), size: 10 },
+      { text: '── THREAT MITIGATIONS ──', size: 14, bold: true },
+      { text: data.threats || 'Not specified', size: 10 },
       { text: ' ', size: 6 },
-      { text: '── COMPLIANCE ──', size: 14, bold: true },
-      { text: data.compliance || 'Not specified', size: 10 },
-      { text: ' ', size: 6 },
-      { text: '── THREAT MODEL ──', size: 14, bold: true },
-      { text: data.threatModel || 'Not specified', size: 10 },
-      { text: ' ', size: 6 },
-      { text: '── ZERO TRUST ──', size: 14, bold: true },
-      { text: data.zeroTrust || 'Not specified', size: 10 }
+      { text: '── COMPLIANCE REQUIREMENTS ──', size: 14, bold: true },
+      { text: data.compliance || 'Not specified', size: 10 }
     ];
     return this.generatePDF(filename, { title: 'Security Architecture Document', lines: lines });
   },
@@ -1852,13 +1830,11 @@ Object.assign(DocGenerator, {
       subtitle: new Date().toLocaleDateString(),
       perSlide: 2,
       sections: [
-        { heading: 'Authentication', content: 'Method: ' + (data.authMethod || 'N/A'), color: DocStyles.colors.navy },
-        { heading: 'Authorization', content: 'Model: ' + (data.authzModel || 'N/A') + '\n\nRoles:\n' + (data.roles || 'N/A'), color: DocStyles.colors.blue },
-        { heading: 'Encryption', content: 'At Rest: ' + (data.encryptionRest || 'N/A') + '\nIn Transit: ' + (data.encryptionTransit || 'N/A'), color: DocStyles.colors.teal },
-        { heading: 'Key & Secrets', content: 'Key Mgmt: ' + (data.keyMgmt || 'N/A') + '\nSecrets: ' + (data.secretsMgmt || 'N/A'), color: DocStyles.colors.navy },
-        { heading: 'Compliance', content: data.compliance || 'Not specified', color: DocStyles.colors.crimson },
-        { heading: 'Threat Model', content: data.threatModel || 'Not specified', color: DocStyles.colors.blue },
-        { heading: 'Zero Trust', content: data.zeroTrust || 'Not specified', color: DocStyles.colors.teal }
+        { heading: 'Authentication', content: 'Method: ' + (data.authMethod || 'N/A') + '\nMFA: ' + (data.mfaStrategy || 'N/A') + '\nToken Lifetime: ' + (data.tokenLifetime || 'N/A'), color: DocStyles.colors.navy },
+        { heading: 'Roles & Permissions', content: data.roles || 'Not specified', color: DocStyles.colors.blue },
+        { heading: 'Encryption Strategy', content: data.encryption || 'Not specified', color: DocStyles.colors.teal },
+        { heading: 'Threat Mitigations', content: data.threats || 'Not specified', color: DocStyles.colors.crimson },
+        { heading: 'Compliance Requirements', content: data.compliance || 'Not specified', color: DocStyles.colors.navy }
       ]
     });
   },
