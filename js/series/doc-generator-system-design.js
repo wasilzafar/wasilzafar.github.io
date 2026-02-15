@@ -623,6 +623,32 @@ Object.assign(DocGenerator, {
   // ============================================================
 
   generateApiDesignSpecWord: async function(filename, data) {
+    var endpoints = data.endpoints || [];
+    // Group endpoints by resource
+    var resourceMap = {};
+    var resourceOrder = [];
+    endpoints.forEach(function(ep) {
+      if (!ep.resource) return;
+      var key = ep.resource.trim();
+      if (!resourceMap[key]) { resourceMap[key] = []; resourceOrder.push(key); }
+      resourceMap[key].push(ep);
+    });
+    // Build per-resource endpoint sections
+    var endpointSections = [];
+    resourceOrder.forEach(function(res, i) {
+      var eps = resourceMap[res];
+      var content = [];
+      eps.forEach(function(ep) {
+        content.push((ep.method || '???') + ' ' + (ep.path || '/'));
+        if (ep.description) content.push('  Description: ' + ep.description);
+        if (ep.requestBody) content.push('  Request Body: ' + ep.requestBody.replace(/\n/g, ' '));
+        if (ep.response) content.push('  Response: ' + ep.response.replace(/\n/g, ' '));
+        content.push('  Auth: ' + (ep.authRequired || 'Yes'));
+        if (ep.notes) content.push('  Notes: ' + ep.notes);
+        content.push('');
+      });
+      endpointSections.push({ heading: 'Resource ' + (i + 1) + ': ' + res, content: content });
+    });
     var sections = [
       { heading: 'API Design Specification', content: [
         'API Name: ' + (data.apiName || 'N/A'),
@@ -635,19 +661,19 @@ Object.assign(DocGenerator, {
         'Authentication: ' + (data.authMethod || 'N/A'),
         'Content Type: ' + (data.contentType || 'N/A')
       ]},
-      { heading: '2. Resources / Entities', content: (data.resources || 'Not specified').split('\n') },
-      { heading: '3. Key Endpoints', content: (data.endpoints || 'Not specified').split('\n') },
-      { heading: '4. Rate Limiting', content: [
+      { heading: '2. Rate Limiting', content: [
         'Policy: ' + (data.rateLimit || 'N/A')
       ]},
-      { heading: '5. Pagination Strategy', content: ['Strategy: ' + (data.pagination || 'N/A')] },
-      { heading: '6. Error Response Format', content: (data.errorFormat || 'Not specified').split('\n') }
-    ];
+      { heading: '3. Pagination Strategy', content: ['Strategy: ' + (data.pagination || 'N/A')] },
+      { heading: '4. Error Response Format', content: (data.errorFormat || 'Not specified').split('\n') },
+      { heading: '5. API Endpoints', content: ['Total Resources: ' + resourceOrder.length + '  |  Total Endpoints: ' + endpoints.length] }
+    ].concat(endpointSections);
     return this.generateWord(filename, { title: 'API Design – ' + (data.apiName || ''), author: data.authorName || '', sections: sections });
   },
 
   generateApiDesignSpecExcel: function(filename, data) {
     var wb = XLSX.utils.book_new();
+    var endpoints = data.endpoints || [];
     // API Overview
     var overview = [
       ['API DESIGN SPECIFICATION'],
@@ -662,31 +688,41 @@ Object.assign(DocGenerator, {
       ['Authentication', data.authMethod || ''],
       ['Content Type', data.contentType || ''],
       ['Rate Limit', data.rateLimit || ''],
-      ['Pagination', data.pagination || '']
+      ['Pagination', data.pagination || ''],
+      [],
+      ['ERROR RESPONSE FORMAT'],
+      [data.errorFormat || 'Not specified'],
+      [],
+      ['ENDPOINTS SUMMARY'],
+      ['#', 'Resource', 'Method', 'Path', 'Auth']
     ];
+    endpoints.forEach(function(ep, i) {
+      if (ep.resource || ep.path) {
+        overview.push([i + 1, ep.resource || '', ep.method || '', ep.path || '', ep.authRequired || 'Yes']);
+      }
+    });
     var ws1 = XLSX.utils.aoa_to_sheet(overview);
-    ws1['!cols'] = [{ wch: 25 }, { wch: 50 }];
+    ws1['!cols'] = [{ wch: 8 }, { wch: 22 }, { wch: 10 }, { wch: 35 }, { wch: 10 }];
     XLSX.utils.book_append_sheet(wb, ws1, 'API Overview');
-    // Endpoints sheet
-    var ep = [['Method', 'Path', 'Description', 'Auth Required', 'Rate Limit']];
-    (data.endpoints || '').split('\n').forEach(function(e) {
-      if (e.trim()) ep.push([e.trim(), '', '', 'Yes', '']);
+    // Endpoints detail sheet
+    var epRows = [['Resource', 'Method', 'Path', 'Description', 'Request Body', 'Response', 'Auth', 'Notes']];
+    endpoints.forEach(function(ep) {
+      if (ep.resource || ep.path) {
+        epRows.push([
+          ep.resource || '', ep.method || '', ep.path || '',
+          ep.description || '', ep.requestBody || '', ep.response || '',
+          ep.authRequired || 'Yes', ep.notes || ''
+        ]);
+      }
     });
-    var ws2 = XLSX.utils.aoa_to_sheet(ep);
-    ws2['!cols'] = [{ wch: 10 }, { wch: 30 }, { wch: 30 }, { wch: 12 }, { wch: 15 }];
+    var ws2 = XLSX.utils.aoa_to_sheet(epRows);
+    ws2['!cols'] = [{ wch: 18 }, { wch: 8 }, { wch: 28 }, { wch: 28 }, { wch: 30 }, { wch: 30 }, { wch: 8 }, { wch: 25 }];
     XLSX.utils.book_append_sheet(wb, ws2, 'Endpoints');
-    // Resources sheet
-    var res = [['Resource', 'Fields', 'Relationships']];
-    (data.resources || '').split('\n').forEach(function(r) {
-      if (r.trim()) res.push([r.trim(), '', '']);
-    });
-    var ws3 = XLSX.utils.aoa_to_sheet(res);
-    ws3['!cols'] = [{ wch: 25 }, { wch: 35 }, { wch: 30 }];
-    XLSX.utils.book_append_sheet(wb, ws3, 'Resources');
     XLSX.writeFile(wb, filename + '.xlsx');
   },
 
   generateApiDesignSpecPDF: function(filename, data) {
+    var endpoints = data.endpoints || [];
     var lines = [
       { text: 'API DESIGN SPECIFICATION', size: 18, bold: true },
       { text: (data.apiName || '') + '  |  ' + (data.baseUrl || ''), size: 12 },
@@ -697,15 +733,28 @@ Object.assign(DocGenerator, {
       { text: 'Auth: ' + (data.authMethod || 'N/A') + '  |  Content: ' + (data.contentType || 'N/A'), size: 10 },
       { text: 'Rate Limit: ' + (data.rateLimit || 'N/A') + '  |  Pagination: ' + (data.pagination || 'N/A'), size: 10 },
       { text: ' ', size: 6 },
-      { text: '── RESOURCES / ENTITIES ──', size: 14, bold: true },
-      { text: data.resources || 'Not specified', size: 10 },
-      { text: ' ', size: 6 },
-      { text: '── KEY ENDPOINTS ──', size: 14, bold: true },
-      { text: data.endpoints || 'Not specified', size: 10 },
-      { text: ' ', size: 6 },
       { text: '── ERROR RESPONSE FORMAT ──', size: 14, bold: true },
       { text: data.errorFormat || 'Not specified', size: 10 }
     ];
+    // Group endpoints by resource
+    var resourceMap = {};
+    var resourceOrder = [];
+    endpoints.forEach(function(ep) {
+      if (!ep.resource) return;
+      var key = ep.resource.trim();
+      if (!resourceMap[key]) { resourceMap[key] = []; resourceOrder.push(key); }
+      resourceMap[key].push(ep);
+    });
+    resourceOrder.forEach(function(res, i) {
+      lines.push({ text: ' ', size: 6 });
+      lines.push({ text: '── RESOURCE ' + (i + 1) + ': ' + res.toUpperCase() + ' ──', size: 14, bold: true });
+      resourceMap[res].forEach(function(ep) {
+        lines.push({ text: (ep.method || '???') + ' ' + (ep.path || '/') + (ep.description ? ' — ' + ep.description : ''), size: 10 });
+        if (ep.requestBody) lines.push({ text: '  Request: ' + ep.requestBody.replace(/\n/g, ' '), size: 9 });
+        if (ep.response) lines.push({ text: '  Response: ' + ep.response.replace(/\n/g, ' '), size: 9 });
+        lines.push({ text: '  Auth: ' + (ep.authRequired || 'Yes') + (ep.notes ? '  |  ' + ep.notes : ''), size: 9 });
+      });
+    });
     return this.generatePDF(filename, { title: 'API Design Specification', lines: lines });
   },
 

@@ -1164,16 +1164,6 @@ server.wait_for_termination()</code></pre>
                         </div>
                         <div class="form-row">
                             <div class="form-group">
-                                <label for="apiResources">Resources / Entities *</label>
-                                <textarea id="apiResources" rows="4" placeholder="Users: GET /users, POST /users, GET /users/{id}&#10;Orders: GET /orders, POST /orders&#10;Products: GET /products?category={cat}"></textarea>
-                            </div>
-                            <div class="form-group">
-                                <label for="apiEndpoints">Key Endpoints Detail</label>
-                                <textarea id="apiEndpoints" rows="4" placeholder="POST /payments: create payment intent&#10;GET /payments/{id}: retrieve payment&#10;POST /refunds: process refund&#10;GET /webhooks: list webhook configs"></textarea>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
                                 <label for="apiPagination">Pagination Strategy</label>
                                 <select id="apiPagination">
                                     <option value="">Select strategy...</option>
@@ -1199,6 +1189,8 @@ server.wait_for_termination()</code></pre>
                                 <textarea id="apiErrorFormat" rows="3" placeholder='{"error": {"code": "PAYMENT_FAILED", "message": "Insufficient funds", "details": [...]}}'></textarea>
                             </div>
                         </div>
+                        <!-- Dynamic Endpoint Groups -->
+                        <div id="apiEndpointsContainer" class="dynamic-group-container"></div>
                         <div class="form-row">
                             <div class="form-group" style="grid-column: 1 / -1;">
                                 <label><i class="fas fa-user me-1"></i>Author Name</label>
@@ -1326,12 +1318,42 @@ server.wait_for_termination()</code></pre>
             'apiVersion': 'versionStrategy',
             'apiAuth': 'authMethod',
             'apiRateLimit': 'rateLimit',
-            'apiResources': 'resources',
-            'apiEndpoints': 'endpoints',
             'apiPagination': 'pagination',
             'apiContentType': 'contentType',
             'apiErrorFormat': 'errorFormat'
         }, 'apiBadge');
+
+        // Dynamic endpoint groups
+        var apiEndpointMgr = new DynamicGroupManager({
+            containerId: 'apiEndpointsContainer',
+            groupLabel: 'Endpoint',
+            icon: 'fa-exchange-alt',
+            maxEntries: 30,
+            minEntries: 1,
+            fields: [
+                { key: 'resource', label: 'Resource / Entity *', type: 'input', placeholder: 'e.g., Users, Orders, Products' },
+                { key: 'method', label: 'HTTP Method *', type: 'select', options: [
+                    { value: '', label: 'Select method...' },
+                    { value: 'GET', label: 'GET' },
+                    { value: 'POST', label: 'POST' },
+                    { value: 'PUT', label: 'PUT' },
+                    { value: 'PATCH', label: 'PATCH' },
+                    { value: 'DELETE', label: 'DELETE' },
+                    { value: 'HEAD', label: 'HEAD' },
+                    { value: 'OPTIONS', label: 'OPTIONS' }
+                ]},
+                { key: 'path', label: 'Path *', type: 'input', placeholder: 'e.g., /users/{id}, /orders?status={s}' },
+                { key: 'description', label: 'Description', type: 'input', placeholder: 'e.g., Retrieve user by ID' },
+                { key: 'requestBody', label: 'Request Body / Params', type: 'textarea', rows: 2, placeholder: '{ "name": "string", "email": "string" }' },
+                { key: 'response', label: 'Response Schema', type: 'textarea', rows: 2, placeholder: '200: { "id": "uuid", "name": "string" }\n404: { "error": "Not found" }' },
+                { key: 'authRequired', label: 'Auth Required', type: 'select', options: [
+                    { value: 'Yes', label: 'Yes' },
+                    { value: 'No', label: 'No' },
+                    { value: 'Optional', label: 'Optional' }
+                ]},
+                { key: 'notes', label: 'Notes', type: 'input', placeholder: 'e.g., Paginated, rate-limited to 100/min' }
+            ]
+        });
 
         var apiHandler = new CanvasFormHandler({
             formId: 'apiForm',
@@ -1340,12 +1362,47 @@ server.wait_for_termination()</code></pre>
             persistence: apiPersistence,
             filenameField: 'apiName',
             filenameSuffix: '-api-design-spec',
-            requiredFields: ['apiName', 'apiType', 'apiVersion', 'apiResources'],
-            requiredMessage: 'Please fill in API Name, Type, Versioning Strategy, and Resources.',
+            requiredFields: ['apiName', 'apiType', 'apiVersion'],
+            requiredMessage: 'Please fill in API Name, Type, and Versioning Strategy. Add at least one endpoint with resource, method, and path.',
             docType: 'ApiDesignSpec'
         });
 
-        document.addEventListener('DOMContentLoaded', function() { apiPersistence.init(); });
+        // Override validation to check dynamic groups
+        var _apiOrigValidate = apiHandler._validate.bind(apiHandler);
+        apiHandler._validate = function() {
+            if (!_apiOrigValidate()) return false;
+            var endpoints = apiEndpointMgr.collectAll();
+            var hasValid = endpoints.some(function(ep) {
+                return ep.resource && ep.resource.trim() && ep.method && ep.path && ep.path.trim();
+            });
+            if (!hasValid) {
+                alert('Please add at least one endpoint with a resource name, HTTP method, and path.');
+                return false;
+            }
+            return true;
+        };
+
+        // Override data collection to merge dynamic groups
+        var _apiOrigCollect = apiPersistence.collectData.bind(apiPersistence);
+        apiPersistence.collectData = function() {
+            var data = _apiOrigCollect();
+            data.endpoints = apiEndpointMgr.collectAll();
+            return data;
+        };
+
+        // Override reset to also reset dynamic groups
+        var _apiOrigReset = apiHandler.reset.bind(apiHandler);
+        apiHandler.reset = function() {
+            _apiOrigReset();
+            apiEndpointMgr.reset('sd-api-endpoints');
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            apiPersistence.init();
+            apiEndpointMgr.init(1);
+            apiEndpointMgr.restoreFromStorage('sd-api-endpoints');
+            apiEndpointMgr.attachAutoSave('sd-api-endpoints', 500);
+        });
     </script>
 
             </body>
