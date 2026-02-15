@@ -1011,24 +1011,66 @@ streams.start();
                         </div>
                         <div class="form-row">
                             <div class="form-group">
-                                <label for="edaEvents">Event Types & Schemas *</label>
-                                <textarea id="edaEvents" rows="4" placeholder="OrderCreated: {orderId, userId, items[], total}&#10;PaymentProcessed: {paymentId, orderId, status}&#10;InventoryReserved: {productId, qty, warehouseId}&#10;ShipmentDispatched: {shipmentId, orderId, carrier}"></textarea>
+                                <label for="edaOrdering">Message Ordering</label>
+                                <select id="edaOrdering">
+                                    <option value="">Select ordering...</option>
+                                    <option value="Strict (per partition)">Strict (per partition)</option>
+                                    <option value="Best-Effort">Best-Effort</option>
+                                    <option value="FIFO (queue-level)">FIFO (queue-level)</option>
+                                    <option value="None">None</option>
+                                </select>
                             </div>
                             <div class="form-group">
-                                <label for="edaProducers">Producers & Consumers</label>
-                                <textarea id="edaProducers" rows="4" placeholder="OrderService → OrderCreated, OrderCancelled&#10;PaymentService ← OrderCreated → PaymentProcessed&#10;InventoryService ← OrderCreated → InventoryReserved&#10;NotificationService ← PaymentProcessed"></textarea>
+                                <label for="edaRetention">Retention Period</label>
+                                <select id="edaRetention">
+                                    <option value="">Select retention...</option>
+                                    <option value="1 day">1 day</option>
+                                    <option value="3 days">3 days</option>
+                                    <option value="7 days">7 days</option>
+                                    <option value="14 days">14 days</option>
+                                    <option value="30 days">30 days</option>
+                                    <option value="Indefinite (compacted)">Indefinite (compacted)</option>
+                                </select>
                             </div>
                         </div>
                         <div class="form-row">
                             <div class="form-group">
-                                <label for="edaDLQ">Dead Letter Queue Policy</label>
-                                <textarea id="edaDLQ" rows="3" placeholder="Max retries: 3&#10;Backoff: exponential (1s, 5s, 30s)&#10;DLQ retention: 14 days&#10;Alert on DLQ depth > 100"></textarea>
+                                <label for="edaDLQPolicy">Dead Letter Queue Policy</label>
+                                <select id="edaDLQPolicy">
+                                    <option value="">Select DLQ policy...</option>
+                                    <option value="Retry 3x then DLQ, 14-day retention">Retry 3x → DLQ (14-day retention)</option>
+                                    <option value="Retry 5x exponential then DLQ, 7-day retention">Retry 5x exponential → DLQ (7-day)</option>
+                                    <option value="Immediate DLQ on poison message">Immediate DLQ on poison message</option>
+                                    <option value="Retry with circuit breaker then DLQ">Circuit breaker → DLQ</option>
+                                    <option value="No DLQ (fail-fast)">No DLQ (fail-fast)</option>
+                                </select>
                             </div>
                             <div class="form-group">
-                                <label for="edaIdempotency">Idempotency Strategy</label>
-                                <textarea id="edaIdempotency" rows="3" placeholder="Deduplication by event ID&#10;Idempotency key in message header&#10;Consumer-side upsert logic"></textarea>
+                                <label for="edaDLQNotes">DLQ / Retry Notes</label>
+                                <textarea id="edaDLQNotes" rows="2" placeholder="Backoff: exponential (1s, 5s, 30s)&#10;Alert on DLQ depth > 100"></textarea>
                             </div>
                         </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edaIdempotency">Idempotency Strategy</label>
+                                <select id="edaIdempotency">
+                                    <option value="">Select strategy...</option>
+                                    <option value="Deduplication by event ID">Deduplication by event ID</option>
+                                    <option value="Idempotency key in header">Idempotency key in header</option>
+                                    <option value="Consumer-side upsert logic">Consumer-side upsert logic</option>
+                                    <option value="Database unique constraint">Database unique constraint</option>
+                                    <option value="Transactional outbox">Transactional outbox</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="edaThroughput">Expected Throughput</label>
+                                <input type="text" id="edaThroughput" placeholder="e.g., 10K events/sec peak, 2K avg">
+                            </div>
+                        </div>
+                        <!-- Dynamic Event Types & Schemas -->
+                        <div id="edaEventsContainer" class="dynamic-group-container"></div>
+                        <!-- Dynamic Services (Producers & Consumers) -->
+                        <div id="edaServicesContainer" class="dynamic-group-container"></div>
                         <div class="form-row">
                             <div class="form-group" style="grid-column: 1 / -1;">
                                 <label><i class="fas fa-user me-1"></i>Author Name</label>
@@ -1153,11 +1195,72 @@ streams.start();
             'edaBroker': 'broker',
             'edaPattern': 'pattern',
             'edaDelivery': 'delivery',
-            'edaEvents': 'events',
-            'edaProducers': 'producers',
-            'edaDLQ': 'dlqPolicy',
-            'edaIdempotency': 'idempotency'
+            'edaOrdering': 'ordering',
+            'edaRetention': 'retention',
+            'edaDLQPolicy': 'dlqPolicy',
+            'edaDLQNotes': 'dlqNotes',
+            'edaIdempotency': 'idempotency',
+            'edaThroughput': 'throughput'
         }, 'edaBadge');
+
+        // Dynamic Event Types & Schemas
+        var edaEventMgr = new DynamicGroupManager({
+            containerId: 'edaEventsContainer',
+            groupLabel: 'Event Type',
+            icon: 'fa-bolt',
+            maxEntries: 30,
+            minEntries: 1,
+            fields: [
+                { key: 'eventName', label: 'Event Name *', type: 'input', placeholder: 'e.g., OrderCreated, PaymentProcessed' },
+                { key: 'topic', label: 'Topic / Queue', type: 'input', placeholder: 'e.g., orders.events, payments.processed' },
+                { key: 'schema', label: 'Schema / Payload', type: 'textarea', rows: 2, placeholder: '{ "orderId": "uuid", "userId": "uuid", "items": [], "total": "decimal" }' },
+                { key: 'serialization', label: 'Serialization', type: 'select', options: [
+                    { value: '', label: 'Select format...' },
+                    { value: 'JSON', label: 'JSON' },
+                    { value: 'Avro', label: 'Avro' },
+                    { value: 'Protobuf', label: 'Protobuf' },
+                    { value: 'MessagePack', label: 'MessagePack' },
+                    { value: 'XML', label: 'XML' }
+                ]},
+                { key: 'partitionKey', label: 'Partition Key', type: 'input', placeholder: 'e.g., orderId, userId, region' },
+                { key: 'priority', label: 'Priority', type: 'select', options: [
+                    { value: '', label: 'Select priority...' },
+                    { value: 'Critical', label: 'Critical' },
+                    { value: 'High', label: 'High' },
+                    { value: 'Normal', label: 'Normal' },
+                    { value: 'Low', label: 'Low' }
+                ]},
+                { key: 'notes', label: 'Notes', type: 'input', placeholder: 'e.g., Triggers inventory reservation, retry-safe' }
+            ]
+        });
+
+        // Dynamic Services (Producers & Consumers)
+        var edaServiceMgr = new DynamicGroupManager({
+            containerId: 'edaServicesContainer',
+            groupLabel: 'Service',
+            icon: 'fa-microchip',
+            maxEntries: 20,
+            minEntries: 1,
+            fields: [
+                { key: 'serviceName', label: 'Service Name *', type: 'input', placeholder: 'e.g., OrderService, PaymentService' },
+                { key: 'role', label: 'Role *', type: 'select', options: [
+                    { value: '', label: 'Select role...' },
+                    { value: 'Producer', label: 'Producer' },
+                    { value: 'Consumer', label: 'Consumer' },
+                    { value: 'Both', label: 'Both (Producer + Consumer)' }
+                ]},
+                { key: 'publishes', label: 'Publishes Events', type: 'input', placeholder: 'e.g., OrderCreated, OrderCancelled' },
+                { key: 'subscribes', label: 'Subscribes To Events', type: 'input', placeholder: 'e.g., PaymentProcessed, InventoryReserved' },
+                { key: 'consumerGroup', label: 'Consumer Group', type: 'input', placeholder: 'e.g., order-service-cg, payment-cg' },
+                { key: 'processing', label: 'Processing Mode', type: 'select', options: [
+                    { value: '', label: 'Select mode...' },
+                    { value: 'Sequential', label: 'Sequential' },
+                    { value: 'Parallel', label: 'Parallel' },
+                    { value: 'Batch', label: 'Batch' }
+                ]},
+                { key: 'notes', label: 'Notes', type: 'input', placeholder: 'e.g., 3 replicas, auto-scales on lag' }
+            ]
+        });
 
         var edaHandler = new CanvasFormHandler({
             formId: 'edaForm',
@@ -1166,12 +1269,52 @@ streams.start();
             persistence: edaPersistence,
             filenameField: 'systemName',
             filenameSuffix: '-event-driven-design',
-            requiredFields: ['edaSystemName', 'edaBroker', 'edaPattern', 'edaEvents'],
-            requiredMessage: 'Please fill in System Name, Message Broker, Pattern, and Event Types.',
+            requiredFields: ['edaSystemName', 'edaBroker', 'edaPattern'],
+            requiredMessage: 'Please fill in System Name, Message Broker, and Pattern. Add at least one event type with a name.',
             docType: 'EventDrivenDesign'
         });
 
-        document.addEventListener('DOMContentLoaded', function() { edaPersistence.init(); });
+        // Override validation to check dynamic groups
+        var _edaOrigValidate = edaHandler._validate.bind(edaHandler);
+        edaHandler._validate = function() {
+            if (!_edaOrigValidate()) return false;
+            var events = edaEventMgr.collectAll();
+            var hasValidEvent = events.some(function(e) {
+                return e.eventName && e.eventName.trim();
+            });
+            if (!hasValidEvent) {
+                alert('Please add at least one event type with a name.');
+                return false;
+            }
+            return true;
+        };
+
+        // Override data collection to merge dynamic groups
+        var _edaOrigCollect = edaPersistence.collectData.bind(edaPersistence);
+        edaPersistence.collectData = function() {
+            var data = _edaOrigCollect();
+            data.events = edaEventMgr.collectAll();
+            data.services = edaServiceMgr.collectAll();
+            return data;
+        };
+
+        // Override reset to also reset dynamic groups
+        var _edaOrigReset = edaHandler.reset.bind(edaHandler);
+        edaHandler.reset = function() {
+            _edaOrigReset();
+            edaEventMgr.reset('sd-eda-events');
+            edaServiceMgr.reset('sd-eda-services');
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            edaPersistence.init();
+            edaEventMgr.init(1);
+            edaEventMgr.restoreFromStorage('sd-eda-events');
+            edaEventMgr.attachAutoSave('sd-eda-events', 500);
+            edaServiceMgr.init(1);
+            edaServiceMgr.restoreFromStorage('sd-eda-services');
+            edaServiceMgr.attachAutoSave('sd-eda-services', 500);
+        });
     </script>
 
             </body>
