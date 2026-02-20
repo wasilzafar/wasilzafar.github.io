@@ -411,6 +411,66 @@ remake --profile       # writes profile to profile.json
 SHELL = /bin/bash
 # Then add "time" prefix to expensive rules for spot checks</code></pre>
 
+                    <h3>Try It — Parallel vs Sequential</h3>
+                    <p>Create a small project and compare <code>-j1</code> (sequential) with <code>-j$(nproc)</code> (parallel) build times:</p>
+
+                    <pre><code class="language-bash">mkdir -p src
+
+# Create 4 independent source files
+for f in main utils parser network; do
+cat > src/$f.c << EOF
+#include &lt;stdio.h&gt;
+void ${f}_init(void) { printf("$f ready\n"); }
+EOF
+done
+
+# Add main() to main.c
+cat > src/main.c << 'EOF'
+#include &lt;stdio.h&gt;
+extern void utils_init(void);
+extern void parser_init(void);
+extern void network_init(void);
+int main(void) {
+    utils_init(); parser_init(); network_init();
+    printf("All modules loaded\n");
+    return 0;
+}
+EOF
+
+# Write a parallel-safe Makefile
+cat > Makefile << 'EOF'
+CC       := gcc
+CFLAGS   := -Wall -Wextra -O2
+SRCS     := $(wildcard src/*.c)
+OBJS     := $(SRCS:.c=.o)
+TARGET   := myapp
+
+.PHONY: all clean info
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) -o $@ $^
+
+src/%.o: src/%.c
+	$(CC) $(CFLAGS) -c $&lt; -o $@
+
+clean:
+	rm -f $(OBJS) $(TARGET)
+
+info:
+	@echo "CC     = $(CC)"
+	@echo "CFLAGS = $(CFLAGS)"
+	@echo "SRCS   = $(SRCS)"
+	@echo "OBJS   = $(OBJS)"
+EOF
+
+# Compare build times
+make info
+time make -j1          # sequential
+make clean
+time make -j$(nproc)   # parallel
+make clean</code></pre>
+
                     <div class="highlight-box">
                         <i class="fas fa-lightbulb me-2"></i>
                         <strong>Rule of thumb:</strong> Always use <code>:=</code> for variables computed from <code>$(shell ...)</code>, <code>$(wildcard ...)</code>, and <code>$(patsubst ...)</code> in large projects. Use <code>=</code> only when you explicitly need lazy re-evaluation, such as target-specific variable forwarding.

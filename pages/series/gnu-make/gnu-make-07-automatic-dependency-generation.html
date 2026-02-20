@@ -419,7 +419,7 @@ SRCS  := $(wildcard $(SRCDIR)/*.c)
 OBJS  := $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SRCS))
 DEPS  := $(OBJS:.o=.d)
 
-.PHONY: all clean
+.PHONY: all clean info
 
 all: $(TARGET)
 
@@ -433,12 +433,100 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c
 -include $(DEPS)
 
 clean:
-	rm -rf $(BUILDDIR)</code></pre>
+	rm -rf $(BUILDDIR)
 
-                    <pre><code class="language-bash"># Verify it works:
-make                    # full build
-touch src/config.h      # simulate header change
-make                    # only files including config.h rebuild</code></pre>
+info:
+	@echo "CC       = $(CC)"
+	@echo "CFLAGS   = $(CFLAGS)"
+	@echo "TARGET   = $(TARGET)"
+	@echo "SRCDIR   = $(SRCDIR)"
+	@echo "SRCS     = $(SRCS)"
+	@echo "OBJS     = $(OBJS)"
+	@echo "DEPS     = $(DEPS)"</code></pre>
+
+                    <pre><code class="language-bash"># --- Setup: create src/ directory with all source files ---
+mkdir -p src
+
+cat > src/main.h << 'EOF'
+#ifndef MAIN_H
+#define MAIN_H
+#include "utils.h"
+#include "network.h"
+#define APP_NAME "demo"
+#endif
+EOF
+
+cat > src/utils.h << 'EOF'
+#ifndef UTILS_H
+#define UTILS_H
+void utils_greet(const char *name);
+int  utils_add(int a, int b);
+#endif
+EOF
+
+cat > src/network.h << 'EOF'
+#ifndef NETWORK_H
+#define NETWORK_H
+void net_connect(const char *host, int port);
+void net_disconnect(void);
+#endif
+EOF
+
+cat > src/crypto.h << 'EOF'
+#ifndef CRYPTO_H
+#define CRYPTO_H
+void crypto_hash(const char *input, char *output, int outlen);
+#endif
+EOF
+
+cat > src/main.c << 'EOF'
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include "main.h"
+#include "crypto.h"
+int main(void) {
+    char hash[64];
+    crypto_hash("hello", hash, 64);
+    utils_greet(hash);
+    return 0;
+}
+EOF
+
+cat > src/utils.c << 'EOF'
+#include &lt;stdio.h&gt;
+#include "utils.h"
+void utils_greet(const char *name) { printf("Hello, %s!\n", name); }
+int  utils_add(int a, int b)       { return a + b; }
+EOF
+
+cat > src/network.c << 'EOF'
+#include &lt;stdio.h&gt;
+#include "network.h"
+void net_connect(const char *host, int port) { printf("Connecting to %s:%d\n", host, port); }
+void net_disconnect(void) { printf("Disconnected\n"); }
+EOF
+
+cat > src/crypto.c << 'EOF'
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include "crypto.h"
+void crypto_hash(const char *input, char *output, int outlen) {
+    snprintf(output, outlen, "hash(%s)", input);
+}
+EOF</code></pre>
+
+                    <pre><code class="language-bash"># --- Try it: verify dependency tracking ---
+make info                   # display all variable values
+make                        # full build
+ls build/*.d                # see generated .d dependency files
+cat build/main.d            # inspect dependency chain for main.c
+
+touch src/utils.h           # simulate header change
+make                        # only files including utils.h rebuild
+
+touch src/crypto.h          # simulate another header change
+make                        # only crypto-dependent files rebuild
+make clean                  # remove build artifacts</code></pre>
                 </div>
 
                 <!-- Next Steps -->
