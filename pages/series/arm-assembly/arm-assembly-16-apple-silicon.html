@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Apple Silicon assembly and macOS ABI: ARM64e pointer authentication (PACIASP/AUTIASP), BTI, Mach-O binary format, dyld3 lazy binding, Apple-specific register conventions, and PMU access on M1/M2/M3." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="Apple Silicon assembly, ARM64e PAC authentication, macOS ABI assembly, Mach-O binary format, dyld3 ARM64, PACIASP AUTIASP, BTI Branch Target Identification, M1 M2 PMU performance counters" />
+    <meta property="og:title" content="ARM Assembly Part 16: Apple Silicon &amp; macOS ABI" />
+    <meta property="og:description" content="Explore ARM64e on Apple Silicon: pointer authentication codes PAC, BTI, Mach-O format, dyld lazy binding, macOS calling convention, and PMU micro-benchmarking on M1/M2/M3." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-04-23" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <title>ARM Assembly Part 16: Apple Silicon &amp; macOS ABI - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/arm-assembly/arm-assembly-16-apple-silicon.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied',
+            'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', {
+            'ad_storage': 'granted', 'ad_user_data': 'granted',
+            'ad_personalization': 'granted', 'analytics_storage': 'granted'
+        });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20"><path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path></svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. By clicking "Accept All", you consent to our use of cookies. See our <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>.</p>
+                <div id="cookieSettings" style="display: none;"></div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59,151,151,0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;"><label style="display:flex;align-items:start;cursor:pointer;"><input type="checkbox" checked disabled style="margin-top:2px;margin-right:8px;cursor:not-allowed;"><div><strong style="font-size:13px;color:var(--color-navy);display:block;margin-bottom:2px;">Essential Cookies (Required)</strong><span style="font-size:12px;color:#666;">Necessary for the website to function properly.</span></div></label></div>
+                    <div style="margin-bottom: 12px;"><label style="display:flex;align-items:start;cursor:pointer;"><input type="checkbox" id="analyticsCookies" checked style="margin-top:2px;margin-right:8px;"><div><strong style="font-size:13px;color:var(--color-navy);display:block;margin-bottom:2px;">Analytics Cookies</strong><span style="font-size:12px;color:#666;">Help us understand how you interact with the website.</span></div></label></div>
+                    <div style="margin-bottom: 12px;"><label style="display:flex;align-items:start;cursor:pointer;"><input type="checkbox" id="marketingCookies" style="margin-top:2px;margin-right:8px;"><div><strong style="font-size:13px;color:var(--color-navy);display:block;margin-bottom:2px;">Marketing Cookies</strong><span style="font-size:12px;color:#666;">Used to deliver relevant advertisements.</span></div></label></div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background:var(--color-teal);color:white;font-weight:600;">Accept All</button>
+                <button id="cookieReject" style="background:transparent;color:var(--color-navy);border:2px solid var(--color-teal);font-weight:600;">Reject All</button>
+                <button id="cookieSave" style="background:var(--color-blue);color:white;font-weight:600;display:none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+                <h1 class="display-4 fw-bold mb-3">ARM Assembly Part 16: Apple Silicon &amp; macOS ABI</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>April 23, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>22 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Apple Silicon implements ARM64e — an ARM-designed superset of AArch64 that enforces pointer authentication codes (PAC) and Branch Target Identification (BTI) in hardware. Combined with Apple's unique ABI requirements (mandatory frame pointer, 16-byte aligned stack, Mach-O load commands), macOS assembly has a distinct character that differs from Linux and Windows ARM64.</p>
+            </div>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#introduction" onclick="closeNav()">Introduction &amp; ARM64e vs AArch64</a></li>
+            <li>
+                <a href="#pac" onclick="closeNav()">Pointer Authentication Codes (PAC)</a>
+                <ul>
+                    <li><a href="#paciasp" onclick="closeNav()">PACIASP / AUTIASP</a></li>
+                    <li><a href="#pac-data" onclick="closeNav()">Data Pointer Authentication</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#bti" onclick="closeNav()">Branch Target Identification (BTI)</a></li>
+            <li>
+                <a href="#macho" onclick="closeNav()">Mach-O Binary Format</a>
+                <ul>
+                    <li><a href="#load-commands" onclick="closeNav()">Mach-O Header &amp; Load Commands</a></li>
+                    <li><a href="#sections" onclick="closeNav()">__TEXT and __DATA Segments</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#dyld" onclick="closeNav()">dyld &amp; Lazy Binding</a></li>
+            <li>
+                <a href="#apple-abi" onclick="closeNav()">Apple ARM64 ABI Specifics</a>
+                <ul>
+                    <li><a href="#frame-pointer" onclick="closeNav()">Mandatory Frame Pointer</a></li>
+                    <li><a href="#syscall" onclick="closeNav()">macOS System Call Convention</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#pmu" onclick="closeNav()">PMU Performance Counters on M1/M2</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Hands-On Exercises</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                <div id="introduction" class="blog-content">
+
+                    <h2><i class="fab fa-apple me-2 text-teal"></i>Introduction &amp; ARM64e vs AArch64</h2>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Series Overview:</strong> This is Part 16 of the 28-part ARM Assembly Mastery Series. Apple Silicon (M1, M2, M3, M4 families) builds on the ARMv8.3-A+ instruction set with Apple-specific extensions under the ARM64e ABI. Writing system-level code, hand-optimised kernels, or reverse-engineering macOS binaries requires understanding both the architectural extensions and Apple's unique ABI choices.
+                    </div>
+
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>ARM Assembly Mastery</h4>
+                            <div class="path-subtitle">Your 28-step learning path • Currently on Step 16</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="arm-assembly-01-architecture-history.html" class="step-card"><div class="step-num completed">1</div><div class="step-info"><h6>Architecture History &amp; Core Concepts</h6><small>ARMv1→v9, RISC philosophy, profiles</small></div></a>
+                            <a href="arm-assembly-02-arm32-instructions.html" class="step-card"><div class="step-num completed">2</div><div class="step-info"><h6>ARM32 Instruction Set Fundamentals</h6><small>ARM vs Thumb, registers, CPSR, barrel shifter</small></div></a>
+                            <a href="arm-assembly-03-aarch64-registers.html" class="step-card"><div class="step-num completed">3</div><div class="step-info"><h6>AArch64 Registers, Addressing &amp; Data Movement</h6><small>X/W regs, addressing modes, load/store pairs</small></div></a>
+                            <a href="arm-assembly-04-arithmetic-logic.html" class="step-card"><div class="step-num completed">4</div><div class="step-info"><h6>Arithmetic, Logic &amp; Bit Manipulation</h6><small>ADD/SUB, bitfield extract/insert, CLZ</small></div></a>
+                            <a href="arm-assembly-05-branching-loops.html" class="step-card"><div class="step-num completed">5</div><div class="step-info"><h6>Branching, Loops &amp; Conditional Execution</h6><small>Branch types, link register, jump tables</small></div></a>
+                            <a href="arm-assembly-06-stack-subroutines.html" class="step-card"><div class="step-num completed">6</div><div class="step-info"><h6>Stack, Subroutines &amp; AAPCS</h6><small>Calling conventions, prologue/epilogue</small></div></a>
+                            <a href="arm-assembly-07-memory-caches.html" class="step-card"><div class="step-num completed">7</div><div class="step-info"><h6>Memory Model, Caches &amp; Barriers</h6><small>Weak ordering, DMB/DSB/ISB, TLB</small></div></a>
+                            <a href="arm-assembly-08-neon-simd.html" class="step-card"><div class="step-num completed">8</div><div class="step-info"><h6>NEON &amp; Advanced SIMD</h6><small>Vector ops, intrinsics, media processing</small></div></a>
+                            <a href="arm-assembly-09-sve-sve2.html" class="step-card"><div class="step-num completed">9</div><div class="step-info"><h6>SVE &amp; SVE2 Scalable Vector Extensions</h6><small>Predicate regs, gather/scatter, HPC/ML</small></div></a>
+                            <a href="arm-assembly-10-floating-point.html" class="step-card"><div class="step-num completed">10</div><div class="step-info"><h6>Floating-Point &amp; VFP Instructions</h6><small>IEEE-754, scalar FP, rounding modes</small></div></a>
+                            <a href="arm-assembly-11-exception-levels.html" class="step-card"><div class="step-num completed">11</div><div class="step-info"><h6>Exception Levels, Interrupts &amp; Vector Tables</h6><small>EL0–EL3, GIC, fault debugging</small></div></a>
+                            <a href="arm-assembly-12-mmu-virtual-memory.html" class="step-card"><div class="step-num completed">12</div><div class="step-info"><h6>MMU, Page Tables &amp; Virtual Memory</h6><small>Stage-1 translation, permissions, huge pages</small></div></a>
+                            <a href="arm-assembly-13-trustzone-security.html" class="step-card"><div class="step-num completed">13</div><div class="step-info"><h6>TrustZone &amp; ARM Security Extensions</h6><small>Secure monitor, world switching, TF-A</small></div></a>
+                            <a href="arm-assembly-14-cortex-m-embedded.html" class="step-card"><div class="step-num completed">14</div><div class="step-info"><h6>Cortex-M Assembly &amp; Bare-Metal Embedded</h6><small>NVIC, SysTick, linker scripts, low-power</small></div></a>
+                            <a href="arm-assembly-15-cortex-a-boot.html" class="step-card"><div class="step-num completed">15</div><div class="step-info"><h6>Cortex-A System Programming &amp; Boot</h6><small>EL3→EL1 transitions, MMU setup, PSCI</small></div></a>
+                            <div class="step-card current"><div class="step-num active">16</div><div class="step-info"><h6>Apple Silicon &amp; macOS ABI</h6><small>ARM64e PAC, Mach-O, dyld, perf counters</small></div><span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span></div>
+                            <a href="arm-assembly-17-inline-asm-intrinsics.html" class="step-card"><div class="step-num upcoming">17</div><div class="step-info"><h6>Inline Assembly, GCC/Clang &amp; C Interop</h6><small>Constraints, clobbers, compiler interaction</small></div></a>
+                            <a href="arm-assembly-18-performance-profiling.html" class="step-card"><div class="step-num upcoming">18</div><div class="step-info"><h6>Performance Profiling &amp; Micro-Optimization</h6><small>Pipeline hazards, PMU, benchmarking</small></div></a>
+                            <a href="arm-assembly-19-reverse-engineering.html" class="step-card"><div class="step-num upcoming">19</div><div class="step-info"><h6>Reverse Engineering &amp; ARM Binary Analysis</h6><small>ELF, disassembly, CFR, iOS/Android quirks</small></div></a>
+                            <a href="arm-assembly-20-bare-metal-os-kernel.html" class="step-card"><div class="step-num upcoming">20</div><div class="step-info"><h6>Building a Bare-Metal OS Kernel</h6><small>Bootloader, UART, scheduler, context switch</small></div></a>
+                            <a href="arm-assembly-21-microarchitecture.html" class="step-card"><div class="step-num upcoming">21</div><div class="step-info"><h6>ARM Microarchitecture Deep Dive</h6><small>OOO pipelines, reorder buffers, branch predict</small></div></a>
+                            <a href="arm-assembly-22-virtualization.html" class="step-card"><div class="step-num upcoming">22</div><div class="step-info"><h6>Virtualization Extensions</h6><small>EL2 hypervisor, stage-2 translation, KVM</small></div></a>
+                            <a href="arm-assembly-23-debugging-tooling.html" class="step-card"><div class="step-num upcoming">23</div><div class="step-info"><h6>Debugging &amp; Tooling Ecosystem</h6><small>GDB, OpenOCD/JTAG, ETM/ITM, QEMU</small></div></a>
+                            <a href="arm-assembly-24-linkers-loaders.html" class="step-card"><div class="step-num upcoming">24</div><div class="step-info"><h6>Linkers, Loaders &amp; Binary Format Internals</h6><small>ELF deep dive, relocations, PIC, crt0</small></div></a>
+                            <a href="arm-assembly-25-cross-compilation.html" class="step-card"><div class="step-num upcoming">25</div><div class="step-info"><h6>Cross-Compilation &amp; Build Systems</h6><small>GCC/Clang toolchains, CMake, firmware gen</small></div></a>
+                            <a href="arm-assembly-26-arm-real-systems.html" class="step-card"><div class="step-num upcoming">26</div><div class="step-info"><h6>ARM in Real Systems</h6><small>Android, FreeRTOS/Zephyr, U-Boot, TF-A</small></div></a>
+                            <a href="arm-assembly-27-security-exploitation.html" class="step-card"><div class="step-num upcoming">27</div><div class="step-info"><h6>Security Research &amp; Exploitation</h6><small>ASLR, PAC attacks, ROP/JOP, kernel exploit</small></div></a>
+                            <a href="arm-assembly-28-armv9-future.html" class="step-card"><div class="step-num upcoming">28</div><div class="step-info"><h6>Emerging ARMv9 &amp; Future Directions</h6><small>MTE, SME, confidential compute, AI accel</small></div></a>
+                        </div>
+                    </div>
+
+                    <p>ARM64e is Apple's implementation of ARMv8.3-A Pointer Authentication combined with ARMv8.5-A BTI. The ISA gains new instructions (PACIA/AUTIA families), the ABI gains new calling convention requirements (PACIASP in prologues), and the hardware gain new registers (APxxx keys). On macOS, this coexists with the Mach-O binary format, dyld interposition, and Apple's hardened runtime — all of which influences how hand-written assembly must be structured.</p>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-passport me-2"></i>
+                        <strong>Analogy — The Airport Security Check:</strong> Think of Pointer Authentication as a passport stamp system. When you enter a function (arrive at the gate), the CPU stamps your return address (passport) with a cryptographic signature (PACIASP). When you leave (AUTIASP), security checks the stamp — if it's been tampered with (buffer overflow corrupted LR), you're denied boarding (SIGILL crash). BTI is the designated entry point system: you can only enter the terminal through authorised doors (marked with BTI instructions). If malicious code tries to jump into the middle of a function (sneak through a service entrance), the hardware blocks it. Together, PAC + BTI create a zero-overhead security perimeter that makes Apple Silicon one of the most exploit-resistant consumer platforms ever shipped.
+                    </div>
+
+                    <!-- PAC -->
+                    <h2 id="pac">Pointer Authentication Codes (PAC)</h2>
+                    <p>PAC uses spare bits in 64-bit virtual addresses (bits 63–49 on systems with fewer than 50-bit VA) to store a cryptographic MAC. The key is a hardware register (APIAKey_EL1) not accessible from EL0. Signing inserts the PAC; stripping/authenticating removes it. Forgery causes an authentication fault (SIGSEGV on macOS).</p>
+
+                    <h3 id="paciasp">PACIASP / AUTIASP</h3>
+                    <pre><code class="language-armasm">// ARM64e function prologue/epilogue — required by Apple ABI for
+// any function that modifies LR (i.e., any non-leaf function)
+// PACIASP: sign LR using SP as context + IA key → stores signed LR on return addr
+// AUTIASP: authenticate (strip and verify) LR using SP as context
+
+    .text
+    .align 4
+_my_function:
+    PACIASP                    // Sign LR with SP context (IA key)
+    STP   x29, x30, [sp, #-16]!  // Push frame pointer + signed LR
+    MOV   x29, sp              // Set up frame pointer (MANDATORY on Apple)
+
+    // ... function body ...
+    BL    _some_other_function
+
+    LDP   x29, x30, [sp], #16  // Restore frame pointer + signed LR
+    AUTIASP                    // Authenticate LR — fail → SIGILL/SIGSEGV
+    RET                        // Jump via authenticated LR
+
+// Leaf function (no BL inside): no PAC needed, LR never saved
+    .align 4
+_leaf_function:
+    ADD   x0, x0, x1
+    RET</code></pre>
+
+                    <h3 id="pac-data">Data Pointer Authentication</h3>
+                    <pre><code class="language-armasm">// Signing and authenticating data pointers (DA key, generic key)
+// PACDA: sign data pointer in Xn using DA key, SP as modifier
+// AUTDA: authenticate data pointer (strip and verify)
+// XPACD: strip PAC without authentication (for debugging/comparison)
+
+// Sign a global pointer before storing
+LDR   x0, =my_vtable_ptr      // Load pointer value (untagged)
+PACDA x0, sp                   // Sign: x0 = signed_pointer(x0, sp, DA_key)
+STR   x0, [x19, #vtable_offset] // Store signed pointer
+
+// Authenticate before indirect call
+LDR   x0, [x19, #vtable_offset] // Load signed pointer
+AUTDA x0, sp                   // Authenticate: restores untagged on success
+                                 // Poisons to non-canonical addr on failure
+LDR   x8, [x0, #method_offset] // Load method pointer from vtable
+BLRAA x8, x0                   // Branch with PAC: call + authenticate in one op
+
+// Strip PAC for display (no authentication — unsafe!)
+LDR   x0, [x19, #vtable_offset]
+XPACD x0                       // Remove PAC bits: x0 = raw VA
+// Use x0 only for printing / comparison, NOT for calling</code></pre>
+
+                    <!-- BTI -->
+                    <h2 id="bti">Branch Target Identification (BTI)</h2>
+                    <pre><code class="language-armasm">// BTI: valid indirect branch targets must start with BTI instruction
+// Enabled via GNU_PROPERTY_AARCH64_FEATURE_1_BTI in ELF note or
+// _COMM_PAGE_CPU_CAPABILITIES bit on macOS
+// BTI variants: BTI c (BLR targets), BTI j (BR targets), BTI jc (both)
+
+    .section __TEXT,__text
+    .align 4
+_callback_function:
+    BTI   c                    // Valid target for BLR only
+    STP   x29, x30, [sp, #-16]!
+    MOV   x29, sp
+    // ... implementation ...
+    LDP   x29, x30, [sp], #16
+    RET
+
+    .align 4
+_jump_table_entry:
+    BTI   j                    // Valid target for BR only (switch jump tables)
+    B     _actual_handler
+
+    .align 4
+_general_entry:
+    BTI   jc                   // Valid for both BR and BLR
+    NOP
+
+// Attempting indirect branch to non-BTI landing pad → EXC_BAD_INSTRUCTION
+// (SIGILL with ESR_EL1.EC = 0b111100, ISS = BTI trap)
+
+// macOS disables BTI enforcement for userspace by default but Hardened Runtime
+// .entitlements can enable it. XNU kernel enforces BTI for kernel extensions.</code></pre>
+
+                    <!-- Mach-O -->
+                    <h2 id="macho">Mach-O Binary Format</h2>
+
+                    <h3 id="load-commands">Mach-O Header &amp; Load Commands</h3>
+                    <p>Every macOS binary starts with a <code>mach_header_64</code> (magic 0xFEEDFACF for 64-bit). This is followed by load commands: LC_SEGMENT_64 defines virtual memory regions; LC_DYLD_INFO_ONLY carries bind/lazy-bind/export trie tables; LC_SYMTAB holds the symbol table; LC_DYSYMTAB holds dynamic symbol info. Unlike ELF, Mach-O has no separate section headers independent of segments — sections are nested inside LC_SEGMENT_64 commands.</p>
+
+                    <pre><code class="language-bash"># Inspect Mach-O structure
+otool -h -l /usr/bin/clang | head -60
+
+# Dump __TEXT,__text section disassembly (Apple llvm-objdump)
+otool -t -v -V /usr/lib/system/libsystem_c.dylib | head -80
+
+# Show all load commands
+otool -l /usr/bin/swift | grep -A4 "LC_SEGMENT_64"
+
+# Show exported symbols (from export trie)
+nm -gU /usr/lib/libSystem.B.dylib | head -20
+
+# Check PAC/BTI note in ARM64e binary
+otool -l /usr/bin/clang | grep -A3 LC_NOTE</code></pre>
+
+                    <h3 id="sections">__TEXT and __DATA Segments</h3>
+                    <pre><code class="language-armasm">// macOS assembly section declarations (Apple GAS / clang assembler syntax)
+    .section __TEXT,__text,regular,pure_instructions   // Code
+    .section __TEXT,__const                            // Read-only data
+    .section __TEXT,__objc_methnames,cstring_literals  // ObjC method name strings
+    .section __DATA,__data                             // Initialised data (RW)
+    .section __DATA,__bss                              // Uninitialised data
+    .section __DATA,__la_symbol_ptr,lazy_symbol_pointers // Lazy binding stubs
+    .section __DATA_CONST,__got,non_lazy_symbol_pointers // GOT (non-lazy)
+
+// Example: define a global variable + string literal
+    .section __DATA,__data
+    .align 3
+my_counter:
+    .quad  0                   // 8-byte global counter
+
+    .section __TEXT,__cstring,cstring_literals
+hello_str:
+    .asciz "Hello, Apple Silicon\n"</code></pre>
+
+                    <!-- dyld -->
+                    <h2 id="dyld">dyld &amp; Lazy Binding</h2>
+                    <pre><code class="language-armasm">// Calling a dynamic library function from assembly
+// First call goes through dyld stub → resolver → patches GOT → real function
+// Subsequent calls bypass dyld (direct through GOT)
+
+    .text
+    .align 4
+call_printf_example:
+    PACIASP
+    STP   x29, x30, [sp, #-32]!
+    MOV   x29, sp
+
+    ADRP  x0, hello_str@PAGE      // Load PC-relative page of string
+    ADD   x0, x0, hello_str@PAGEOFF
+    BL    _printf                  // Call via PLT stub (first call: slow path)
+
+    LDP   x29, x30, [sp], #32
+    AUTIASP
+    RET
+
+// macOS stub (in __TEXT,__stubs):
+// _printf:
+//     ADRP   x16, __la_symbol_ptr_printf@GOTPAGE
+//     LDR    x16, [x16, __la_symbol_ptr_printf@GOTPAGEOFF]
+//     BR     x16                  // First call: jumps to dyld_stub_binder
+//                                 // After binding: jumps directly to _printf in libSystem
+
+// objc_msgSend dispatch (message passing — extremely hot path on macOS)
+// Apple's hand-written assembly dispatcher is in libobjc.A.dylib
+// bl objc_msgSend: x0=receiver, x1=selector, x2..=args</code></pre>
+
+                    <!-- Apple ABI -->
+                    <h2 id="apple-abi">Apple ARM64 ABI Specifics</h2>
+
+                    <h3 id="frame-pointer">Mandatory Frame Pointer</h3>
+                    <pre><code class="language-armasm">// Apple ARM64 ABI requires x29 (frame pointer) always valid on non-leaf calls
+// This enables reliable stack unwinding for crash reports and Instruments profiling
+// Unlike Linux where -fomit-frame-pointer is common, Apple mandates x29
+
+// Correct Apple ABI function prologue:
+_my_func:
+    PACIASP
+    STP   x29, x30, [sp, #-16]!   // Decrement SP by 16; store x29+x30
+    MOV   x29, sp                  // x29 = current fp (chain to caller's frame)
+    // ... body ...
+    LDP   x29, x30, [sp], #16     // Restore; increment SP by 16
+    AUTIASP
+    RET
+
+// Frame chains: x29 → caller_x29 → caller_caller_x29 → ... → 0
+// Crash reporter walks this chain to produce symbolicated backtraces
+
+// Stack alignment: SP must be 16-byte aligned at all call sites
+// Variadic functions require SP 16-byte aligned before BL
+    SUB   sp, sp, #32              // 32-byte frame (16-byte aligned)
+    STP   x0, x1, [sp]             // Save argument registers
+    ADD   sp, sp, #32              // Restore (must also be 16-byte aligned)</code></pre>
+
+                    <h3 id="syscall">macOS System Call Convention</h3>
+                    <pre><code class="language-armasm">// macOS ARM64 system call: SVC #0x80 (unlike Linux SVC #0)
+// System call number in x16 (not x8 as on Linux)
+// Arguments: x0–x5 (same as Linux)
+// Return: x0 (result), x1 (2nd return word for some calls)
+// Error: NZCV carry flag C=1 → x0 = errno value
+
+// Example: write(1, buf, len) → syscall #4 (BSD write)
+    .text
+_raw_write:
+    MOV   x16, #4              // SYS_write = 4 on macOS
+    SVC   #0x80                // Trap to XNU
+    BCS   syscall_error        // Carry set = error; x0 = errno
+    RET
+syscall_error:
+    NEG   x0, x0               // Return negative errno (POSIX convention)
+    RET
+
+// Example: exit(0) → syscall #1 (SYS_exit)
+_raw_exit:
+    MOV   x16, #1              // SYS_exit
+    MOV   x0, #0               // exit code 0
+    SVC   #0x80
+
+// Mach trap numbers: negative (e.g., mach_msg = -31, task_self = -28)
+// Called via SVC #0x80 with x16 = 0xFFFFFFFF00000000 | trap_number</code></pre>
+
+                    <!-- PMU -->
+                    <h2 id="pmu">PMU Performance Counters on M1/M2</h2>
+                    <pre><code class="language-bash"># Apple PMU does not support perf(1) or direct MSR via mrs in user space
+# Use Apple's kdebug / kperf API from privileged processes, or Instruments.app
+
+# Option 1: pmu counters via kperf (requires entitlement com.apple.private.kpc)
+# Headers: <kperfdata/kperfdata.h>, <kperf/kperf.h>
+# Available via Apple Internal SDK or open-source xnu headers
+
+# Option 2: ktrace / kdebug via libkdd
+#   sudo ktrace artrace -o trace.artrace -- ./benchmark
+#   instruments -l 10000 -t "CPU Profiler" ./benchmark
+
+# Option 3: proc_pid_rusage() for coarse wall/user/system time
+# clock_gettime(CLOCK_UPTIME_RAW): accesses ARM CNTVCT_EL0 via commpage
+
+# Measure CNTVCT_EL0 (virtual timer counter — accessible from EL0):
+    .text
+read_cntvct:
+    MRS   x0, CNTVCT_EL0      // Virtual count (runs at CNTFRQ_EL0 Hz ≈ 24 MHz)
+    RET
+
+read_cntfrq:
+    MRS   x0, CNTFRQ_EL0      // Counter frequency in Hz (24000000 on M1/M2)
+    RET
+
+# Compute elapsed time: (cntvct_end - cntvct_start) * 1e9 / cntfrq = nanoseconds</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Key Insight:</strong> The most impactful Apple Silicon assembly difference for developers porting Linux arm64 code to macOS is the mandatory PACIASP/AUTIASP pair. On Linux arm64 without PAC hardware, these are NOPs. On Apple Silicon they're enforced — omitting PACIASP in a function that saves LR means AUTIASP will authenticate a value that was never signed, producing a non-canonical address in LR and an immediate EXC_BAD_ACCESS. The second most common gotcha is the x16 syscall register — Linux uses x8, macOS uses x16, and mixing them produces SIGSYS or unexpected errno values.
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span class="bias-tag bg-crimson">Case Study</span>
+                            <span class="bias-tag bg-teal">Apple M1</span>
+                        </div>
+                        <h4>Case Study: The M1 Transition — Rosetta 2 and PAC Compatibility</h4>
+                        <p>When Apple shipped the M1 in November 2020, billions of lines of x86_64 code needed to run on ARM64. Rosetta 2 JIT-translates x86 → ARM64 at install time, but PAC posed a unique challenge: translated code doesn't use PACIASP/AUTIASP (x86 has no equivalent), so Apple created a separate code signing entitlement (<code>com.apple.security.cs.allow-jit</code>) and a dedicated translation cache that operates in non-PAC mode for Rosetta processes while native ARM64e processes enforce PAC fully.</p>
+                        <p><strong>Performance insight:</strong> Despite the translation overhead, Rosetta 2 achieves 70-80% native performance on compute-heavy workloads — partly because Apple's M1 microarchitecture was designed with a wide 8-issue decode pipeline and 592 reorder buffer entries specifically to absorb the extra instructions Rosetta generates. Hand-written ARM64 assembly for M1 can exploit this width: 4 integer + 2 FP + 2 load/store per cycle with zero branch misprediction penalty on correctly predicted paths.</p>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span class="bias-tag bg-navy">History</span>
+                            <span class="bias-tag bg-teal">Evolution</span>
+                        </div>
+                        <h4>From PowerPC to ARM: Apple's Three Architecture Transitions</h4>
+                        <p>Apple has navigated three major ISA transitions: 68K→PowerPC (1994), PowerPC→x86 (2006), and x86→ARM64 (2020). Each transition introduced a translation layer (68K emulator, Rosetta 1, Rosetta 2) and a universal binary format (fat binaries, Universal 2). The ARM64 transition was uniquely aggressive: Apple designed both the silicon (M1) and the OS (Big Sur) simultaneously, ensuring that XNU kernel, drivers, and core frameworks shipped as native ARM64e binaries from day one — no emulation layer for the OS itself.</p>
+                        <p>The ARM64e ABI was first deployed on the A12 Bionic (iPhone XS, 2018) with iOS 12, giving Apple two years of real-world PAC deployment data before the Mac transition. By the time M1 shipped, every PAC-related kernel bug had been found and patched through the iPhone install base — a strategic advantage no other ARM desktop platform has had.</p>
+                    </div>
+
+                    <!-- Exercises -->
+                    <h2 id="exercises">Hands-On Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span class="bias-tag bg-teal">Exercise 1</span>
+                            <span class="bias-tag bg-navy">PAC</span>
+                        </div>
+                        <h4>Exercise: PAC-Signed Function Calls on macOS</h4>
+                        <p>Write a macOS ARM64e assembly program with three functions: <code>_main</code> (calls <code>_compute</code>), <code>_compute</code> (calls <code>_helper</code>), and <code>_helper</code> (leaf function). Each non-leaf function must use PACIASP/AUTIASP and mandatory frame pointer (STP x29, x30; MOV x29, sp). Build with <code>clang -arch arm64e -o pac_demo pac_demo.s</code> and run. Then intentionally corrupt the saved LR on the stack (write 0xDEAD to [sp, #8] after STP) and observe the EXC_BAD_ACCESS crash. Use <code>lldb</code> to inspect the register state at the fault and identify the PAC authentication failure in the crash report.</p>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span class="bias-tag bg-teal">Exercise 2</span>
+                            <span class="bias-tag bg-crimson">Mach-O</span>
+                        </div>
+                        <h4>Exercise: Minimal Mach-O "Hello World" in Assembly</h4>
+                        <p>Write a complete macOS ARM64 assembly program that prints "Hello, Apple Silicon!" using the raw syscall interface (SVC #0x80). Use <code>x16 = 4</code> (SYS_write), <code>x0 = 1</code> (stdout), <code>x1 = buffer</code>, <code>x2 = length</code>. Then exit with <code>x16 = 1</code> (SYS_exit). Assemble with <code>as -o hello.o hello.s && ld -o hello hello.o -lSystem -syslibroot $(xcrun --sdk macosx --show-sdk-path) -e _main</code>. Examine the resulting binary with <code>otool -h -l hello</code> to identify all LC_SEGMENT_64 commands and compare the __TEXT and __DATA segment layout to what you see in <code>otool -l /usr/bin/true</code>.</p>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta">
+                            <span class="bias-tag bg-teal">Exercise 3</span>
+                            <span class="bias-tag bg-navy">Timing</span>
+                        </div>
+                        <h4>Exercise: Precision Timing with CNTVCT_EL0</h4>
+                        <p>Write a macOS ARM64 assembly function <code>_bench_neon_dotproduct</code> that: (1) reads CNTVCT_EL0 into x19 (start time), (2) executes 1,000,000 iterations of a 128-bit NEON dot-product on two 4-element float32 vectors (FMLA v2.4s, v0.4s, v1.4s), (3) reads CNTVCT_EL0 again into x20, (4) computes elapsed = x20 - x19. Call from a C wrapper that reads CNTFRQ_EL0 (24 MHz on M-series) and converts to nanoseconds: <code>ns = elapsed * 1e9 / freq</code>. Compare the throughput (GFLOP/s) against the theoretical peak of your Apple Silicon chip (M1: ~2.5 GFLOP/s per core for FP32 NEON).</p>
+                    </div>
+
+                    <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
+                    <p>We covered ARM64e on Apple Silicon comprehensively: PAC instruction families (PACIASP/AUTIASP for return addresses, PACDA/AUTDA for data pointers, BLRAA for authenticated indirect calls), BTI landing pads for indirect branch hardening, the Mach-O binary structure (load commands, segment/section layout, Apple assembler syntax), dyld lazy binding stubs and GOT entries, Apple ABI requirements (mandatory frame pointer, SVC #0x80 with syscall number in x16), and measuring timing via CNTVCT_EL0. We also traced the M1 transition history and how Rosetta 2 handles the PAC compatibility challenge.</p>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="arm-assembly-17-inline-asm-intrinsics.html"><strong>Part 17: Inline Assembly, GCC/Clang &amp; C Interop</strong></a>, we move to embedding assembly directives inside C/C++ code: constraint strings, clobber lists, memory barriers from C, and when the compiler wins vs when hand-written asm still matters.</p>
+                    </div>
+
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 6: Stack, Subroutines &amp; AAPCS</h5>
+                            <p>The base calling convention that Apple extends with mandatory frame pointers and PAC requirements.</p>
+                            <a href="arm-assembly-06-stack-subroutines.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 17: Inline Assembly, GCC/Clang &amp; C Interop</h5>
+                            <p>Using PAC instructions from inline assembly constraints in C code compiled for Apple Silicon.</p>
+                            <a href="arm-assembly-17-inline-asm-intrinsics.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 18: Performance Profiling &amp; Micro-Optimization</h5>
+                            <p>PMU and timing methodology expanded — perf counters, flamegraphs, and throughput analysis.</p>
+                            <a href="arm-assembly-18-performance-profiling.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.</p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small"><i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a></p>
+                    <p class="small mt-3"><a href="/" class="text-light text-decoration-none">Home</a> | <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a></p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"><i class="fas fa-tag"></i><span id="categoryText">Technology</span></div>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>

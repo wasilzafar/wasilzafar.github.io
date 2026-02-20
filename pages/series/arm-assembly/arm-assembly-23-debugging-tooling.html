@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="ARM debugging and tooling ecosystem: GDB remote stub for ARM64, OpenOCD with JTAG/SWD probes, Embedded Trace Macrocell (ETM) instruction-level tracing, ITM stimulus ports, and QEMU as a virtual debug target." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="ARM64 GDB remote debug, OpenOCD JTAG ARM, ARM ETM tracing, ARM ITM stimulus, QEMU GDB stub ARM, ARM64 kernel debugging, ARM SWD probe debug" />
+    <meta property="og:title" content="ARM Assembly Part 23: Debugging &amp; Tooling Ecosystem" />
+    <meta property="og:description" content="Debug ARM64 systems: GDB remote stub protocol, OpenOCD JTAG/SWD connection, ETM instruction trace capture, ITM printf, and QEMU as a virtual debug target for kernel development." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-06-11" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <title>ARM Assembly Part 23: Debugging &amp; Tooling Ecosystem - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/arm-assembly/arm-assembly-23-debugging-tooling.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied',
+            'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', {
+            'ad_storage': 'granted', 'ad_user_data': 'granted',
+            'ad_personalization': 'granted', 'analytics_storage': 'granted'
+        });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20"><path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path></svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">We use cookies to enhance your browsing experience. See our <a href="/privacy-policy.html" style="color: var(--color-teal);">Privacy Policy</a>.</p>
+                <div id="cookieSettings" style="display: none;"></div>
+                <div id="cookieTypes" style="display: none;"></div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background:var(--color-teal);color:white;font-weight:600;">Accept All</button>
+                <button id="cookieReject" style="background:transparent;color:var(--color-navy);border:2px solid var(--color-teal);font-weight:600;">Reject All</button>
+                <button id="cookieSave" style="background:var(--color-blue);color:white;font-weight:600;display:none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+                <h1 class="display-4 fw-bold mb-3">ARM Assembly Part 23: Debugging &amp; Tooling Ecosystem</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>June 11, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>22 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">The ARM debugging ecosystem spans from QEMU software simulation up to hardware probes with instruction-level trace. This part covers the GDB remote serial protocol, OpenOCD configuration for JTAG and SWD adapters, ETM/ITM trace decoding, and practical kernel debugging workflows with QEMU.</p>
+            </div>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#introduction" onclick="closeNav()">Debugging Architecture Overview</a></li>
+            <li><a href="#gdb" onclick="closeNav()">GDB Remote Protocol</a></li>
+            <li><a href="#openocd" onclick="closeNav()">OpenOCD &amp; JTAG/SWD</a></li>
+            <li><a href="#etm" onclick="closeNav()">ETM Instruction Trace</a></li>
+            <li><a href="#itm" onclick="closeNav()">ITM Stimulus Ports</a></li>
+            <li><a href="#qemu" onclick="closeNav()">QEMU as Debug Target</a></li>
+            <li><a href="#kernel-debug" onclick="closeNav()">Kernel Debugging Workflows</a></li>
+            <li><a href="#case-study" onclick="closeNav()">Case Study: ARM Boot Failure</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Hands-On Exercises</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                <div id="introduction" class="blog-content">
+
+                    <h2><i class="fas fa-bug me-2 text-teal"></i>Debugging Architecture Overview</h2>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Series Overview:</strong> Part 23 of 28. Related: Part 14 (Cortex-M/NVIC), Part 15 (Cortex-A boot), Part 20 (bare-metal kernel).
+                    </div>
+
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>ARM Assembly Mastery</h4>
+                            <div class="path-subtitle">Your 28-step learning path • Currently on Step 23</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="arm-assembly-01-architecture-history.html" class="step-card"><div class="step-num completed">1</div><div class="step-info"><h6>Architecture History &amp; Core Concepts</h6><small>ARMv1→v9, RISC philosophy</small></div></a>
+                            <a href="arm-assembly-02-arm32-instructions.html" class="step-card"><div class="step-num completed">2</div><div class="step-info"><h6>ARM32 Instruction Set Fundamentals</h6><small>ARM vs Thumb, CPSR</small></div></a>
+                            <a href="arm-assembly-03-aarch64-registers.html" class="step-card"><div class="step-num completed">3</div><div class="step-info"><h6>AArch64 Registers, Addressing &amp; Data Movement</h6><small>X/W regs, addressing modes</small></div></a>
+                            <a href="arm-assembly-04-arithmetic-logic.html" class="step-card"><div class="step-num completed">4</div><div class="step-info"><h6>Arithmetic, Logic &amp; Bit Manipulation</h6><small>ADD/SUB, bitfield, CLZ</small></div></a>
+                            <a href="arm-assembly-05-branching-loops.html" class="step-card"><div class="step-num completed">5</div><div class="step-info"><h6>Branching, Loops &amp; Conditional Execution</h6><small>Branch types, jump tables</small></div></a>
+                            <a href="arm-assembly-06-stack-subroutines.html" class="step-card"><div class="step-num completed">6</div><div class="step-info"><h6>Stack, Subroutines &amp; AAPCS</h6><small>Calling conventions</small></div></a>
+                            <a href="arm-assembly-07-memory-caches.html" class="step-card"><div class="step-num completed">7</div><div class="step-info"><h6>Memory Model, Caches &amp; Barriers</h6><small>Weak ordering, DMB/DSB/ISB</small></div></a>
+                            <a href="arm-assembly-08-neon-simd.html" class="step-card"><div class="step-num completed">8</div><div class="step-info"><h6>NEON &amp; Advanced SIMD</h6><small>Vector ops, intrinsics</small></div></a>
+                            <a href="arm-assembly-09-sve-sve2.html" class="step-card"><div class="step-num completed">9</div><div class="step-info"><h6>SVE &amp; SVE2 Scalable Vectors</h6><small>Predicate regs, HPC/ML</small></div></a>
+                            <a href="arm-assembly-10-floating-point.html" class="step-card"><div class="step-num completed">10</div><div class="step-info"><h6>Floating-Point &amp; VFP Instructions</h6><small>IEEE-754, rounding modes</small></div></a>
+                            <a href="arm-assembly-11-exception-levels.html" class="step-card"><div class="step-num completed">11</div><div class="step-info"><h6>Exception Levels, Interrupts &amp; Vectors</h6><small>EL0–EL3, GIC</small></div></a>
+                            <a href="arm-assembly-12-mmu-virtual-memory.html" class="step-card"><div class="step-num completed">12</div><div class="step-info"><h6>MMU, Page Tables &amp; Virtual Memory</h6><small>Stage-1 translation</small></div></a>
+                            <a href="arm-assembly-13-trustzone-security.html" class="step-card"><div class="step-num completed">13</div><div class="step-info"><h6>TrustZone &amp; Security Extensions</h6><small>Secure monitor, TF-A</small></div></a>
+                            <a href="arm-assembly-14-cortex-m-embedded.html" class="step-card"><div class="step-num completed">14</div><div class="step-info"><h6>Cortex-M Assembly &amp; Bare-Metal</h6><small>NVIC, SysTick, linker scripts</small></div></a>
+                            <a href="arm-assembly-15-cortex-a-boot.html" class="step-card"><div class="step-num completed">15</div><div class="step-info"><h6>Cortex-A System Programming &amp; Boot</h6><small>EL3→EL1, MMU setup, PSCI</small></div></a>
+                            <a href="arm-assembly-16-apple-silicon.html" class="step-card"><div class="step-num completed">16</div><div class="step-info"><h6>Apple Silicon &amp; macOS ABI</h6><small>ARM64e PAC, Mach-O, dyld</small></div></a>
+                            <a href="arm-assembly-17-inline-asm-intrinsics.html" class="step-card"><div class="step-num completed">17</div><div class="step-info"><h6>Inline Assembly &amp; C Interop</h6><small>Constraints, clobbers</small></div></a>
+                            <a href="arm-assembly-18-performance-profiling.html" class="step-card"><div class="step-num completed">18</div><div class="step-info"><h6>Performance Profiling &amp; Micro-Opt</h6><small>Pipeline hazards, PMU</small></div></a>
+                            <a href="arm-assembly-19-reverse-engineering.html" class="step-card"><div class="step-num completed">19</div><div class="step-info"><h6>Reverse Engineering &amp; Binary Analysis</h6><small>ELF, disassembly, CFR</small></div></a>
+                            <a href="arm-assembly-20-bare-metal-os-kernel.html" class="step-card"><div class="step-num completed">20</div><div class="step-info"><h6>Building a Bare-Metal OS Kernel</h6><small>Bootloader, UART, scheduler</small></div></a>
+                            <a href="arm-assembly-21-microarchitecture.html" class="step-card"><div class="step-num completed">21</div><div class="step-info"><h6>ARM Microarchitecture Deep Dive</h6><small>OOO pipelines, branch predict</small></div></a>
+                            <a href="arm-assembly-22-virtualization.html" class="step-card"><div class="step-num completed">22</div><div class="step-info"><h6>Virtualization Extensions</h6><small>EL2 hypervisor, stage-2, KVM</small></div></a>
+                            <div class="step-card current"><div class="step-num active">23</div><div class="step-info"><h6>Debugging &amp; Tooling Ecosystem</h6><small>GDB, OpenOCD/JTAG, ETM/ITM, QEMU</small></div><span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span></div>
+                            <a href="arm-assembly-24-linkers-loaders.html" class="step-card"><div class="step-num upcoming">24</div><div class="step-info"><h6>Linkers, Loaders &amp; Binary Format Internals</h6><small>ELF deep dive, relocations, PIC, crt0</small></div></a>
+                            <a href="arm-assembly-25-cross-compilation.html" class="step-card"><div class="step-num upcoming">25</div><div class="step-info"><h6>Cross-Compilation &amp; Build Systems</h6><small>GCC/Clang toolchains, CMake</small></div></a>
+                            <a href="arm-assembly-26-arm-real-systems.html" class="step-card"><div class="step-num upcoming">26</div><div class="step-info"><h6>ARM in Real Systems</h6><small>Android, FreeRTOS/Zephyr, U-Boot</small></div></a>
+                            <a href="arm-assembly-27-security-exploitation.html" class="step-card"><div class="step-num upcoming">27</div><div class="step-info"><h6>Security Research &amp; Exploitation</h6><small>ASLR, PAC attacks, ROP/JOP</small></div></a>
+                            <a href="arm-assembly-28-armv9-future.html" class="step-card"><div class="step-num upcoming">28</div><div class="step-info"><h6>Emerging ARMv9 &amp; Future Directions</h6><small>MTE, SME, confidential compute</small></div></a>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Real-World Analogy — A Doctor's Diagnostic Toolkit:</strong> Debugging an ARM system is like a doctor diagnosing a patient using increasingly invasive tools. <em>Printf/UART debugging</em> is like asking the patient "where does it hurt?" — cheap, non-invasive, but relies on the patient (code) being conscious (running) and honest (correct print statements). <em>GDB breakpoints</em> are an X-ray: you halt the patient (stop execution), take a snapshot of internal state (registers, memory), then let them continue. <em>JTAG/SWD</em> is surgery — you physically connect probes to the patient's nervous system (debug port), gaining total control even when the patient is unconscious (crashed or in a tight loop). <em>ETM instruction trace</em> is a continuous ECG monitor: it records every heartbeat (instruction) in real-time without slowing the patient down, letting you reconstruct exactly what happened leading up to a cardiac event (crash). <em>ITM stimulus ports</em> are blood pressure cuffs — lightweight, always-on monitoring channels that report vital signs (debug events) without disrupting the patient. Each tool has a cost-benefit trade-off: more invasive means more data but more disruption.
+                    </div>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-sitemap me-2"></i>
+                        <strong>ARM Debug Architecture Layers:</strong><br>
+                        Hardware: JTAG/SWD pins → Debug Access Port (DAP) → Memory Access Port (MEM-AP) → system bus<br>
+                        Trace:    ETM (instruction-level) → CoreSight trace bus → TPIU/ETB → host<br>
+                        Protocol: OpenOCD (JTAG/SWD) → GDB Remote Serial Protocol (RSP) → GDB<br>
+                        Virtual:  QEMU -s flag → built-in GDB stub (no hardware needed)
+                    </div>
+
+                    <!-- GDB -->
+                    <h2 id="gdb">GDB Remote Protocol</h2>
+                    <pre><code class="language-bash"># ── Connect GDB to a QEMU GDB stub (from Part 20 bare-metal kernel) ──
+qemu-system-aarch64 \
+    -machine virt -cpu cortex-a57 -m 128M \
+    -kernel kernel.elf -serial stdio -display none \
+    -s -S   # -s: GDB on port 1234, -S: halt at boot
+
+# In a second terminal:
+aarch64-linux-gnu-gdb kernel.elf
+(gdb) target remote :1234
+(gdb) b _start
+(gdb) continue
+(gdb) info registers           # Show all GP registers
+(gdb) x/4i $pc                 # Disassemble 4 instructions at PC
+(gdb) x/32xg $sp               # Dump 32 quadwords from stack pointer
+(gdb) p/x *(uint64_t*)0x40000000   # Read physical memory
+(gdb) set $x0 = 0x1234         # Modify register
+(gdb) watch *(uint64_t*)0x40100000 # Hardware watchpoint on memory address</code></pre>
+
+                    <pre><code class="language-bash"># ── GDB useful AArch64-specific commands ──
+# Inspect system registers (aarch64 extension):
+(gdb) monitor info registers   # QEMU: show all QEMU-visible regs
+
+# Set conditional breakpoint (break when X0 == 5):
+(gdb) b some_function if $x0 == 5
+
+# Tui mode for source+asm side by side:
+(gdb) tui enable
+(gdb) layout split
+
+# Save/load breakpoints:
+(gdb) save breakpoints bp.txt
+(gdb) source bp.txt</code></pre>
+
+                    <!-- OpenOCD -->
+                    <h2 id="openocd">OpenOCD &amp; JTAG/SWD</h2>
+                    <pre><code class="language-bash"># ── Install OpenOCD and connect to a Raspberry Pi 4 via J-Link ──
+# (Raspberry Pi 4 exposes JTAG on GPIO 22-27 with appropriate config)
+
+# openocd.cfg for RPi4 via J-Link
+cat &gt; rpi4.cfg &lt;&lt;'EOF'
+# Probe: SEGGER J-Link (SWD mode)
+source [find interface/jlink.cfg]
+transport select swd
+
+# Target: ARM Cortex-A72 (AArch64)
+source [find target/bcm2711.cfg]
+
+# SWD clk: start conservative
+adapter speed 1000
+EOF
+
+openocd -f rpi4.cfg &amp;
+
+# Then attach GDB:
+aarch64-linux-gnu-gdb vmlinux
+(gdb) target extended-remote :3333
+(gdb) monitor reset halt
+(gdb) b start_kernel
+(gdb) continue</code></pre>
+
+                    <pre><code class="language-bash"># ── OpenOCD flash programming (Cortex-M embedded, Part 14 context) ──
+# Example: flash bare-metal firmware to STM32 via ST-Link
+openocd \
+    -f interface/stlink.cfg \
+    -f target/stm32f4x.cfg \
+    -c "program firmware.elf verify reset exit"
+
+# Memory read/write from OpenOCD telnet interface:
+telnet localhost 4444
+> halt
+> mdw 0x40000000 8   # Read 8 words from 0x40000000
+> mww 0x40000000 0xDEADBEEF   # Write word</code></pre>
+
+                    <!-- ETM -->
+                    <h2 id="etm">ETM Instruction Trace</h2>
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-stream me-2"></i>
+                        <strong>CoreSight ETM Architecture:</strong> The Embedded Trace Macrocell (ETM) captures every instruction executed (PC values + branch outcomes) at full CPU speed using a compressed protocol. The trace is output via the CoreSight trace bus to an Embedded Trace Buffer (ETB, on-chip SRAM) or off-chip via a TPIU (Trace Port Interface Unit). An ETB can store ~4–32 KB of compressed trace, decoded offline to reconstruct the full execution path.
+                    </div>
+
+                    <pre><code class="language-armasm">// Enable ETMv4 via system registers (AArch64, EL2 access required)
+// CoreSight registers are memory-mapped in the debug ROM region
+// Cortex-A78 ETM base address: read from ROM table at 0xE00FF000
+
+// In assembly (EL2 or debug monitor):
+.equ ETM_BASE,     0xE0041000   // ETM for CPU0 (SoC-specific)
+.equ ETM_TRCPRGCTLR, 0x004     // Programming Control Register
+.equ ETM_TRCCONFIGR, 0x010     // Configuration Register
+.equ ETM_TRCVICTLR, 0x080      // ViewInst Control Register (which PCs to trace)
+.equ ETM_TRCOSLAR,  0x300      // OS Lock Access Register
+
+// Step 1: Unlock OS Lock (prevents ETM access if locked)
+mov  x0, #ETM_BASE
+str  wzr, [x0, #ETM_TRCOSLAR]  // Write 0 to unlock
+
+// Step 2: Disable ETM for programming
+ldr  w1, [x0, #ETM_TRCPRGCTLR]
+bic  w1, w1, #1                 // Clear EN bit
+str  w1, [x0, #ETM_TRCPRGCTLR]
+dsb  sy
+isb
+
+// Step 3: Configure to trace all instructions, timestamps on
+mov  w2, #(1 << 6)             // TRCONFIGR: timestamps enabled
+str  w2, [x0, #ETM_TRCCONFIGR]
+
+// Step 4: ViewInst — include all EL1 instructions (no filter)
+mov  w3, #0x201                 // TRCVICTLR: EL1NS, no filter
+str  w3, [x0, #ETM_TRCVICTLR]
+
+// Step 5: Re-enable ETM
+ldr  w1, [x0, #ETM_TRCPRGCTLR]
+orr  w1, w1, #1
+str  w1, [x0, #ETM_TRCPRGCTLR]
+isb</code></pre>
+
+                    <pre><code class="language-bash"># Decode ETM trace in Linux using Coresight subsystem
+# (kernel must be built with CONFIG_CORESIGHT=y, CONFIG_CORESIGHT_ETM4X=y)
+
+# Enable ETM tracing on CPU0:
+echo 1 > /sys/bus/coresight/devices/etm0/enable_source
+
+# Run workload:
+./my_workload &amp;
+PID=$!
+sleep 1
+kill -STOP $PID
+echo 0 > /sys/bus/coresight/devices/etm0/enable_source
+
+# Read ETB (Embedded Trace Buffer) and decode:
+cat /dev/cs_etb0 > trace.raw
+# Use 'perf' with cs-etm event:
+perf record -e cs_etm//@etm0/ --per-thread ./my_workload
+perf report --stdio --call-graph flat</code></pre>
+
+                    <!-- ITM -->
+                    <h2 id="itm">ITM Stimulus Ports</h2>
+                    <pre><code class="language-armasm">// ITM (Instrumentation Trace Macrocell) — Cortex-M / A debug printf
+// ITM_STIM0 at 0xE0000000 — write a byte/word and it appears in trace
+// No clock cycles wasted on flush — non-blocking when demultiplexed via SWO pin
+
+.equ ITM_STIM0,    0xE0000000   // Stimulus port 0
+.equ ITM_TER,      0xE0000E00   // Trace Enable Register (enable port 0)
+.equ ITM_TCR,      0xE0000E80   // Trace Control Register
+.equ ITM_LAR,      0xE0000FB0   // Lock Access Register
+
+// itm_init: unlock and enable ITM, stimulus port 0
+itm_init:
+    mov  x0, #ITM_LAR
+    movk x0, #0xE000, lsl #16
+    mov  w1, #0xC5ACCE55        // ITM unlock key
+    str  w1, [x0]               // Unlock ITM
+
+    mov  x2, #ITM_TCR
+    movk x2, #0xE000, lsl #16
+    mov  w3, #0x00010005        // ITMENA=1, TraceBusID=1
+    str  w3, [x2]
+
+    mov  x4, #ITM_TER
+    movk x4, #0xE000, lsl #16
+    mov  w5, #1                  // Enable port 0 only
+    str  w5, [x4]
+    ret
+
+// itm_putc(char c) — x0 = character, non-blocking write to stimulus port 0
+itm_putc:
+    mov  x1, #ITM_STIM0
+    movk x1, #0xE000, lsl #16
+.itm_spin:
+    ldr  w2, [x1]               // FIFOREADY bit in STIM read
+    tst  w2, #1
+    b.eq .itm_spin              // Wait until FIFO has space
+    strb w0, [x1]               // Write 1 byte to port 0
+    ret</code></pre>
+
+                    <!-- QEMU -->
+                    <h2 id="qemu">QEMU as Debug Target</h2>
+                    <pre><code class="language-bash"># ── Debug AArch64 Linux kernel with QEMU + GDB ──
+# Run QEMU with GDB stub enabled and halted at boot:
+qemu-system-aarch64 \
+    -machine virt -cpu cortex-a72 -m 2G \
+    -kernel Image \
+    -initrd initramfs.cpio.gz \
+    -append "nokaslr console=ttyAMA0 debug" \
+    -serial stdio -display none \
+    -s -S
+
+# Note: nokaslr disables KASLR (kernel address randomisation) — required for GDB symbols to work
+
+# Attach GDB with kernel vmlinux symbols:
+aarch64-linux-gnu-gdb vmlinux
+(gdb) target remote :1234
+(gdb) add-symbol-file drivers/net/virtio_net.ko 0xffff000001234000  # Load module symbols
+(gdb) b net_rx_action     # Kernel breakpoint
+(gdb) continue
+
+# Trace individual syscalls using GDB catch:
+(gdb) catch syscall read   # Break on every read() syscall
+(gdb) commands             # Run commands on each catch
+    silent
+    printf "read at pc=%#lx\n", $pc
+    continue
+end</code></pre>
+
+                    <pre><code class="language-bash"># ── QEMU register inspection while halted ──
+# In GDB: QEMU maps ARM64 system registers via monitor interface
+(gdb) monitor info registers   # All registers including PSTATE, ELR, SPSR
+
+# In QEMU monitor (Ctrl+A C to switch from serial to monitor):
+(qemu) x /10i 0xffff800010000000   # Disassemble kernel .text
+(qemu) xp /4x 0x40000000           # Physical memory dump
+(qemu) info mtree                   # Show full ARM memory map
+(qemu) info cpus                    # All vCPUs and their states</code></pre>
+
+                    <!-- Kernel debug -->
+                    <h2 id="kernel-debug">Kernel Debugging Workflows</h2>
+                    <pre><code class="language-bash"># ── 1. KASAN (Kernel Address Sanitizer) for ARM64 memory bugs ──
+# Build kernel with:
+# CONFIG_KASAN=y, CONFIG_KASAN_GENERIC=y
+# All heap out-of-bounds and use-after-free bugs print:
+# BUG: KASAN: slab-out-of-bounds in function+offset/size
+
+# ── 2. KGDB — built-in kernel GDB stub over serial ──
+# Boot: append "kgdboc=ttyAMA0,115200 kgdbwait"
+# Connect: aarch64-linux-gnu-gdb vmlinux -ex "target remote /dev/ttyUSB0"
+
+# ── 3. Ftrace — function tracer with zero config in sysfs ──
+echo function > /sys/kernel/debug/tracing/current_tracer
+echo schedule > /sys/kernel/debug/tracing/set_ftrace_filter
+echo 1 > /sys/kernel/debug/tracing/tracing_on
+sleep 1
+echo 0 > /sys/kernel/debug/tracing/tracing_on
+cat /sys/kernel/debug/tracing/trace | head -50
+
+# ── 4. Crash dump analysis with crash tool ──
+# Configure kernel: CONFIG_KEXEC=y, CONFIG_CRASH_DUMP=y
+# kdump via kexec: on panic, boot capture kernel:
+kdump: saved vmcore to /var/crash/vmcore
+crash vmlinux /var/crash/vmcore
+crash> bt         # Backtrace of panicking task
+crash> log        # Kernel log buffer at crash time
+crash> ps         # All tasks at crash time</code></pre>
+
+                    <!-- Case Study -->
+                    <h2 id="case-study"><i class="fas fa-flask me-2 text-teal"></i>Case Study: Debugging a Real-World ARM Boot Failure</h2>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Embedded</span><span class="bias-tag bg-crimson">Production</span><span class="bias-tag bg-navy">Real-World</span></div>
+                        <div class="card-content">
+                            <h5>When the Board Won't Boot: A Cortex-A53 Custom SoC Story</h5>
+                            <p>A hardware startup bringing up a custom Cortex-A53 quad-core SoC encountered a devastating production bug: 1 in 50 boards failed to boot, hanging silently after ATF (Arm Trusted Firmware) started. No UART output, no error LED. The debugging journey illustrates every tool in this article:</p>
+                            <ul>
+                                <li><strong>Step 1 — JTAG (OpenOCD + J-Link):</strong> Connected to the DAP and halted all four cores. Three cores were parked correctly (WFE loop). Core 0 was stuck in a <code>DMB SY</code> at the very end of BL2 → BL31 handoff. The program counter hadn't advanced past the barrier.</li>
+                                <li><strong>Step 2 — GDB inspection:</strong> <code>info registers</code> showed SCTLR_EL3.C=1 (caches enabled) but MAIR_EL3 contained garbage. The memory attribute for the ATF code region was configured as Device-nGnRnE instead of Normal Cacheable — meaning every instruction fetch was non-cacheable and non-speculative. The DMB was waiting for all outstanding stores to complete, but the store buffer was wedged because the cache controller was trying to coherence-check a non-cacheable region.</li>
+                                <li><strong>Step 3 — ETM trace (Lauterbach TRACE32):</strong> Instruction trace showed the MAIR_EL3 was written correctly 99% of the time. On failing boards, a voltage droop during the PLL lock sequence caused a transient SRAM bit-flip in the ATF's <code>.data</code> section where MAIR constants were stored. The ETM trace proved the write instruction executed correctly but the value it loaded from memory was already corrupted.</li>
+                                <li><strong>Fix:</strong> Added a MAIR readback verification loop after initial configuration: write MAIR, read it back, compare, retry up to 3 times. Added CRC check on ATF .data section at boot. Zero failures across 10,000 units after the fix.</li>
+                            </ul>
+                            <p><strong>Key lesson:</strong> Each debugging layer revealed what the previous couldn't. JTAG + GDB found <em>where</em> the CPU was stuck. ETM trace found <em>why</em> — a hardware transient that no amount of printf debugging could have caught.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">History</span><span class="bias-tag bg-navy">Evolution</span></div>
+                        <div class="card-content">
+                            <h5>Evolution of ARM Debug: From ICE to CoreSight</h5>
+                            <p>ARM debugging technology has evolved through distinct generations:</p>
+                            <ul>
+                                <li><strong>1990s — EmbeddedICE:</strong> ARM7TDMI included the first on-chip debug unit. Two hardware breakpoints and two watchpoints, controlled via JTAG scan chain. GDB talked to the ICE through manufacturer-specific protocols (ARM Multi-ICE, Lauterbach TRACE32).</li>
+                                <li><strong>2004 — CoreSight v1:</strong> ARM introduced a standardized debug interconnect — the Debug Access Port (DAP) and standard memory-mapped debug components. For the first time, different debug probes could connect to any CoreSight-compliant chip using the same protocol.</li>
+                                <li><strong>2008 — ETMv4:</strong> Full instruction-level tracing at GHz speeds. Each instruction compressed to ~1 bit on average (branch outcomes + exception transitions). A 32KB ETB can store millions of instructions.</li>
+                                <li><strong>2016 — CoreSight SoC-600:</strong> Added cross-trigger interfaces (CTI) for multi-core synchronized halt, timestamp synchronization across cores, and AMBA ATB (Advanced Trace Bus) for streaming trace to DDR at multi-GB/s rates.</li>
+                                <li><strong>2020+ — ARM Statistical Profiling Extension (SPE):</strong> Hardware-sampled profiling directly to memory. Every Nth instruction (configurable) is sampled with full context (PC, latency, data address, cache/TLB events) — like perf but zero software overhead.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Exercises -->
+                    <h2 id="exercises"><i class="fas fa-pencil-alt me-2 text-teal"></i>Hands-On Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Exercise 1</span><span class="bias-tag bg-navy">Beginner</span></div>
+                        <div class="card-content">
+                            <h5>GDB Command Mastery with QEMU</h5>
+                            <p>Using the Part 20 bare-metal kernel in QEMU with GDB:</p>
+                            <ol>
+                                <li>Set a breakpoint on <code>uart_putc</code>. When it hits, print the character being sent: <code>p/c (char)$x0</code></li>
+                                <li>Set a hardware watchpoint on the UART data register: <code>watch *(uint32_t*)0x09000000</code>. Continue and confirm GDB breaks every time a character is written</li>
+                                <li>Use <code>display/i $pc</code> to automatically show the next instruction at every breakpoint hit</li>
+                                <li>Use <code>record full</code> (if supported by QEMU-GDB) to enable reverse debugging, then <code>reverse-stepi</code> to step backwards through execution</li>
+                            </ol>
+                            <p><strong>Deliverable:</strong> A GDB command script (<code>.gdbinit</code>) that automates connecting to QEMU, loading symbols, and setting up your standard breakpoints.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Exercise 2</span><span class="bias-tag bg-crimson">Intermediate</span></div>
+                        <div class="card-content">
+                            <h5>Ftrace Kernel Function Profiling</h5>
+                            <p>On an ARM64 Linux system (Raspberry Pi, cloud instance, or QEMU with full Linux):</p>
+                            <ol>
+                                <li>Enable function tracing: <code>echo function > /sys/kernel/debug/tracing/current_tracer</code></li>
+                                <li>Filter to scheduler functions only: <code>echo 'schedule*' > /sys/kernel/debug/tracing/set_ftrace_filter</code></li>
+                                <li>Run a workload (<code>stress-ng --cpu 4 --timeout 5</code>), then read the trace</li>
+                                <li>Switch to <code>function_graph</code> tracer and repeat — observe the call tree with timing for each function</li>
+                                <li>Use <code>trace-cmd record -p function_graph -g schedule</code> for a cleaner workflow</li>
+                            </ol>
+                            <p><strong>Analysis:</strong> Identify the top 5 most-called functions in the scheduler path. Correlate with what you know about context switching from Part 20.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Exercise 3</span><span class="bias-tag bg-crimson">Advanced</span></div>
+                        <div class="card-content">
+                            <h5>Custom GDB Python Script for ARM64</h5>
+                            <p>Write a GDB Python extension that pretty-prints ARM64 system register state:</p>
+                            <ol>
+                                <li>Create <code>arm64_debug.py</code> with a GDB command class that inherits from <code>gdb.Command</code></li>
+                                <li>When invoked, read key registers: <code>gdb.parse_and_eval("$pc")</code>, <code>$sp</code>, <code>$cpsr</code></li>
+                                <li>Decode PSTATE fields from CPSR: N, Z, C, V flags, current EL (bits [3:2]), SP selection (bit 0), and exception masking (DAIF, bits [9:6])</li>
+                                <li>Pretty-print: <code>EL1h | NZCV=0b1001 | DAIF=0b1111 (all masked) | SP=0xFFFF...1000</code></li>
+                                <li>Bonus: Add a <code>arm64-bt</code> command that walks the frame pointer chain (X29) manually, printing each saved LR (X30) — a manual stack trace that works even when GDB's built-in <code>bt</code> fails</li>
+                            </ol>
+                            <p><strong>Load:</strong> <code>(gdb) source arm64_debug.py</code> then use <code>(gdb) arm64-state</code></p>
+                        </div>
+                    </div>
+
+                    <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
+                    <p>The ARM debugging stack is deep but consistent: every layer from JTAG hardware to kernel tracing exposes the same fundamental abstractions — halt, single-step, memory read/write, and execution trace. Mastering these tools transforms opaque crashes into navigable execution histories. The boot failure case study shows how layered debugging tools complement each other, and the exercises build practical muscle memory with GDB, Ftrace, and custom debug scripting that you'll use throughout your ARM development career.</p>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="arm-assembly-24-linkers-loaders.html"><strong>Part 24: Linkers, Loaders &amp; Binary Format Internals</strong></a>, we descend into ELF section anatomy, RELA relocations, PLT/GOT mechanics, position-independent code, and the <code>crt0</code> startup sequence that connects the OS loader to your <code>main()</code> function.</p>
+                    </div>
+
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 20: Building a Bare-Metal OS Kernel</h5>
+                            <p>The kernel we debug in this part — QEMU virt machine, UART, exception table, cooperative scheduler.</p>
+                            <a href="arm-assembly-20-bare-metal-os-kernel.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 14: Cortex-M Assembly &amp; Bare-Metal Embedded</h5>
+                            <p>ITM stimulus ports and SWD debugging covered in the Cortex-M embedded context.</p>
+                            <a href="arm-assembly-14-cortex-m-embedded.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 19: Reverse Engineering &amp; ARM Binary Analysis</h5>
+                            <p>Static binary analysis tools (objdump, Ghidra, BN) that complement the runtime debug tools here.</p>
+                            <a href="arm-assembly-19-reverse-engineering.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.</p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small"><i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a></p>
+                    <p class="small mt-3"><a href="/" class="text-light text-decoration-none">Home</a> | <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a></p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a></p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"><i class="fas fa-tag"></i><span id="categoryText">Technology</span></div>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>

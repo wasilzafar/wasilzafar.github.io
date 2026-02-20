@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Scale GNU Make to large codebases: recursive $(MAKE) -C sub-makes, non-recursive include patterns, out-of-source builds, and disciplined multi-directory project layouts." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="GNU Make multi-directory, recursive make, $(MAKE) -C, include Makefile, out-of-source build, non-recursive make, project architecture" />
+    <meta property="og:title" content="GNU Make Mastery Part 9: Project Architecture & Multi-Directory Builds" />
+    <meta property="og:description" content="Learn recursive $(MAKE) -C, non-recursive include, and out-of-source build layouts to structure large C/C++ projects cleanly with GNU Make." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-02-25" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>GNU Make Mastery Part 9: Project Architecture & Multi-Directory Builds - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/gnu-make/gnu-make-09-project-architecture-multi-directory.html" />
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied', 'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', { 'ad_storage': 'granted', 'ad_user_data': 'granted', 'ad_personalization': 'granted', 'analytics_storage': 'granted' });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20"><path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path></svg>
+                    <h4 style="margin:0;font-size:18px;color:var(--color-navy);font-weight:700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size:14px;line-height:1.6;color:var(--color-navy);margin-bottom:15px;">We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. By clicking "Accept All", you consent to our use of cookies. See our <a href="/privacy-policy.html" style="color:var(--color-teal);border-bottom:1px dotted var(--color-teal);">Privacy Policy</a> for more information.</p>
+                <div id="cookieSettings" style="display:none;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14"><path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path></svg><span style="margin-left:5px;font-size:12px;font-weight:600;color:var(--color-navy);">Customize Settings</span></div>
+                <div id="cookieTypes" style="display:none;margin-top:15px;padding-top:15px;border-top:1px solid rgba(59,151,151,0.2);">
+                    <h5 style="font-size:12px;font-weight:700;color:var(--color-navy);margin-bottom:10px;text-transform:uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom:12px;"><label style="display:flex;align-items:start;cursor:pointer;"><input type="checkbox" checked disabled style="margin-top:2px;margin-right:8px;cursor:not-allowed;"><div><strong style="font-size:13px;color:var(--color-navy);display:block;margin-bottom:2px;">Essential Cookies (Required)</strong><span style="font-size:12px;color:#666;">Necessary for the website to function properly.</span></div></label></div>
+                    <div style="margin-bottom:12px;"><label style="display:flex;align-items:start;cursor:pointer;"><input type="checkbox" id="analyticsCookies" checked style="margin-top:2px;margin-right:8px;"><div><strong style="font-size:13px;color:var(--color-navy);display:block;margin-bottom:2px;">Analytics Cookies</strong><span style="font-size:12px;color:#666;">Help us understand how you interact with the website.</span></div></label></div>
+                    <div style="margin-bottom:12px;"><label style="display:flex;align-items:start;cursor:pointer;"><input type="checkbox" id="marketingCookies" style="margin-top:2px;margin-right:8px;"><div><strong style="font-size:13px;color:var(--color-navy);display:block;margin-bottom:2px;">Marketing Cookies</strong><span style="font-size:12px;color:#666;">Used to deliver relevant advertisements.</span></div></label></div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background:var(--color-teal);color:white;font-weight:600;">Accept All</button>
+                <button id="cookieReject" style="background:transparent;color:var(--color-navy);border:2px solid var(--color-teal);font-weight:600;">Reject All</button>
+                <button id="cookieSave" style="background:var(--color-blue);color:white;font-weight:600;display:none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="../../categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+                <h1 class="display-4 fw-bold mb-3">GNU Make Mastery Part 9: Project Architecture &amp; Multi-Directory Builds</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>February 25, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>22 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Scale your Makefile from a single directory to an enterprise-grade project: compare recursive <code>$(MAKE) -C</code> sub-makes with non-recursive <code>include</code>, choose the right out-of-source build layout, and avoid the classic pitfalls that haunt large C codebases.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- TOC Toggle -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+
+    <!-- Side Navigation Overlay -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#why-structure" onclick="closeNav()">Why Structure Matters</a>
+                <ul>
+                    <li><a href="#project-layout" onclick="closeNav()">Canonical Project Layout</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#recursive-make" onclick="closeNav()">Recursive Make</a>
+                <ul>
+                    <li><a href="#makec" onclick="closeNav()">$(MAKE) -C Pattern</a></li>
+                    <li><a href="#recursive-pitfalls" onclick="closeNav()">Classic Pitfalls</a></li>
+                    <li><a href="#passing-vars" onclick="closeNav()">Passing Variables to Sub-makes</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#non-recursive" onclick="closeNav()">Non-Recursive Make</a>
+                <ul>
+                    <li><a href="#include-pattern-nr" onclick="closeNav()">include Module.mk Pattern</a></li>
+                    <li><a href="#nr-advantages" onclick="closeNav()">Advantages &amp; Trade-offs</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#out-of-source" onclick="closeNav()">Out-of-Source Builds</a></li>
+            <li><a href="#complete-project" onclick="closeNav()">Complete Project Example</a></li>
+            <li><a href="#next-steps" onclick="closeNav()">Next Steps</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <div id="why-structure" class="blog-content">
+                    <h2><i class="fas fa-sitemap me-2 text-teal"></i>Why Structure Matters</h2>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-tools me-2"></i>
+                        <strong>Part 9 of 16 — GNU Make Mastery Series.</strong> Everything so far has lived in one directory. Real projects span dozens of directories, libraries, and subsystems. This part covers two fundamentally different approaches and when to use each.
+                    </div>
+
+                    <!-- Series Navigation Path -->
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-cogs"></i></div>
+                            <h4>GNU Make Mastery</h4>
+                            <div class="path-subtitle">Your 16-step learning path &bull; Currently on Step 9</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="gnu-make-01-build-systems-foundations.html" class="step-card">
+                                <div class="step-num completed">1</div>
+                                <div class="step-info"><h6>Build Systems Foundations</h6><small>Why Make, compilation pipeline, basics</small></div>
+                            </a>
+                            <a href="gnu-make-02-targets-prerequisites-execution.html" class="step-card">
+                                <div class="step-num completed">2</div>
+                                <div class="step-info"><h6>Targets, Prerequisites &amp; Execution</h6><small>Rule anatomy, PHONY, build workflows</small></div>
+                            </a>
+                            <a href="gnu-make-03-variables-expansion-scope.html" class="step-card">
+                                <div class="step-num completed">3</div>
+                                <div class="step-info"><h6>Variables, Expansion &amp; Scope</h6><small>= vs :=, ?=, +=, CLI overrides</small></div>
+                            </a>
+                            <a href="gnu-make-04-automatic-variables-pattern-rules.html" class="step-card">
+                                <div class="step-num completed">4</div>
+                                <div class="step-info"><h6>Automatic Variables &amp; Pattern Rules</h6><small>$@, $&lt;, $^, $?, %.o: %.c patterns</small></div>
+                            </a>
+                            <a href="gnu-make-05-built-in-functions-make-language.html" class="step-card">
+                                <div class="step-num completed">5</div>
+                                <div class="step-info"><h6>Built-in Functions &amp; Make Language</h6><small>subst, wildcard, foreach, $(shell)</small></div>
+                            </a>
+                            <a href="gnu-make-06-conditionals-configurable-builds.html" class="step-card">
+                                <div class="step-num completed">6</div>
+                                <div class="step-info"><h6>Conditionals &amp; Configurable Builds</h6><small>ifeq, ifdef, platform detection, flags</small></div>
+                            </a>
+                            <a href="gnu-make-07-automatic-dependency-generation.html" class="step-card">
+                                <div class="step-num completed">7</div>
+                                <div class="step-info"><h6>Automatic Dependency Generation</h6><small>-M, -MM, -MD, .d files, header deps</small></div>
+                            </a>
+                            <a href="gnu-make-08-compilation-workflow-libraries.html" class="step-card">
+                                <div class="step-num completed">8</div>
+                                <div class="step-info"><h6>Compilation Workflow &amp; Libraries</h6><small>Static/shared libs, ar, -fPIC, SONAME</small></div>
+                            </a>
+                            <div class="step-card current">
+                                <div class="step-num active">9</div>
+                                <div class="step-info"><h6>Project Architecture &amp; Multi-Directory</h6><small>Recursive make, include, out-of-source</small></div>
+                                <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                            </div>
+                            <a href="gnu-make-10-cross-compilation-toolchains.html" class="step-card">
+                                <div class="step-num upcoming">10</div>
+                                <div class="step-info"><h6>Cross-Compilation &amp; Toolchains</h6><small>Toolchain prefixes, sysroots, embedded</small></div>
+                            </a>
+                            <a href="gnu-make-11-parallel-builds-performance.html" class="step-card">
+                                <div class="step-num upcoming">11</div>
+                                <div class="step-info"><h6>Parallel Builds &amp; Performance</h6><small>make -j, jobserver, race conditions</small></div>
+                            </a>
+                            <a href="gnu-make-12-testing-coverage-debug-tooling.html" class="step-card">
+                                <div class="step-num upcoming">12</div>
+                                <div class="step-info"><h6>Testing, Coverage &amp; Debug Tooling</h6><small>Test targets, gcov/lcov, sanitizers</small></div>
+                            </a>
+                            <a href="gnu-make-13-automation-devops-tool.html" class="step-card">
+                                <div class="step-num upcoming">13</div>
+                                <div class="step-info"><h6>Make as Automation &amp; DevOps Tool</h6><small>Task runner, Docker, install, packaging</small></div>
+                            </a>
+                            <a href="gnu-make-14-ci-cd-integration.html" class="step-card">
+                                <div class="step-num upcoming">14</div>
+                                <div class="step-info"><h6>CI/CD Integration</h6><small>Deterministic builds, GitHub Actions, cache</small></div>
+                            </a>
+                            <a href="gnu-make-15-advanced-make-debugging.html" class="step-card">
+                                <div class="step-num upcoming">15</div>
+                                <div class="step-info"><h6>Advanced Make &amp; Debugging</h6><small>--debug, dynamic rules, evaluation traps</small></div>
+                            </a>
+                            <a href="gnu-make-16-ecosystem-alternatives-professional.html" class="step-card">
+                                <div class="step-num upcoming">16</div>
+                                <div class="step-info"><h6>Ecosystem, Alternatives &amp; Mastery</h6><small>CMake, Ninja, Meson, Bazel, production</small></div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <h3 id="project-layout">Canonical Project Layout</h3>
+                    <pre><code class="language-bash">myproject/
+├── Makefile          # top-level entry point
+├── include/          # public headers
+│   └── myproject/
+├── src/
+│   ├── core/         # subsystem: core
+│   │   ├── Module.mk # non-recursive: per-dir fragment
+│   │   ├── core.c
+│   │   └── core.h
+│   ├── net/          # subsystem: networking
+│   │   ├── Module.mk
+│   │   └── net.c
+│   └── main.c
+├── lib/              # produced .a / .so files
+├── build/            # all object and dep files (out-of-source)
+└── tests/
+    └── Makefile</code></pre>
+                </div>
+
+                <div id="sample-files" class="blog-content mt-5">
+                    <h2><i class="fas fa-file-code me-2 text-teal"></i>Sample Source Files</h2>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Self-contained examples:</strong> Multi-module project examples reference <code>main.c</code>, <code>net.c</code>, and <code>logger.c</code>. Drop these files into the module subdirectories shown in the project-tree snippets and the Makefiles will build cleanly.
+                    </div>
+
+                    <h3>main.c</h3>
+                    <pre><code class="language-c">/* main.c — entry point */
+#include &lt;stdio.h&gt;
+#include "logger.h"
+
+int main(void) {
+    log_info("Application started");
+    return 0;
+}</code></pre>
+
+                    <h3>logger.h</h3>
+                    <pre><code class="language-c">/* logger.h */
+#ifndef LOGGER_H
+#define LOGGER_H
+void log_info(const char *msg);
+void log_error(const char *msg);
+#endif</code></pre>
+
+                    <h3>logger.c</h3>
+                    <pre><code class="language-c">/* logger.c — simple logging helpers */
+#include &lt;stdio.h&gt;
+#include "logger.h"
+
+void log_info(const char *msg)  { printf("[INFO]  %s\n", msg); }
+void log_error(const char *msg) { fprintf(stderr, "[ERROR] %s\n", msg); }</code></pre>
+
+                    <h3>net.c</h3>
+                    <pre><code class="language-c">/* net.c — minimal networking stub */
+#include &lt;stdio.h&gt;
+
+void net_connect(const char *addr, int port) {
+    printf("Connecting to %s:%d\n", addr, port);
+}
+
+void net_disconnect(void) { printf("Disconnected\n"); }</code></pre>
+                </div>
+
+                <div id="recursive-make" class="blog-content mt-5">
+                    <h2><i class="fas fa-redo me-2 text-teal"></i>Recursive Make</h2>
+
+                    <h3 id="makec"><code>$(MAKE) -C</code> Pattern</h3>
+                    <p><code>$(MAKE) -C dir</code> changes into <code>dir</code> and invokes a new Make process there. Always use <code>$(MAKE)</code> (not <code>make</code>) so the same Make binary and jobserver options propagate.</p>
+
+                    <pre><code class="language-makefile"># Top-level Makefile
+SUBDIRS := src/core src/net tests
+
+.PHONY: all clean $(SUBDIRS)
+
+all: $(SUBDIRS)
+
+# Each subdir target triggers a recursive make
+$(SUBDIRS):
+	$(MAKE) -C $@
+
+# Pass build config down
+$(SUBDIRS): BUILD ?= release
+$(SUBDIRS):
+	$(MAKE) -C $@ BUILD=$(BUILD)
+
+clean:
+	for dir in $(SUBDIRS); do $(MAKE) -C $$dir clean; done</code></pre>
+
+                    <h3 id="recursive-pitfalls">Classic Pitfalls</h3>
+                    <div class="experiment-card">
+                        <div class="card-meta mb-2"><span class="badge bg-teal text-white">Pitfalls</span></div>
+                        <ul class="mb-0">
+                            <li><strong>Broken parallelism:</strong> <code>make -j8</code> at the top level doesn't parallelize across subdirs without the jobserver. Use <code>$(MAKE) -C</code> (not a shell loop) so Make can coordinate jobs.</li>
+                            <li><strong>Stale inter-directory deps:</strong> If <code>src/net</code> depends on a header rebuilt by <code>src/core</code>, recursive Make may not see the dependency. Express it explicitly.</li>
+                            <li><strong>Ordering:</strong> Use prerequisite chaining to enforce order: <code>src/net: src/core</code></li>
+                        </ul>
+                    </div>
+
+                    <h3 id="passing-vars">Passing Variables to Sub-makes</h3>
+                    <pre><code class="language-makefile"># Method 1: export (makes variable visible to all child processes)
+export CC := arm-linux-gnueabihf-gcc
+export CFLAGS := -Wall -O2
+
+# Method 2: pass on command line (overrides child Makefile vars)
+$(MAKE) -C src/core CC=$(CC) CFLAGS="$(CFLAGS)"
+
+# Method 3: export all variables (use sparingly — can cause surprises)
+export</code></pre>
+                </div>
+
+                <div id="non-recursive" class="blog-content mt-5">
+                    <h2><i class="fas fa-file-import me-2 text-teal"></i>Non-Recursive Make</h2>
+
+                    <p>In the non-recursive approach, a single top-level <code>Makefile</code> <code>include</code>s per-directory fragments (<code>Module.mk</code>) that append to global variable lists. Make has a single, complete dependency graph — enabling correct parallelism and cross-directory deps.</p>
+
+                    <h3 id="include-pattern-nr"><code>include Module.mk</code> Pattern</h3>
+
+                    <pre><code class="language-makefile"># src/core/Module.mk — note use of $(d) for current dir prefix
+d := src/core
+
+CORE_SRCS := $(d)/allocator.c $(d)/logger.c $(d)/config.c
+CORE_OBJS := $(patsubst $(d)/%.c,build/$(d)/%.o,$(CORE_SRCS))
+
+# Append to global lists
+SRCS += $(CORE_SRCS)
+OBJS += $(CORE_OBJS)
+
+# Module-specific compile flags
+$(CORE_OBJS): CFLAGS += -DCORE_MODULE
+
+build/$(d)/%.o: $(d)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@</code></pre>
+
+                    <pre><code class="language-makefile"># Top-level Makefile
+CC      := gcc
+CFLAGS  := -Wall -Wextra -std=c11 -O2
+BUILDDIR := build
+TARGET  := myapp
+
+# Include all module fragments
+include src/core/Module.mk
+include src/net/Module.mk
+
+DEPS := $(OBJS:.o=.d)
+
+.PHONY: all clean
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+-include $(DEPS)
+
+clean:
+	rm -rf $(BUILDDIR) $(TARGET)</code></pre>
+
+                    <h3 id="nr-advantages">Advantages &amp; Trade-offs</h3>
+                    <div class="experiment-card">
+                        <div class="card-meta mb-2"><span class="badge bg-teal text-white">Comparison</span></div>
+                        <table class="table table-sm mb-0">
+                            <thead><tr><th></th><th>Recursive</th><th>Non-Recursive</th></tr></thead>
+                            <tbody>
+                                <tr><td>Cross-dir deps</td><td>Error-prone to express</td><td>Natural — single graph</td></tr>
+                                <tr><td>Parallel builds</td><td>Needs jobserver tuning</td><td>Full <code>-j</code> exploitation</td></tr>
+                                <tr><td>Module independence</td><td>Each subdir self-contained</td><td>All fragments share namespace</td></tr>
+                                <tr><td>Incremental builds</td><td>Per-subdir Makefiles re-evaluated</td><td>Single Make database</td></tr>
+                                <tr><td>Best for</td><td>Large, loosely-coupled monorepos</td><td>Tightly-coupled libraries</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="out-of-source" class="blog-content mt-5">
+                    <h2><i class="fas fa-folder-open me-2 text-teal"></i>Out-of-Source Builds</h2>
+
+                    <p>Never pollute your source tree with build artifacts. Keep all <code>.o</code>, <code>.d</code>, and output files in a separate <code>build/</code> tree, mirroring the source structure:</p>
+
+                    <pre><code class="language-makefile">SRCDIR   := src
+BUILDDIR := build
+
+# Mirror src/ structure under build/
+# src/core/allocator.c → build/src/core/allocator.o
+SRCS := $(shell find $(SRCDIR) -name '*.c')
+OBJS := $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SRCS))
+
+$(BUILDDIR)/%.o: $(SRCDIR)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Multiple build flavors:</strong> Parameterize the build directory by config so debug and release artifacts never collide:
+                    </div>
+
+                    <pre><code class="language-makefile">BUILD    ?= release
+BUILDDIR := build/$(BUILD)
+
+ifeq ($(BUILD),debug)
+    CFLAGS += -g3 -O0 -DDEBUG
+else
+    CFLAGS += -O2 -DNDEBUG
+endif
+
+# Now:  build/debug/src/core/allocator.o
+#       build/release/src/core/allocator.o</code></pre>
+                </div>
+
+                <div id="complete-project" class="blog-content mt-5">
+                    <h2><i class="fas fa-laptop-code me-2 text-teal"></i>Complete Non-Recursive Project Example</h2>
+
+                    <pre><code class="language-makefile"># =============================================================
+# Top-level Makefile — non-recursive, out-of-source
+# =============================================================
+CC       := gcc
+CFLAGS   := -Wall -Wextra -std=c11 -Iinclude
+BUILD    ?= release
+BUILDDIR := build/$(BUILD)
+TARGET   := $(BUILDDIR)/myapp
+
+ifeq ($(BUILD),debug)
+CFLAGS   += -g3 -O0 -DDEBUG
+else
+CFLAGS   += -O2 -DNDEBUG
+endif
+
+# Accumulator variables — populated by Module.mk files
+SRCS :=
+OBJS :=
+
+# Include per-directory build fragments
+include src/core/Module.mk
+include src/net/Module.mk
+
+DEPS := $(OBJS:.o=.d)
+
+.PHONY: all clean
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) $(LDFLAGS) -o $@ $^
+	@echo "Built: $@"
+
+$(BUILDDIR)/%.o: src/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
+
+-include $(DEPS)
+
+clean:
+	rm -rf build $(TARGET)
+
+# Print all source files (debugging aid)
+.PHONY: info
+info:
+	@echo "SRCS = $(SRCS)"
+	@echo "OBJS = $(OBJS)"</code></pre>
+                </div>
+
+                <!-- Next Steps -->
+                <div id="next-steps" class="blog-content mt-5">
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="gnu-make-10-cross-compilation-toolchains.html"><strong>Part 10: Cross-Compilation &amp; Toolchains</strong></a>, we set <code>CROSS_COMPILE</code> prefixes, sysroot flags, and <code>PKG_CONFIG_SYSROOT_DIR</code> to build firmware for embedded ARM targets from an x86 Linux host.</p>
+                    </div>
+
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 10: Cross-Compilation &amp; Toolchains</h5>
+                            <p class="text-muted small mb-2">Configure <code>CROSS_COMPILE</code>, sysroots, and toolchain variables for ARM, RISC-V, and MIPS embedded targets.</p>
+                            <a href="gnu-make-10-cross-compilation-toolchains.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 8: Compilation Workflow &amp; Libraries</h5>
+                            <p class="text-muted small mb-2">Build static archives and shared objects, manage SONAME versioning, and handle link order for multi-library projects.</p>
+                            <a href="gnu-make-08-compilation-workflow-libraries.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5 class="mb-2">Part 11: Parallel Builds &amp; Performance</h5>
+                            <p class="text-muted small mb-2">Maximize throughput with <code>make -j</code>, the jobserver protocol, and techniques for detecting and fixing race conditions.</p>
+                            <a href="gnu-make-11-parallel-builds-performance.html" class="text-decoration-none">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                    <div class="series-nav">
+                        <a href="gnu-make-08-compilation-workflow-libraries.html" class="series-nav-item prev">
+                            <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span>
+                            <span class="nav-title">Part 8: Compilation Workflow &amp; Libraries</span>
+                        </a>
+                        <a href="gnu-make-10-cross-compilation-toolchains.html" class="series-nav-item next">
+                            <span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span>
+                            <span class="nav-title">Part 10: Cross-Compilation &amp; Toolchains</span>
+                        </a>
+                    </div>
+                </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.</p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small"><i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a></p>
+                    <p class="small mt-3"><a href="/" class="text-light text-decoration-none">Home</a> | <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a></p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">Enjoying this content? <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration:underline;">Keep me caffeinated</a> to keep the pixels flowing!</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator" title="Current Section"><i class="fas fa-tag"></i><span id="categoryText">Technology</span></div>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-makefile.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>

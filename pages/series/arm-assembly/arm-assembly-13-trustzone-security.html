@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="ARM TrustZone security extensions: Secure vs Non-Secure worlds, SCR_EL3 configuration, SMC calling convention, Secure-EL1 MMU, Trusted Firmware-A BL31 architecture, and world-switch assembly." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="ARM TrustZone, Secure Monitor Call, SMC ARM, SCR_EL3, Trusted Firmware-A, ARM secure world, OPTEE ARM, world switch assembly" />
+    <meta property="og:title" content="ARM Assembly Part 13: TrustZone &amp; ARM Security Extensions" />
+    <meta property="og:description" content="Explore ARM TrustZone: Secure and Non-Secure worlds, EL3 secure monitor, SMC calling convention, Trusted Firmware-A BL31, and S-EL1 trusted OS setup." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-04-02" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <title>ARM Assembly Part 13: TrustZone &amp; ARM Security Extensions - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/arm-assembly/arm-assembly-13-trustzone-security.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied',
+            'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', {
+            'ad_storage': 'granted', 'ad_user_data': 'granted',
+            'ad_personalization': 'granted', 'analytics_storage': 'granted'
+        });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20"><path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path></svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. By clicking "Accept All", you consent to our use of cookies. See our <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>.</p>
+                <div id="cookieSettings" style="display: none;"></div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59,151,151,0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;"><label style="display:flex;align-items:start;cursor:pointer;"><input type="checkbox" checked disabled style="margin-top:2px;margin-right:8px;cursor:not-allowed;"><div><strong style="font-size:13px;color:var(--color-navy);display:block;margin-bottom:2px;">Essential Cookies (Required)</strong><span style="font-size:12px;color:#666;">Necessary for the website to function properly.</span></div></label></div>
+                    <div style="margin-bottom: 12px;"><label style="display:flex;align-items:start;cursor:pointer;"><input type="checkbox" id="analyticsCookies" checked style="margin-top:2px;margin-right:8px;"><div><strong style="font-size:13px;color:var(--color-navy);display:block;margin-bottom:2px;">Analytics Cookies</strong><span style="font-size:12px;color:#666;">Help us understand how you interact with the website.</span></div></label></div>
+                    <div style="margin-bottom: 12px;"><label style="display:flex;align-items:start;cursor:pointer;"><input type="checkbox" id="marketingCookies" style="margin-top:2px;margin-right:8px;"><div><strong style="font-size:13px;color:var(--color-navy);display:block;margin-bottom:2px;">Marketing Cookies</strong><span style="font-size:12px;color:#666;">Used to deliver relevant advertisements.</span></div></label></div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background:var(--color-teal);color:white;font-weight:600;">Accept All</button>
+                <button id="cookieReject" style="background:transparent;color:var(--color-navy);border:2px solid var(--color-teal);font-weight:600;">Reject All</button>
+                <button id="cookieSave" style="background:var(--color-blue);color:white;font-weight:600;display:none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+                <h1 class="display-4 fw-bold mb-3">ARM Assembly Part 13: TrustZone &amp; ARM Security Extensions</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>April 2, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>22 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">ARM TrustZone partitions hardware into Secure and Non-Secure worlds at the silicon level. EL3 is the Secure Monitor — a permanent resident that arbitrates world switches via SMC calls. This part covers SCR_EL3 configuration, the SMC calling convention (SMCCC), Trusted Firmware-A BL31 internals, S-EL1 trusted OS setup, and secure memory partitioning.</p>
+            </div>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#introduction" onclick="closeNav()">Introduction &amp; Security Model</a></li>
+            <li>
+                <a href="#worlds" onclick="closeNav()">Secure vs Non-Secure Worlds</a>
+                <ul>
+                    <li><a href="#scr-el3" onclick="closeNav()">SCR_EL3 — Secure Configuration</a></li>
+                    <li><a href="#ns-bit" onclick="closeNav()">NS Bit &amp; Memory Tagging</a></li>
+                    <li><a href="#secure-registers" onclick="closeNav()">Banked Registers per World</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#smc" onclick="closeNav()">SMC — Secure Monitor Call</a>
+                <ul>
+                    <li><a href="#smccc" onclick="closeNav()">SMCCC Calling Convention</a></li>
+                    <li><a href="#psci" onclick="closeNav()">PSCI — Power State Coordination</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#tfa" onclick="closeNav()">Trusted Firmware-A (TF-A)</a>
+                <ul>
+                    <li><a href="#bl-chain" onclick="closeNav()">BL1→BL2→BL31→BL33 Boot Chain</a></li>
+                    <li><a href="#bl31" onclick="closeNav()">BL31 Runtime Services</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#world-switch" onclick="closeNav()">World Switch Assembly</a>
+                <ul>
+                    <li><a href="#ns-to-s" onclick="closeNav()">Non-Secure → Secure</a></li>
+                    <li><a href="#s-to-ns" onclick="closeNav()">Secure → Non-Secure Return</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#sel1" onclick="closeNav()">S-EL1 Trusted OS (OP-TEE)</a></li>
+            <li>
+                <a href="#tzasc" onclick="closeNav()">TZASC &amp; Memory Partitioning</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Hands-On Exercises</a></li>
+            <li><a href="#security-tool" onclick="closeNav()">Security Audit Tool</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                <div id="introduction" class="blog-content">
+
+                    <h2><i class="fas fa-shield-alt me-2 text-teal"></i>Introduction &amp; Security Model</h2>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Series Overview:</strong> This is Part 13 of our 28-part ARM Assembly Mastery Series. Part 12 set up virtual memory. Now we add a second axis of privilege: TrustZone's Secure world, which exists orthogonally to the EL0–EL3 hierarchy and provides hardware-isolated execution for trusted applications, cryptographic keys, and DRM enforcement.
+                    </div>
+
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>ARM Assembly Mastery</h4>
+                            <div class="path-subtitle">Your 28-step learning path • Currently on Step 13</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="arm-assembly-01-architecture-history.html" class="step-card"><div class="step-num completed">1</div><div class="step-info"><h6>Architecture History &amp; Core Concepts</h6><small>ARMv1→v9, RISC philosophy, profiles</small></div></a>
+                            <a href="arm-assembly-02-arm32-instructions.html" class="step-card"><div class="step-num completed">2</div><div class="step-info"><h6>ARM32 Instruction Set Fundamentals</h6><small>ARM vs Thumb, registers, CPSR, barrel shifter</small></div></a>
+                            <a href="arm-assembly-03-aarch64-registers.html" class="step-card"><div class="step-num completed">3</div><div class="step-info"><h6>AArch64 Registers, Addressing &amp; Data Movement</h6><small>X/W regs, addressing modes, load/store pairs</small></div></a>
+                            <a href="arm-assembly-04-arithmetic-logic.html" class="step-card"><div class="step-num completed">4</div><div class="step-info"><h6>Arithmetic, Logic &amp; Bit Manipulation</h6><small>ADD/SUB, bitfield extract/insert, CLZ</small></div></a>
+                            <a href="arm-assembly-05-branching-loops.html" class="step-card"><div class="step-num completed">5</div><div class="step-info"><h6>Branching, Loops &amp; Conditional Execution</h6><small>Branch types, link register, jump tables</small></div></a>
+                            <a href="arm-assembly-06-stack-subroutines.html" class="step-card"><div class="step-num completed">6</div><div class="step-info"><h6>Stack, Subroutines &amp; AAPCS</h6><small>Calling conventions, prologue/epilogue</small></div></a>
+                            <a href="arm-assembly-07-memory-caches.html" class="step-card"><div class="step-num completed">7</div><div class="step-info"><h6>Memory Model, Caches &amp; Barriers</h6><small>Weak ordering, DMB/DSB/ISB, TLB</small></div></a>
+                            <a href="arm-assembly-08-neon-simd.html" class="step-card"><div class="step-num completed">8</div><div class="step-info"><h6>NEON &amp; Advanced SIMD</h6><small>Vector ops, intrinsics, media processing</small></div></a>
+                            <a href="arm-assembly-09-sve-sve2.html" class="step-card"><div class="step-num completed">9</div><div class="step-info"><h6>SVE &amp; SVE2 Scalable Vector Extensions</h6><small>Predicate regs, gather/scatter, HPC/ML</small></div></a>
+                            <a href="arm-assembly-10-floating-point.html" class="step-card"><div class="step-num completed">10</div><div class="step-info"><h6>Floating-Point &amp; VFP Instructions</h6><small>IEEE-754, scalar FP, rounding modes</small></div></a>
+                            <a href="arm-assembly-11-exception-levels.html" class="step-card"><div class="step-num completed">11</div><div class="step-info"><h6>Exception Levels, Interrupts &amp; Vector Tables</h6><small>EL0–EL3, GIC, fault debugging</small></div></a>
+                            <a href="arm-assembly-12-mmu-virtual-memory.html" class="step-card"><div class="step-num completed">12</div><div class="step-info"><h6>MMU, Page Tables &amp; Virtual Memory</h6><small>Stage-1 translation, permissions, huge pages</small></div></a>
+                            <div class="step-card current"><div class="step-num active">13</div><div class="step-info"><h6>TrustZone &amp; ARM Security Extensions</h6><small>Secure monitor, world switching, TF-A</small></div><span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span></div>
+                            <a href="arm-assembly-14-cortex-m-embedded.html" class="step-card"><div class="step-num upcoming">14</div><div class="step-info"><h6>Cortex-M Assembly &amp; Bare-Metal Embedded</h6><small>NVIC, SysTick, linker scripts, low-power</small></div></a>
+                            <a href="arm-assembly-15-cortex-a-boot.html" class="step-card"><div class="step-num upcoming">15</div><div class="step-info"><h6>Cortex-A System Programming &amp; Boot</h6><small>EL3→EL1 transitions, MMU setup, PSCI</small></div></a>
+                            <a href="arm-assembly-16-apple-silicon.html" class="step-card"><div class="step-num upcoming">16</div><div class="step-info"><h6>Apple Silicon &amp; macOS ABI</h6><small>ARM64e PAC, Mach-O, dyld, perf counters</small></div></a>
+                            <a href="arm-assembly-17-inline-asm-intrinsics.html" class="step-card"><div class="step-num upcoming">17</div><div class="step-info"><h6>Inline Assembly, GCC/Clang &amp; C Interop</h6><small>Constraints, clobbers, compiler interaction</small></div></a>
+                            <a href="arm-assembly-18-performance-profiling.html" class="step-card"><div class="step-num upcoming">18</div><div class="step-info"><h6>Performance Profiling &amp; Micro-Optimization</h6><small>Pipeline hazards, PMU, benchmarking</small></div></a>
+                            <a href="arm-assembly-19-reverse-engineering.html" class="step-card"><div class="step-num upcoming">19</div><div class="step-info"><h6>Reverse Engineering &amp; ARM Binary Analysis</h6><small>ELF, disassembly, CFR, iOS/Android quirks</small></div></a>
+                            <a href="arm-assembly-20-bare-metal-os-kernel.html" class="step-card"><div class="step-num upcoming">20</div><div class="step-info"><h6>Building a Bare-Metal OS Kernel</h6><small>Bootloader, UART, scheduler, context switch</small></div></a>
+                            <a href="arm-assembly-21-microarchitecture.html" class="step-card"><div class="step-num upcoming">21</div><div class="step-info"><h6>ARM Microarchitecture Deep Dive</h6><small>OOO pipelines, reorder buffers, branch predict</small></div></a>
+                            <a href="arm-assembly-22-virtualization.html" class="step-card"><div class="step-num upcoming">22</div><div class="step-info"><h6>Virtualization Extensions</h6><small>EL2 hypervisor, stage-2 translation, KVM</small></div></a>
+                            <a href="arm-assembly-23-debugging-tooling.html" class="step-card"><div class="step-num upcoming">23</div><div class="step-info"><h6>Debugging &amp; Tooling Ecosystem</h6><small>GDB, OpenOCD/JTAG, ETM/ITM, QEMU</small></div></a>
+                            <a href="arm-assembly-24-linkers-loaders.html" class="step-card"><div class="step-num upcoming">24</div><div class="step-info"><h6>Linkers, Loaders &amp; Binary Format Internals</h6><small>ELF deep dive, relocations, PIC, crt0</small></div></a>
+                            <a href="arm-assembly-25-cross-compilation.html" class="step-card"><div class="step-num upcoming">25</div><div class="step-info"><h6>Cross-Compilation &amp; Build Systems</h6><small>GCC/Clang toolchains, CMake, firmware gen</small></div></a>
+                            <a href="arm-assembly-26-arm-real-systems.html" class="step-card"><div class="step-num upcoming">26</div><div class="step-info"><h6>ARM in Real Systems</h6><small>Android, FreeRTOS/Zephyr, U-Boot, TF-A</small></div></a>
+                            <a href="arm-assembly-27-security-exploitation.html" class="step-card"><div class="step-num upcoming">27</div><div class="step-info"><h6>Security Research &amp; Exploitation</h6><small>ASLR, PAC attacks, ROP/JOP, kernel exploit</small></div></a>
+                            <a href="arm-assembly-28-armv9-future.html" class="step-card"><div class="step-num upcoming">28</div><div class="step-info"><h6>Emerging ARMv9 &amp; Future Directions</h6><small>MTE, SME, confidential compute, AI accel</small></div></a>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-building me-2"></i>
+                        <strong>Real-World Analogy — The Diplomatic Embassy:</strong> Think of TrustZone like a diplomatic embassy within a foreign country. The embassy compound (Secure world) sits on sovereign territory — even though it is physically located inside the host nation (Non-Secure world), the host's police and laws cannot enter or inspect it. The embassy has its own guards (EL3 Secure Monitor), its own vault for classified documents (Secure SRAM), and its own communication channels (SMC calls). Citizens of the host country (Normal-world applications) must go through the embassy's front desk (SMC calling convention) to request services like visa processing (Trusted Application execution). The host nation can see the embassy building exists, but cannot peek inside its walls — just as Non-Secure software can see that Secure memory regions exist but the TZASC physically blocks all read/write attempts. If the host nation's government is overthrown (kernel compromise), the embassy remains inviolable.
+                    </div>
+
+                    <p>TrustZone adds a single hardware bit — the NS (Non-Secure) bit — to every bus transaction on the AMBA AXI bus. Peripherals and DRAM controllers use this bit to enforce access control: Secure-world transactions (NS=0) can reach any address; Non-Secure transactions (NS=1) are blocked from Secure-only regions by the TZASC (TrustZone Address Space Controller) and TZPC (TrustZone Protection Controller). The CPU's current world is determined by SCR_EL3.NS at EL3, and by the implied state when running below EL3.</p>
+
+                    <!-- Worlds -->
+                    <h2 id="worlds">Secure vs Non-Secure Worlds</h2>
+
+                    <h3 id="scr-el3">SCR_EL3 — Secure Configuration</h3>
+                    <pre><code class="language-armasm">// SCR_EL3 key bits:
+// [0]  NS  — 0=Secure, 1=Non-Secure (current world when in EL1/EL0)
+// [1]  IRQ — 1=IRQs taken to EL3 (else to EL1)
+// [2]  FIQ — 1=FIQs taken to EL3
+// [3]  EA  — 1=SErrors taken to EL3
+// [4]  SMD — 1=Disable SMC instruction at EL1 and above
+// [10] RW  — 1=EL1 is AArch64 (0=AArch32)
+// [11] SIF — 1=Secure instruction fetch from Non-Secure memory prohibited
+
+// Enter Non-Secure world from EL3 (Linux boot scenario):
+MRS  x0, SCR_EL3
+ORR  x0, x0, #(1 << 0)   // NS=1: EL1 will be Non-Secure
+ORR  x0, x0, #(1 << 10)  // RW=1: EL1 is AArch64
+ORR  x0, x0, #(1 << 2)   // FIQ=1: route FIQ to EL3 (for secure interrupts)
+BIC  x0, x0, #(1 << 4)   // SMD=0: SMC allowed from NS EL1
+MSR  SCR_EL3, x0
+ISB</code></pre>
+
+                    <h3 id="ns-bit">NS Bit &amp; Memory Tagging</h3>
+                    <p>Every read/write from the CPU carries the current world's NS bit through the cache and memory bus. The TZASC (typically AXI TrustZone Address Space Controller v1/v2 or GPC for newer SoCs) is configured at boot by Secure firmware to mark regions as Secure-only. Non-Secure masters attempting to access those physical pages receive a bus abort. This is enforced in hardware, independent of the MMU, making TrustZone the foundation for features like Android Strongbox keys, iOS Secure Enclave equivalents, and DRM content protection.</p>
+
+                    <h3 id="secure-registers">Banked Registers per World</h3>
+                    <p>Each world has its own complete set of EL0/EL1 system registers: TTBR0_EL1, TTBR1_EL1, TCR_EL1, SCTLR_EL1, SPSR_EL1, ELR_EL1, SP_EL0, SP_EL1, and the entire NEON/FP register file. When EL3 switches worlds by writing SCR_EL3.NS and executing ERET, the processor transparently switches to the Secure copies of these registers, giving the trusted OS its own fully independent virtual memory space and register state.</p>
+
+                    <!-- SMC -->
+                    <h2 id="smc">SMC — Secure Monitor Call</h2>
+
+                    <h3 id="smccc">SMCCC Calling Convention</h3>
+                    <p>The ARM SMC Calling Convention (SMCCC v1.2) standardises how software invokes EL3 services. x0 contains the function identifier (32-bit encoding: [31]=call type, [30:24]=OEN, [16]=SMC32/64, [15:0]=function). x1–x7 carry arguments. EL3 services return results in x0–x3 (SMCCC ≥ 1.2: also x4–x7). This convention is used by PSCI, vendor-specific services, and hypervisor SMC calls.</p>
+
+                    <pre><code class="language-armasm">// SMCCC example: PSCI CPU_ON to boot a secondary CPU
+// Function ID: 0xC4000003 = PSCI64 CPU_ON
+// x0 = Function ID, x1 = target MPIDR, x2 = entry_point_address, x3 = context_id
+MOV  x0, #0xC4000003       // PSCI CPU_ON (SMC64)
+MRS  x1, MPIDR_EL1         // Read own MPIDR (modify to target CPU)
+ORR  x1, x1, #(1 << 8)    // Point to CPU1 (Aff1=1)
+ADR  x2, secondary_entry   // Secondary core entry point
+MOV  x3, #0                // Context ID
+SMC  #0                    // Invoke EL3 secure monitor
+
+// On return: x0 = PSCI_SUCCESS (0) or error code
+CMP  x0, #0
+B.NE psci_error</code></pre>
+
+                    <h3 id="psci">PSCI — Power State Coordination Interface</h3>
+                    <p>PSCI is the most common SMC-based service. It provides CPU_SUSPEND, CPU_OFF, CPU_ON, SYSTEM_OFF, SYSTEM_RESET, and MIGRATE functions, allowing the OS to manage CPU power states without requiring platform-specific code. Linux's CPU hotplug, idle framework (cpuidle), and kexec all use PSCI SMC calls. TF-A's BL31 implements the PSCI runtime service handlers at EL3.</p>
+
+                    <!-- TF-A -->
+                    <h2 id="tfa">Trusted Firmware-A (TF-A)</h2>
+
+                    <h3 id="bl-chain">BL1→BL2→BL31→BL33 Boot Chain</h3>
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">Boot Chain</span> TF-A BL stages</div>
+                        <div class="card-content">
+                            <p><strong>BL1 (Boot ROM / AP Trusted Boot):</strong> Runs from ROM at EL3. Validates and loads BL2.</p>
+                            <p><strong>BL2 (Trusted Boot Firmware):</strong> Loads all other BL images, validates them against Certificate-based Trust of Origin (CoT).</p>
+                            <p><strong>BL31 (EL3 Runtime Software):</strong> Stays resident in SRAM/ROM. Handles PSCI, SMCCC, SPM (Secure Partition Manager) dispatch.</p>
+                            <p><strong>BL32 (Trusted OS — optional):</strong> OP-TEE or other S-EL1 trusted OS. Manages Trusted Applications (TAs).</p>
+                            <p><strong>BL33 (Non-Secure Bootloader):</strong> U-Boot or UEFI. Runs in Non-Secure EL2 or EL1, eventually boots Linux.</p>
+                        </div>
+                    </div>
+
+                    <h3 id="bl31">BL31 Runtime Services</h3>
+                    <pre><code class="language-armasm">// BL31 SMC dispatch (simplified TF-A pattern)
+// When SMC is trapped to EL3, BL31 runtime:
+// 1. Save Non-Secure context (NS GPRs, SP, ELR, SPSR)
+// 2. Decode x0 function identifier → route to service handler
+// 3. If dispatching to S-EL1 (OP-TEE):
+//    - Set SCR_EL3.NS=0
+//    - Restore Secure EL1 context
+//    - ERET to S-EL1 (OP-TEE) handler
+// 4. When S-EL1 finishes: SMC back to EL3
+//    - Save Secure context
+//    - Set SCR_EL3.NS=1
+//    - Restore NS context
+//    - ERET back to NS caller
+
+// Pseudo-code equivalent in assembly:
+el3_smc_handler:
+    SAVE_NS_CONTEXT x18           // Macro: save x0-x29, SP, ELR, SPSR
+    BL    smc_dispatch_c          // C: decode x0, return target world
+    CBZ   x0, return_to_ns        // 0 = return to NS, 1 = go to secure
+    RESTORE_SECURE_CONTEXT x18
+    MSR   SCR_EL3, x19            // SCR_EL3 with NS=0
+    ERET                          // Jump to Secure EL1</code></pre>
+
+                    <h4 id="hardware-rot">Hardware Root of Trust</h4>
+                    <p>A Hardware Root of Trust (HRoT) anchors the entire TrustZone security model in tamper-resistant silicon. Without it, even a perfectly configured TF-A boot chain could be subverted by flashing modified firmware. The HRoT ensures that the very first instruction executed after power-on is authentic and untampered.</p>
+
+                    <p><strong>OTP Fuses for Boot Key Storage:</strong> The SoC contains One-Time Programmable (OTP) fuses — eFuses that are physically burned during manufacturing. These store the SHA-256 hash of the root-of-trust public key (ROTPK). BL1 in ROM reads this hash and verifies BL2's certificate chain against it. Because eFuses are write-once, an attacker cannot replace the key even with physical access to the chip.</p>
+
+                    <p><strong>Anti-Rollback Counters:</strong> OTP fuses also store monotonic anti-rollback counters (NV counters). Each signed firmware image includes a minimum counter value; BL1/BL2 refuse to load any image whose counter is below the fused value. When a security-critical update ships, the new firmware burns the next fuse bit, permanently preventing rollback to vulnerable versions.</p>
+
+                    <p><strong>Hardware Entropy Sources (TRNG):</strong> Secure key generation requires unpredictable randomness. ARM CryptoCell and similar IP blocks include a True Random Number Generator (TRNG) based on ring-oscillator jitter or thermal noise. The TRNG is mapped to the Secure address space only — Non-Secure software must request random bytes via an SMC call to a Trusted Application, ensuring the entropy source cannot be manipulated or observed by the Normal world.</p>
+
+                    <p><strong>Certificate Chain Verification in Secure Boot:</strong> TF-A implements a Certificate of Trust (CoT) model: BL1 verifies BL2's content certificate using the ROTPK hash from OTP. BL2 then verifies BL31, BL32, and BL33 certificates in a chain. Each certificate binds the image hash to the signing key, and each key is itself signed by its parent. A single broken link in this chain halts the boot process entirely — the SoC enters a secure fault state rather than booting compromised firmware.</p>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">Case Study</span> Samsung Knox &amp; Qualcomm Secure Boot Chain</div>
+                        <div class="card-content">
+                            <p><strong>Samsung Knox:</strong> Samsung's Knox platform uses ARM TrustZone on Exynos and Snapdragon SoCs to implement a multi-level HRoT. The Device Root Key (DRK) is injected into OTP fuses during manufacturing in Samsung's secure facility. The bootloader chain — PBL (Primary Bootloader in ROM) → SBL (Secondary Bootloader) → TIMA (TrustZone-based Integrity Measurement Architecture) → Android — verifies each stage cryptographically. Knox maintains a hardware-backed "warranty bit" (KNOX_WARRANTY fuse) that is permanently blown if an unsigned bootloader is detected, providing a tamper-evident audit trail even after reflashing stock firmware.</p>
+                            <p><strong>Qualcomm Secure Boot:</strong> Qualcomm's Snapdragon SoCs implement a similar chain using their proprietary Qualcomm Trusted Execution Environment (QTEE). The PBL in mask-ROM reads the OEM root certificate hash from eFuses (QFPROM — Qualcomm Fuse Peripheral ROM), then verifies the XBL (eXtensible Bootloader). Anti-rollback is enforced via dedicated QFPROM version fuses per firmware image. Qualcomm's CryptoCell provides the TRNG for runtime key generation, and their Secure Processing Unit (SPU) on newer SoCs acts as an additional HRoT for biometric templates and payment credentials — completely isolated even from the TrustZone Secure world.</p>
+                        </div>
+                    </div>
+
+                    <!-- World Switch -->
+                    <h2 id="world-switch">World Switch Assembly</h2>
+
+                    <h3 id="ns-to-s">Non-Secure → Secure</h3>
+                    <p>The Non-Secure OS issues an SMC to request a Trusted Application service (e.g., decrypting a key with OP-TEE). EL3 (BL31) receives the SMC, saves the entire Non-Secure CPU context (x0–x30, SP_EL0, SP_EL1, ELR_EL1, SPSR_EL1, all FP/NEON registers) to a context save area, then restores the Secure EL1 context and sets SCR_EL3.NS=0 before ERETing to the trusted OS.</p>
+
+                    <h3 id="s-to-ns">Secure → Non-Secure Return</h3>
+                    <pre><code class="language-armasm">// OP-TEE: return result to Non-Secure caller via SMC
+// x0 = OPTEE_SMC_RETURN_OK (0)
+// x1-x3 = return values
+MOV  x0, #0                // OPTEE_SMC_RETURN_OK
+SMC  #0                    // Trap back to EL3 (BL31)
+
+// BL31 on return:
+// 1. Decode x0 as OPTEE return
+// 2. Save Secure EL1 context
+// 3. Set SCR_EL3.NS = 1
+// 4. Restore Non-Secure context (x0 holds PSCI/TEE result)
+// 5. ERET to NS EL1 (after the original SMC instruction)</code></pre>
+
+                    <!-- S-EL1 -->
+                    <h2 id="sel1">S-EL1 Trusted OS (OP-TEE)</h2>
+                    <p>OP-TEE (Open Portable Trusted Execution Environment) runs at S-EL1 under TF-A. It has its own MMU (TTBR0 in Secure state), exception vector table, and scheduler for Trusted Applications (TAs). TAs are loaded as ELF binaries into Secure memory and execute at S-EL0. Communication with the Normal world uses shared memory buffers whose physical addresses are passed via SMCCC parameters — the OP-TEE driver in the Linux kernel handles encoding these calls and mapping the shared buffers.</p>
+
+                    <!-- TZASC -->
+                    <h2 id="tzasc">TZASC &amp; Memory Partitioning</h2>
+                    <p>The TrustZone Address Space Controller (ARM TZASC-400/TZASC-380 / GPC in DynamIQ) divides physical memory into Secure, Non-Secure, and shared regions. BL2 configures the TZASC before loading BL32/BL33 — typically reserving the top 16–32 MB of DRAM as Secure for OP-TEE and its TAs. TZPC (TrustZone Protection Controller) gates peripheral access for devices like the Secure keyboard, biometric sensor, or cryptographic accelerator, ensuring only Secure-world transactions can reach them.</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Key Insight:</strong> TrustZone exploits the fact that EL3 is architecturally always in the Secure state (EL3 cannot be Non-Secure). This means the secure monitor code running at EL3 is inherently protected from the Normal-world OS — even a fully compromised Linux kernel cannot execute at EL3 or read Secure physical memory, because the TZASC enforces those constraints at the hardware level, independent of any software.
+                    </div>
+
+                    <!-- Exercises -->
+                    <h2 id="exercises"><i class="fas fa-dumbbell me-2 text-teal"></i>Hands-On Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">Exercise 1</span> SMC World-Switch Handler</div>
+                        <div class="card-content">
+                            <p><strong>Task:</strong> Write an EL3 SMC handler in AArch64 assembly that receives an SMC from Non-Secure EL1, saves the full Non-Secure context (x0–x30, SP_EL0, SP_EL1, ELR_EL1, SPSR_EL1), sets SCR_EL3.NS=0, restores a minimal Secure EL1 context, and ERETs into S-EL1. Then write the reverse path: the Secure world issues SMC to return to Non-Secure, and EL3 restores the NS context and ERETs back. Test with QEMU virt machine.</p>
+                            <p><strong>Hint:</strong> Use a per-CPU context save area indexed by MPIDR_EL1.Aff0. The save macro should use STP for register pairs (STP x0, x1, [x18]; STP x2, x3, [x18, #16]; ...) and MRS/STR for system registers. Remember to issue ISB after writing SCR_EL3 before ERET. Set SPSR_EL3 to 0x3C5 (EL1h, IRQ/FIQ masked) for the target world.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">Exercise 2</span> Trusted Application — Secure Key Store</div>
+                        <div class="card-content">
+                            <p><strong>Task:</strong> Implement a minimal Trusted Application (TA) running at S-EL0 under a simplified S-EL1 dispatcher. The TA should support three operations via SMC: (1) STORE_KEY — accept a 256-bit key in x1–x4 and save it to Secure SRAM, (2) SIGN_DATA — accept a data pointer in shared memory, compute HMAC-SHA256 using the stored key, and return the hash in x1–x4, (3) DESTROY_KEY — zero the key from Secure SRAM. The Normal-world caller should never receive the raw key bytes.</p>
+                            <p><strong>Hint:</strong> Map a 4KB Secure-only page for the key store (TZASC region with NS=0). The shared memory buffer for SIGN_DATA must be mapped as Non-Secure in the S-EL1 page tables (set NS=1 in the descriptor) so the TA can read Normal-world data. For the HMAC, you can stub the crypto with a simple XOR-based MAC for testing — the exercise focuses on the memory isolation and SMC plumbing, not the cryptographic strength.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">Exercise 3</span> TZASC Memory Partitioning</div>
+                        <div class="card-content">
+                            <p><strong>Task:</strong> Configure TZASC-400 registers to partition a 1GB DRAM (0x4000_0000 – 0x7FFF_FFFF) such that the top 256MB (0x7000_0000 – 0x7FFF_FFFF) is Secure-only, the next 64MB (0x6C00_0000 – 0x6FFF_FFFF) is shared (readable by both worlds, writable only by Secure), and the remaining 704MB is Non-Secure. Write the BL2 initialization code that programs TZASC region registers (REGION_SETUP_LOW_0/1, REGION_ATTRIBUTES_0) for each partition.</p>
+                            <p><strong>Hint:</strong> TZASC-400 supports up to 9 regions (0–8), where region 0 is the default (covers all of DRAM). Set region 0 as Non-Secure (SP=0xF for full NS access). Region 1 covers the Secure 256MB: base=0x70000000, top=0x7FFFFFFF, SP=0xC (Secure RW only). Region 2 covers the 64MB shared buffer: base=0x6C000000, top=0x6FFFFFFF, SP=0xD (Secure RW + NS read-only). Higher-numbered regions take priority in overlapping areas. Remember to set the region enable bit (bit 0 of REGION_ATTRIBUTES).</p>
+                        </div>
+                    </div>
+
+                    <!-- Security Audit Tool -->
+                    <h2 id="security-tool"><i class="fas fa-shield-alt me-2 text-teal"></i>ARM Security Audit Tool</h2>
+                    <p>Use this tool to document your TrustZone security architecture, threat model, and mitigations. Export as Word, Excel, or PDF for security review documentation.</p>
+
+                    <div class="canvas-form" id="secForm">
+                        <h4><i class="fas fa-shield-alt me-2"></i>ARM TrustZone Security Audit</h4>
+                        <p class="form-help-text">Document your system's TrustZone security posture. Download as Word, Excel, or PDF.</p>
+                        <div id="secBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="secSystem">System Name *</label>
+                                <input type="text" id="secSystem" placeholder="e.g., IoT Gateway SoC Platform">
+                            </div>
+                            <div class="form-group">
+                                <label for="secAuthor">Author</label>
+                                <input type="text" id="secAuthor" placeholder="e.g., Security Engineering Team">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1;">
+                                <label for="secThreat">Threat Model *</label>
+                                <textarea id="secThreat" placeholder="Describe adversary capabilities, attack goals, and threat scenarios&#10;e.g., Remote attacker with kernel exploit capability targeting key material"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1;">
+                                <label for="secBoundaries">Trust Boundaries *</label>
+                                <textarea id="secBoundaries" placeholder="Define Secure/Non-Secure world boundaries&#10;e.g., EL3 BL31 firmware, S-EL1 OP-TEE, TZASC regions 0x7000_0000–0x7FFF_FFFF"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="secAssets">Secure Assets</label>
+                                <textarea id="secAssets" placeholder="List assets protected in Secure world&#10;e.g., Device root key, DRM content keys, biometric templates"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="secSurfaces">Attack Surfaces</label>
+                                <textarea id="secSurfaces" placeholder="Identify attack vectors and entry points&#10;e.g., SMC interface, shared memory buffers, JTAG debug port"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1;">
+                                <label for="secMitigations">Mitigations</label>
+                                <textarea id="secMitigations" placeholder="Describe security controls and countermeasures&#10;e.g., Secure boot with anti-rollback, JTAG disabled via OTP fuse, SMC input validation"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="secHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="secHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="secHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-reset" onclick="secHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="secSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="secSuccessText"></span></div>
+                    </div>
+
+                    <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
+                    <p>We dissected ARM TrustZone: the NS bit propagation through AMBA buses, SCR_EL3 configuration, the banked Secure/Non-Secure register files, the SMCCC standard (including PSCI CPU_ON), TF-A's BL1→BL2→BL31→BL33 boot chain, BL31 SMC dispatch, world-switch assembly for NS→Secure and back, OP-TEE's S-EL1 architecture, and TZASC/TZPC memory and peripheral partitioning.</p>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="arm-assembly-14-cortex-m-embedded.html"><strong>Part 14: Cortex-M Assembly &amp; Bare-Metal Embedded</strong></a>, we shift to the microcontroller world — Cortex-M's NVIC interrupt controller, SysTick timer, thumb-only instruction set, linker scripts, startup code, and low-power sleep modes used in IoT firmware.</p>
+                    </div>
+
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 11: Exception Levels, Interrupts &amp; Vector Tables</h5>
+                            <p>The EL3 exception level that TrustZone's secure monitor permanently occupies.</p>
+                            <a href="arm-assembly-11-exception-levels.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 12: MMU, Page Tables &amp; Virtual Memory</h5>
+                            <p>How S-EL1 uses its own banked MMU registers to isolate Secure memory mappings.</p>
+                            <a href="arm-assembly-12-mmu-virtual-memory.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 15: Cortex-A System Programming &amp; Boot</h5>
+                            <p>Full Cortex-A boot sequence including the EL3→EL1 world transition via TF-A.</p>
+                            <a href="arm-assembly-15-cortex-a-boot.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.</p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small"><i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a></p>
+                    <p class="small mt-3"><a href="/" class="text-light text-decoration-none">Home</a> | <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a></p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"><i class="fas fa-tag"></i><span id="categoryText">Technology</span></div>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-arm-assembly.js"></script>
+    <script>
+        var secPersistence = new FormPersistence('arm-security-audit-draft', {
+            'secSystem': 'systemName',
+            'secThreat': 'threatModel',
+            'secBoundaries': 'trustBoundaries',
+            'secAssets': 'secureAssets',
+            'secSurfaces': 'attackSurfaces',
+            'secMitigations': 'mitigations'
+        }, 'secBadge');
+
+        var secHandler = new CanvasFormHandler({
+            formId: 'secForm',
+            successId: 'secSuccess',
+            successTextId: 'secSuccessText',
+            persistence: secPersistence,
+            filenameField: 'systemName',
+            filenameSuffix: '-security-audit',
+            requiredFields: ['secSystem', 'secThreat', 'secBoundaries'],
+            requiredMessage: 'Please fill in System Name, Threat Model, and Trust Boundaries.',
+            docType: 'ArmSecurityAudit'
+        });
+
+        secPersistence.init();
+    </script>
+</body>
+</html>
