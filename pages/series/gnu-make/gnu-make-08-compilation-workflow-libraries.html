@@ -325,30 +325,32 @@ ar rcs libmath.a add.o sub.o mul.o div.o</code></pre>
                     <h3 id="static-makefile">Static Library Makefile</h3>
                     <pre><code class="language-makefile">CC      := gcc
 CFLAGS  := -Wall -Wextra -std=c11 -O2
-AR      := ar
-ARFLAGS := rcs
+AR      := ar                    # archive tool (creates static libraries)
+ARFLAGS := rcs                   # r=replace, c=create, s=write index
 
 LIBDIR  := lib
 SRCDIR  := src
 BUILDDIR := build
 
-LIB_SRCS := $(wildcard $(SRCDIR)/math/*.c)
-LIB_OBJS := $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(LIB_SRCS))
-STATIC_LIB := $(LIBDIR)/libmath.a
+LIB_SRCS := $(wildcard $(SRCDIR)/math/*.c)                          # find all .c under src/math/
+LIB_OBJS := $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(LIB_SRCS))   # src/math/foo.c → build/math/foo.o
+STATIC_LIB := $(LIBDIR)/libmath.a                                   # output archive name
 
 .PHONY: all clean
 
 all: $(STATIC_LIB)
 
+# ── Create static library from object files ──
 $(STATIC_LIB): $(LIB_OBJS)
 	@mkdir -p $(LIBDIR)
-	$(AR) $(ARFLAGS) $@ $^
+	$(AR) $(ARFLAGS) $@ $^           # $@ = libmath.a, $^ = all .o files
 
+# ── Compile ──
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c
-	@mkdir -p $(dir $@)
+	@mkdir -p $(dir $@)               # $(dir $@) = directory part of target path
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
--include $(LIB_OBJS:.o=.d)
+-include $(LIB_OBJS:.o=.d)           # pull in auto-generated dependency files
 
 clean:
 	rm -rf $(BUILDDIR) $(LIBDIR)</code></pre>
@@ -386,14 +388,15 @@ readelf -d lib/libcrypto.so.1.0.0 | grep SONAME</code></pre>
 
                     <h3 id="shared-makefile">Shared Library Makefile</h3>
                     <pre><code class="language-makefile">CC      := gcc
-CFLAGS  := -Wall -Wextra -std=c11 -O2 -fPIC
-LDFLAGS := -shared
+CFLAGS  := -Wall -Wextra -std=c11 -O2 -fPIC    # -fPIC = position-independent code (required for .so)
+LDFLAGS := -shared                              # tell linker to produce a shared library
 
+# ── Versioning ──
 LIBNAME := myutil
-LIBVER  := 1.0.0
-SONAME  := lib$(LIBNAME).so.1
-REALNAME := lib$(LIBNAME).so.$(LIBVER)
-LINKNAME := lib$(LIBNAME).so
+LIBVER  := 1.0.0                                # full version (real name on disk)
+SONAME  := lib$(LIBNAME).so.1                   # ABI version (embedded in the .so)
+REALNAME := lib$(LIBNAME).so.$(LIBVER)          # libmyutil.so.1.0.0
+LINKNAME := lib$(LIBNAME).so                    # linker name (used by -lmyutil)
 
 LIBDIR   := lib
 BUILDDIR := build
@@ -406,10 +409,12 @@ LIB_OBJS := $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(LIB_SRCS))
 
 all: $(LIBDIR)/$(REALNAME) symlinks
 
+# ── Build the shared library with embedded SONAME ──
 $(LIBDIR)/$(REALNAME): $(LIB_OBJS)
 	@mkdir -p $(LIBDIR)
-	$(CC) $(LDFLAGS) -Wl,-soname,$(SONAME) -o $@ $^
+	$(CC) $(LDFLAGS) -Wl,-soname,$(SONAME) -o $@ $^   # -Wl passes option to linker
 
+# ── Create SONAME and linker symlinks ──
 symlinks: $(LIBDIR)/$(REALNAME)
 	cd $(LIBDIR) && ln -sf $(REALNAME) $(SONAME) && ln -sf $(SONAME) $(LINKNAME)
 
@@ -486,21 +491,21 @@ endif</code></pre>
 
                     <pre><code class="language-makefile">CC       := gcc
 CFLAGS   := -Wall -Wextra -std=c11 -O2
-CFLAGS_PIC := $(CFLAGS) -fPIC
+CFLAGS_PIC := $(CFLAGS) -fPIC         # PIC variant for shared library objects
 BUILDDIR := build
 LIBDIR   := lib
 
-# Static library sources
+# ── Static library (src/math/*.c → libmath.a) ──
 STATIC_SRCS := $(wildcard src/math/*.c)
 STATIC_OBJS := $(patsubst src/%.c,$(BUILDDIR)/%.o,$(STATIC_SRCS))
 STATIC_LIB  := $(LIBDIR)/libmath.a
 
-# Shared library sources
+# ── Shared library (src/io/*.c → libio.so) ──
 SHARED_SRCS := $(wildcard src/io/*.c)
-SHARED_OBJS := $(patsubst src/%.c,$(BUILDDIR)/pic/%.o,$(SHARED_SRCS))
+SHARED_OBJS := $(patsubst src/%.c,$(BUILDDIR)/pic/%.o,$(SHARED_SRCS))  # separate dir for PIC
 SHARED_LIB  := $(LIBDIR)/libio.so
 
-# Application
+# ── Application ──
 APP_SRCS := main.c
 APP_OBJS := $(BUILDDIR)/main.o
 TARGET   := myapp
@@ -509,32 +514,33 @@ TARGET   := myapp
 
 all: $(TARGET)
 
-# Static library
+# ── Create static library (archive of .o files) ──
 $(STATIC_LIB): $(STATIC_OBJS)
 	@mkdir -p $(LIBDIR)
-	ar rcs $@ $^
+	ar rcs $@ $^                      # r=replace, c=create, s=write index
 
-# Shared library (PIC objects in separate subdir to avoid mixing with static)
+# ── Create shared library (PIC objects linked with -shared) ──
 $(SHARED_LIB): $(SHARED_OBJS)
 	@mkdir -p $(LIBDIR)
-	$(CC) -shared -Wl,-soname,libio.so.1 -o $@ $^
+	$(CC) -shared -Wl,-soname,libio.so.1 -o $@ $^   # embed SONAME for ABI versioning
 
-# Static .o (no -fPIC needed)
+# ── Compile for static lib (no -fPIC needed) ──
 $(BUILDDIR)/%.o: src/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
-# PIC .o for shared lib
+# ── Compile for shared lib (with -fPIC) ──
 $(BUILDDIR)/pic/%.o: src/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS_PIC) -MMD -MP -c $< -o $@
 
+# ── Link application against both libraries ──
 $(TARGET): $(APP_OBJS) $(STATIC_LIB) $(SHARED_LIB)
 	$(CC) $(LDFLAGS) -o $@ $(APP_OBJS) \
-	    -L$(LIBDIR) -Wl,-rpath,$(LIBDIR) \
-	    -lio -lmath
+	    -L$(LIBDIR) -Wl,-rpath,$(LIBDIR) \           # -rpath embeds lib search path
+	    -lio -lmath                                  # order matters: dependers first
 
--include $(shell find $(BUILDDIR) -name '*.d' 2>/dev/null)
+-include $(shell find $(BUILDDIR) -name '*.d' 2>/dev/null)   # include all .d files
 
 clean:
 	rm -rf $(BUILDDIR) $(LIBDIR) $(TARGET)

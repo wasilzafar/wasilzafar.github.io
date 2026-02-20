@@ -383,7 +383,7 @@ TARGETS   := $(foreach p,$(PLATFORMS),build/$(p)/myapp)
 
 # Generate -I flags for all subdirectories of include/
 INCDIRS  := $(wildcard include/*)
-CFLAGS   += $(foreach d,$(INCDIRS),-I$(d))
+CFLAGS   += $(foreach d,$(INCDIRS),-I$(d))   # -Iinclude/core -Iinclude/net ...
 
 # Create build directories for all modules
 MODULES  := core net io ui
@@ -391,7 +391,7 @@ BUILDDIRS := $(foreach m,$(MODULES),$(BUILDDIR)/$(m))
 
 .PHONY: makedirs
 makedirs:
-	$(foreach d,$(BUILDDIRS),mkdir -p $(d);)</code></pre>
+	$(foreach d,$(BUILDDIRS),mkdir -p $(d);)  # semicolons chain commands in one shell</code></pre>
                 </div>
 
                 <div id="user-functions" class="blog-content mt-5">
@@ -410,11 +410,14 @@ CFLAGS  += $(call include_flags,$(INCDIRS))
 
 OBJS := $(call src_to_obj,src,build,$(SRCS))</code></pre>
 
-                    <pre><code class="language-makefile"># Recursive function example: generate per-module build rules
+                    <pre><code class="language-makefile"># Recursive function: generate per-module build rules dynamically
 define MODULE_RULES
 $(2)/$(1).o: src/$(1).c
 	$(CC) $(CFLAGS) -Isrc/$(1) -c $$&lt; -o $$@
 endef
+# NOTE: $$< and $$@ use double-dollar to survive two expansion rounds:
+#   1st by $(call)  →  $<  $@
+#   2nd by $(eval)  →  actual automatic variable values at recipe time
 
 MODULES := core net ui
 $(foreach m,$(MODULES),$(eval $(call MODULE_RULES,$(m),$(BUILDDIR))))</code></pre>
@@ -472,21 +475,23 @@ SYS_LIBS     := $(shell pkg-config --libs   openssl 2>/dev/null)</code></pre>
                     </div>
 
                     <pre><code class="language-makefile"># Self-configuring Makefile using Make functions
+
+# ── Variables ────────────────────────────────────────
 CC       := gcc
 CFLAGS   := -Wall -Wextra -std=c11 -O2
 SRCDIR   := src
 BUILDDIR := build
 TARGET   := myapp
 
-# Auto-discover all .c files recursively
-SRCS  := $(wildcard $(SRCDIR)/*.c) $(wildcard $(SRCDIR)/**/*.c)
-OBJS  := $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SRCS))
+# ── Auto-discover sources ───────────────────────────
+SRCS  := $(wildcard $(SRCDIR)/*.c) $(wildcard $(SRCDIR)/**/*.c)   # find all .c files
+OBJS  := $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SRCS))       # map src/ → build/
 
-# Auto-generate -I flags for every subdirectory of include/
+# ── Auto-generate include flags ─────────────────────
 INCDIRS := $(wildcard include/*) include
-CFLAGS  += $(addprefix -I,$(INCDIRS))
+CFLAGS  += $(addprefix -I,$(INCDIRS))                            # -Iinclude/core -Iinclude ...
 
-# Embed build metadata
+# ── Embed build metadata ────────────────────────────
 GIT_HASH  := $(shell git rev-parse --short HEAD 2>/dev/null || echo nogit)
 CFLAGS    += -DGIT_HASH='"$(GIT_HASH)"'
 
@@ -494,12 +499,14 @@ CFLAGS    += -DGIT_HASH='"$(GIT_HASH)"'
 
 all: $(TARGET)
 
+# ── Link ──
 $(TARGET): $(OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^                # $^ = all .o prerequisites
 
+# ── Compile ──
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+	@mkdir -p $(dir $@)                       # $(dir $@) = directory part of the .o path
+	$(CC) $(CFLAGS) -c $< -o $@              # $< = source file, $@ = object file
 
 clean:
 	rm -rf $(BUILDDIR) $(TARGET)

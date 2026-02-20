@@ -255,16 +255,16 @@
                     </div>
 
                     <h3 id="ifeq-ifneq"><code>ifeq</code> / <code>ifneq</code></h3>
-                    <pre><code class="language-makefile">BUILD ?= debug
+                    <pre><code class="language-makefile">BUILD ?= debug                  # default if not set on CLI
 
-ifeq ($(BUILD),debug)
-    CFLAGS += -O0 -g3 -DDEBUG
+ifeq ($(BUILD),debug)            # string comparison at parse time
+    CFLAGS += -O0 -g3 -DDEBUG   # no optimisation + full debug info
     OUTDIR := build/debug
 else ifeq ($(BUILD),release)
-    CFLAGS += -O3 -DNDEBUG
+    CFLAGS += -O3 -DNDEBUG      # max optimisation + disable assert()
     OUTDIR := build/release
 else
-    $(error Unknown BUILD type: $(BUILD). Use debug or release.)
+    $(error Unknown BUILD type: $(BUILD). Use debug or release.)  # stop Make with error
 endif</code></pre>
 
                     <h3 id="ifdef-ifndef"><code>ifdef</code> / <code>ifndef</code></h3>
@@ -298,18 +298,18 @@ endif
                     <pre><code class="language-makefile">CC    := gcc
 BUILD ?= debug
 
-# Shared flags
-CFLAGS  := -Wall -Wextra -std=c11 -MMD -MP
+# Shared flags (always applied)
+CFLAGS  := -Wall -Wextra -std=c11 -MMD -MP    # -MMD -MP = auto-generate .d dependency files
 
 # Build-type flags
 ifeq ($(BUILD),debug)
-    CFLAGS  += -O0 -g3 -fsanitize=address,undefined -DDEBUG
-    LDFLAGS += -fsanitize=address,undefined
+    CFLAGS  += -O0 -g3 -fsanitize=address,undefined -DDEBUG   # sanitizers catch memory/UB bugs
+    LDFLAGS += -fsanitize=address,undefined                    # linker must also get sanitizer flag
 else ifeq ($(BUILD),release)
-    CFLAGS  += -O3 -march=native -flto -DNDEBUG
-    LDFLAGS += -O3 -flto -s
+    CFLAGS  += -O3 -march=native -flto -DNDEBUG  # max speed + link-time optimisation
+    LDFLAGS += -O3 -flto -s                       # -s strips debug symbols from binary
 else ifeq ($(BUILD),profile)
-    CFLAGS  += -O2 -pg -DNDEBUG
+    CFLAGS  += -O2 -pg -DNDEBUG                   # -pg enables gprof profiling
     LDFLAGS += -pg
 else
     $(error BUILD must be debug, release, or profile)
@@ -317,19 +317,21 @@ endif</code></pre>
 
                     <h3 id="build-dir">Separate Build Directories Per Configuration</h3>
                     <pre><code class="language-makefile">BUILD   ?= debug
-OUTDIR  := build/$(BUILD)
-SRCS    := $(wildcard src/*.c)
-OBJS    := $(patsubst src/%.c,$(OUTDIR)/%.o,$(SRCS))
+OUTDIR  := build/$(BUILD)                              # e.g. build/debug or build/release
+SRCS    := $(wildcard src/*.c)                          # auto-discover sources
+OBJS    := $(patsubst src/%.c,$(OUTDIR)/%.o,$(SRCS))   # map src/foo.c → build/debug/foo.o
 TARGET  := $(OUTDIR)/myapp
 
 all: $(TARGET)
 
+# Link all .o files into the binary
 $(TARGET): $(OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^              # $^ = all object files
 
+# Compile each .c → .o into build type dir
 $(OUTDIR)/%.o: src/%.c
-	@mkdir -p $(OUTDIR)
-	$(CC) $(CFLAGS) -c $< -o $@</code></pre>
+	@mkdir -p $(OUTDIR)                     # create output dir if needed
+	$(CC) $(CFLAGS) -c $< -o $@            # $< = source file</code></pre>
                 </div>
 
                 <div id="os-detection" class="blog-content mt-5">
@@ -420,63 +422,68 @@ PREFIX  ?= /usr/local</code></pre>
                         <strong>Milestone:</strong> A single Makefile that builds on Linux and macOS, supports debug/release switching via <code>BUILD=</code>, optional SSL via <code>WITH_SSL=1</code>, and reads local overrides from <code>config.mk</code>.
                     </div>
 
-                    <pre><code class="language-makefile">-include config.mk
+                    <pre><code class="language-makefile"># ── Local overrides (optional file, - = don't error if missing) ──
+-include config.mk
 
+# ── Defaults (? = set only if not already defined) ──
 CC      ?= gcc
 BUILD   ?= debug
 PREFIX  ?= /usr/local
 SRCDIR  := src
-BUILDDIR := build/$(BUILD)
+BUILDDIR := build/$(BUILD)                              # separate dir per build type
 TARGET  := $(BUILDDIR)/myapp
 
-CFLAGS  := -Wall -Wextra -std=c11 -MMD -MP
+CFLAGS  := -Wall -Wextra -std=c11 -MMD -MP              # -MMD -MP = auto-dep generation
 LDLIBS  :=
 SRCS    := $(wildcard $(SRCDIR)/*.c)
 
-# Build type
+# ── Build type ──
 ifeq ($(BUILD),debug)
     CFLAGS += -O0 -g3 -DDEBUG -fsanitize=address,undefined
     LDFLAGS += -fsanitize=address,undefined
 else ifeq ($(BUILD),release)
-    CFLAGS += -O3 -DNDEBUG -flto
-    LDFLAGS += -flto -s
+    CFLAGS += -O3 -DNDEBUG -flto                         # link-time optimisation
+    LDFLAGS += -flto -s                                  # strip debug symbols
 endif
 
-# OS detection
+# ── OS detection ──
 OS := $(shell uname -s 2>/dev/null || echo Windows)
 ifeq ($(OS),Darwin)
-    CC ?= clang
+    CC ?= clang                                          # macOS ships clang, not gcc
     LDLIBS += -framework CoreFoundation
 endif
 
-# Optional SSL
+# ── Optional SSL (activated: make WITH_SSL=1) ──
 ifdef WITH_SSL
     CFLAGS  += -DWITH_SSL $(shell pkg-config --cflags openssl)
     LDLIBS  += $(shell pkg-config --libs openssl)
     SRCS    += $(SRCDIR)/ssl.c
 endif
 
-OBJS := $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SRCS))
-DEPS := $(OBJS:.o=.d)
+# ── Derived variables ──
+OBJS := $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SRCS))  # src/foo.c → build/debug/foo.o
+DEPS := $(OBJS:.o=.d)                                      # .o → .d (generated dep files)
 
 .PHONY: all clean install info
 
 all: $(TARGET)
 
+# ── Link ──
 $(TARGET): $(OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)   # $^ = all .o files, LDLIBS = -l flags at end
 
+# ── Compile ──
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c
 	@mkdir -p $(BUILDDIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@            # $< = .c source, $@ = .o output
 
--include $(DEPS)
+-include $(DEPS)                                # pull in auto-generated .d dependency files
 
 clean:
 	rm -rf build
 
 install: $(TARGET)
-	install -Dm755 $(TARGET) $(PREFIX)/bin/myapp
+	install -Dm755 $(TARGET) $(PREFIX)/bin/myapp   # -D creates parent dirs, m755 = rwxr-xr-x
 
 info:
 	@echo "OS       = $(OS)"

@@ -355,12 +355,12 @@ BUILD   ?= debug        # default build type
                     <h3 id="append">Append Operator (<code>+=</code>)</h3>
                     <p>Appends to an existing variable with a single space separator. If the variable was previously defined with <code>:=</code>, append uses simple expansion. If with <code>=</code>, it remains recursive.</p>
 
-                    <pre><code class="language-makefile">CFLAGS  := -Wall -Wextra
-CFLAGS  += -std=c11       # → -Wall -Wextra -std=c11
-CFLAGS  += -g             # → -Wall -Wextra -std=c11 -g
+                    <pre><code class="language-makefile">CFLAGS  := -Wall -Wextra        # start with base flags
+CFLAGS  += -std=c11             # += appends with a space → -Wall -Wextra -std=c11
+CFLAGS  += -g                   # append again → -Wall -Wextra -std=c11 -g
 
-SRCS    := main.c utils.c
-SRCS    += network.c      # → main.c utils.c network.c</code></pre>
+SRCS    := main.c utils.c       # initial source list
+SRCS    += network.c            # add another file → main.c utils.c network.c</code></pre>
                 </div>
 
                 <div id="cli-overrides" class="blog-content mt-5">
@@ -406,17 +406,17 @@ unexport SENSITIVE_TOKEN</code></pre>
                     <h3 id="target-specific">Target-Specific Variables</h3>
                     <p>Variables can be scoped to a specific target (and its prerequisites). They override global values within that target's recipe.</p>
 
-                    <pre><code class="language-makefile">CFLAGS := -Wall -O2
+                    <pre><code class="language-makefile">CFLAGS := -Wall -O2              # global flags used by all targets
 
-# Override CFLAGS only for the debug target and its prerequisites
-debug: CFLAGS := -Wall -O0 -g -DDEBUG
+# Override CFLAGS only for the debug target (and its prerequisites)
+debug: CFLAGS := -Wall -O0 -g -DDEBUG   # target-specific: replaces global value
 debug: myapp
 	@echo "Built debug version with $(CFLAGS)"
 
-# Override for a specific object file
-special.o: CFLAGS += -fno-strict-aliasing
+# Override for a single object file only
+special.o: CFLAGS += -fno-strict-aliasing  # appends to global; relaxes aliasing rules
 special.o: special.c
-	$(CC) $(CFLAGS) -c $&lt; -o $@</code></pre>
+	$(CC) $(CFLAGS) -c $&lt; -o $@             # $< = special.c, $@ = special.o</code></pre>
 
                     <h3 id="pattern-specific">Pattern-Specific Variables</h3>
                     <p>Like target-specific variables, but applied to all targets matching a pattern.</p>
@@ -433,25 +433,25 @@ test_%.o: CFLAGS += -fsanitize=address,undefined
 
                     <p><code>define</code>/<code>endef</code> defines a variable containing newlines — useful for reusable command sequences (macros) that can be <code>call</code>ed or expanded inline.</p>
 
-                    <pre><code class="language-makefile"># Define a reusable compilation macro
+                    <pre><code class="language-makefile"># Define a reusable compilation macro (multi-line variable)
 define COMPILE_C
-@echo "  CC  $@"
-$(CC) $(CFLAGS) -c $&lt; -o $@
+@echo "  CC  $@"                 # $@ expands to the target filename at recipe time
+$(CC) $(CFLAGS) -c $&lt; -o $@    # $< expands to the first prerequisite (.c file)
 endef
 
-# Use it in a rule — $(COMPILE_C) expands to the multi-line block
+# Use it in a pattern rule — $(COMPILE_C) expands to both lines above
 %.o: %.c
 	$(COMPILE_C)
 
 # Multi-line variable for a build banner
 define BUILD_BANNER
 @echo "=============================="
-@echo " Building $(TARGET) v$(VERSION)"
+@echo " Building $(TARGET) v$(VERSION)"   # variables expanded when the macro runs
 @echo "=============================="
 endef
 
 all: $(TARGET)
-	$(BUILD_BANNER)</code></pre>
+	$(BUILD_BANNER)              # expands the entire 3-line block into this recipe</code></pre>
 
                     <div class="highlight-box">
                         <i class="fas fa-lightbulb me-2"></i>
@@ -475,32 +475,37 @@ all: $(TARGET)
                     </div>
 
                     <pre><code class="language-makefile"># Parameterised Makefile — try: make, make BUILD=release, make CC=clang BUILD=release
-CC      ?= gcc
-BUILD   ?= debug
+
+# ── Variables (? = set only if not already defined on CLI) ──
+CC      ?= gcc                   # allow caller to override compiler
+BUILD   ?= debug                 # default build type
 TARGET  := myapp
 SRCS    := main.c utils.c
-OBJS    := $(SRCS:.c=.o)
+OBJS    := $(SRCS:.c=.o)         # .c → .o substitution
 
-# Common flags
+# ── Common flags ────────────────────────────────────
 CFLAGS  := -Wall -Wextra -std=c11
 
-# Build-type flags
+# ── Build-type flags (chosen by ifeq conditional) ──
 ifeq ($(BUILD),release)
-    CFLAGS  += -O3 -DNDEBUG
-    LDFLAGS += -s
+    CFLAGS  += -O3 -DNDEBUG      # max optimisation, disable assert()
+    LDFLAGS += -s                # strip symbols from binary
 else
-    CFLAGS  += -O0 -g3 -DDEBUG
+    CFLAGS  += -O0 -g3 -DDEBUG  # no optimisation, full debug info
 endif
 
 .PHONY: all clean info
 
+# ── Default target ──
 all: $(TARGET)
 
+# ── Link ──
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^   # $@ = target, $^ = all .o files
 
+# ── Compile (pattern rule: any .c → .o) ──
 %.o: %.c
-	$(CC) $(CFLAGS) -c $&lt; -o $@
+	$(CC) $(CFLAGS) -c $&lt; -o $@           # $< = the .c source file
 
 clean:
 	rm -f $(TARGET) $(OBJS)

@@ -277,17 +277,17 @@ arm-linux-gnueabihf-strip     # symbol stripping</code></pre>
                     <p>The Linux kernel popularised the convention of a single <code>CROSS_COMPILE</code> variable that prefixes every tool name. This is now standard in most embedded projects:</p>
 
                     <pre><code class="language-makefile"># Set on the command line:  make CROSS_COMPILE=arm-linux-gnueabihf-
-CROSS_COMPILE ?=
+CROSS_COMPILE ?=                              # empty = native build
 
-CC      := $(CROSS_COMPILE)gcc
-CXX     := $(CROSS_COMPILE)g++
-AS      := $(CROSS_COMPILE)as
-AR      := $(CROSS_COMPILE)ar
-LD      := $(CROSS_COMPILE)ld
-OBJCOPY := $(CROSS_COMPILE)objcopy
-OBJDUMP := $(CROSS_COMPILE)objdump
-SIZE    := $(CROSS_COMPILE)size
-STRIP   := $(CROSS_COMPILE)strip</code></pre>
+CC      := $(CROSS_COMPILE)gcc                # C compiler
+CXX     := $(CROSS_COMPILE)g++                # C++ compiler
+AS      := $(CROSS_COMPILE)as                 # assembler
+AR      := $(CROSS_COMPILE)ar                 # archive tool (static libs)
+LD      := $(CROSS_COMPILE)ld                 # linker
+OBJCOPY := $(CROSS_COMPILE)objcopy            # binary format converter
+OBJDUMP := $(CROSS_COMPILE)objdump            # disassembler / section inspector
+SIZE    := $(CROSS_COMPILE)size               # section size reporter
+STRIP   := $(CROSS_COMPILE)strip              # symbol stripper</code></pre>
 
                     <pre><code class="language-bash"># Native (host) build — CROSS_COMPILE defaults to empty:
 make
@@ -303,7 +303,7 @@ make CROSS_COMPILE=arm-none-eabi-</code></pre>
 
                     <h3 id="cc-ar-pattern">Full Toolchain Variable Pattern</h3>
                     <pre><code class="language-makefile">CROSS_COMPILE ?=
-ARCH          ?= $(shell uname -m)
+ARCH          ?= $(shell uname -m)             # detect host arch if not set
 
 CC      := $(CROSS_COMPILE)gcc
 AR      := $(CROSS_COMPILE)ar
@@ -315,10 +315,12 @@ CFLAGS  := -Wall -Wextra -std=c11 -O2
 
 # Architecture-specific flags
 ifeq ($(ARCH),arm)
-    CFLAGS += -mcpu=cortex-a53 -mfpu=neon-fp-armv8 -mfloat-abi=hard
+    CFLAGS += -mcpu=cortex-a53              # target Cortex-A53 core
+    CFLAGS += -mfpu=neon-fp-armv8           # enable NEON SIMD unit
+    CFLAGS += -mfloat-abi=hard              # hardware floating point ABI
 endif
 ifeq ($(ARCH),aarch64)
-    CFLAGS += -march=armv8-a
+    CFLAGS += -march=armv8-a                # 64-bit ARMv8 baseline
 endif</code></pre>
                 </div>
 
@@ -328,15 +330,15 @@ endif</code></pre>
                     <p>A <em>sysroot</em> is a directory tree that mirrors the target's root filesystem: it contains target-architecture headers (<code>usr/include/</code>) and pre-built libraries (<code>usr/lib/</code>) for linking against. Without a sysroot, the compiler would find your host's <code>/usr/include</code> headers — wrong architecture.</p>
 
                     <h3 id="sysroot-flags"><code>--sysroot</code> and <code>-I</code>/<code>-L</code> Paths</h3>
-                    <pre><code class="language-makefile">SYSROOT := /opt/sysroots/arm-linux-gnueabihf
+                    <pre><code class="language-makefile">SYSROOT := /opt/sysroots/arm-linux-gnueabihf   # target root filesystem mirror
 
 CC      := $(CROSS_COMPILE)gcc
-CFLAGS  += --sysroot=$(SYSROOT)
-LDFLAGS += --sysroot=$(SYSROOT)
+CFLAGS  += --sysroot=$(SYSROOT)                 # tells gcc where target headers/libs live
+LDFLAGS += --sysroot=$(SYSROOT)                 # same for the linker
 
-# Additional include/library search inside sysroot:
-CFLAGS  += -I$(SYSROOT)/usr/include
-LDFLAGS += -L$(SYSROOT)/usr/lib -L$(SYSROOT)/lib</code></pre>
+# Explicit include/lib search inside sysroot (sometimes needed):
+CFLAGS  += -I$(SYSROOT)/usr/include             # target's C headers
+LDFLAGS += -L$(SYSROOT)/usr/lib -L$(SYSROOT)/lib  # target's pre-built libraries</code></pre>
 
                     <pre><code class="language-bash"># Verify the compiler found the right headers:
 arm-linux-gnueabihf-gcc --sysroot=/opt/sysroots/arm-linux-gnueabihf \
@@ -366,7 +368,7 @@ SSL_LDFLAGS := $(shell PKG_CONFIG_SYSROOT_DIR=$(SYSROOT) PKG_CONFIG_PATH=$(PKG_C
 
                     <p>Support native, ARM, and AArch64 builds from a single Makefile parameterized entirely from the command line:</p>
 
-                    <pre><code class="language-makefile"># multi-target Makefile
+                    <pre><code class="language-makefile"># Multi-target cross-compilation Makefile
 # Usage:
 #   make                              → native x86_64
 #   make TARGET=arm                   → ARM32 Linux
@@ -375,8 +377,9 @@ SSL_LDFLAGS := $(shell PKG_CONFIG_SYSROOT_DIR=$(SYSROOT) PKG_CONFIG_PATH=$(PKG_C
 
 TARGET ?= native
 
+# ── Per-target toolchain and flags ────────────────────────
 ifeq ($(TARGET),native)
-    CROSS_COMPILE :=
+    CROSS_COMPILE :=                           # no prefix = host compiler
     CFLAGS_ARCH   :=
     LDFLAGS_ARCH  :=
     SYSROOT       :=
@@ -390,27 +393,30 @@ else ifeq ($(TARGET),arm)
 
 else ifeq ($(TARGET),aarch64)
     CROSS_COMPILE := aarch64-linux-gnu-
-    CFLAGS_ARCH   := -march=armv8-a+crc
+    CFLAGS_ARCH   := -march=armv8-a+crc        # ARMv8-A with CRC extension
     SYSROOT       ?= /opt/sysroots/aarch64-linux-gnu
     CFLAGS_ARCH   += --sysroot=$(SYSROOT) -I$(SYSROOT)/usr/include
     LDFLAGS_ARCH  += --sysroot=$(SYSROOT) -L$(SYSROOT)/usr/lib
 
 else ifeq ($(TARGET),arm-bare)
-    CROSS_COMPILE := arm-none-eabi-
-    CFLAGS_ARCH   := -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard \
-                     -ffunction-sections -fdata-sections -nostdlib
-    LDFLAGS_ARCH  := -T linker.ld -Wl,--gc-sections
+    CROSS_COMPILE := arm-none-eabi-            # bare-metal toolchain (no OS)
+    CFLAGS_ARCH   := -mcpu=cortex-m4 -mthumb \       # Thumb instruction set
+                     -mfpu=fpv4-sp-d16 -mfloat-abi=hard \
+                     -ffunction-sections -fdata-sections \  # enable dead code stripping
+                     -nostdlib                  # no standard library (bare metal)
+    LDFLAGS_ARCH  := -T linker.ld -Wl,--gc-sections    # use linker script, remove unused sections
 endif
 
+# ── Derived tool variables ──
 CC      := $(CROSS_COMPILE)gcc
 AR      := $(CROSS_COMPILE)ar
-OBJCOPY := $(CROSS_COMPILE)objcopy
-SIZE    := $(CROSS_COMPILE)size
+OBJCOPY := $(CROSS_COMPILE)objcopy             # convert ELF → .bin/.hex
+SIZE    := $(CROSS_COMPILE)size                # report section sizes
 
 CFLAGS  := -Wall -Wextra -std=c11 -O2 $(CFLAGS_ARCH)
 LDFLAGS := $(LDFLAGS_ARCH)
 
-BUILDDIR := build/$(TARGET)
+BUILDDIR := build/$(TARGET)                    # separate output per target
 SRCDIR   := src
 SRCS     := $(wildcard $(SRCDIR)/*.c)
 OBJS     := $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SRCS))
@@ -420,22 +426,24 @@ TARGET_BIN := $(BUILDDIR)/firmware
 
 all: $(TARGET_BIN)
 
+# ── Link ──
 $(TARGET_BIN): $(OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(LDFLAGS) -o $@ $^
 
-# For bare-metal: also produce .bin and .hex
+# For bare-metal: also produce raw binary and Intel HEX
 ifeq ($(TARGET),arm-bare)
-	$(OBJCOPY) -O binary $@ $@.bin
-	$(OBJCOPY) -O ihex   $@ $@.hex
+	$(OBJCOPY) -O binary $@ $@.bin             # flat binary for flashing
+	$(OBJCOPY) -O ihex   $@ $@.hex             # Intel HEX for programmers
 endif
 
+# ── Compile ──
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
 size: $(TARGET_BIN)
-	$(SIZE) $<
+	$(SIZE) $<                                 # show text/data/bss sizes
 
 -include $(OBJS:.o=.d)
 
@@ -502,25 +510,25 @@ make clean</code></pre>
                 <div id="embedded-extras" class="blog-content mt-5">
                     <h2><i class="fas fa-memory me-2 text-teal"></i>Embedded-Specific Extras</h2>
 
-                    <pre><code class="language-makefile"># Linker script for bare-metal (memory map)
-LDFLAGS += -T board/stm32f407.ld
+                    <pre><code class="language-makefile"># ── Linker script (defines memory regions for bare-metal) ──
+LDFLAGS += -T board/stm32f407.ld               # custom memory layout for STM32F407
 
-# Section analysis after build
+# ── Inspect ELF section headers after build ──
 .PHONY: sections
 sections: $(TARGET_BIN)
-	$(OBJDUMP) -h $<
+	$(OBJDUMP) -h $<                            # -h shows section names, sizes, addresses
 
-# Flash to target via OpenOCD:
+# ── Flash firmware to target via OpenOCD ──
 .PHONY: flash
 flash: $(TARGET_BIN).bin
-	openocd -f interface/stlink.cfg \
-	        -f target/stm32f4x.cfg  \
-	        -c "program $< 0x08000000 verify reset exit"
+	openocd -f interface/stlink.cfg \            # ST-Link debugger config
+	        -f target/stm32f4x.cfg  \            # target MCU config
+	        -c "program $< 0x08000000 verify reset exit"  # flash, verify, reset
 
-# GDB debug session:
+# ── Start interactive GDB debug session ──
 .PHONY: debug
 debug: $(TARGET_BIN)
-	arm-none-eabi-gdb -ex "target extended-remote :3333" $<</code></pre>
+	arm-none-eabi-gdb -ex "target extended-remote :3333" $<  # connect to OpenOCD GDB server</code></pre>
 
                     <div class="highlight-box">
                         <i class="fas fa-lightbulb me-2"></i>
