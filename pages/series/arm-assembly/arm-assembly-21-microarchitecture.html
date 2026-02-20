@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="ARM microarchitecture deep dive: out-of-order pipelines, reorder buffers, register renaming, branch prediction (bimodal, two-level, TAGE), store-to-load forwarding, cache organisation, and TLB management on Cortex-A55 vs Cortex-A78 vs Neoverse N2." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="ARM microarchitecture, ARM out-of-order pipeline, ARM reorder buffer, ARM branch prediction TAGE, Cortex-A78 pipeline, Neoverse N2 microarchitecture, store-to-load forwarding ARM, ARM cache TLB" />
+    <meta property="og:title" content="ARM Assembly Part 21: ARM Microarchitecture Deep Dive" />
+    <meta property="og:description" content="Understand ARM CPU internals: OOO execution, reorder buffers, register renaming, branch prediction, caches, and TLB management on modern Cortex-A and Neoverse cores." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-05-28" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <title>ARM Assembly Part 21: ARM Microarchitecture Deep Dive - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/arm-assembly/arm-assembly-21-microarchitecture.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied',
+            'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', {
+            'ad_storage': 'granted', 'ad_user_data': 'granted',
+            'ad_personalization': 'granted', 'analytics_storage': 'granted'
+        });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20"><path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path></svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">We use cookies to enhance your browsing experience. See our <a href="/privacy-policy.html" style="color: var(--color-teal);">Privacy Policy</a>.</p>
+                <div id="cookieSettings" style="display: none;"></div>
+                <div id="cookieTypes" style="display: none;"></div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background:var(--color-teal);color:white;font-weight:600;">Accept All</button>
+                <button id="cookieReject" style="background:transparent;color:var(--color-navy);border:2px solid var(--color-teal);font-weight:600;">Reject All</button>
+                <button id="cookieSave" style="background:var(--color-blue);color:white;font-weight:600;display:none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+                <h1 class="display-4 fw-bold mb-3">ARM Assembly Part 21: ARM Microarchitecture Deep Dive</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>May 28, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>25 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Understanding what happens below the ISA boundary explains every counter-intuitive performance result from Part 18. This part maps the journey from instruction fetch and branch prediction down through register renaming, the reorder buffer, execution ports, store queues, and the cache/TLB hierarchy.</p>
+            </div>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#introduction" onclick="closeNav()">Pipeline Overview</a></li>
+            <li><a href="#ooo" onclick="closeNav()">Out-of-Order Execution</a></li>
+            <li><a href="#branch-prediction" onclick="closeNav()">Branch Prediction</a></li>
+            <li><a href="#memory-subsystem" onclick="closeNav()">Memory Subsystem</a></li>
+            <li><a href="#cache" onclick="closeNav()">Cache &amp; TLB Architecture</a></li>
+            <li><a href="#core-comparison" onclick="closeNav()">Core Comparison</a></li>
+            <li><a href="#asm-implications" onclick="closeNav()">Assembly Implications</a></li>
+            <li><a href="#case-study" onclick="closeNav()">Case Study: M1 vs Cortex-X2</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Hands-On Exercises</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                <div id="introduction" class="blog-content">
+
+                    <h2><i class="fas fa-microchip me-2 text-teal"></i>Pipeline Overview</h2>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Series Overview:</strong> Part 21 of 28. Prerequisites: Part 18 (Performance Profiling), Part 7 (Memory Model), Part 5 (Branching).
+                    </div>
+
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>ARM Assembly Mastery</h4>
+                            <div class="path-subtitle">Your 28-step learning path • Currently on Step 21</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="arm-assembly-01-architecture-history.html" class="step-card"><div class="step-num completed">1</div><div class="step-info"><h6>Architecture History &amp; Core Concepts</h6><small>ARMv1→v9, RISC philosophy, profiles</small></div></a>
+                            <a href="arm-assembly-02-arm32-instructions.html" class="step-card"><div class="step-num completed">2</div><div class="step-info"><h6>ARM32 Instruction Set Fundamentals</h6><small>ARM vs Thumb, registers, CPSR, barrel shifter</small></div></a>
+                            <a href="arm-assembly-03-aarch64-registers.html" class="step-card"><div class="step-num completed">3</div><div class="step-info"><h6>AArch64 Registers, Addressing &amp; Data Movement</h6><small>X/W regs, addressing modes, load/store pairs</small></div></a>
+                            <a href="arm-assembly-04-arithmetic-logic.html" class="step-card"><div class="step-num completed">4</div><div class="step-info"><h6>Arithmetic, Logic &amp; Bit Manipulation</h6><small>ADD/SUB, bitfield extract/insert, CLZ</small></div></a>
+                            <a href="arm-assembly-05-branching-loops.html" class="step-card"><div class="step-num completed">5</div><div class="step-info"><h6>Branching, Loops &amp; Conditional Execution</h6><small>Branch types, link register, jump tables</small></div></a>
+                            <a href="arm-assembly-06-stack-subroutines.html" class="step-card"><div class="step-num completed">6</div><div class="step-info"><h6>Stack, Subroutines &amp; AAPCS</h6><small>Calling conventions, prologue/epilogue</small></div></a>
+                            <a href="arm-assembly-07-memory-caches.html" class="step-card"><div class="step-num completed">7</div><div class="step-info"><h6>Memory Model, Caches &amp; Barriers</h6><small>Weak ordering, DMB/DSB/ISB, TLB</small></div></a>
+                            <a href="arm-assembly-08-neon-simd.html" class="step-card"><div class="step-num completed">8</div><div class="step-info"><h6>NEON &amp; Advanced SIMD</h6><small>Vector ops, intrinsics, media processing</small></div></a>
+                            <a href="arm-assembly-09-sve-sve2.html" class="step-card"><div class="step-num completed">9</div><div class="step-info"><h6>SVE &amp; SVE2 Scalable Vector Extensions</h6><small>Predicate regs, gather/scatter, HPC/ML</small></div></a>
+                            <a href="arm-assembly-10-floating-point.html" class="step-card"><div class="step-num completed">10</div><div class="step-info"><h6>Floating-Point &amp; VFP Instructions</h6><small>IEEE-754, scalar FP, rounding modes</small></div></a>
+                            <a href="arm-assembly-11-exception-levels.html" class="step-card"><div class="step-num completed">11</div><div class="step-info"><h6>Exception Levels, Interrupts &amp; Vector Tables</h6><small>EL0–EL3, GIC, fault debugging</small></div></a>
+                            <a href="arm-assembly-12-mmu-virtual-memory.html" class="step-card"><div class="step-num completed">12</div><div class="step-info"><h6>MMU, Page Tables &amp; Virtual Memory</h6><small>Stage-1 translation, permissions, huge pages</small></div></a>
+                            <a href="arm-assembly-13-trustzone-security.html" class="step-card"><div class="step-num completed">13</div><div class="step-info"><h6>TrustZone &amp; ARM Security Extensions</h6><small>Secure monitor, world switching, TF-A</small></div></a>
+                            <a href="arm-assembly-14-cortex-m-embedded.html" class="step-card"><div class="step-num completed">14</div><div class="step-info"><h6>Cortex-M Assembly &amp; Bare-Metal Embedded</h6><small>NVIC, SysTick, linker scripts, low-power</small></div></a>
+                            <a href="arm-assembly-15-cortex-a-boot.html" class="step-card"><div class="step-num completed">15</div><div class="step-info"><h6>Cortex-A System Programming &amp; Boot</h6><small>EL3→EL1 transitions, MMU setup, PSCI</small></div></a>
+                            <a href="arm-assembly-16-apple-silicon.html" class="step-card"><div class="step-num completed">16</div><div class="step-info"><h6>Apple Silicon &amp; macOS ABI</h6><small>ARM64e PAC, Mach-O, dyld, perf counters</small></div></a>
+                            <a href="arm-assembly-17-inline-asm-intrinsics.html" class="step-card"><div class="step-num completed">17</div><div class="step-info"><h6>Inline Assembly, GCC/Clang &amp; C Interop</h6><small>Constraints, clobbers, compiler interaction</small></div></a>
+                            <a href="arm-assembly-18-performance-profiling.html" class="step-card"><div class="step-num completed">18</div><div class="step-info"><h6>Performance Profiling &amp; Micro-Optimization</h6><small>Pipeline hazards, PMU, benchmarking</small></div></a>
+                            <a href="arm-assembly-19-reverse-engineering.html" class="step-card"><div class="step-num completed">19</div><div class="step-info"><h6>Reverse Engineering &amp; ARM Binary Analysis</h6><small>ELF, disassembly, CFR, iOS/Android quirks</small></div></a>
+                            <a href="arm-assembly-20-bare-metal-os-kernel.html" class="step-card"><div class="step-num completed">20</div><div class="step-info"><h6>Building a Bare-Metal OS Kernel</h6><small>Bootloader, UART, scheduler, context switch</small></div></a>
+                            <div class="step-card current"><div class="step-num active">21</div><div class="step-info"><h6>ARM Microarchitecture Deep Dive</h6><small>OOO pipelines, reorder buffers, branch predict</small></div><span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span></div>
+                            <a href="arm-assembly-22-virtualization.html" class="step-card"><div class="step-num upcoming">22</div><div class="step-info"><h6>Virtualization Extensions</h6><small>EL2 hypervisor, stage-2 translation, KVM</small></div></a>
+                            <a href="arm-assembly-23-debugging-tooling.html" class="step-card"><div class="step-num upcoming">23</div><div class="step-info"><h6>Debugging &amp; Tooling Ecosystem</h6><small>GDB, OpenOCD/JTAG, ETM/ITM, QEMU</small></div></a>
+                            <a href="arm-assembly-24-linkers-loaders.html" class="step-card"><div class="step-num upcoming">24</div><div class="step-info"><h6>Linkers, Loaders &amp; Binary Format Internals</h6><small>ELF deep dive, relocations, PIC, crt0</small></div></a>
+                            <a href="arm-assembly-25-cross-compilation.html" class="step-card"><div class="step-num upcoming">25</div><div class="step-info"><h6>Cross-Compilation &amp; Build Systems</h6><small>GCC/Clang toolchains, CMake, firmware gen</small></div></a>
+                            <a href="arm-assembly-26-arm-real-systems.html" class="step-card"><div class="step-num upcoming">26</div><div class="step-info"><h6>ARM in Real Systems</h6><small>Android, FreeRTOS/Zephyr, U-Boot, TF-A</small></div></a>
+                            <a href="arm-assembly-27-security-exploitation.html" class="step-card"><div class="step-num upcoming">27</div><div class="step-info"><h6>Security Research &amp; Exploitation</h6><small>ASLR, PAC attacks, ROP/JOP, kernel exploit</small></div></a>
+                            <a href="arm-assembly-28-armv9-future.html" class="step-card"><div class="step-num upcoming">28</div><div class="step-info"><h6>Emerging ARMv9 &amp; Future Directions</h6><small>MTE, SME, confidential compute, AI accel</small></div></a>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Real-World Analogy — A Restaurant Kitchen:</strong> A modern ARM core is like a high-volume restaurant kitchen. The <em>fetch/decode</em> stage is the waiter taking orders. <em>Register renaming</em> is the head chef assigning each dish to a specific station and pan (physical register) — even if three tables all ordered "steak" (same architectural register), each gets its own cooking surface to avoid conflicts. The <em>reorder buffer</em> is the pass (the heated counter where finished plates wait): dishes can finish in any order (out-of-order execution), but the expeditor (commit logic) sends them to tables strictly in the order they were ordered, so no guest gets dessert before their appetizer. <em>Branch prediction</em> is the kitchen prepping speculative dishes — "Table 5 always orders tiramisu after the steak" — gambling time to start early. If the prediction is wrong (they order cheesecake), the speculative work is thrown out (pipeline flush), wasting cycles. The <em>store buffer</em> is the pickup window: finished dishes (stores) queue here until the waiter (memory system) is ready, and a subsequent order for "that same dish" (load from same address) can be fulfilled directly from the window without going back to the fridge (cache).
+                    </div>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>OOO Pipeline Stages:</strong>
+                        Fetch → Decode → Rename → Dispatch → Issue → Execute → Writeback → Commit (Retire). Each stage can hide work from the ISA programmer but every stage has capacity limits that show up as performance bottlenecks.
+                    </div>
+
+                    <h2 id="ooo">Out-of-Order Execution</h2>
+
+                    <h3>Register Renaming</h3>
+                    <p>The architectural register file (X0–X30) is far too small to hold the inflight work of a wide OOO core. A physical register file (PRF) of 128–256 entries is allocated dynamically. The rename stage maps each destination register write to a fresh PRF entry, eliminating WAR (Write-After-Read) and WAW (Write-After-Write) hazards while preserving true RAW (Read-After-Write) data dependences.</p>
+
+                    <pre><code class="language-armasm">// Visible code — appears serial:
+MUL  X1, X2, X3    // WAW: both write X1 ... but after renaming →
+ADD  X1, X4, X5    //   MUL  → PRF[p47], ADD → PRF[p48]  (no conflict)
+
+// RAW hazard (cannot rename away):
+SDIV X0, X6, X7    // Long latency (≥12 cycles on A78)
+ADD  X8, X0, X1    // Must wait for SDIV result in PRF[p47]</code></pre>
+
+                    <h3>Reorder Buffer (ROB)</h3>
+                    <p>Instructions are inserted into the ROB in program order at dispatch. They can execute out of order — the ROB records which have completed — but they <strong>commit</strong> (become visible state) only in program order from the head of the ROB. This is what makes precise exceptions possible: any instruction that faulted can be identified because nothing past it has committed.</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-table me-2"></i>
+                        <strong>ROB Sizes (approximate):</strong><br>
+                        Cortex-A55: ~32 entry ROB (in-order up to decode, OOO from issue). Cortex-A78: ~160 entry ROB. Neoverse N2: ~400 entry ROB. Apple Firestorm: ~620 entry ROB — the largest ROB publicly known (2023), enabling deep memory-level parallelism.
+                    </div>
+
+                    <h3>Reservation Stations &amp; Execution Ports</h3>
+                    <pre><code class="language-armasm">// Cortex-A78 issue queues (approximate per ARM TRM):
+// IQ0 (integer ALU, shift, CSEL): 4 entries × 2 pipes → 2 ALU/cycle
+// IQ1 (multiply, divide):          2 entries × 1 pipe → 1 MUL/cycle
+// IQ2 (load):                      12 entries × 2 pipes → 2 loads/cycle
+// IQ3 (store):                     8 entries × 1 pipe → 1 store/cycle
+// IQ4 (NEON/FP):                   8 entries × 2 pipes → 2 NEON/cycle
+
+// Throughput-limiting example: 4 dependent multiplies, 1 cycle each
+MUL  X4, X0, X1    // Uses MUL pipe (1 cycle latency approx)
+MUL  X5, X2, X3    // Independent → can dual-issue if separate src regs
+MUL  X6, X4, X5    // Depends on X4 and X5 → must wait → serialised
+MUL  X7, X6, X3    // Depends on X6 → more serialisation
+
+// Solution: expose more independent chains (see Part 18, multiple accumulators)</code></pre>
+
+                    <h2 id="branch-prediction">Branch Prediction</h2>
+
+                    <h3>Bimodal &amp; Two-Level Predictors</h3>
+                    <p>A bimodal predictor is a table of 2-bit saturating counters indexed by PC bits. Two-level (correlated) predictors index the counter table with a combination of the PC and the Global History Register (GHR), a shift register of the last N branch outcomes. The GHR captures correlation patterns like "this branch is always taken if the last three were also taken."</p>
+
+                    <pre><code class="language-armasm">// Branch that aliases in a bimodal predictor (same PC bits, different ctx):
+// Two calls to same function with different condition chains → predictor thrashes
+// Solution: pad hot inner loops with NOPs or use PRFM for instruction cache</code></pre>
+
+                    <h3>TAGE Predictor</h3>
+                    <p>Tagged GEometric history length (TAGE) uses a base bimodal table plus K tagged tables indexed by hash(PC, GHR[0:2^k−1]). The longest history that hits provides the prediction. A "use-count" meta-predictor arbitrates ties. Cortex-A78 and Neoverse N2 implement variants of TAGE achieving >98% accuracy on SPECint workloads.</p>
+
+                    <h3>Branch Target Buffer (BTB) &amp; Return Address Stack (RAS)</h3>
+                    <pre><code class="language-armasm">// BTB Miss: indirect branch (BR Xn) where target changes frequently
+// Triggering BTB miss costs ~20 cycles pipeline flush on A78
+// Perf event: 0x010 = BR_MIS_PRED
+mrs x0, pmcr_el0
+// ... configure PMU event 0x010 as in Part 18 ...
+
+// Indirect call via function pointer (high BTB miss rate if target varies):
+BLR X9        // BTB must predict X9 content — if wrong: flush + refetch
+
+// Static indirect branches (e.g. switch jump table): BTB usually correct after warmup
+// Dynamic virtual dispatch: 1 call site → many targets → BTB capacity exhausted
+
+// RAS (Return Address Stack, ~16–32 deep):
+BL  func      // Pushes PC+4 onto RAS
+...
+func:
+    ...
+    RET       // Pops RAS → correct most of the time (mismatch on longjmp/setjmp)</code></pre>
+
+                    <h2 id="memory-subsystem">Memory Subsystem</h2>
+
+                    <h3>Store-to-Load Forwarding</h3>
+                    <p>A store writes to the store buffer (not directly to cache). A subsequent load to the same address is fulfilled from the store buffer — this is store-to-load forwarding. It avoids the cache latency when the data is still "in flight." However, partial overlaps (e.g., write 8 bytes, read 4 bytes misaligned) cause a forwarding bubble of ~4–8 extra cycles.</p>
+
+                    <pre><code class="language-armasm">// Perfect forwarding: same address, same size → data from store buffer
+STR  X0, [X1]      // Write X0 to [X1]
+LDR  X2, [X1]      // Forwarded from store buffer: ~4 cycle latency vs ~12 cache hit
+
+// Forwarding failure: partial overlap
+STR  W0, [X1]      // Write 4 bytes to [X1]
+LDR  X2, [X1]      // Read 8 bytes from [X1] — only 4 overlap → forwarding stall
+
+// Common kernel bug: write byte, read word (struct alignment pitfall)
+STRB W0, [X1]      // 1-byte store
+LDR  W2,  [X1]     // 4-byte load → partial overlap → ~10 cycle penalty on A78</code></pre>
+
+                    <h3>Memory Dependence Speculation</h3>
+                    <p>ARM OOO cores speculate that loads do not alias most stores. If a load is issued early and a later-dispatched store has the same address, the core detects the violation at commit time, flushes the load (and everything dispatched after it), and re-executes. The PMU event <code>0x074 = MEM_ACCESS_LD</code> and the <code>perf stat</code> metric <code>memory_bound</code> reveal when this is expensive.</p>
+
+                    <h2 id="cache">Cache &amp; TLB Architecture</h2>
+
+                    <pre><code class="language-armasm">// Query cache parameters at runtime (ARM CTR_EL0):
+// CTR_EL0[19:16] = L1 instruction cache line size (log2 words)
+// CTR_EL0[3:0]   = L1 data cache line size (log2 words)
+mrs  x0, ctr_el0
+ubfx x1, x0, #16, #4   // Extract ICache line size field
+mov  x2, #4
+lsl  x3, x2, x1         // Cache line = 4 << field (bytes)
+// On A78: CTR_EL0 = 0x84448004 → L1D line = 64 bytes, L1I line = 64 bytes</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-memory me-2"></i>
+                        <strong>Cache Parameters (Cortex-A78, typical SoC):</strong><br>
+                        L1I: 64 KB, 4-way set-assoc, 64-byte lines, 4-cycle hit<br>
+                        L1D: 32 KB, 4-way set-assoc, 64-byte lines, 4-cycle hit<br>
+                        L2 (per core): 256 KB–512 KB, 8-way, 12-cycle hit<br>
+                        L3 (shared): 4–8 MB, 16-way, 30–40 cycle hit<br>
+                        DRAM: 200–300 cycles (DDR5 at 5600 MT/s)
+                    </div>
+
+                    <h3>Prefetchers</h3>
+                    <pre><code class="language-armasm">// Hardware prefetcher types (all implicit, cannot be disabled via ISA):
+// 1. Next-line: always fetch the next cache line after a miss
+// 2. Stride: detect constant-stride access patterns
+// 3. Stream: detect sequential streams, issue ahead-of-time prefetch
+
+// Software prefetch (explicit, from Part 18):
+PRFM PLDL1KEEP, [X0, #256]   // Prefetch 4 cache lines ahead into L1D
+PRFM PLDL2KEEP, [X0, #512]   // Prefetch into L2 (for long loops)
+
+// PRFM hint types:
+// PLDL1KEEP  = load, L1, keep (non-evict hint)
+// PSTL1KEEP  = store, L1, keep — prefetch for write (allocate clean line)
+// PLDL3STRM  = load, L3, stream (evict-soon hint — scratchpad pattern)</code></pre>
+
+                    <h3>TLB Structure &amp; Shootdown</h3>
+                    <pre><code class="language-armasm">// TLB Miss: triggers full page table walk (50–200 cycles!)
+// TLBI (TLB Invalidate) instructions:
+TLBI  VMALLE1IS      // Invalidate all EL1 translations (inner-shareable)
+TLBI  VAE1IS, X0     // Invalidate EL1 by virtual address (X0 >> 12 = VA/4KB)
+TLBI  ASIDE1IS, X0   // Invalidate all entries with ASID in X0[63:48]
+DSB   ISH            // Ensure TLB invalidation visible to all observers
+ISB                  // Flush pipeline after TLB change
+
+// TLB shootdown on SMP: each core running threads of the same process
+// must invalidate TLBs when a mapping changes. IS (Inner-Shareable) suffix
+// broadcasts the TLBI to all cores in the same inner-shareable domain.</code></pre>
+
+                    <h2 id="core-comparison">Core Comparison</h2>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-table me-2"></i>
+                        <strong>Cortex-A55 vs Cortex-A78 vs Neoverse N2 (summary):</strong>
+                        <br><br>
+                        <strong>Cortex-A55 (efficiency core used in DynamIQ clusters):</strong> In-order up to dispatch; 2-wide decode; 8-entry issue queue; 32-entry ROB equivalent; ~1.9 IPC at peak; sub-1W active power. Designed for background tasks and always-on workloads.
+                        <br><br>
+                        <strong>Cortex-A78 (performance core, 2020–2023 smartphones):</strong> 4-wide decode; 160-entry ROB; 6 execution ports; 2 load + 1 store / cycle; TAGE branch predictor; 3.6 IPC peak; ~2.5W TDP in 5 nm silicon.
+                        <br><br>
+                        <strong>Neoverse N2 (server, 2022+):</strong> 4-wide decode; 400-entry ROB; 8 execution ports; 3 load + 2 store / cycle (SVE adds vector load/store ports); CHI interconnect for cache coherence at rack scale; ~4.0 IPC peak; 10W+ TDP.
+                    </div>
+
+                    <h2 id="asm-implications">Assembly Implications</h2>
+
+                    <pre><code class="language-armasm">// ── Rule 1: Break dependence chains for ILP ──
+// Bad: chain of 4 multiplies → 1 result/4 cycles
+MUL  X0, X1, X2
+MUL  X0, X0, X3
+MUL  X0, X0, X4
+MUL  X0, X0, X5
+
+// Good: 4 independent multiplies → 4 results/1 cycle (wide issue)
+MUL  X0, X1, X2
+MUL  X6, X3, X4
+MUL  X7, X5, X8
+MUL  X9, X10, X11
+// Then merge: MUL X12, X0, X6 / MUL X13, X7, X9 / MUL X0, X12, X13</code></pre>
+
+                    <pre><code class="language-armasm">// ── Rule 2: Avoid indirect branch thrash → prefer direct branches ──
+// VTable dispatch: BLR Xn — poor BTB predictions when targets vary
+// Alternative: inline or devirtualise in hot paths</code></pre>
+
+                    <pre><code class="language-armasm">// ── Rule 3: Align hot loop head to I-Cache line boundary ──
+.balign 64           // 64-byte = L1I cache line on A78
+.loop_head:
+    LDP  X0, X1, [X2], #16
+    LDP  X3, X4, [X2], #16
+    // ... loop body ...
+    B.NE .loop_head</code></pre>
+
+                    <pre><code class="language-armasm">// ── Rule 4: Separate store and load to same address ──
+STR  X0, [X1]
+// Insert ~4 independent instructions here to allow forwarding pipeline
+ADD  X5, X6, X7    // Fill cycle 1
+ADD  X8, X9, X10   // Fill cycle 2
+ADD  X11, X12, X13 // Fill cycle 3 (A78 forwarding latency ≈ 4)
+LDR  X2, [X1]      // Now forwarding hits clean without stall</code></pre>
+
+                    <!-- Case Study -->
+                    <h2 id="case-study"><i class="fas fa-flask me-2 text-teal"></i>Case Study: Apple M1 vs Cortex-X2 — Two Takes on Wide OOO</h2>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Microarchitecture</span><span class="bias-tag bg-crimson">Industry</span><span class="bias-tag bg-navy">Real-World</span></div>
+                        <div class="card-content">
+                            <h5>How Different Design Philosophies Yield Different Results</h5>
+                            <p>When Apple's M1 (Firestorm cores) launched in 2020, it shattered ARM performance expectations. Its microarchitecture makes a fascinating comparison to ARM's own Cortex-X2 (2022):</p>
+                            <table class="table table-bordered table-sm">
+                                <thead><tr><th>Parameter</th><th>Apple Firestorm (M1)</th><th>Cortex-X2</th></tr></thead>
+                                <tbody>
+                                    <tr><td>Decode Width</td><td>8-wide</td><td>5-wide</td></tr>
+                                    <tr><td>ROB Size</td><td>~630 entries</td><td>~288 entries</td></tr>
+                                    <tr><td>Integer ALU Ports</td><td>6</td><td>4</td></tr>
+                                    <tr><td>Load/Store Ports</td><td>3 Load + 2 Store</td><td>2 Load + 2 Store</td></tr>
+                                    <tr><td>L1D Cache</td><td>128 KB, 8-way</td><td>64 KB, 4-way</td></tr>
+                                    <tr><td>L2 Cache (per core)</td><td>12 MB shared (perf cluster)</td><td>512 KB–1 MB</td></tr>
+                                    <tr><td>Power Target</td><td>~10W (perf cluster)</td><td>~3W (single core)</td></tr>
+                                </tbody>
+                            </table>
+                            <p><strong>Key insight:</strong> Apple's advantage comes from being both the chip designer and the only customer — they can afford a 630-entry ROB and 128 KB L1D because they control the thermal design of the MacBook chassis. ARM's Cortex-X2 must work across dozens of Android phones with different thermal budgets, forcing a more conservative design. The lesson: microarchitecture trade-offs are inseparable from the system they ship in.</p>
+                            <p><strong>Performance impact:</strong> On SPEC CPU 2017, Firestorm's wider issue and larger ROB deliver ~15–20% higher single-thread IPC than X2, but X2's smaller area allows more cores per cluster. In server workloads (Neoverse N2), throughput per watt matters more than single-thread speed, so ARM chose a 4-wide balanced design instead.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">History</span><span class="bias-tag bg-navy">Evolution</span></div>
+                        <div class="card-content">
+                            <h5>From StrongARM to Neoverse: 30 Years of ARM Microarchitecture</h5>
+                            <p>ARM microarchitecture has evolved through distinct generations:</p>
+                            <ul>
+                                <li><strong>1996 — StrongARM (DEC, then Intel):</strong> The first high-performance ARM core. 5-stage in-order pipeline, 233 MHz, 1W. Proved ARM could compete on performance, not just power.</li>
+                                <li><strong>2005 — Cortex-A8:</strong> ARM's first superscalar core. 2-wide in-order, dual-issue integer. Powered the original iPhone (2007) and Kindle.</li>
+                                <li><strong>2011 — Cortex-A15:</strong> ARM's first fully out-of-order core. 3-wide decode, ~100-entry ROB. The architecture that made ARM credible for servers (Calxeda, Applied Micro).</li>
+                                <li><strong>2018 — Cortex-A76 ("Enyo"):</strong> 4-wide OOO, 128-entry ROB, micro-op cache. Closed the gap with Intel mobile Core i5. Basis for Neoverse N1 (AWS Graviton2).</li>
+                                <li><strong>2022 — Neoverse V2:</strong> 5-wide decode, SVE2, 400+ ROB, CHI mesh interconnect. Powers Graviton4 and Microsoft Cobalt — ARM's entry into datacenter dominance.</li>
+                            </ul>
+                            <p>Each generation roughly doubled ROB size and added 1–2 execution ports, a pattern constrained by the cubic relationship between power and OOO window size.</p>
+                        </div>
+                    </div>
+
+                    <!-- Exercises -->
+                    <h2 id="exercises"><i class="fas fa-pencil-alt me-2 text-teal"></i>Hands-On Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Exercise 1</span><span class="bias-tag bg-navy">Beginner</span></div>
+                        <div class="card-content">
+                            <h5>Measure ROB Depth via Dependency Chain</h5>
+                            <p>Empirically estimate your CPU's ROB size by measuring when independent instruction throughput drops:</p>
+                            <ol>
+                                <li>Write a loop containing N independent <code>ADD Xn, Xn, #1</code> instructions (each writing a different register), followed by a single long-latency <code>SDIV</code> whose result is consumed by the next iteration's first ADD</li>
+                                <li>Increase N from 10 to 300 in steps of 10. Time 10 million iterations of each</li>
+                                <li>Plot cycles/iteration vs N. While N &lt; ROB depth, the independent ADDs fill the ROB and overlap with the SDIV. Once N exceeds the ROB, dispatching stalls — the curve flattens</li>
+                                <li>The "knee" of the curve approximates the ROB size</li>
+                            </ol>
+                            <p><strong>Expected:</strong> On Cortex-A78, the knee should appear around N=150–160. On Apple M-series, around N=600+.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Exercise 2</span><span class="bias-tag bg-crimson">Intermediate</span></div>
+                        <div class="card-content">
+                            <h5>Branch Predictor Stress Test</h5>
+                            <p>Design a benchmark that defeats TAGE prediction:</p>
+                            <ol>
+                                <li>Create an array of 256 random 0/1 values (unseeded random — different each run)</li>
+                                <li>Loop through the array; for each element, execute <code>CBZ/CBNZ</code> to branch into one of two code paths</li>
+                                <li>Measure total cycles and branch mispredictions using PMU events <code>0x10 (BR_MIS_PRED)</code> and <code>0x12 (BR_PRED)</code></li>
+                                <li>Compare against a sorted version of the same array (all 0s then all 1s) — mispredictions should drop to near-zero</li>
+                            </ol>
+                            <p><strong>Analysis:</strong> Calculate misprediction rate for random vs sorted. Typical results: ~45-50% miss rate on random (worse than coin flip due to aliasing), &lt;1% on sorted.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Exercise 3</span><span class="bias-tag bg-crimson">Advanced</span></div>
+                        <div class="card-content">
+                            <h5>Store-to-Load Forwarding Latency Measurement</h5>
+                            <p>Measure the difference between forwarded and non-forwarded loads:</p>
+                            <ol>
+                                <li>Write a tight loop: <code>STR X0, [X1] / LDR X2, [X1]</code> (same address, same size — perfect forwarding). Time 100M iterations using cycle counter</li>
+                                <li>Modify to misaligned partial overlap: <code>STR X0, [X1] / LDR W2, [X1, #2]</code> (4-byte load at 2-byte offset into 8-byte store). Time again</li>
+                                <li>Modify to complete miss: <code>STR X0, [X1] / LDR X2, [X3]</code> where X3 points to a different cache line</li>
+                                <li>Calculate: forwarding latency, partial-overlap penalty, and L1D hit latency (from the miss case)</li>
+                            </ol>
+                            <p><strong>Expected on A78:</strong> ~4 cycles (forwarded), ~10-12 cycles (partial overlap), ~4 cycles (L1D hit, no forwarding — same if data is warm in cache).</p>
+                        </div>
+                    </div>
+
+                    <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
+                    <p>The Cortex-A78 represents the intersection of every concept in the series: ISA constraints shape what rename can do, weak memory ordering emerges from the store buffer design, and cache line boundaries determine when PRFM helps. Every assembly optimization from Part 18 maps to a physical circuit now visible in this part. The Apple M1 vs Cortex-X2 comparison shows how system-level constraints drive wildly different microarchitectural choices from the same ISA, and the exercises let you probe these mechanisms empirically by measuring ROB depth, branch predictor accuracy, and forwarding latency on real hardware.</p>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="arm-assembly-22-virtualization.html"><strong>Part 22: Virtualization Extensions</strong></a>, we enter EL2, write trap handlers, configure stage-2 page tables for guest memory isolation, wire virtual GIC list registers, and understand how KVM on ARM implements hardware-accelerated virtual machines.</p>
+                    </div>
+
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 18: Performance Profiling &amp; Micro-Optimization</h5>
+                            <p>PMU programming, pipeline hazard types, and optimization patterns that this part explains at the circuit level.</p>
+                            <a href="arm-assembly-18-performance-profiling.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 7: Memory Model, Caches &amp; Barriers</h5>
+                            <p>ARM weak memory ordering is a direct consequence of the store buffer architecture described in this part.</p>
+                            <a href="arm-assembly-07-memory-caches.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 5: Branching, Loops &amp; Conditional Execution</h5>
+                            <p>Branch instruction encoding and ISA-level patterns that feed the predictors described here.</p>
+                            <a href="arm-assembly-05-branching-loops.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.</p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small"><i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a></p>
+                    <p class="small mt-3"><a href="/" class="text-light text-decoration-none">Home</a> | <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a></p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a></p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"><i class="fas fa-tag"></i><span id="categoryText">Technology</span></div>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>

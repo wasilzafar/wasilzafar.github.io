@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="ARM performance profiling and micro-optimization: PMU hardware counters, Linux perf stat, pipeline hazard analysis, instruction throughput vs latency, and systematic micro-benchmarking methodology." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="ARM PMU performance counters, Linux perf stat ARM, ARM pipeline hazards, instruction throughput latency ARM, PMCCNTR_EL0 cycle counter, ARM micro-benchmarking, Cortex-A performance optimization" />
+    <meta property="og:title" content="ARM Assembly Part 18: Performance Profiling &amp; Micro-Optimization" />
+    <meta property="og:description" content="Master ARM performance profiling: PMU hardware event counters, Linux perf stat, pipeline hazard classification, throughput vs latency tables, and rigorous micro-benchmarking for assembly routines." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-05-07" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <title>ARM Assembly Part 18: Performance Profiling &amp; Micro-Optimization - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/arm-assembly/arm-assembly-18-performance-profiling.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied',
+            'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', {
+            'ad_storage': 'granted', 'ad_user_data': 'granted',
+            'ad_personalization': 'granted', 'analytics_storage': 'granted'
+        });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20"><path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path></svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">We use cookies to enhance your browsing experience. See our <a href="/privacy-policy.html" style="color: var(--color-teal);">Privacy Policy</a>.</p>
+                <div id="cookieSettings" style="display: none;"></div>
+                <div id="cookieTypes" style="display: none;"></div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background:var(--color-teal);color:white;font-weight:600;">Accept All</button>
+                <button id="cookieReject" style="background:transparent;color:var(--color-navy);border:2px solid var(--color-teal);font-weight:600;">Reject All</button>
+                <button id="cookieSave" style="background:var(--color-blue);color:white;font-weight:600;display:none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+                <h1 class="display-4 fw-bold mb-3">ARM Assembly Part 18: Performance Profiling &amp; Micro-Optimization</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>May 7, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>24 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Writing fast assembly is half craft, half measurement. ARM's Performance Monitoring Unit gives you hardware-level insight into every stall, cache miss, and mispredicted branch. Combined with Linux perf and a principled micro-benchmarking methodology, you can systematically identify and eliminate the bottlenecks that profiles reveal.</p>
+            </div>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#introduction" onclick="closeNav()">Introduction &amp; Profiling Philosophy</a></li>
+            <li>
+                <a href="#pmu" onclick="closeNav()">ARM PMU Hardware Counters</a>
+                <ul>
+                    <li><a href="#pmu-regs" onclick="closeNav()">PMU Register Map</a></li>
+                    <li><a href="#pmu-userspace" onclick="closeNav()">Enabling EL0 Access</a></li>
+                    <li><a href="#pmu-read" onclick="closeNav()">Reading Counters from C</a></li>
+                </ul>
+            </li>
+            <li><a href="#perf" onclick="closeNav()">Linux perf stat &amp; perf record</a></li>
+            <li><a href="#hazards" onclick="closeNav()">Pipeline Hazard Classification</a></li>
+            <li><a href="#throughput-latency" onclick="closeNav()">Throughput vs Latency</a></li>
+            <li><a href="#benchmarking" onclick="closeNav()">Micro-Benchmarking Methodology</a></li>
+            <li><a href="#optimization-patterns" onclick="closeNav()">Practical Optimization Patterns</a></li>
+            <li><a href="#case-study" onclick="closeNav()">Case Study: AWS Graviton3 Profiling</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Hands-On Exercises</a></li>
+            <li><a href="#profiling-tool" onclick="closeNav()">Perf Profiling Worksheet Tool</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                <div id="introduction" class="blog-content">
+
+                    <h2><i class="fas fa-tachometer-alt me-2 text-teal"></i>Introduction &amp; Profiling Philosophy</h2>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Series Overview:</strong> Part 18 of 28. Part 17 showed how to write inline assembly. This part teaches you to measure whether it's actually faster. Never optimize without data; never trust synthetic benchmarks without validation.
+                    </div>
+
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>ARM Assembly Mastery</h4>
+                            <div class="path-subtitle">Your 28-step learning path • Currently on Step 18</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="arm-assembly-01-architecture-history.html" class="step-card"><div class="step-num completed">1</div><div class="step-info"><h6>Architecture History &amp; Core Concepts</h6><small>ARMv1→v9, RISC philosophy, profiles</small></div></a>
+                            <a href="arm-assembly-02-arm32-instructions.html" class="step-card"><div class="step-num completed">2</div><div class="step-info"><h6>ARM32 Instruction Set Fundamentals</h6><small>ARM vs Thumb, registers, CPSR, barrel shifter</small></div></a>
+                            <a href="arm-assembly-03-aarch64-registers.html" class="step-card"><div class="step-num completed">3</div><div class="step-info"><h6>AArch64 Registers, Addressing &amp; Data Movement</h6><small>X/W regs, addressing modes, load/store pairs</small></div></a>
+                            <a href="arm-assembly-04-arithmetic-logic.html" class="step-card"><div class="step-num completed">4</div><div class="step-info"><h6>Arithmetic, Logic &amp; Bit Manipulation</h6><small>ADD/SUB, bitfield extract/insert, CLZ</small></div></a>
+                            <a href="arm-assembly-05-branching-loops.html" class="step-card"><div class="step-num completed">5</div><div class="step-info"><h6>Branching, Loops &amp; Conditional Execution</h6><small>Branch types, link register, jump tables</small></div></a>
+                            <a href="arm-assembly-06-stack-subroutines.html" class="step-card"><div class="step-num completed">6</div><div class="step-info"><h6>Stack, Subroutines &amp; AAPCS</h6><small>Calling conventions, prologue/epilogue</small></div></a>
+                            <a href="arm-assembly-07-memory-caches.html" class="step-card"><div class="step-num completed">7</div><div class="step-info"><h6>Memory Model, Caches &amp; Barriers</h6><small>Weak ordering, DMB/DSB/ISB, TLB</small></div></a>
+                            <a href="arm-assembly-08-neon-simd.html" class="step-card"><div class="step-num completed">8</div><div class="step-info"><h6>NEON &amp; Advanced SIMD</h6><small>Vector ops, intrinsics, media processing</small></div></a>
+                            <a href="arm-assembly-09-sve-sve2.html" class="step-card"><div class="step-num completed">9</div><div class="step-info"><h6>SVE &amp; SVE2 Scalable Vector Extensions</h6><small>Predicate regs, gather/scatter, HPC/ML</small></div></a>
+                            <a href="arm-assembly-10-floating-point.html" class="step-card"><div class="step-num completed">10</div><div class="step-info"><h6>Floating-Point &amp; VFP Instructions</h6><small>IEEE-754, scalar FP, rounding modes</small></div></a>
+                            <a href="arm-assembly-11-exception-levels.html" class="step-card"><div class="step-num completed">11</div><div class="step-info"><h6>Exception Levels, Interrupts &amp; Vector Tables</h6><small>EL0–EL3, GIC, fault debugging</small></div></a>
+                            <a href="arm-assembly-12-mmu-virtual-memory.html" class="step-card"><div class="step-num completed">12</div><div class="step-info"><h6>MMU, Page Tables &amp; Virtual Memory</h6><small>Stage-1 translation, permissions, huge pages</small></div></a>
+                            <a href="arm-assembly-13-trustzone-security.html" class="step-card"><div class="step-num completed">13</div><div class="step-info"><h6>TrustZone &amp; ARM Security Extensions</h6><small>Secure monitor, world switching, TF-A</small></div></a>
+                            <a href="arm-assembly-14-cortex-m-embedded.html" class="step-card"><div class="step-num completed">14</div><div class="step-info"><h6>Cortex-M Assembly &amp; Bare-Metal Embedded</h6><small>NVIC, SysTick, linker scripts, low-power</small></div></a>
+                            <a href="arm-assembly-15-cortex-a-boot.html" class="step-card"><div class="step-num completed">15</div><div class="step-info"><h6>Cortex-A System Programming &amp; Boot</h6><small>EL3→EL1 transitions, MMU setup, PSCI</small></div></a>
+                            <a href="arm-assembly-16-apple-silicon.html" class="step-card"><div class="step-num completed">16</div><div class="step-info"><h6>Apple Silicon &amp; macOS ABI</h6><small>ARM64e PAC, Mach-O, dyld, perf counters</small></div></a>
+                            <a href="arm-assembly-17-inline-asm-intrinsics.html" class="step-card"><div class="step-num completed">17</div><div class="step-info"><h6>Inline Assembly, GCC/Clang &amp; C Interop</h6><small>Constraints, clobbers, compiler interaction</small></div></a>
+                            <div class="step-card current"><div class="step-num active">18</div><div class="step-info"><h6>Performance Profiling &amp; Micro-Optimization</h6><small>Pipeline hazards, PMU, benchmarking</small></div><span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span></div>
+                            <a href="arm-assembly-19-reverse-engineering.html" class="step-card"><div class="step-num upcoming">19</div><div class="step-info"><h6>Reverse Engineering &amp; ARM Binary Analysis</h6><small>ELF, disassembly, CFR, iOS/Android quirks</small></div></a>
+                            <a href="arm-assembly-20-bare-metal-os-kernel.html" class="step-card"><div class="step-num upcoming">20</div><div class="step-info"><h6>Building a Bare-Metal OS Kernel</h6><small>Bootloader, UART, scheduler, context switch</small></div></a>
+                            <a href="arm-assembly-21-microarchitecture.html" class="step-card"><div class="step-num upcoming">21</div><div class="step-info"><h6>ARM Microarchitecture Deep Dive</h6><small>OOO pipelines, reorder buffers, branch predict</small></div></a>
+                            <a href="arm-assembly-22-virtualization.html" class="step-card"><div class="step-num upcoming">22</div><div class="step-info"><h6>Virtualization Extensions</h6><small>EL2 hypervisor, stage-2 translation, KVM</small></div></a>
+                            <a href="arm-assembly-23-debugging-tooling.html" class="step-card"><div class="step-num upcoming">23</div><div class="step-info"><h6>Debugging &amp; Tooling Ecosystem</h6><small>GDB, OpenOCD/JTAG, ETM/ITM, QEMU</small></div></a>
+                            <a href="arm-assembly-24-linkers-loaders.html" class="step-card"><div class="step-num upcoming">24</div><div class="step-info"><h6>Linkers, Loaders &amp; Binary Format Internals</h6><small>ELF deep dive, relocations, PIC, crt0</small></div></a>
+                            <a href="arm-assembly-25-cross-compilation.html" class="step-card"><div class="step-num upcoming">25</div><div class="step-info"><h6>Cross-Compilation &amp; Build Systems</h6><small>GCC/Clang toolchains, CMake, firmware gen</small></div></a>
+                            <a href="arm-assembly-26-arm-real-systems.html" class="step-card"><div class="step-num upcoming">26</div><div class="step-info"><h6>ARM in Real Systems</h6><small>Android, FreeRTOS/Zephyr, U-Boot, TF-A</small></div></a>
+                            <a href="arm-assembly-27-security-exploitation.html" class="step-card"><div class="step-num upcoming">27</div><div class="step-info"><h6>Security Research &amp; Exploitation</h6><small>ASLR, PAC attacks, ROP/JOP, kernel exploit</small></div></a>
+                            <a href="arm-assembly-28-armv9-future.html" class="step-card"><div class="step-num upcoming">28</div><div class="step-info"><h6>Emerging ARMv9 &amp; Future Directions</h6><small>MTE, SME, confidential compute, AI accel</small></div></a>
+                        </div>
+                    </div>
+
+                    <p>Profiling has a three-step loop: measure the actual workload, identify the dominant bottleneck (memory bandwidth, compute throughput, branch misprediction, cache miss), fix the single worst offender, then re-measure. Skipping the measurement step produces clever-but-wrong optimizations.</p>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Real-World Analogy — Doctor's Diagnosis:</strong> Performance profiling is like medical diagnosis. You wouldn't prescribe medication based on a guess — you run tests first (blood work, X-rays, MRI). The PMU is your blood panel: it measures cache miss rates, branch mispredictions, and pipeline stalls with hardware precision. <code>perf stat</code> is your lab report: it summarises the numbers. <code>perf record</code> is the MRI: it shows <em>where</em> in the code the symptoms occur. Just as a doctor treats the most life-threatening condition first (not the mild headache), you fix the <strong>dominant</strong> bottleneck — the one consuming the most cycles — before touching anything else. "Optimizing" a function that accounts for 2% of runtime is cosmetic surgery, not treatment.
+                    </div>
+
+                    <!-- PMU -->
+                    <h2 id="pmu">ARM PMU Hardware Counters</h2>
+
+                    <h3 id="pmu-regs">PMU Register Map</h3>
+                    <p>AArch64 exposes PMU registers as System Registers accessible via <code>MRS</code>/<code>MSR</code>. Key registers:</p>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">PMU Registers</span></div>
+                        <div class="card-content">
+                            <p><strong>PMCR_EL0</strong> — control: E=enable all, C=cycle reset, P=counter reset, N=num counters, LC=64-bit cycles<br>
+                            <strong>PMCNTENSET_EL0</strong> — counter enable set: bit 31 = cycle counter, bits 0–30 = event counters<br>
+                            <strong>PMCNTENCLR_EL0</strong> — counter enable clear (complement of above)<br>
+                            <strong>PMCCNTR_EL0</strong> — 64-bit CPU cycle counter<br>
+                            <strong>PMEVCNTR&lt;n&gt;_EL0</strong> — event counter n (n = 0 to PMCR_EL0.N-1)<br>
+                            <strong>PMEVTYPER&lt;n&gt;_EL0</strong> — event type for counter n (lower 16 bits = event code)<br>
+                            <strong>PMUSERENR_EL0</strong> — user-mode enable: EN=1 allows EL0 reads of all PMU registers<br>
+                            <strong>PMINTENSET_EL1</strong> — PMU interrupt enable (for overflow interrupts)</p>
+                        </div>
+                    </div>
+
+                    <h3 id="pmu-userspace">Enabling EL0 Access</h3>
+                    <pre><code class="language-c">// Kernel driver or module / device tree overlay to enable EL0 PMU access
+// On Linux 4.4+: perf_event subsystem manages PMU via kernel driver
+// For bare-metal / custom kernel: set PMUSERENR_EL0 at EL1
+
+// EL1 initialization (in kernel or bare-metal init code)
+void pmu_init_el1(void) {
+    uint64_t reg;
+
+    // Enable PMUSERENR_EL0: allow EL0 to read cycle counter
+    asm volatile("mrs %0, pmuserenr_el0" : "=r"(reg));
+    reg |= (1UL &lt;&lt; 0);    // EN: enable EL0 access to all PMU registers
+    reg |= (1UL &lt;&lt; 2);    // CR: allow EL0 to read cycle register
+    asm volatile("msr pmuserenr_el0, %0" : : "r"(reg));
+
+    // Enable cycle counter via PMCNTENSET_EL0
+    asm volatile("msr pmcntenset_el0, %0" : : "r"(1UL &lt;&lt; 31));
+
+    // Set PMCR_EL0: enable (E), reset cycle (C), reset event counters (P), 64-bit cycle (LC)
+    asm volatile("mrs %0, pmcr_el0" : "=r"(reg));
+    reg |= (1 &lt;&lt; 0) | (1 &lt;&lt; 1) | (1 &lt;&lt; 2) | (1 &lt;&lt; 6);
+    asm volatile("msr pmcr_el0, %0" : : "r"(reg));
+    asm volatile("isb");
+}</code></pre>
+
+                    <h3 id="pmu-read">Reading Counters from C</h3>
+                    <pre><code class="language-c">#include &lt;stdint.h&gt;
+
+// Read CPU cycle counter (requires PMUSERENR_EL0.EN=1 from EL1)
+static inline uint64_t pmu_cycles(void) {
+    uint64_t cyc;
+    asm volatile("isb\n\t"                  // Serialize instruction stream
+                 "mrs %0, pmccntr_el0"
+                 : "=r"(cyc) : : "memory");
+    return cyc;
+}
+
+// Common PMU event codes (ARMv8 architecture events)
+#define PMU_SW_INCR          0x0000  // Software increment
+#define PMU_L1I_CACHE_REFILL 0x0001  // L1 instruction cache refill
+#define PMU_L1I_TLB_REFILL   0x0002  // L1 instruction TLB refill
+#define PMU_L1D_CACHE_REFILL 0x0003  // L1 data cache refill
+#define PMU_L1D_CACHE        0x0004  // L1 data cache access
+#define PMU_L1D_TLB_REFILL   0x0005  // L1 data TLB refill
+#define PMU_INST_RETIRED     0x0008  // Instructions architecturally executed
+#define PMU_EXC_TAKEN        0x0009  // Exception taken
+#define PMU_BR_MIS_PRED      0x0010  // Mispredicted or not predicted branches
+#define PMU_CPU_CYCLES       0x0011  // Cycle counter alias
+#define PMU_BR_PRED          0x0012  // Predictable branch speculatively executed
+#define PMU_MEM_ACCESS       0x0013  // Data memory access
+#define PMU_L1I_CACHE        0x0014  // L1 instruction cache access
+#define PMU_L1D_CACHE_WB     0x0015  // L1 data cache write-back
+#define PMU_L2D_CACHE        0x0016  // L2 data cache access
+#define PMU_L2D_CACHE_REFILL 0x0017  // L2 data cache refill
+
+// Configure event counter 0 to count L1D cache misses
+void pmu_set_event(int counter, uint32_t event_code) {
+    // Set event type for counter n
+    asm volatile("msr pmselr_el0, %0" : : "r"((uint64_t)counter));
+    asm volatile("isb");
+    asm volatile("msr pmxevtyper_el0, %0" : : "r"((uint64_t)event_code));
+    // Enable this counter
+    asm volatile("msr pmcntenset_el0, %0" : : "r"(1UL &lt;&lt; counter));
+}
+
+// Read event counter n using PMSELR_EL0 + PMXEVCNTR_EL0
+uint64_t pmu_read_counter(int counter) {
+    uint64_t val;
+    asm volatile("msr pmselr_el0, %0" : : "r"((uint64_t)counter));
+    asm volatile("isb");
+    asm volatile("mrs %0, pmxevcntr_el0" : "=r"(val));
+    return val;
+}</code></pre>
+
+                    <!-- perf -->
+                    <h2 id="perf">Linux perf stat &amp; perf record</h2>
+                    <pre><code class="language-bash"># Basic perf stat — measure cycle/instruction/cache-miss counts
+perf stat ./my_binary
+
+# Specific ARM PMU events (use perf list for full list)
+perf stat -e cycles,instructions,cache-misses,cache-references,\
+    branch-misses,branches,L1-dcache-load-misses ./my_binary
+
+# Per-function profiling with symbol resolution
+perf record -g ./my_binary
+perf report --stdio       # Text report
+perf report               # Interactive TUI
+
+# Measure a specific function with annotated assembly
+perf record -e cycles:pp --call-graph dwarf ./my_binary
+perf annotate my_function
+
+# Topdown analysis (requires Arm CoreTile / Neoverse PMU driver)
+perf stat -e armv8_pmuv3/topdown-retiring/,\
+    armv8_pmuv3/topdown-bad-spec/,\
+    armv8_pmuv3/topdown-fe-bound/,\
+    armv8_pmuv3/topdown-be-bound/ ./my_binary
+
+# Count only specific functions (using probes)
+perf probe -x ./my_binary my_asm_routine
+perf stat -e probe_my_binary:my_asm_routine,cycles ./my_binary</code></pre>
+
+                    <!-- Pipeline Hazards -->
+                    <h2 id="hazards">Pipeline Hazard Classification</h2>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">Pipeline Hazards</span></div>
+                        <div class="card-content">
+                            <p><strong>RAW (Read After Write) — Data dependency hazard</strong><br>
+                            Most common. Instruction N writes a register that instruction N+1 reads. On in-order pipelines this stalls until the result is available. On OOO cores the scheduler may find other independent instructions to fill the slots.<br>
+                            <em>Fix:</em> Reorder instructions to introduce independent work between producer and consumer. Use LDP/STP to hide load latency.</p>
+
+                            <p><strong>WAR (Write After Read) — Anti-dependency</strong><br>
+                            N reads a register that N-1 writes. In OOO with register renaming this is transparent. In explicitly scheduled code, can surface as stalls on in-order micro-ops.<br>
+                            <em>Fix:</em> Use a different destination register.</p>
+
+                            <p><strong>WAW (Write After Write) — Output dependency</strong><br>
+                            Two instructions write the same register; the second must follow the first. Register renaming eliminates this in hardware.<br>
+                            <em>Fix:</em> Use different destination registers when possible.</p>
+
+                            <p><strong>Structural hazard</strong><br>
+                            Two instructions need the same execution unit in the same cycle (e.g., two FP divides; only one FDIV unit). Compiler/assembler scheduling must respect issue slots.<br>
+                            <em>Fix:</em> Interleave non-competing instructions (e.g., integer ops between FP divides).</p>
+
+                            <p><strong>Control hazard (branch misprediction)</strong><br>
+                            Speculative execution fetches the wrong path; misprediction flushes the OOO window and refetches. Cortex-A72 mispredict penalty ≈ 15 cycles; Neoverse N1 ≈ 10 cycles.<br>
+                            <em>Fix:</em> CSEL/CSINC for short conditionals. Restructure loops to be loop-carried-dependency–free. Sort data to increase branch predictability.</p>
+                        </div>
+                    </div>
+
+                    <!-- Throughput vs Latency -->
+                    <h2 id="throughput-latency">Throughput vs Latency</h2>
+                    <pre><code class="language-armasm">// ===== Loop dominated by LATENCY (critical path through chain of dependent adds) =====
+// Bad: each ADD depends on the previous — serial dependency chain
+// On Cortex-A55 (1-cycle ADD latency), this is 1 ADD/cycle regardless of ports
+loop_latency:
+    add  x0, x0, x1      // depends on previous x0
+    add  x0, x0, x2      // depends on previous x0
+    add  x0, x0, x3      // depends on previous x0
+    add  x0, x0, x4      // depends on previous x0
+    subs x5, x5, #1
+    b.ne loop_latency
+
+// ===== Loop limited by THROUGHPUT (independent work, fills issue slots) =====
+// Better: 4 independent accumulators use separate ALU slots in parallel
+loop_throughput:
+    add  x10, x10, x1    // accumulator 1
+    add  x11, x11, x2    // accumulator 2 — independent
+    add  x12, x12, x3    // accumulator 3 — independent
+    add  x13, x13, x4    // accumulator 4 — independent
+    subs x5, x5, #1
+    b.ne loop_throughput
+    add  x10, x10, x11   // combine at end
+    add  x12, x12, x13
+    add  x0, x10, x12</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Key Insight:</strong> Latency is the time from when an instruction issues to when its result is available (e.g., 4 cycles for a load hit L1-D on Cortex-A55). Throughput is how many instructions of a type can issue per cycle (e.g., 2 ALU ops/cycle on Cortex-A55). In compute-bound loops, throughput is the ceiling; in dependency chains, latency is the floor. Instruction-level parallelism techniques (multiple accumulators, software pipelining) attack the latency floor by exposing throughput headroom.
+                    </div>
+
+                    <!-- Benchmarking -->
+                    <h2 id="benchmarking">Micro-Benchmarking Methodology</h2>
+                    <pre><code class="language-c">#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+
+// Step 1: Serialise before/after with ISB to prevent out-of-order crossing
+// Step 2: Warm up caches/branch predictor (run the loop once before timing)
+// Step 3: Run multiple iterations and take the MINIMUM (not average) — the
+//         minimum is closest to hardware capability; spikes are OS noise
+
+static inline uint64_t rdcyc(void) {
+    uint64_t v;
+    asm volatile("isb\n\tmrs %0, pmccntr_el0" : "=r"(v) : : "memory");
+    return v;
+}
+
+#define BENCH_ITERS 1000
+#define BENCH_INNER 10000
+
+typedef void (*bench_fn)(void);
+
+// Measure minimum cycles across BENCH_ITERS runs of fn() with BENCH_INNER loops
+uint64_t bench_min_cycles(bench_fn fn, int inner_loops) {
+    uint64_t min = UINT64_MAX;
+    for (int i = 0; i &lt; BENCH_ITERS; i++) {
+        uint64_t start = rdcyc();
+        // Call with inner_loops to amortise rdcyc() overhead
+        fn();   // warm/inner loop happens inside fn
+        uint64_t end = rdcyc();
+        uint64_t elapsed = end - start;
+        if (elapsed &lt; min) min = elapsed;
+    }
+    return min;
+}
+
+// Example: benchmark a simple NEON dot product
+#include &lt;arm_neon.h&gt;
+static float a[1024], b[1024];
+
+void bench_dot_neon(void) {
+    float32x4_t acc = vdupq_n_f32(0.0f);
+    for (int i = 0; i &lt; 1024; i += 4) {
+        acc = vfmaq_f32(acc, vld1q_f32(a+i), vld1q_f32(b+i));
+    }
+    // Prevent dead-code-elimination: "use" the result
+    volatile float r = vaddvq_f32(acc);
+    (void)r;
+}
+
+int main(void) {
+    // Prime caches
+    bench_dot_neon();
+
+    uint64_t cyc = bench_min_cycles(bench_dot_neon, 1);
+    double cyc_per_elem = (double)cyc / 1024.0;
+    printf("NEON dot 1024 floats: min %lu cycles (%.2f cyc/elem)\n",
+           (unsigned long)cyc, cyc_per_elem);
+    return 0;
+}</code></pre>
+
+                    <!-- Optimization patterns -->
+                    <h2 id="optimization-patterns">Practical Optimization Patterns</h2>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">Pattern 1</span><span class="bias-tag">Loop Unrolling</span></div>
+                        <div class="card-content">
+                            <p>Unrolling reduces loop overhead (SUBS+B.NE = 2 instructions per element) and exposes more independent instructions to the OOO scheduler. Unroll factor of 4–8 typically optimal; beyond that, register pressure limits gains.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">Pattern 2</span><span class="bias-tag">Prefetching</span></div>
+                        <div class="card-content">
+                            <p><code>PRFM PLDL1KEEP, [x0, #256]</code> — hint to hardware prefetcher to load cache line at address (x0+256) into L1-D. Use when the hardware stride prefetcher can't detect the pattern (e.g., pointer-chasing). Prefetch distance = latency × bandwidth. Over-prefetching pollutes the cache.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">Pattern 3</span><span class="bias-tag">CSEL vs Branch</span></div>
+                        <div class="card-content">
+                            <p>Replace short if/else with <code>CSEL Xd, Xn, Xm, &lt;cond&gt;</code>. No branch = no misprediction = no 10–15 cycle flush. Works when both values are already computed (no side effects in the branch body). The compiler does this automatically with -O2 for simple ternaries; inline asm for complex cases.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">Pattern 4</span><span class="bias-tag">Software Pipelining</span></div>
+                        <div class="card-content">
+                            <p>Overlap iteration N's computation with iteration N+1's load. Classic pattern: <code>LDR Xn, [ptr, #STRIDE]</code> at the bottom of iteration N starts the load early; the data is consumed at the top of iteration N+1, hiding the L1D load latency (4 cycles on Cortex-A55). Requires one loop prolog load and one epilog.</p>
+                        </div>
+                    </div>
+
+                    <!-- Case Study -->
+                    <h2 id="case-study"><i class="fas fa-flask me-2 text-teal"></i>Case Study: AWS Graviton3 Migration Profiling</h2>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Cloud</span><span class="bias-tag bg-crimson">Production</span><span class="bias-tag bg-navy">2022</span></div>
+                        <div class="card-content">
+                            <h5>Profiling a Redis-like Cache on Neoverse V1</h5>
+                            <p>When a cloud provider migrated their Redis-compatible in-memory cache from Intel Xeon (Ice Lake) to AWS Graviton3 (Neoverse V1), initial benchmarks showed 15% <em>slower</em> throughput on ARM — surprising given Graviton3's competitive IPC. The profiling investigation uncovered three issues:</p>
+                            <ol>
+                                <li><strong>Branch misprediction spike</strong>: <code>perf stat -e branch-misses</code> showed 8.3% miss rate on the hash table lookup path (vs 2.1% on Intel). Root cause: the hash function used <code>CRC32C</code> — Intel had a hardware CRC instruction, but the ARM build fell back to a software polynomial table with unpredictable branches. Fix: switched to <code>__crc32cd()</code> ARM CRC intrinsic (ARMv8.1-A), reducing branch misses to 1.8%.</li>
+                                <li><strong>L1D cache miss on atomic operations</strong>: PMU counter <code>L1D_CACHE_REFILL</code> was 3× higher than expected. The LDXR/STXR atomic increment in the per-shard counter was causing excessive cacheline bouncing across Graviton3's 64 cores (each core has its own L1). Fix: switched to per-CPU counters with periodic aggregation, reducing L1D refills by 60%.</li>
+                                <li><strong>Memory bandwidth ceiling</strong>: <code>perf stat -e armv8_pmuv3/bus_access/</code> showed the workload was saturating DDR bandwidth during bulk SCAN operations. Fix: added <code>PRFM PLDL1KEEP</code> prefetch hints 256 bytes ahead in the key iteration loop, improving SCAN throughput by 22%.</li>
+                            </ol>
+                            <p><strong>Result:</strong> After all three fixes, Graviton3 throughput was 31% higher than the original Intel baseline — at 40% lower cost per hour. None of these optimizations would have been found without PMU-guided profiling.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">History</span><span class="bias-tag bg-navy">PMU Evolution</span></div>
+                        <div class="card-content">
+                            <h5>From Hardware Logic Analyzers to PMU Counters</h5>
+                            <p>In the early ARM days (ARM2, 1986), performance profiling meant connecting a <strong>logic analyzer</strong> to the external bus and counting clock edges manually. The first on-chip performance monitoring appeared in ARM9E (late 1990s) with a simple cycle counter. ARMv6 introduced the PMU specification with 4 configurable event counters. ARMv7 standardized the interface (CP15 access, event codes), and ARMv8 moved everything to System Registers (MSR/MRS) with up to 31 counters and architecture-defined event codes. Modern Neoverse cores (V1, N2) support 6+ configurable counters with Arm's Statistical Profiling Extension (SPE) — which records <em>individual instruction</em> events (latency, data source, branch outcome) into a memory buffer, enabling <code>perf record -e arm_spe//</code> for instruction-level profiling without sampling bias.</p>
+                        </div>
+                    </div>
+
+                    <!-- Exercises -->
+                    <h2 id="exercises"><i class="fas fa-pencil-alt me-2 text-teal"></i>Hands-On Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Exercise 1</span><span class="bias-tag bg-navy">Beginner</span></div>
+                        <div class="card-content">
+                            <h5>PMU Cycle Counting from User Space</h5>
+                            <p>Write a C program that measures the cycle cost of a simple operation:</p>
+                            <ol>
+                                <li>Enable PMU user-space access (use the <code>pmu_init_el1()</code> pattern from this article, or on Linux, use <code>perf_event_open()</code> syscall with <code>PERF_COUNT_HW_CPU_CYCLES</code>)</li>
+                                <li>Read <code>PMCCNTR_EL0</code> before and after a tight loop of 1000 <code>NOP</code> instructions</li>
+                                <li>Run 100 iterations and record the minimum cycle count</li>
+                                <li>Calculate cycles-per-NOP (should be close to 0.25 on a 4-wide core, or pipeline fill overhead)</li>
+                            </ol>
+                            <p><strong>Challenge:</strong> Add ISB serialization before each counter read and explain why the minimum is ~4 cycles higher than without ISB.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Exercise 2</span><span class="bias-tag bg-crimson">Intermediate</span></div>
+                        <div class="card-content">
+                            <h5>Cache Miss Profiling with perf</h5>
+                            <p>Create two C programs with identical computation but different memory access patterns:</p>
+                            <ol>
+                                <li><strong>Sequential access</strong>: Iterate through a 4 MB array linearly (<code>arr[i] += 1</code>)</li>
+                                <li><strong>Random access</strong>: Use a pre-shuffled index array to access the same 4 MB array randomly</li>
+                                <li>Profile both with: <code>perf stat -e L1-dcache-load-misses,L1-dcache-loads,LLC-load-misses,LLC-loads</code></li>
+                                <li>Calculate the L1D miss rate and LLC miss rate for each pattern</li>
+                            </ol>
+                            <p><strong>Expected result:</strong> Sequential access should have &lt;1% L1D miss rate (hardware prefetcher effective). Random access should have 30-50% L1D miss rate on a 32KB L1D. The difference in wall-clock time should be 5-10× — demonstrating that memory access pattern dominates performance.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Exercise 3</span><span class="bias-tag bg-crimson">Advanced</span></div>
+                        <div class="card-content">
+                            <h5>Branch Elimination Benchmark</h5>
+                            <p>Measure the impact of branch misprediction and demonstrate CSEL elimination:</p>
+                            <ol>
+                                <li>Write a function that clamps values using an <code>if/else</code>: <code>if (x &gt; max) x = max; else if (x &lt; min) x = min;</code></li>
+                                <li>Write the same function using inline asm with <code>CMP</code> + <code>CSEL</code> (no branches)</li>
+                                <li>Profile both with: <code>perf stat -e branches,branch-misses,cycles,instructions</code></li>
+                                <li>Test with: (a) sorted input (predictable branches), (b) random input (unpredictable)</li>
+                            </ol>
+                            <p><strong>Expected:</strong> With random input, the branching version shows 25-40% branch miss rate on the clamp path. CSEL version shows 0 branch misses for clamping (only the loop branch remains). The IPC difference reveals the misprediction penalty.</p>
+                        </div>
+                    </div>
+
+                    <!-- Performance Profiling Tool -->
+                    <h2 id="profiling-tool"><i class="fas fa-tools me-2 text-teal"></i>Performance Profiling Worksheet Generator</h2>
+
+                    <div class="canvas-form" id="perfForm">
+                        <h4 class="canvas-form-title"><i class="fas fa-tachometer-alt me-2"></i>ARM Performance Profiling Worksheet</h4>
+                        <p class="form-help-text">Document your profiling findings systematically. Download as Word, Excel, or PDF.</p>
+                        <div id="perfBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="perfAppName">Application / Workload Name *</label>
+                                <input type="text" id="perfAppName" placeholder="e.g., Redis Cache Service">
+                            </div>
+                            <div class="form-group">
+                                <label for="perfTarget">Target Platform *</label>
+                                <input type="text" id="perfTarget" placeholder="e.g., Graviton3 / Neoverse V1 @ 2.6 GHz">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="perfAuthor">Author</label>
+                                <input type="text" id="perfAuthor" placeholder="Your name">
+                            </div>
+                            <div class="form-group">
+                                <label for="perfHotspots">Hotspot Functions</label>
+                                <textarea id="perfHotspots" placeholder="hash_lookup() — 42% CPU&#10;atomic_inc_shard() — 18% CPU&#10;scan_keys() — 12% CPU"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="perfPmuCounters">PMU Counter Configuration</label>
+                                <textarea id="perfPmuCounters" placeholder="Counter 0: L1D_CACHE_REFILL (0x03)&#10;Counter 1: BR_MIS_PRED (0x10)&#10;Counter 2: INST_RETIRED (0x08)&#10;Cycle counter: enabled"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="perfBranchAnalysis">Branch Prediction Analysis</label>
+                                <textarea id="perfBranchAnalysis" placeholder="hash_lookup: 8.3% miss rate&#10;Root cause: CRC32 software fallback&#10;Fix: switched to __crc32cd() intrinsic"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="perfL1dHitRate">L1D Cache Hit Rate</label>
+                                <input type="text" id="perfL1dHitRate" placeholder="e.g., 94.2%">
+                            </div>
+                            <div class="form-group">
+                                <label for="perfL1iHitRate">L1I Cache Hit Rate</label>
+                                <input type="text" id="perfL1iHitRate" placeholder="e.g., 99.1%">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="perfL2HitRate">L2 Cache Hit Rate</label>
+                                <input type="text" id="perfL2HitRate" placeholder="e.g., 88.5%">
+                            </div>
+                            <div class="form-group">
+                                <label for="perfTlbMissRate">TLB Miss Rate</label>
+                                <input type="text" id="perfTlbMissRate" placeholder="e.g., 0.3%">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="perfPipelineStalls">Pipeline Stall Analysis</label>
+                                <textarea id="perfPipelineStalls" placeholder="RAW hazard on hash chain pointer load&#10;3-cycle L1D latency × 8 avg chain length&#10;Structural: dual FDIV contention in float path"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="perfOptimizationPlan">Optimization Plan</label>
+                                <textarea id="perfOptimizationPlan" placeholder="1. Replace software CRC with __crc32cd()&#10;2. Per-CPU counters for atomic hotspot&#10;3. PRFM prefetch in SCAN loop"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1;">
+                                <label for="perfMetrics">Before / After Metrics</label>
+                                <textarea id="perfMetrics" placeholder="Before: 145K ops/sec, IPC 1.2, 8.3% branch miss&#10;After: 190K ops/sec, IPC 2.1, 1.8% branch miss&#10;Improvement: +31% throughput, +75% IPC"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="perfHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="perfHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="perfHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-reset" onclick="perfHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="perfSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="perfSuccessText"></span></div>
+                        <p class="form-help-text" style="margin-top:0.75rem;font-size:0.78rem;"><i class="fas fa-lock me-1"></i>All data stays in your browser. Nothing is uploaded.</p>
+                    </div>
+
+                    <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
+                    <p>We covered ARM PMU register programming (PMCR, PMCNTENSET, PMCCNTR, PMEVCNTR, PMSELR), enabling EL0 user-space counter access, Linux <code>perf stat</code> and <code>perf record</code> workflows, the four pipeline hazard types, throughput-vs-latency analysis with multiple accumulators, rigorous minimum-cycle micro-benchmarking, and practical optimization patterns (unrolling, PRFM prefetch, CSEL, software pipelining). The AWS Graviton3 migration case study demonstrated how PMU-guided profiling can turn a 15% regression into a 31% improvement — and the exercises give you hands-on practice with cycle counting, cache miss analysis, and branch elimination benchmarking.</p>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="arm-assembly-19-reverse-engineering.html"><strong>Part 19: Reverse Engineering &amp; ARM Binary Analysis</strong></a>, we flip perspective: instead of writing assembly, we read and analyze binaries — ELF section layout, objdump/Ghidra/Binary Ninja workflows, iOS Mach-O specifics, Android NDK .so quirks, and identifying compiler idioms in disassembly.</p>
+                    </div>
+
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 16: Apple Silicon &amp; macOS ABI</h5>
+                            <p>CNTVCT_EL0 timing and Apple's performance counter access patterns.</p>
+                            <a href="arm-assembly-16-apple-silicon.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 17: Inline Assembly, GCC/Clang &amp; C Interop</h5>
+                            <p>MRS/MSR inline asm for reading PMU registers directly from C code.</p>
+                            <a href="arm-assembly-17-inline-asm-intrinsics.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 21: ARM Microarchitecture Deep Dive</h5>
+                            <p>OOO pipeline internals: reorder buffers, reservation stations, and why measurements look the way they do.</p>
+                            <a href="arm-assembly-21-microarchitecture.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.</p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small"><i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a></p>
+                    <p class="small mt-3"><a href="/" class="text-light text-decoration-none">Home</a> | <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a></p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a></p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"><i class="fas fa-tag"></i><span id="categoryText">Technology</span></div>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-arm-assembly.js"></script>
+    <script>
+        var perfPersistence = new FormPersistence('arm-perf-profile-draft', {
+            'perfAppName': 'appName',
+            'perfTarget': 'target',
+            'perfAuthor': 'authorName',
+            'perfHotspots': 'hotspots',
+            'perfPmuCounters': 'pmuCounters',
+            'perfL1dHitRate': 'l1dHitRate',
+            'perfL1iHitRate': 'l1iHitRate',
+            'perfL2HitRate': 'l2HitRate',
+            'perfTlbMissRate': 'tlbMissRate',
+            'perfBranchAnalysis': 'branchAnalysis',
+            'perfPipelineStalls': 'pipelineStalls',
+            'perfOptimizationPlan': 'optimizationPlan',
+            'perfMetrics': 'metrics'
+        }, 'perfBadge');
+
+        var perfHandler = new CanvasFormHandler({
+            formId: 'perfForm',
+            successId: 'perfSuccess',
+            successTextId: 'perfSuccessText',
+            persistence: perfPersistence,
+            filenameField: 'appName',
+            filenameSuffix: '-perf-profile',
+            requiredFields: ['perfAppName', 'perfTarget'],
+            requiredMessage: 'Please fill in Application Name and Target Platform.',
+            docType: 'ArmPerfProfile'
+        });
+
+        perfPersistence.init();
+    </script>
+</body>
+</html>

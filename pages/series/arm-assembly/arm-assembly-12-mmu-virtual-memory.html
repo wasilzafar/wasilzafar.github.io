@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="ARM AArch64 MMU setup: page table descriptors, TCR_EL1 granule and range configuration, MAIR_EL1 memory attributes, TLB maintenance instructions, huge pages, and identity mapping for boot." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="ARM MMU setup, AArch64 page tables, TCR_EL1, TTBR0_EL1, MAIR_EL1, TLB maintenance ARM, huge pages ARM, virtual memory ARM assembly" />
+    <meta property="og:title" content="ARM Assembly Part 12: MMU, Page Tables &amp; Virtual Memory" />
+    <meta property="og:description" content="Configure the AArch64 MMU from scratch: page table formats, TCR_EL1 settings, memory attributes, TLB maintenance, and identity mapping." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-26" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <title>ARM Assembly Part 12: MMU, Page Tables &amp; Virtual Memory - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/arm-assembly/arm-assembly-12-mmu-virtual-memory.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied',
+            'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', {
+            'ad_storage': 'granted', 'ad_user_data': 'granted',
+            'ad_personalization': 'granted', 'analytics_storage': 'granted'
+        });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20"><path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path></svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. By clicking "Accept All", you consent to our use of cookies. See our <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>.</p>
+                <div id="cookieSettings" style="display: none;"></div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59,151,151,0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;"><label style="display:flex;align-items:start;cursor:pointer;"><input type="checkbox" checked disabled style="margin-top:2px;margin-right:8px;cursor:not-allowed;"><div><strong style="font-size:13px;color:var(--color-navy);display:block;margin-bottom:2px;">Essential Cookies (Required)</strong><span style="font-size:12px;color:#666;">Necessary for the website to function properly.</span></div></label></div>
+                    <div style="margin-bottom: 12px;"><label style="display:flex;align-items:start;cursor:pointer;"><input type="checkbox" id="analyticsCookies" checked style="margin-top:2px;margin-right:8px;"><div><strong style="font-size:13px;color:var(--color-navy);display:block;margin-bottom:2px;">Analytics Cookies</strong><span style="font-size:12px;color:#666;">Help us understand how you interact with the website.</span></div></label></div>
+                    <div style="margin-bottom: 12px;"><label style="display:flex;align-items:start;cursor:pointer;"><input type="checkbox" id="marketingCookies" style="margin-top:2px;margin-right:8px;"><div><strong style="font-size:13px;color:var(--color-navy);display:block;margin-bottom:2px;">Marketing Cookies</strong><span style="font-size:12px;color:#666;">Used to deliver relevant advertisements.</span></div></label></div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background:var(--color-teal);color:white;font-weight:600;">Accept All</button>
+                <button id="cookieReject" style="background:transparent;color:var(--color-navy);border:2px solid var(--color-teal);font-weight:600;">Reject All</button>
+                <button id="cookieSave" style="background:var(--color-blue);color:white;font-weight:600;display:none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+                <h1 class="display-4 fw-bold mb-3">ARM Assembly Part 12: MMU, Page Tables &amp; Virtual Memory</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>March 26, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>25 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">The AArch64 MMU implements a four-level page table walk (or three/two levels with large granules) driven by TTBR0_EL1 and TTBR1_EL1, configured via TCR_EL1 and MAIR_EL1. This part walks through descriptor formats, memory attributes, TLB maintenance, and building a minimal identity-map at boot.</p>
+            </div>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#introduction" onclick="closeNav()">Introduction &amp; Translation Overview</a></li>
+            <li>
+                <a href="#tcr-el1" onclick="closeNav()">TCR_EL1 — Translation Control</a>
+                <ul>
+                    <li><a href="#t0sz-t1sz" onclick="closeNav()">T0SZ / T1SZ Address Range</a></li>
+                    <li><a href="#granule" onclick="closeNav()">Granule Selection (TG0/TG1)</a></li>
+                    <li><a href="#walk-levels" onclick="closeNav()">Walk Levels Derived from T0SZ</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#mair-el1" onclick="closeNav()">MAIR_EL1 — Memory Attributes</a>
+                <ul>
+                    <li><a href="#attr-indices" onclick="closeNav()">Attribute Index (AttrIndx)</a></li>
+                    <li><a href="#device-normal" onclick="closeNav()">Device vs Normal Memory</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#descriptors" onclick="closeNav()">Page Table Descriptors</a>
+                <ul>
+                    <li><a href="#block-page" onclick="closeNav()">Block vs Page vs Table Entries</a></li>
+                    <li><a href="#descriptor-bits" onclick="closeNav()">AP, UXN, PXN, AF, SH bits</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#identity-map" onclick="closeNav()">Building an Identity Map at Boot</a>
+                <ul>
+                    <li><a href="#l0-l1" onclick="closeNav()">Level-0 &amp; Level-1 Tables</a></li>
+                    <li><a href="#enable-mmu" onclick="closeNav()">Enabling the MMU (SCTLR_EL1.M)</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#huge-pages" onclick="closeNav()">Huge Pages &amp; Contiguous Hint</a></li>
+            <li>
+                <a href="#tlb" onclick="closeNav()">TLB Maintenance</a>
+                <ul>
+                    <li><a href="#tlbi-ops" onclick="closeNav()">TLBI Operations</a></li>
+                    <li><a href="#break-before-make" onclick="closeNav()">Break-Before-Make Rule</a></li>
+                </ul>
+            </li>
+            <li><a href="#exercises" onclick="closeNav()">Hands-On Exercises</a></li>
+            <li><a href="#mmu-tool" onclick="closeNav()">Page Table Config Generator</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                <div id="introduction" class="blog-content">
+
+                    <h2><i class="fas fa-sitemap me-2 text-teal"></i>Introduction &amp; Translation Overview</h2>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Series Overview:</strong> This is Part 12 of our 28-part ARM Assembly Mastery Series. In Part 11 we covered the exception model. Now we configure what every AArch64 OS must set up before running user space: the Memory Management Unit. Without the MMU there is no process isolation, no kernel/user separation, and no demand paging.
+                    </div>
+
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>ARM Assembly Mastery</h4>
+                            <div class="path-subtitle">Your 28-step learning path • Currently on Step 12</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="arm-assembly-01-architecture-history.html" class="step-card"><div class="step-num completed">1</div><div class="step-info"><h6>Architecture History &amp; Core Concepts</h6><small>ARMv1→v9, RISC philosophy, profiles</small></div></a>
+                            <a href="arm-assembly-02-arm32-instructions.html" class="step-card"><div class="step-num completed">2</div><div class="step-info"><h6>ARM32 Instruction Set Fundamentals</h6><small>ARM vs Thumb, registers, CPSR, barrel shifter</small></div></a>
+                            <a href="arm-assembly-03-aarch64-registers.html" class="step-card"><div class="step-num completed">3</div><div class="step-info"><h6>AArch64 Registers, Addressing &amp; Data Movement</h6><small>X/W regs, addressing modes, load/store pairs</small></div></a>
+                            <a href="arm-assembly-04-arithmetic-logic.html" class="step-card"><div class="step-num completed">4</div><div class="step-info"><h6>Arithmetic, Logic &amp; Bit Manipulation</h6><small>ADD/SUB, bitfield extract/insert, CLZ</small></div></a>
+                            <a href="arm-assembly-05-branching-loops.html" class="step-card"><div class="step-num completed">5</div><div class="step-info"><h6>Branching, Loops &amp; Conditional Execution</h6><small>Branch types, link register, jump tables</small></div></a>
+                            <a href="arm-assembly-06-stack-subroutines.html" class="step-card"><div class="step-num completed">6</div><div class="step-info"><h6>Stack, Subroutines &amp; AAPCS</h6><small>Calling conventions, prologue/epilogue</small></div></a>
+                            <a href="arm-assembly-07-memory-caches.html" class="step-card"><div class="step-num completed">7</div><div class="step-info"><h6>Memory Model, Caches &amp; Barriers</h6><small>Weak ordering, DMB/DSB/ISB, TLB</small></div></a>
+                            <a href="arm-assembly-08-neon-simd.html" class="step-card"><div class="step-num completed">8</div><div class="step-info"><h6>NEON &amp; Advanced SIMD</h6><small>Vector ops, intrinsics, media processing</small></div></a>
+                            <a href="arm-assembly-09-sve-sve2.html" class="step-card"><div class="step-num completed">9</div><div class="step-info"><h6>SVE &amp; SVE2 Scalable Vector Extensions</h6><small>Predicate regs, gather/scatter, HPC/ML</small></div></a>
+                            <a href="arm-assembly-10-floating-point.html" class="step-card"><div class="step-num completed">10</div><div class="step-info"><h6>Floating-Point &amp; VFP Instructions</h6><small>IEEE-754, scalar FP, rounding modes</small></div></a>
+                            <a href="arm-assembly-11-exception-levels.html" class="step-card"><div class="step-num completed">11</div><div class="step-info"><h6>Exception Levels, Interrupts &amp; Vector Tables</h6><small>EL0–EL3, GIC, fault debugging</small></div></a>
+                            <div class="step-card current"><div class="step-num active">12</div><div class="step-info"><h6>MMU, Page Tables &amp; Virtual Memory</h6><small>Stage-1 translation, permissions, huge pages</small></div><span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span></div>
+                            <a href="arm-assembly-13-trustzone-security.html" class="step-card"><div class="step-num upcoming">13</div><div class="step-info"><h6>TrustZone &amp; ARM Security Extensions</h6><small>Secure monitor, world switching, TF-A</small></div></a>
+                            <a href="arm-assembly-14-cortex-m-embedded.html" class="step-card"><div class="step-num upcoming">14</div><div class="step-info"><h6>Cortex-M Assembly &amp; Bare-Metal Embedded</h6><small>NVIC, SysTick, linker scripts, low-power</small></div></a>
+                            <a href="arm-assembly-15-cortex-a-boot.html" class="step-card"><div class="step-num upcoming">15</div><div class="step-info"><h6>Cortex-A System Programming &amp; Boot</h6><small>EL3→EL1 transitions, MMU setup, PSCI</small></div></a>
+                            <a href="arm-assembly-16-apple-silicon.html" class="step-card"><div class="step-num upcoming">16</div><div class="step-info"><h6>Apple Silicon &amp; macOS ABI</h6><small>ARM64e PAC, Mach-O, dyld, perf counters</small></div></a>
+                            <a href="arm-assembly-17-inline-asm-intrinsics.html" class="step-card"><div class="step-num upcoming">17</div><div class="step-info"><h6>Inline Assembly, GCC/Clang &amp; C Interop</h6><small>Constraints, clobbers, compiler interaction</small></div></a>
+                            <a href="arm-assembly-18-performance-profiling.html" class="step-card"><div class="step-num upcoming">18</div><div class="step-info"><h6>Performance Profiling &amp; Micro-Optimization</h6><small>Pipeline hazards, PMU, benchmarking</small></div></a>
+                            <a href="arm-assembly-19-reverse-engineering.html" class="step-card"><div class="step-num upcoming">19</div><div class="step-info"><h6>Reverse Engineering &amp; ARM Binary Analysis</h6><small>ELF, disassembly, CFR, iOS/Android quirks</small></div></a>
+                            <a href="arm-assembly-20-bare-metal-os-kernel.html" class="step-card"><div class="step-num upcoming">20</div><div class="step-info"><h6>Building a Bare-Metal OS Kernel</h6><small>Bootloader, UART, scheduler, context switch</small></div></a>
+                            <a href="arm-assembly-21-microarchitecture.html" class="step-card"><div class="step-num upcoming">21</div><div class="step-info"><h6>ARM Microarchitecture Deep Dive</h6><small>OOO pipelines, reorder buffers, branch predict</small></div></a>
+                            <a href="arm-assembly-22-virtualization.html" class="step-card"><div class="step-num upcoming">22</div><div class="step-info"><h6>Virtualization Extensions</h6><small>EL2 hypervisor, stage-2 translation, KVM</small></div></a>
+                            <a href="arm-assembly-23-debugging-tooling.html" class="step-card"><div class="step-num upcoming">23</div><div class="step-info"><h6>Debugging &amp; Tooling Ecosystem</h6><small>GDB, OpenOCD/JTAG, ETM/ITM, QEMU</small></div></a>
+                            <a href="arm-assembly-24-linkers-loaders.html" class="step-card"><div class="step-num upcoming">24</div><div class="step-info"><h6>Linkers, Loaders &amp; Binary Format Internals</h6><small>ELF deep dive, relocations, PIC, crt0</small></div></a>
+                            <a href="arm-assembly-25-cross-compilation.html" class="step-card"><div class="step-num upcoming">25</div><div class="step-info"><h6>Cross-Compilation &amp; Build Systems</h6><small>GCC/Clang toolchains, CMake, firmware gen</small></div></a>
+                            <a href="arm-assembly-26-arm-real-systems.html" class="step-card"><div class="step-num upcoming">26</div><div class="step-info"><h6>ARM in Real Systems</h6><small>Android, FreeRTOS/Zephyr, U-Boot, TF-A</small></div></a>
+                            <a href="arm-assembly-27-security-exploitation.html" class="step-card"><div class="step-num upcoming">27</div><div class="step-info"><h6>Security Research &amp; Exploitation</h6><small>ASLR, PAC attacks, ROP/JOP, kernel exploit</small></div></a>
+                            <a href="arm-assembly-28-armv9-future.html" class="step-card"><div class="step-num upcoming">28</div><div class="step-info"><h6>Emerging ARMv9 &amp; Future Directions</h6><small>MTE, SME, confidential compute, AI accel</small></div></a>
+                        </div>
+                    </div>
+
+                    <p>AArch64 virtual address translation converts a 64-bit virtual address to a physical address through a multi-level page table walk. Two independent address spaces exist: TTBR0_EL1 covers user space (VA bits[63:56] = 0x00) and TTBR1_EL1 covers kernel space (VA bits[63:56] = 0xFF). Both ranges and granule choices are encoded in TCR_EL1. Memory attributes (cacheability, shareability, device type) come from MAIR_EL1, indexed by a 3-bit AttrIndx field in each page table descriptor.</p>
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-building me-2"></i>
+                        <strong>Real-World Analogy &mdash; The Library Index Card System:</strong> Think of the MMU as a <strong>library card catalogue</strong>. Books (data) are stored on physical shelves at specific physical addresses. But patrons never navigate by shelf number &mdash; they look up a <strong>virtual reference</strong> (call number) in the catalogue. The catalogue has multiple levels: first you find the floor directory (L0 table), then the aisle (L1), then the shelf section (L2), then the exact shelf position (L3/page). <strong>Two separate catalogues</strong> (TTBR0 and TTBR1) exist &mdash; one for public readers (user space) and a restricted one for librarians (kernel space). Access permissions on each card (AP bits) determine who can read which books &mdash; and the PXN/UXN bits prevent patrons from executing the library code manuals. The <strong>TLB</strong> is the librarian's memory of recently looked-up books, avoiding the full catalogue walk every time.
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-navy">Walkthrough</span> Step-by-Step Address Translation (4KB Granule)</div>
+                        <div class="card-content">
+                            <p>Consider translating virtual address <code>0x0000_0040_1234_5678</code> with T0SZ=25 and 4KB granule:</p>
+                            <p><strong>Step 1 &mdash; Top-bit check:</strong> Bits[63:56] = 0x00 &rarr; use TTBR0_EL1 (user space).</p>
+                            <p><strong>Step 2 &mdash; L0 index:</strong> VA[47:39] = 0b000000010 = 2 &rarr; read entry at TTBR0 + 2×8 bytes. This is a Table entry pointing to L1 table base.</p>
+                            <p><strong>Step 3 &mdash; L1 index:</strong> VA[38:30] = 0b000000000 = 0 &rarr; read L1[0]. If this is a 1GB Block entry, translation is done (PA = Block base | VA[29:0]). Otherwise, it's a Table entry pointing to L2.</p>
+                            <p><strong>Step 4 &mdash; L2 index:</strong> VA[29:21] = 0b010010001 = 145 &rarr; read L2[145]. If 2MB Block entry, PA = Block base | VA[20:0]. Otherwise, Table &rarr; L3.</p>
+                            <p><strong>Step 5 &mdash; L3 index:</strong> VA[20:12] = 0b001000101 = 69 &rarr; read L3[69]. This is a 4KB Page entry. Final PA = Page base | VA[11:0] (offset 0x678).</p>
+                            <p>The total walk costs 4 sequential memory reads &mdash; in the worst case ~40 cycles without TLB caching. The TLB caches the final PA, making subsequent accesses to the same page a single-cycle lookup.</p>
+                        </div>
+                    </div>
+
+                    <h4><i class="fas fa-lock me-2 text-crimson"></i>Kernel/User Isolation via TTBR0/TTBR1</h4>
+                    <p>ARM's <strong>split address space</strong> design provides natural kernel/user isolation. User processes use TTBR0_EL1 (lower VA range, 0x0000...) and can only access pages marked with AP=01 (EL1/EL0 RW) or AP=11 (EL1/EL0 RO). The kernel's TTBR1_EL1 (upper VA range, 0xFFFF...) maps with AP=00 (EL1 only). On context switch, the kernel changes TTBR0_EL1 to the new process's page table &mdash; TTBR1_EL1 stays constant since kernel mappings are shared. Post-Spectre, Linux on ARM64 implements <strong>KPTI (Kernel Page Table Isolation)</strong>: when running in EL0, the kernel TTBR1 page tables are replaced with a minimal "trampoline" table that only maps the exception vectors. On EL1 entry, the handler quickly switches to the full kernel tables. This prevents Meltdown-style attacks where EL0 speculatively reads kernel memory through TTBR1.</p>
+                    <!-- TCR_EL1 -->
+                    <h2 id="tcr-el1">TCR_EL1 — Translation Control</h2>
+
+                    <h3 id="t0sz-t1sz">T0SZ / T1SZ Address Range</h3>
+                    <p>TCR_EL1.T0SZ defines the size of the TTBR0 address space as 2^(64-T0SZ) bytes. Linux typically uses T0SZ=25 giving a 512 GB user address space (0x0000_0000_0000_0000 to 0x0000_007F_FFFF_FFFF). TCR_EL1.T1SZ mirrors this for the kernel TTBR1 range. Addresses outside both ranges generate an address size fault.</p>
+
+                    <h3 id="granule">Granule Selection (TG0/TG1)</h3>
+                    <p>TG0/TG1 select the page granule: 00=4KB, 01=64KB, 10=16KB. The 4KB granule is the most common (used by Linux) and gives 512-entry tables at each level. The 64KB granule reduces walk depth and TLB pressure for workloads with large contiguous allocations (common in HPC/NUMA systems like Cavium Thunder).</p>
+
+                    <h3 id="walk-levels">Walk Levels Derived from T0SZ</h3>
+                    <pre><code class="language-armasm">// TCR_EL1 setup for Linux-style config:
+// T0SZ=25, T1SZ=25, 4KB granule, inner shareable, write-back cacheable
+LDR  x0, =0x00000015B5194515
+// Bit breakdown:
+//  [5:0]  T0SZ = 25  (0x19)
+//  [7]    EPD0 = 0   (TTBR0 walk enabled)
+//  [9:8]  IRGN0 = 01 (inner WB WA cacheable)
+//  [11:10] ORGN0 = 01 (outer WB WA cacheable)
+//  [13:12] SH0  = 11  (inner shareable)
+//  [15:14] TG0  = 00  (4KB granule)
+//  [21:16] T1SZ = 25  (0x19)
+//  [23]   EPD1 = 0
+//  [29:28] TG1  = 10  (4KB granule for TTBR1, encoding differs!)
+//  [35:32] IPS  = 100 (48-bit phys addr space)
+MSR  TCR_EL1, x0
+ISB</code></pre>
+
+                    <!-- MAIR_EL1 -->
+                    <h2 id="mair-el1">MAIR_EL1 — Memory Attributes</h2>
+
+                    <h3 id="attr-indices">Attribute Index (AttrIndx)</h3>
+                    <p>MAIR_EL1 holds eight 8-bit attribute encodings (indices 0–7). Each page table descriptor references one via its 3-bit AttrIndx field. A typical kernel setup uses: index 0 = Device-nGnRnE (MMIO, strictly ordered), index 1 = Normal, Inner/Outer Write-Back, Read-Allocate, Write-Allocate (cached RAM), index 2 = Normal, Non-Cacheable (uncached DMA buffers).</p>
+
+                    <pre><code class="language-armasm">// MAIR_EL1 encoding for three common attribute types
+// Attr[0] = 0x00 = Device-nGnRnE (strictly-ordered MMIO)
+// Attr[1] = 0xFF = Normal, Inner/Outer WB/WA/RA (cacheable)
+// Attr[2] = 0x44 = Normal, Inner/Outer Non-Cacheable
+
+LDR  x0, =0x000000000044FF00
+MSR  MAIR_EL1, x0
+ISB</code></pre>
+
+                    <h3 id="device-normal">Device vs Normal Memory</h3>
+                    <p>Device memory (Device-nGnRnE / nGnRE / nGRE / GRE) is used for memory-mapped I/O registers. Accesses to Device memory are always in program order relative to other Device accesses to the same peripheral, preventing the hardware from reordering reads or writes. Normal memory allows full out-of-order and speculative access; without explicit barriers it may be reordered by both the CPU and memory system.</p>
+
+                    <!-- Descriptors -->
+                    <h2 id="descriptors">Page Table Descriptors</h2>
+
+                    <h3 id="block-page">Block vs Page vs Table Entries</h3>
+                    <p>A 4KB-granule descriptor is 8 bytes. Bits[1:0] identify the type: 00/01 = invalid, 11 = table (points to next-level table), 01 at leaf = page (4 KB), 01 at L1/L2 = block (1 GB or 2 MB respectively). Block entries eliminate one or two levels of walk, reducing TLB miss latency for large contiguous regions. Linux uses 2 MB huge pages extensively for the kernel image and large anonymous mappings.</p>
+
+                    <h3 id="descriptor-bits">AP, UXN, PXN, AF, SH bits</h3>
+                    <pre><code class="language-armasm">// 4KB page descriptor bit fields (simplified):
+// [0]    Valid bit
+// [1]    Type (1=block/page, 0=table at non-leaf)
+// [4:2]  AttrIndx — index into MAIR_EL1 (bits[4:2])
+// [5]    NS  — Non-Secure (EL3 only)
+// [7:6]  AP  — Access Permissions
+//               00 = EL1 RW, EL0 no access
+//               01 = EL1/EL0 RW
+//               10 = EL1 RO, EL0 no access
+//               11 = EL1/EL0 RO
+// [9:8]  SH  — Shareability (10=outer, 11=inner shareable)
+// [10]   AF  — Access Flag (must be 1 or take AF fault on first access)
+// [11]   nG  — Not Global (ASID-tagged if set)
+// [47:12] OA — Output (physical) address[47:12]
+// [51:48] (RES0 for 48-bit PA)
+// [53]   PXN — Privileged Execute Never
+// [54]   UXN — Unprivileged Execute Never
+
+// Example: EL1 RW, EL0 no access, cached, inner shareable, AF=1
+// AttrIndx=1 (Normal cached), AP=00, SH=11, AF=1
+// Descriptor bits: AF|SH|AP|AttrIndx | OA | valid+type
+// = 0x0060000000000703  (for OA=0x0, type=page)
+
+MOV x0, #0x703             // bits[11:0]: AF=1, SH=11, AttrIndx=001, valid+type
+ORR x0, x0, #(1 << 10)    // AF bit already included above
+ORR x0, x0, x5             // OR in physical page address (x5 = page_phys_addr)</code></pre>
+
+                    <!-- Identity Map -->
+                    <h2 id="identity-map">Building an Identity Map at Boot</h2>
+
+                    <h3 id="l0-l1">Level-0 &amp; Level-1 Tables</h3>
+                    <p>An identity map (VA == PA) is the simplest starting point for boot: the MMU is enabled while code is still running at physical addresses. With T0SZ=25 and 4KB granule, the walk is L0→L1→L2→L3 for 4KB pages, or terminates at L1 for 1 GB blocks. A minimal boot identity-map uses a single L0 table (4KB, 512×8-byte entries) pointing to a few L1 block entries.</p>
+
+                    <pre><code class="language-armasm">// Minimal identity map: map 0x0–0x40000000 (1 GB) as Device,
+// and 0x40000000–0x80000000 (1 GB) as Normal cached.
+// Page table base in x9 (4KB aligned, zero-filled before use)
+
+// L0[0] → L1 table
+ADR   x0, l1_table
+ORR   x0, x0, #3           // Table descriptor (valid=1, type=table)
+STR   x0, [x9]             // L0 entry 0
+
+// L1[0] = 1 GB block: PA 0x0, Device-nGnRnE (AttrIndx=0, AP=00, AF=1)
+MOV   x1, #(1 << 10)       // AF=1
+ORR   x1, x1, #(3 << 8)   // SH=11 (inner shareable)
+ORR   x1, x1, #1           // valid=1, block (type=01 at L1)
+STR   x1, [x10]            // l1_table[0]
+
+// L1[1] = 1 GB block: PA 0x40000000, Normal cached (AttrIndx=1)
+MOV   x2, #0x40000000      // physical base
+ORR   x2, x2, #(1 << 10)  // AF
+ORR   x2, x2, #(3 << 8)   // SH inner
+ORR   x2, x2, #(1 << 2)   // AttrIndx=1
+ORR   x2, x2, #1           // valid+block
+STR   x2, [x10, #8]        // l1_table[1]</code></pre>
+
+                    <h3 id="enable-mmu">Enabling the MMU (SCTLR_EL1.M)</h3>
+                    <pre><code class="language-armasm">// Enable MMU: write TTBR0, TTBR1, TCR, MAIR, then set SCTLR_EL1.M
+ADR   x0, l0_table
+MSR   TTBR0_EL1, x0
+ADR   x0, kernel_l0_table
+MSR   TTBR1_EL1, x0
+
+// Ensure all page table writes are visible before enabling MMU
+DSB   ISH
+TLBI  VMALLE1IS              // Invalidate all TLB entries
+DSB   ISH
+ISB
+
+MRS   x0, SCTLR_EL1
+ORR   x0, x0, #(1 << 0)    // M=1: enable MMU
+ORR   x0, x0, #(1 << 2)    // C=1: data cache enable
+ORR   x0, x0, #(1 << 12)   // I=1: instruction cache enable
+MSR   SCTLR_EL1, x0
+ISB                          // Instruction barrier after MMU enable</code></pre>
+
+                    <!-- Huge Pages -->
+                    <h2 id="huge-pages">Huge Pages &amp; Contiguous Hint</h2>
+                    <p>Beyond 2 MB L2 blocks, AArch64 supports a Contiguous Hint (bit[52] in descriptors): when 16 consecutive naturally-aligned L3 page descriptors all have Contiguous=1, the TLB may cache them as a single 64 KB entry, reducing TLB pressure for hot large-page regions. Linux uses this for anonymous huge pages on systems without 2 MB aligned physical memory. The kernel also supports 1 GB L1 block mappings for areas like device RAM on server SoCs where the full gigabyte is contiguous.</p>
+
+                    <!-- TLB -->
+                    <h2 id="tlb">TLB Maintenance</h2>
+
+                    <h3 id="tlbi-ops">TLBI Operations</h3>
+                    <pre><code class="language-armasm">// TLBI syntax: TLBI &lt;op&gt;{IS}{nXS}, {Xt}
+// IS = inner-shareable broadcast (affects all cores in shareability domain)
+// nXS = not extended shareability
+
+// Invalidate all EL1 entries (broadcast to all PEs)
+TLBI  VMALLE1IS
+
+// Invalidate a specific VA in EL1, non-broadcast (current PE only)
+// Xt = VA[55:12] shifted — bits[63:44]=ASID, bits[43:0]=VA>>12
+MOV   x0, x5, LSR #12      // VA page number
+TLBI  VAE1, x0             // Invalidate by VA in EL1
+
+// Invalidate all entries for a specific ASID
+MOV   x0, #(1234 << 48)    // ASID in bits[63:48]
+TLBI  ASIDE1IS, x0
+
+// Always use DSB before and after TLBI in critical sections
+DSB   ISHST                 // Ensure preceding stores (page table writes) complete
+TLBI  VMALLE1IS
+DSB   ISH                  // Ensure TLBI completes before continuing
+ISB</code></pre>
+
+                    <h3 id="break-before-make">Break-Before-Make Rule</h3>
+                    <p>When changing a live page table entry from one valid mapping to another (e.g., changing permissions or PA), the ARM architecture requires Break-Before-Make: first write an invalid descriptor, execute a DSB, issue the appropriate TLBI, issue another DSB, then write the new valid descriptor. Skipping this can expose a window where both old and new mappings coexist in different cores' TLBs, causing undefined behaviour. For read-only promotions (adding a restriction) the rule is relaxed, but erring on the side of BBM is the safe default.</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Key Insight:</strong> The Access Flag (AF, bit[10]) is deliberately omitted from descriptors at first mapping creation in some OS designs. The first access to the page causes an AF fault taken to EL1. The kernel's AF fault handler sets the AF bit and returns — this records which pages have been recently accessed for the page replacement algorithm. It's a hardware-assisted LRU approximation that costs zero kernel-side tracking overhead.
+                    </div>
+
+                    <!-- Exercises -->
+                    <h2 id="exercises">Hands-On Exercises</h2>
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-pencil-alt me-2"></i>
+                        <strong>Practice Exercises:</strong> Test your understanding of ARM virtual memory and page tables.
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">Exercise 1</span> Identity Map with Permissions</div>
+                        <div class="card-content">
+                            <p><strong>Task:</strong> Extend the boot identity map to cover 4 regions: 0x00000000–0x3FFFFFFF as Device-nGnRnE (MMIO), 0x40000000–0x7FFFFFFF as Normal RW cached (kernel data), 0x80000000–0xBFFFFFFF as Normal RO+PXN cached (user code mapped as read-only), and 0xC0000000–0xFFFFFFFF as Normal RW Non-Cacheable (DMA buffers). Use L1 block entries and verify each region's attributes by reading back the descriptors in GDB.</p>
+                            <p><strong>Hint:</strong> You need four L1 entries. Set AttrIndx=0 for Device, AttrIndx=1 for cached Normal, AttrIndx=2 for non-cacheable. Use AP[7:6] to control read/write permissions.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">Exercise 2</span> TLB Shootdown Sequence</div>
+                        <div class="card-content">
+                            <p><strong>Task:</strong> Write a function that implements the Break-Before-Make pattern: given a pointer to a live L3 page table entry and a new descriptor value, (1) store an invalid entry, (2) DSB ISH, (3) TLBI VAE1IS with the correct VA, (4) DSB ISH, (5) store the new valid entry, (6) DSB ISH + ISB. Test by changing a page from RW to RO while another thread reads it — verify the reader takes a permission fault after the change.</p>
+                            <p><strong>Hint:</strong> The TLBI operand format is: bits[63:48]=ASID, bits[43:0]=VA≡12. Zero the ASID field for global pages.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">Exercise 3</span> Demand Paging via AF Faults</div>
+                        <div class="card-content">
+                            <p><strong>Task:</strong> Create page table entries with AF=0 for a 64KB region. Write an AF fault handler (ESR_EL1 EC=0b100100, ISS DFSC=0b001001) that sets the AF bit in the faulting descriptor, issues TLBI+DSB, and returns to the faulting instruction. Count how many AF faults you take when linearly scanning the region — verify it equals exactly 16 (one per 4KB page).</p>
+                            <p><strong>Hint:</strong> The FAR_EL1 gives the faulting VA. Walk the page table from TTBR0 to find the L3 entry, then OR in bit[10]. Remember to use atomic ORR if other cores might access the same descriptor.</p>
+                        </div>
+                    </div>
+
+                    <!-- Page Table Config Generator -->
+                    <h2 id="mmu-tool">Page Table Configuration Generator</h2>
+                    <p>Use this tool to plan and document your MMU configuration — address space layout, granule sizes, memory regions with attributes, and TLBI maintenance strategy. Download as Word, Excel, or PDF for your system design documentation.</p>
+
+                    <div class="canvas-form" id="mmuForm">
+                        <h4 class="canvas-form-title"><i class="fas fa-sitemap me-2"></i>Page Table Configuration Planner</h4>
+                        <p class="form-help-text">Document your MMU setup: address ranges, attributes, and TLB strategy. Download as Word, Excel, or PDF.</p>
+                        <div id="mmuBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <p class="form-privacy-notice"><i class="fas fa-shield-alt"></i> All data stays in your browser. Nothing is sent to or stored on any server.</p>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="mmuSystem">System Name *</label>
+                                <input type="text" id="mmuSystem" placeholder="e.g., Embedded Linux SBC">
+                            </div>
+                            <div class="form-group">
+                                <label for="mmuGranule">Granule Size *</label>
+                                <select id="mmuGranule">
+                                    <option value="">Select granule...</option>
+                                    <option value="4KB">4KB (512 entries per table)</option>
+                                    <option value="16KB">16KB (2048 entries per table)</option>
+                                    <option value="64KB">64KB (8192 entries per table)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="mmuT0sz">T0SZ / T1SZ Config *</label>
+                                <textarea id="mmuT0sz" rows="3" placeholder="T0SZ=25 (512GB user VA)&#10;T1SZ=25 (512GB kernel VA)&#10;IPS=100 (48-bit PA)"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="mmuMair">MAIR_EL1 Attributes *</label>
+                                <textarea id="mmuMair" rows="3" placeholder="Index 0: 0x00 Device-nGnRnE&#10;Index 1: 0xFF Normal WB/WA/RA&#10;Index 2: 0x44 Normal Non-Cacheable"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="mmuRegions">Memory Regions</label>
+                                <textarea id="mmuRegions" rows="4" placeholder="0x00000000-0x3FFFFFFF: Device (MMIO)&#10;0x40000000-0xBFFFFFFF: Normal Cached (DRAM)&#10;0xC0000000-0xFFFFFFFF: Normal NC (DMA)"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="mmuTlbi">TLB Maintenance Strategy</label>
+                                <textarea id="mmuTlbi" rows="4" placeholder="Context switch: TLBI ASIDE1IS + new TTBR0&#10;Page table update: Break-Before-Make&#10;Huge page split: TLBI VAE1IS per 4KB sub-page"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="mmuHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="mmuHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="mmuHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-reset" onclick="mmuHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="mmuSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="mmuSuccessText"></span></div>
+                    </div>
+
+                    <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
+                    <p>We configured the AArch64 MMU from scratch: TCR_EL1 T0SZ/T1SZ/TG0/TG1/IPS, MAIR_EL1 attribute indices for Device and Normal memory, page table descriptor fields (AP, UXN, PXN, AF, SH, AttrIndx), the step-by-step address translation walk, kernel/user isolation via split TTBR0/TTBR1 address spaces and KPTI, building a boot identity map with L1 block entries, enabling the MMU via SCTLR_EL1.M with proper cache and barrier sequencing, huge pages and the Contiguous Hint, and TLBI operations with the Break-Before-Make rule.</p>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="arm-assembly-13-trustzone-security.html"><strong>Part 13: TrustZone &amp; ARM Security Extensions</strong></a>, we explore how ARM hardware partitions the system into Secure and Non-Secure worlds — the secure monitor, world switching via SMC, and how Trusted Firmware-A (TF-A) implements EL3 services.</p>
+                    </div>
+
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 7: Memory Model, Caches &amp; Barriers</h5>
+                            <p>Cache coherency and barrier instructions essential for safe page table management.</p>
+                            <a href="arm-assembly-07-memory-caches.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 11: Exception Levels, Interrupts &amp; Vector Tables</h5>
+                            <p>The privilege model that grants EL1 access to MMU control registers.</p>
+                            <a href="arm-assembly-11-exception-levels.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 13: TrustZone &amp; ARM Security Extensions</h5>
+                            <p>How the Secure world uses separate stage-1 translations and the S-EL1 MMU.</p>
+                            <a href="arm-assembly-13-trustzone-security.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.</p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small"><i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a></p>
+                    <p class="small mt-3"><a href="/" class="text-light text-decoration-none">Home</a> | <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a></p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"><i class="fas fa-tag"></i><span id="categoryText">Technology</span></div>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <!-- Document Generation -->
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-arm-assembly.js"></script>
+    <script>
+        var mmuPersistence = new FormPersistence('arm-page-table-config-draft', {
+            'mmuSystem': 'systemName',
+            'mmuGranule': 'granule',
+            'mmuT0sz': 'tcrConfig',
+            'mmuMair': 'mairConfig',
+            'mmuRegions': 'memoryRegions',
+            'mmuTlbi': 'tlbiStrategy'
+        }, 'mmuBadge');
+
+        var mmuHandler = new CanvasFormHandler({
+            formId: 'mmuForm',
+            successId: 'mmuSuccess',
+            successTextId: 'mmuSuccessText',
+            persistence: mmuPersistence,
+            filenameField: 'systemName',
+            filenameSuffix: '-page-table-config',
+            requiredFields: ['mmuSystem', 'mmuGranule', 'mmuT0sz', 'mmuMair'],
+            requiredMessage: 'Please fill in System Name, Granule Size, TCR Config, and MAIR Attributes.',
+            docType: 'ArmPageTableConfig'
+        });
+
+        mmuPersistence.init();
+    </script>
+</body>
+</html>

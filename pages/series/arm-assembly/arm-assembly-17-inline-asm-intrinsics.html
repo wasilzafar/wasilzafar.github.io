@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Inline assembly with GCC and Clang for ARM: constraint strings, clobber lists, memory barriers from C, NEON intrinsics, and when to prefer inline asm vs compiler intrinsics vs pure C." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="ARM inline assembly GCC, Clang inline asm ARM64, constraint strings GCC ARM, clobber list assembly, memory barrier inline asm, NEON intrinsics ARM C, ARM64 asm volatile" />
+    <meta property="og:title" content="ARM Assembly Part 17: Inline Assembly, GCC/Clang &amp; C Interop" />
+    <meta property="og:description" content="Master ARM inline assembly: GCC/Clang asm() syntax, constraint strings for registers and memory, clobber lists, memory barriers from C, and NEON intrinsics interoperability." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-04-30" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <title>ARM Assembly Part 17: Inline Assembly, GCC/Clang &amp; C Interop - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/arm-assembly/arm-assembly-17-inline-asm-intrinsics.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied',
+            'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', {
+            'ad_storage': 'granted', 'ad_user_data': 'granted',
+            'ad_personalization': 'granted', 'analytics_storage': 'granted'
+        });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20"><path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path></svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">We use cookies to enhance your browsing experience. See our <a href="/privacy-policy.html" style="color: var(--color-teal);">Privacy Policy</a>.</p>
+                <div id="cookieSettings" style="display: none;"></div>
+                <div id="cookieTypes" style="display: none;"></div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background:var(--color-teal);color:white;font-weight:600;">Accept All</button>
+                <button id="cookieReject" style="background:transparent;color:var(--color-navy);border:2px solid var(--color-teal);font-weight:600;">Reject All</button>
+                <button id="cookieSave" style="background:var(--color-blue);color:white;font-weight:600;display:none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+                <h1 class="display-4 fw-bold mb-3">ARM Assembly Part 17: Inline Assembly, GCC/Clang &amp; C Interop</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>April 30, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>21 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Inline assembly bridges the gap between high-level C and precise hardware control. GCC Extended Asm and Clang's compatible implementation give you surgical register allocation, zero-overhead memory barriers, and access to hardware instructions the compiler never generates — all without the ABI overhead of a full assembly file.</p>
+            </div>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#introduction" onclick="closeNav()">Introduction &amp; When to Use Inline Asm</a></li>
+            <li><a href="#basic-asm" onclick="closeNav()">Basic asm() Syntax</a></li>
+            <li>
+                <a href="#extended-asm" onclick="closeNav()">Extended asm() — Operands &amp; Constraints</a>
+                <ul>
+                    <li><a href="#outputs" onclick="closeNav()">Output Constraints</a></li>
+                    <li><a href="#inputs" onclick="closeNav()">Input Constraints</a></li>
+                    <li><a href="#clobbers" onclick="closeNav()">Clobbers &amp; Memory</a></li>
+                </ul>
+            </li>
+            <li><a href="#barriers" onclick="closeNav()">Memory Barriers via Inline Asm</a></li>
+            <li><a href="#atomic" onclick="closeNav()">Atomic Operations (LDXR/STXR)</a></li>
+            <li><a href="#intrinsics" onclick="closeNav()">NEON &amp; Compiler Intrinsics from C</a></li>
+            <li><a href="#pitfalls" onclick="closeNav()">Common Pitfalls &amp; Debugging</a></li>
+            <li><a href="#case-study" onclick="closeNav()">Case Study: Linux Kernel Inline Asm</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Hands-On Exercises</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                <div id="introduction" class="blog-content">
+
+                    <h2><i class="fas fa-code me-2 text-teal"></i>Introduction &amp; When to Use Inline Asm</h2>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Series Overview:</strong> Part 17 of 28. After mastering standalone assembly files and platform ABIs in Parts 14–16, we now integrate assembly directly into C/C++ source. Inline asm is the tool of choice for Linux kernel barrier macros, RTOS context-switch snippets, and performance-critical inner loops where the compiler's autovectoriser falls short.
+                    </div>
+
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>ARM Assembly Mastery</h4>
+                            <div class="path-subtitle">Your 28-step learning path • Currently on Step 17</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="arm-assembly-01-architecture-history.html" class="step-card"><div class="step-num completed">1</div><div class="step-info"><h6>Architecture History &amp; Core Concepts</h6><small>ARMv1→v9, RISC philosophy, profiles</small></div></a>
+                            <a href="arm-assembly-02-arm32-instructions.html" class="step-card"><div class="step-num completed">2</div><div class="step-info"><h6>ARM32 Instruction Set Fundamentals</h6><small>ARM vs Thumb, registers, CPSR, barrel shifter</small></div></a>
+                            <a href="arm-assembly-03-aarch64-registers.html" class="step-card"><div class="step-num completed">3</div><div class="step-info"><h6>AArch64 Registers, Addressing &amp; Data Movement</h6><small>X/W regs, addressing modes, load/store pairs</small></div></a>
+                            <a href="arm-assembly-04-arithmetic-logic.html" class="step-card"><div class="step-num completed">4</div><div class="step-info"><h6>Arithmetic, Logic &amp; Bit Manipulation</h6><small>ADD/SUB, bitfield extract/insert, CLZ</small></div></a>
+                            <a href="arm-assembly-05-branching-loops.html" class="step-card"><div class="step-num completed">5</div><div class="step-info"><h6>Branching, Loops &amp; Conditional Execution</h6><small>Branch types, link register, jump tables</small></div></a>
+                            <a href="arm-assembly-06-stack-subroutines.html" class="step-card"><div class="step-num completed">6</div><div class="step-info"><h6>Stack, Subroutines &amp; AAPCS</h6><small>Calling conventions, prologue/epilogue</small></div></a>
+                            <a href="arm-assembly-07-memory-caches.html" class="step-card"><div class="step-num completed">7</div><div class="step-info"><h6>Memory Model, Caches &amp; Barriers</h6><small>Weak ordering, DMB/DSB/ISB, TLB</small></div></a>
+                            <a href="arm-assembly-08-neon-simd.html" class="step-card"><div class="step-num completed">8</div><div class="step-info"><h6>NEON &amp; Advanced SIMD</h6><small>Vector ops, intrinsics, media processing</small></div></a>
+                            <a href="arm-assembly-09-sve-sve2.html" class="step-card"><div class="step-num completed">9</div><div class="step-info"><h6>SVE &amp; SVE2 Scalable Vector Extensions</h6><small>Predicate regs, gather/scatter, HPC/ML</small></div></a>
+                            <a href="arm-assembly-10-floating-point.html" class="step-card"><div class="step-num completed">10</div><div class="step-info"><h6>Floating-Point &amp; VFP Instructions</h6><small>IEEE-754, scalar FP, rounding modes</small></div></a>
+                            <a href="arm-assembly-11-exception-levels.html" class="step-card"><div class="step-num completed">11</div><div class="step-info"><h6>Exception Levels, Interrupts &amp; Vector Tables</h6><small>EL0–EL3, GIC, fault debugging</small></div></a>
+                            <a href="arm-assembly-12-mmu-virtual-memory.html" class="step-card"><div class="step-num completed">12</div><div class="step-info"><h6>MMU, Page Tables &amp; Virtual Memory</h6><small>Stage-1 translation, permissions, huge pages</small></div></a>
+                            <a href="arm-assembly-13-trustzone-security.html" class="step-card"><div class="step-num completed">13</div><div class="step-info"><h6>TrustZone &amp; ARM Security Extensions</h6><small>Secure monitor, world switching, TF-A</small></div></a>
+                            <a href="arm-assembly-14-cortex-m-embedded.html" class="step-card"><div class="step-num completed">14</div><div class="step-info"><h6>Cortex-M Assembly &amp; Bare-Metal Embedded</h6><small>NVIC, SysTick, linker scripts, low-power</small></div></a>
+                            <a href="arm-assembly-15-cortex-a-boot.html" class="step-card"><div class="step-num completed">15</div><div class="step-info"><h6>Cortex-A System Programming &amp; Boot</h6><small>EL3→EL1 transitions, MMU setup, PSCI</small></div></a>
+                            <a href="arm-assembly-16-apple-silicon.html" class="step-card"><div class="step-num completed">16</div><div class="step-info"><h6>Apple Silicon &amp; macOS ABI</h6><small>ARM64e PAC, Mach-O, dyld, perf counters</small></div></a>
+                            <div class="step-card current"><div class="step-num active">17</div><div class="step-info"><h6>Inline Assembly, GCC/Clang &amp; C Interop</h6><small>Constraints, clobbers, compiler interaction</small></div><span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span></div>
+                            <a href="arm-assembly-18-performance-profiling.html" class="step-card"><div class="step-num upcoming">18</div><div class="step-info"><h6>Performance Profiling &amp; Micro-Optimization</h6><small>Pipeline hazards, PMU, benchmarking</small></div></a>
+                            <a href="arm-assembly-19-reverse-engineering.html" class="step-card"><div class="step-num upcoming">19</div><div class="step-info"><h6>Reverse Engineering &amp; ARM Binary Analysis</h6><small>ELF, disassembly, CFR, iOS/Android quirks</small></div></a>
+                            <a href="arm-assembly-20-bare-metal-os-kernel.html" class="step-card"><div class="step-num upcoming">20</div><div class="step-info"><h6>Building a Bare-Metal OS Kernel</h6><small>Bootloader, UART, scheduler, context switch</small></div></a>
+                            <a href="arm-assembly-21-microarchitecture.html" class="step-card"><div class="step-num upcoming">21</div><div class="step-info"><h6>ARM Microarchitecture Deep Dive</h6><small>OOO pipelines, reorder buffers, branch predict</small></div></a>
+                            <a href="arm-assembly-22-virtualization.html" class="step-card"><div class="step-num upcoming">22</div><div class="step-info"><h6>Virtualization Extensions</h6><small>EL2 hypervisor, stage-2 translation, KVM</small></div></a>
+                            <a href="arm-assembly-23-debugging-tooling.html" class="step-card"><div class="step-num upcoming">23</div><div class="step-info"><h6>Debugging &amp; Tooling Ecosystem</h6><small>GDB, OpenOCD/JTAG, ETM/ITM, QEMU</small></div></a>
+                            <a href="arm-assembly-24-linkers-loaders.html" class="step-card"><div class="step-num upcoming">24</div><div class="step-info"><h6>Linkers, Loaders &amp; Binary Format Internals</h6><small>ELF deep dive, relocations, PIC, crt0</small></div></a>
+                            <a href="arm-assembly-25-cross-compilation.html" class="step-card"><div class="step-num upcoming">25</div><div class="step-info"><h6>Cross-Compilation &amp; Build Systems</h6><small>GCC/Clang toolchains, CMake, firmware gen</small></div></a>
+                            <a href="arm-assembly-26-arm-real-systems.html" class="step-card"><div class="step-num upcoming">26</div><div class="step-info"><h6>ARM in Real Systems</h6><small>Android, FreeRTOS/Zephyr, U-Boot, TF-A</small></div></a>
+                            <a href="arm-assembly-27-security-exploitation.html" class="step-card"><div class="step-num upcoming">27</div><div class="step-info"><h6>Security Research &amp; Exploitation</h6><small>ASLR, PAC attacks, ROP/JOP, kernel exploit</small></div></a>
+                            <a href="arm-assembly-28-armv9-future.html" class="step-card"><div class="step-num upcoming">28</div><div class="step-info"><h6>Emerging ARMv9 &amp; Future Directions</h6><small>MTE, SME, confidential compute, AI accel</small></div></a>
+                        </div>
+                    </div>
+
+                    <p>Use inline assembly when: you need a single hardware instruction the compiler won't emit (e.g., <code>clz</code>, <code>rbit</code>, <code>dmb</code>); you need precise register placement without function call overhead; or you need compiler-visible effects on memory ordering. Avoid inline asm for anything longer than ~10 instructions — a separate .S file is cleaner, testable, and debuggable.</p>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Real-World Analogy — Margin Notes in a Book:</strong> Think of inline assembly like handwritten margin notes in a printed book. The book (C code) follows grammar rules and is typeset by the publisher (compiler). Occasionally you scribble a precise note in the margin — a formula, a shortcut, or a correction the publisher can't express. The note is powerful but fragile: if the publisher re-typesets (compiler recompiles with different optimizations), your margin note might end up on the wrong page. Constraints (<code>=r</code>, <code>"memory"</code>) are like numbered sticky tabs that tell the publisher exactly which page and line your note references, so it survives any re-layout. Without them, your handwritten wisdom ends up next to the wrong paragraph.
+                    </div>
+
+                    <!-- Basic asm -->
+                    <h2 id="basic-asm">Basic asm() Syntax</h2>
+                    <pre><code class="language-c">// Basic asm — no operands, just instruction string
+// Primarily for assembly directives or ultra-simple one-liners
+// GCC may reorder or eliminate basic asm blocks — rarely what you want
+
+void disable_irq(void) {
+    asm("msr daifset, #2");    // Disable IRQ (sets DAIF.I)
+}
+
+void enable_irq(void) {
+    asm("msr daifclr, #2");    // Enable IRQ (clears DAIF.I)
+}
+
+// Basic asm with multiple instructions (semicolon or \n separated)
+void wfi_sleep(void) {
+    asm("dsb sy\n\t"          // Data sync barrier
+        "wfi");               // Wait for interrupt
+}</code></pre>
+
+                    <!-- Extended asm -->
+                    <h2 id="extended-asm">Extended asm() — Operands &amp; Constraints</h2>
+                    <p>Extended asm has the form: <code>asm [volatile] ("template" : [outputs] : [inputs] : [clobbers])</code>. The template uses <code>%0</code>, <code>%1</code>, … as placeholders for operands listed in order: outputs first, then inputs. On AArch64 use <code>%w0</code> for 32-bit (W-register) access and <code>%x0</code> for explicit 64-bit.</p>
+
+                    <h3 id="outputs">Output Constraints</h3>
+                    <pre><code class="language-c">#include &lt;stdint.h&gt;
+
+// "=r" — any general-purpose register, write-only output
+static inline uint64_t read_cntvct(void) {
+    uint64_t val;
+    asm volatile("mrs %0, cntvct_el0" : "=r"(val));
+    return val;
+}
+
+// "+r" — read-write register (input AND output to same register)
+static inline uint32_t bit_reverse(uint32_t x) {
+    asm volatile("rbit %w0, %w0" : "+r"(x));
+    return x;
+}
+
+// "=&r" — early-clobber: output register must not overlap any input
+// Required when output may be written before all inputs are consumed
+static inline void str_exclusive(uint32_t val, volatile uint32_t *addr,
+                                  int *status) {
+    asm volatile("stxr  %w0, %w2, [%1]"
+                 : "=&r"(*status)          // =& prevents overlap with %1/%2
+                 : "r"(addr), "r"(val)
+                 : "memory");
+}</code></pre>
+
+                    <h3 id="inputs">Input Constraints</h3>
+                    <pre><code class="language-c">// "r" — any GP register (input)
+// "i" — immediate integer (compile-time constant only)
+// "m" — memory operand (produces address for asm use)
+// "n" — numeric constant (immediate, no register allocated)
+
+static inline int count_leading_zeros(uint64_t x) {
+    int result;
+    asm("clz %0, %1" : "=r"(result) : "r"(x));
+    return result;
+}
+
+// Using "i" constraint for immediate (shift amount must be constant)
+static inline uint32_t rotate_right(uint32_t x, int shift) {
+    // Compiler substitutes literal integer into template at compile time
+    uint32_t out;
+    asm("ror %w0, %w1, #%2"
+        : "=r"(out)
+        : "r"(x), "i"(shift));
+    return out;
+}
+
+// Tied input (digit = output index): reuse same register
+static inline uint32_t set_bit(uint32_t val, uint32_t bit) {
+    asm("orr %w0, %w0, %w1"
+        : "+r"(val)            // %0: read-write (tied input)
+        : "r"(1u &lt;&lt; bit));
+    return val;
+}</code></pre>
+
+                    <h3 id="clobbers">Clobbers &amp; Memory</h3>
+                    <pre><code class="language-c">// Clobbers tell the compiler which registers/flags the asm modifies
+// WITHOUT expressing them as outputs — so compiler saves/restores them
+
+// "cc" clobber: asm modifies condition flags
+static inline int signed_saturate(int x, int limit) {
+    int result;
+    asm volatile(
+        "cmp  %1, %2\n\t"
+        "csel %0, %1, %2, lt"    // Select min(x, limit)
+        : "=r"(result)
+        : "r"(x), "r"(limit)
+        : "cc");                  // CMP modifies NZCV flags
+    return result;
+}
+
+// "memory" clobber: asm reads/writes memory not named in operands
+// Forces compiler to flush/reload all live values around the asm
+#define mb()  asm volatile("dmb ish"   : : : "memory")
+#define wmb() asm volatile("dmb ishst" : : : "memory")
+#define rmb() asm volatile("dmb ishld" : : : "memory")
+#define isb() asm volatile("isb"       : : : "memory")
+
+// Combine register + memory clobbers: context switch saves x19-x28 etc.
+void switch_context(uint64_t *save_sp, uint64_t *load_sp) {
+    asm volatile(
+        "stp  x19, x20, [%0, #0]\n\t"
+        "stp  x21, x22, [%0, #16]\n\t"
+        "stp  x23, x24, [%0, #32]\n\t"
+        "mov  %0, sp\n\t"               // Save current SP
+        "mov  sp, %1\n\t"               // Load new SP
+        "ldp  x19, x20, [sp, #0]\n\t"
+        "ldp  x21, x22, [sp, #16]\n\t"
+        "ldp  x23, x24, [sp, #32]"
+        :
+        : "r"(save_sp), "r"(*load_sp)
+        : "x19","x20","x21","x22","x23","x24","memory","cc"
+    );
+}</code></pre>
+
+                    <!-- Barriers -->
+                    <h2 id="barriers">Memory Barriers via Inline Asm</h2>
+                    <pre><code class="language-c">// Linux kernel barrier pattern (arch/arm64/include/asm/barrier.h style)
+#define smp_mb()     asm volatile("dmb ish"   : : : "memory")
+#define smp_wmb()    asm volatile("dmb ishst" : : : "memory")
+#define smp_rmb()    asm volatile("dmb ishld" : : : "memory")
+#define dma_wmb()    asm volatile("dmb oshst" : : : "memory")  // outer shareable
+
+// READ_ONCE and WRITE_ONCE equivalents (prevent compiler reordering)
+#define READ_ONCE(x) \
+    ({ typeof(x) __val; asm volatile("" : "=r"(__val) : "0"(x)); __val; })
+#define WRITE_ONCE(x, val) \
+    asm volatile("" : : "r"((typeof(x))(val)) : "memory")
+
+// Acquire/release atomics using LDAR/STLR
+static inline uint64_t load_acquire(const volatile uint64_t *addr) {
+    uint64_t val;
+    asm volatile("ldar %0, [%1]" : "=r"(val) : "r"(addr) : "memory");
+    return val;
+}
+
+static inline void store_release(volatile uint64_t *addr, uint64_t val) {
+    asm volatile("stlr %1, [%0]" : : "r"(addr), "r"(val) : "memory");
+}</code></pre>
+
+                    <!-- Atomic -->
+                    <h2 id="atomic">Atomic Operations (LDXR/STXR)</h2>
+                    <pre><code class="language-c">// CAS (Compare And Swap) using exclusive monitor
+// AArch64 also has ARMv8.1 LSE atomics: CAS, SWP, LDADD (preferred where available)
+static inline int atomic_cmpxchg32(volatile int *ptr, int old_val, int new_val) {
+    int result;
+    int tmp;
+    asm volatile(
+    "1: ldxr  %w0, [%2]\n\t"       // Load exclusive: result = *ptr
+        "cmp   %w0, %w3\n\t"       // result == old_val?
+        "b.ne  2f\n\t"             // No: bail out
+        "stxr  %w1, %w4, [%2]\n\t" // Yes: try store exclusive
+        "cbnz  %w1, 1b\n\t"        // Retry if store exclusive failed
+    "2: clrex"                     // Clear exclusive if bailed out
+        : "=&r"(result), "=&r"(tmp)
+        : "r"(ptr), "r"(old_val), "r"(new_val)
+        : "cc", "memory"
+    );
+    return result;                  // Returns old value (Linux cmpxchg convention)
+}
+
+// ARMv8.1 LSE: preferred on Cortex-A55+, Neoverse, Apple Silicon
+// Requires -march=armv8.1-a+lse or target_feature attribute
+#ifdef __ARM_FEATURE_ATOMICS
+static inline int atomic_cmpxchg32_lse(volatile int *ptr, int old_val, int new_val) {
+    asm volatile("cas %w0, %w2, [%1]"
+                 : "+r"(old_val)
+                 : "r"(ptr), "r"(new_val)
+                 : "memory");
+    return old_val;
+}
+#endif</code></pre>
+
+                    <!-- Intrinsics -->
+                    <h2 id="intrinsics">NEON &amp; Compiler Intrinsics from C</h2>
+                    <pre><code class="language-c">// Header: &lt;arm_neon.h&gt; — included automatically with -mfpu=neon or -march=armv8-a
+#include &lt;arm_neon.h&gt;
+#include &lt;stdint.h&gt;
+
+// Horizontal sum of 4 floats using intrinsics (no inline asm needed)
+float sum4(const float *arr) {
+    float32x4_t v = vld1q_f32(arr);       // Load 4 floats into NEON register
+    float32x2_t lo = vget_low_f32(v);
+    float32x2_t hi = vget_high_f32(v);
+    float32x2_t sum = vpadd_f32(lo, hi);   // Pairwise add
+    sum = vpadd_f32(sum, sum);             // Final pair add
+    return vget_lane_f32(sum, 0);
+}
+
+// Dot product using FMLA (fused multiply-accumulate)
+float dot_product(const float *a, const float *b, int n) {
+    float32x4_t acc = vdupq_n_f32(0.0f);
+    for (int i = 0; i &lt; n - 3; i += 4) {
+        float32x4_t va = vld1q_f32(a + i);
+        float32x4_t vb = vld1q_f32(b + i);
+        acc = vfmaq_f32(acc, va, vb);      // acc += va * vb (FMLA)
+    }
+    return vaddvq_f32(acc);                // Horizontal sum (ARMv8.1 addv)
+}
+
+// Mixing intrinsics and inline asm for timing (CNTVCT_EL0 not in arm_neon.h)
+#include &lt;time.h&gt;
+static inline uint64_t read_timer(void) {
+    uint64_t t;
+    asm volatile("mrs %0, cntvct_el0" : "=r"(t));
+    return t;
+}</code></pre>
+
+                    <!-- Pitfalls -->
+                    <h2 id="pitfalls">Common Pitfalls &amp; Debugging</h2>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Top 5 Inline Asm Mistakes:</strong>
+                        <ol style="margin-top: 0.5rem; margin-bottom: 0;">
+                            <li><strong>Missing "memory" clobber</strong> on barrier macros — compiler reorders C loads/stores around your barrier.</li>
+                            <li><strong>Missing "cc" clobber</strong> when asm sets flags — compiler uses stale condition codes from before the asm block.</li>
+                            <li><strong>Omitting volatile</strong> on asm with side effects — compiler may hoist/sink/eliminate the block.</li>
+                            <li><strong>Using basic asm for kernel code</strong> — GCC is allowed to delete unreferenced basic asm blocks in optimized builds.</li>
+                            <li><strong>Wrong register width</strong> for AArch64 — using <code>%0</code> in a 32-bit instruction on a 64-bit variable silently generates W-register form or fails to assemble.</li>
+                        </ol>
+                    </div>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Key Insight:</strong> The "memory" clobber is a compiler-level ordering guarantee, not a hardware barrier. <code>asm volatile("" : : : "memory")</code> (a compiler fence) prevents the compiler from reordering loads/stores across it, but the CPU can still execute them out-of-order. For SMP correctness on ARM's weakly-ordered memory model, you need <em>both</em>: the compiler fence AND a hardware barrier instruction (<code>dmb ish</code>). The Linux <code>smp_mb()</code> macro provides both in a single <code>asm volatile("dmb ish":::"memory")</code> statement — the instruction is the hardware barrier, the clobber is the compiler barrier.
+                    </div>
+
+                    <!-- Case Study: Linux Kernel -->
+                    <h2 id="case-study"><i class="fas fa-flask me-2 text-teal"></i>Case Study: Linux Kernel's Inline Assembly</h2>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Kernel</span><span class="bias-tag bg-crimson">Production</span><span class="bias-tag bg-navy">Real-World</span></div>
+                        <div class="card-content">
+                            <h5>Linux arm64 Barrier Macros — From <code>arch/arm64/include/asm/barrier.h</code></h5>
+                            <p>The Linux kernel's arm64 port contains over 200 inline assembly statements across barrier definitions, atomic operations, and context switching. The barrier macros demonstrate every constraint pattern covered in this article:</p>
+                            <ul>
+                                <li><strong><code>smp_mb()</code></strong>: <code>asm volatile("dmb ish" ::: "memory")</code> — hardware + compiler barrier combined. The <code>"memory"</code> clobber prevents GCC from reordering any C memory operation across this point, while <code>dmb ish</code> prevents the CPU from doing the same.</li>
+                                <li><strong><code>__cmpxchg_case_##sz</code></strong>: Template-generated LDXR/STXR loops with <code>"=&amp;r"</code> early-clobber on the status register. Before ARMv8.1 LSE atomics, every <code>atomic_cmpxchg()</code> in the kernel expanded to this pattern.</li>
+                                <li><strong><code>cpu_switch_to()</code> in <code>entry.S</code> calls to inline asm</strong>: Context switch saves callee-saved registers (x19–x28, x29/FP, SP) using STP with explicit register clobber lists, ensuring the compiler doesn't cache any values across a task switch.</li>
+                                <li><strong>READ_ONCE/WRITE_ONCE</strong>: Uses an empty inline asm statement with constraints to force the compiler to actually load/store the variable, preventing dead-store elimination or speculative reloading.</li>
+                            </ul>
+                            <p><strong>Key lesson:</strong> The kernel relies on inline asm not for performance but for <em>correctness</em> — expressing hardware semantics (barrier ordering, exclusive monitors, system register access) that C cannot represent. Every clobber and constraint is the difference between a working SMP system and a silent data-corruption bug.</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">History</span><span class="bias-tag bg-navy">Evolution</span></div>
+                        <div class="card-content">
+                            <h5>The GCC Extended Asm Origin Story</h5>
+                            <p>GCC's inline assembly syntax dates back to the 1980s, when Richard Stallman needed a way to embed PDP-11 and VAX instructions in C code for the GNU system. The original <code>asm()</code> was "basic" — just a string pasted into the output. The constraint system (<code>"=r"</code>, <code>"m"</code>, clobbers) was added in GCC 2.x to solve a critical problem: <strong>register allocation</strong>. Without constraints, the compiler had no idea which registers the assembly block used, leading to silent corruption when the compiler reused the same register for a C variable.</p>
+                            <p>ARM support in GCC arrived in the early 1990s (arm-linux target), and the constraint letters were extended for ARM-specific needs. The <code>%w0</code> / <code>%x0</code> width modifiers for AArch64 were added with GCC 4.8 (2013) when AArch64 was first supported. Clang adopted GCC's exact syntax for compatibility, making inline asm one of the few areas where both compilers are fully interchangeable.</p>
+                        </div>
+                    </div>
+
+                    <!-- Exercises -->
+                    <h2 id="exercises"><i class="fas fa-pencil-alt me-2 text-teal"></i>Hands-On Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Exercise 1</span><span class="bias-tag bg-navy">Beginner</span></div>
+                        <div class="card-content">
+                            <h5>Constraint Practice: Bit Manipulation Wrappers</h5>
+                            <p>Write three inline assembly wrapper functions in C that use AArch64 instructions the compiler rarely emits:</p>
+                            <ol>
+                                <li><code>uint32_t reverse_bytes(uint32_t x)</code> — use <code>REV %w0, %w1</code> with <code>"=r"</code> output and <code>"r"</code> input constraints</li>
+                                <li><code>int popcount64(uint64_t x)</code> — use <code>FMOV d0, %1; CNT v0.8b, v0.8b; ADDV b0, v0.8b; FMOV %w0, s0</code> (moves to NEON, counts bits per byte, horizontal sum, moves back)</li>
+                                <li><code>uint64_t extract_bits(uint64_t x, int lsb, int width)</code> — use <code>UBFX %0, %1, %2, %3</code> with <code>"i"</code> constraints for the immediate operands</li>
+                            </ol>
+                            <p><strong>Verify:</strong> Compile with <code>aarch64-linux-gnu-gcc -O2 -S</code> and confirm the compiler emitted exactly one instruction per function (no spills, no extra moves).</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Exercise 2</span><span class="bias-tag bg-crimson">Intermediate</span></div>
+                        <div class="card-content">
+                            <h5>Spinlock with Acquire/Release Semantics</h5>
+                            <p>Implement a ticket spinlock using inline assembly with correct memory ordering:</p>
+                            <ol>
+                                <li>Define a <code>struct spinlock { uint32_t owner; uint32_t next; }</code></li>
+                                <li><code>spin_lock()</code>: Use <code>LDAXR</code> + <code>ADD</code> + <code>STXR</code> to atomically increment <code>next</code> and get your ticket number. Then spin with <code>LDAXRH</code> on <code>owner</code> until it matches your ticket.</li>
+                                <li><code>spin_unlock()</code>: Use <code>STLR</code> (store-release) to increment <code>owner</code>, releasing the next waiter.</li>
+                                <li>Mark all asm blocks <code>volatile</code> with <code>"memory"</code> clobber.</li>
+                            </ol>
+                            <p><strong>Bonus:</strong> Add WFE/SEV hints — <code>WFE</code> in the spin loop (saves power), <code>SEV</code> after unlock (wakes waiters).</p>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Exercise 3</span><span class="bias-tag bg-crimson">Advanced</span></div>
+                        <div class="card-content">
+                            <h5>Inline Asm vs Intrinsics Benchmark</h5>
+                            <p>Compare the performance and code quality of three approaches for a 256-element float array sum:</p>
+                            <ol>
+                                <li><strong>Pure C loop</strong>: <code>for (int i = 0; i &lt; 256; i++) sum += arr[i];</code> compiled with <code>-O2 -march=armv8-a</code></li>
+                                <li><strong>NEON intrinsics</strong>: Use <code>vld1q_f32</code> + <code>vaddq_f32</code> with 4 accumulators, then <code>vaddvq_f32</code> for horizontal reduction</li>
+                                <li><strong>Inline assembly</strong>: Hand-written NEON using <code>ld1 {v0.4s-v3.4s}, [%1], #64</code> with <code>fadd</code> accumulation</li>
+                            </ol>
+                            <p><strong>Measure:</strong> Use <code>CNTVCT_EL0</code> (from the timer reading inline asm earlier) to capture minimum cycles over 10,000 iterations. Compare the <code>-S</code> output instruction counts. On modern Cortex-A cores with autovectorization, approach 1 should match approach 2 — demonstrating when inline asm is unnecessary.</p>
+                        </div>
+                    </div>
+
+                    <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
+                    <p>We covered inline assembly for ARM: basic vs extended asm syntax, output/input/clobber constraints with <code>=r</code>, <code>+r</code>, <code>=&amp;r</code>, <code>r</code>, <code>i</code>, <code>m</code> and <code>cc</code>/<code>memory</code>, atomic LDXR/STXR loops and LSE CAS, memory barrier macros, LDAR/STLR acquire-release patterns, and NEON intrinsics as a higher-level alternative. Through the Linux kernel case study, we saw how production code uses every constraint pattern for correctness on SMP systems — and through the exercises, you practiced writing constraint-correct wrappers, implementing a ticket spinlock, and benchmarking inline asm against compiler autovectorization.</p>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="arm-assembly-18-performance-profiling.html"><strong>Part 18: Performance Profiling &amp; Micro-Optimization</strong></a>, we move to measurement: PMU hardware counters, <code>perf stat</code>, pipeline hazard analysis, instruction throughput vs latency tables, and micro-benchmarking methodology for assembly routines.</p>
+                    </div>
+
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 7: Memory Model, Caches &amp; Barriers</h5>
+                            <p>The hardware memory ordering model that makes barrier inline asm necessary on ARM.</p>
+                            <a href="arm-assembly-07-memory-caches.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 8: NEON &amp; Advanced SIMD</h5>
+                            <p>The NEON vector register file and instructions that intrinsics wrap.</p>
+                            <a href="arm-assembly-08-neon-simd.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 18: Performance Profiling &amp; Micro-Optimization</h5>
+                            <p>Measuring inline asm effectiveness: PMU, perf stat, and throughput/latency analysis.</p>
+                            <a href="arm-assembly-18-performance-profiling.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.</p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small"><i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a></p>
+                    <p class="small mt-3"><a href="/" class="text-light text-decoration-none">Home</a> | <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a></p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">Enjoying this content? ☕ <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a></p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"><i class="fas fa-tag"></i><span id="categoryText">Technology</span></div>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>
