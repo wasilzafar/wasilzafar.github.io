@@ -601,29 +601,33 @@ DEP_DIR         := $(BUILD_DIR)/dep
 SRC_DIRS        := src src/net src/crypto
 SRCS            := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.c))
 OBJS            := $(patsubst %.c,$(OBJ_DIR)/%.o,$(SRCS))
-DEPS            := $(OBJS:.o=.d)
+DEPS            := $(OBJS:.o=.d)             # auto-generated .d dependency files
 
+# Library objects = everything except main.c (no entry point in a library)
 LIB_SRCS        := $(filter-out src/main.c,$(SRCS))
 LIB_OBJS        := $(patsubst %.c,$(OBJ_DIR)/%.o,$(LIB_SRCS))
 
 # ── Flags ─────────────────────────────────────────────────────────────────────
 CFLAGS_common   := -Wall -Wextra -Wpedantic -Wno-unused-parameter
-CFLAGS_common   += -DPROJECT_VERSION='"$(VERSION)"'
-CFLAGS_common   += $(addprefix -I,$(SRC_DIRS)) -Iinclude
+CFLAGS_common   += -DPROJECT_VERSION='"$(VERSION)"'    # embed version as string literal
+CFLAGS_common   += $(addprefix -I,$(SRC_DIRS)) -Iinclude  # -I flag per source directory
 
-CFLAGS_release  := -O2 -DNDEBUG
-CFLAGS_debug    := -g -Og -DDEBUG
-CFLAGS_asan     := -g -fsanitize=address,undefined -DDEBUG
-CFLAGS_coverage := -g --coverage -DDEBUG
+CFLAGS_release  := -O2 -DNDEBUG                # optimised, disable assert()
+CFLAGS_debug    := -g -Og -DDEBUG              # debug info, minimal optimisation
+CFLAGS_asan     := -g -fsanitize=address,undefined -DDEBUG  # ASan + UBSan combined
+CFLAGS_coverage := -g --coverage -DDEBUG        # gcov instrumentation
 
+# Computed variable: CFLAGS_$(BUILD_TYPE) selects the right set above
 CFLAGS          := $(CFLAGS_common) $(CFLAGS_$(BUILD_TYPE))
 LDFLAGS_asan    := -fsanitize=address,undefined
 LDFLAGS         := $(LDFLAGS_$(BUILD_TYPE))
 
 # ── Quiet / Verbose ───────────────────────────────────────────────────────────
+# V=0 (default): suppress commands, show short "CC src/main.c" messages
+# V=1 (make V=1): print every command in full (traditional Make output)
 V               ?= 0
-Q               := $(if $(filter 1,$(V)),,@)
-LOG             = $(if $(filter 1,$(V)),,$(info  $(1)  $(2)))
+Q               := $(if $(filter 1,$(V)),,@)    # Q=@ when quiet, empty when verbose
+LOG             = $(if $(filter 1,$(V)),,$(info  $(1)  $(2)))  # short log: "CC file.c"
 
 # ── Output directories ────────────────────────────────────────────────────────
 DIRS            := $(BIN_DIR) $(LIB_DIR) $(OBJ_DIR) \
@@ -646,12 +650,15 @@ $(LIB_DIR)/lib$(PROJECT).a: $(LIB_OBJS) | $(LIB_DIR)
 # ── Shared library ────────────────────────────────────────────────────────────
 $(LIB_DIR)/lib$(PROJECT).so: $(LIB_OBJS) | $(LIB_DIR)
 	$(call LOG,SO,$@)
-	$(Q)$(CC) -shared -Wl,-soname,lib$(PROJECT).so.1 $(LDFLAGS) $^ -o $@
+	$(Q)$(CC) -shared -Wl,-soname,lib$(PROJECT).so.1 $(LDFLAGS) $^ -o $@  # soname for ABI versioning
 
 # ── Compile pattern ───────────────────────────────────────────────────────────
 $(OBJ_DIR)/%.o: %.c | $(DIRS)
 	$(call LOG,CC,$<)
 	$(Q)$(CC) $(CFLAGS) -MMD -MP -MF $(DEP_DIR)/$*.d -c $< -o $@
+	#                   -MMD : dependency file (user headers only)
+	#                   -MP  : phony targets for deleted headers
+	#                   -MF  : write deps to explicit path in DEP_DIR
 
 -include $(DEPS)
 
@@ -692,14 +699,15 @@ coverage-report: test
 	$(info Coverage report: $(BUILD_DIR)/coverage-html/index.html)
 
 # ── Install ───────────────────────────────────────────────────────────────────
+# install -D creates parent dirs; -m sets permissions (755=exec, 644=data)
 .PHONY: install
 install: all
 	install -Dm755 $(BIN_DIR)/$(PROJECT) $(DESTDIR)$(PREFIX)/bin/$(PROJECT)
 	install -Dm644 $(LIB_DIR)/lib$(PROJECT).a $(DESTDIR)$(PREFIX)/lib/lib$(PROJECT).a
 	install -Dm755 $(LIB_DIR)/lib$(PROJECT).so $(DESTDIR)$(PREFIX)/lib/lib$(PROJECT).so.$(VERSION)
-	ln -sf lib$(PROJECT).so.$(VERSION) $(DESTDIR)$(PREFIX)/lib/lib$(PROJECT).so
+	ln -sf lib$(PROJECT).so.$(VERSION) $(DESTDIR)$(PREFIX)/lib/lib$(PROJECT).so  # symlink for -l flag
 	install -Dm644 include/$(PROJECT).h $(DESTDIR)$(PREFIX)/include/$(PROJECT).h
-	ldconfig
+	ldconfig                                        # refresh shared library cache
 
 # ── Distribution tarball ──────────────────────────────────────────────────────
 .PHONY: dist

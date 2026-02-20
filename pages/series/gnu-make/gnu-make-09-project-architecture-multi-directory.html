@@ -311,24 +311,24 @@ void net_disconnect(void) { printf("Disconnected\n"); }</code></pre>
                     <h3 id="makec"><code>$(MAKE) -C</code> Pattern</h3>
                     <p><code>$(MAKE) -C dir</code> changes into <code>dir</code> and invokes a new Make process there. Always use <code>$(MAKE)</code> (not <code>make</code>) so the same Make binary and jobserver options propagate.</p>
 
-                    <pre><code class="language-makefile"># Top-level Makefile
+                    <pre><code class="language-makefile"># Top-level Makefile (recursive approach)
 SUBDIRS := src/core src/net tests
 
 .PHONY: all clean $(SUBDIRS)
 
 all: $(SUBDIRS)
 
-# Each subdir target triggers a recursive make
+# Each subdir target triggers a sub-make in that directory
 $(SUBDIRS):
-	$(MAKE) -C $@
+	$(MAKE) -C $@              # -C changes to subdir; $(MAKE) propagates jobserver
 
-# Pass build config down
+# Pass build config down to each sub-make
 $(SUBDIRS): BUILD ?= release
 $(SUBDIRS):
 	$(MAKE) -C $@ BUILD=$(BUILD)
 
 clean:
-	for dir in $(SUBDIRS); do $(MAKE) -C $$dir clean; done</code></pre>
+	for dir in $(SUBDIRS); do $(MAKE) -C $$dir clean; done  # $$dir: escape $ for shell</code></pre>
 
                     <h3 id="recursive-pitfalls">Classic Pitfalls</h3>
                     <div class="experiment-card">
@@ -376,26 +376,26 @@ build/$(d)/%.o: $(d)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@</code></pre>
 
-                    <pre><code class="language-makefile"># Top-level Makefile
+                    <pre><code class="language-makefile"># Top-level Makefile (non-recursive: single Make process)
 CC      := gcc
 CFLAGS  := -Wall -Wextra -std=c11 -O2
 BUILDDIR := build
 TARGET  := myapp
 
-# Include all module fragments
+# Include all module fragments — they append to SRCS and OBJS
 include src/core/Module.mk
 include src/net/Module.mk
 
-DEPS := $(OBJS:.o=.d)
+DEPS := $(OBJS:.o=.d)              # .o → .d for dependency tracking
 
 .PHONY: all clean
 
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^          # single link step sees all objects
 
--include $(DEPS)
+-include $(DEPS)                       # pull in auto-generated .d files
 
 clean:
 	rm -rf $(BUILDDIR) $(TARGET)</code></pre>
@@ -424,13 +424,13 @@ clean:
                     <pre><code class="language-makefile">SRCDIR   := src
 BUILDDIR := build
 
-# Mirror src/ structure under build/
-# src/core/allocator.c → build/src/core/allocator.o
-SRCS := $(shell find $(SRCDIR) -name '*.c')
-OBJS := $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SRCS))
+# Mirror src/ tree under build/ so source stays clean
+# e.g. src/core/allocator.c → build/src/core/allocator.o
+SRCS := $(shell find $(SRCDIR) -name '*.c')                    # recursive file discovery
+OBJS := $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SRCS))      # remap paths to build/
 
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c
-	@mkdir -p $(dir $@)
+	@mkdir -p $(dir $@)                # create matching subdirectory under build/
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@</code></pre>
 
                     <div class="highlight-box">

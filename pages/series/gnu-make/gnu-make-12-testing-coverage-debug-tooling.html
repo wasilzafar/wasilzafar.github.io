@@ -244,7 +244,7 @@
 
                     <h3 id="basic-test">Basic <code>test</code> / <code>check</code> Target</h3>
                     <pre><code class="language-makefile">CC      := gcc
-CFLAGS  := -Wall -Wextra -g
+CFLAGS  := -Wall -Wextra -g                  # -g enables debug info for gdb/sanitizers
 SRCS    := $(wildcard src/*.c)
 OBJS    := $(patsubst src/%.c,build/%.o,$(SRCS))
 
@@ -255,16 +255,17 @@ TEST_BINS := $(patsubst test/%.c,build/test_%,$(TEST_SRCS))
 .PHONY: test check
 test check: $(TEST_BINS)
 	@echo "Running test suite..."
-	@PASS=0; FAIL=0; \
-	for t in $^; do \
+	@PASS=0; FAIL=0; \                        # shell vars ($$=escape $ from Make)
+	for t in $^; do \                          # $^ = all test binary paths
 	    if $$t; then PASS=$$((PASS+1)); echo "  [PASS] $$t"; \
 	    else FAIL=$$((FAIL+1)); echo "  [FAIL] $$t"; fi; \
 	done; \
 	echo "Results: $$PASS passed, $$FAIL failed"; \
-	[ $$FAIL -eq 0 ]
+	[ $$FAIL -eq 0 ]                           # exit 1 if any test failed → Make sees error
 
-build/test_%: test/%.c $(OBJS) | build
-	$(CC) $(CFLAGS) $^ -o $@
+# Link each test binary against the project objects
+build/test_%: test/%.c $(OBJS) | build       # | build = order-only (create dir first)
+	$(CC) $(CFLAGS) $^ -o $@                  # $^ = test source + all object files
 
 build:
 	mkdir -p $@</code></pre>
@@ -328,7 +329,11 @@ cov-clean:
                     <h2><i class="fas fa-bug me-2 text-teal"></i>Sanitizer Builds</h2>
 
                     <h3 id="asan">AddressSanitizer (ASan)</h3>
-                    <pre><code class="language-makefile">ASAN_FLAGS := -fsanitize=address -fno-omit-frame-pointer -g
+                    <pre><code class="language-makefile"># ── AddressSanitizer flags ──
+# -fsanitize=address       : instrument heap/stack/global buffer overflows
+# -fno-omit-frame-pointer  : keep frame pointers for readable stack traces
+# -g                       : debug symbols for file:line info in reports
+ASAN_FLAGS := -fsanitize=address -fno-omit-frame-pointer -g
 
 ASAN_OBJS := $(patsubst src/%.c,build/asan/%.o,$(SRCS))
 ASAN_TESTS := $(patsubst test/%.c,build/asan/test_%,$(wildcard test/*.c))
@@ -347,7 +352,9 @@ asan: $(ASAN_TESTS)
 	@for t in $^; do echo "ASan: $$t"; ASAN_OPTIONS=abort_on_error=1 $$t; done</code></pre>
 
                     <h3 id="ubsan">UndefinedBehaviorSanitizer (UBSan)</h3>
-                    <pre><code class="language-makefile">UBSAN_FLAGS := -fsanitize=undefined -fno-omit-frame-pointer -g
+                    <pre><code class="language-makefile"># ── UndefinedBehaviorSanitizer flags ──
+# Catches signed overflow, null deref, misaligned access, type confusion, etc.
+UBSAN_FLAGS := -fsanitize=undefined -fno-omit-frame-pointer -g
 
 UBSAN_OBJS := $(patsubst src/%.c,build/ubsan/%.o,$(SRCS))
 UBSAN_TESTS := $(patsubst test/%.c,build/ubsan/test_%,$(wildcard test/*.c))
@@ -367,6 +374,7 @@ ubsan: $(UBSAN_TESTS)
 
                     <h3 id="tsan">ThreadSanitizer (TSan)</h3>
                     <pre><code class="language-makefile"># TSan is incompatible with ASan — must be a separate build variant
+# -fPIE -pie  : position-independent executable (required by TSan on some platforms)
 TSAN_FLAGS := -fsanitize=thread -fno-omit-frame-pointer -g -fPIE -pie
 
 TSAN_OBJS  := $(patsubst src/%.c,build/tsan/%.o,$(SRCS))
@@ -386,26 +394,33 @@ tsan: $(TSAN_TESTS)
 	@for t in $^; do echo "TSan: $$t"; TSAN_OPTIONS=halt_on_error=1 $$t; done</code></pre>
 
                     <h3 id="san-patterns">Named Sanitizer Pattern (DRY)</h3>
-                    <pre><code class="language-makefile"># Generate sanitizer targets dynamically to avoid code duplication
+                    <pre><code class="language-makefile"># Generate sanitizer targets dynamically to avoid code duplication.
+# $(1) = sanitizer name (asan, ubsan, tsan)
+# $(2) = compiler flags for that sanitizer
+#
+# Double-dollar ($$) delays expansion until $(eval) processes the text.
+# Inside define blocks, Make expands $(...) immediately but $$(...)  
+# is deferred — necessary so $(SRCS) etc. aren't empty at define time.
 define MAKE_SANITIZER_RULES
 SAN_$(1)_FLAGS   := $(2)
 SAN_$(1)_OBJS    := $$(patsubst src/%.c,build/$(1)/%.o,$$(SRCS))
 SAN_$(1)_TESTS   := $$(patsubst test/%.c,build/$(1)/test_%,$$(wildcard test/*.c))
 
 build/$(1)/%.o: src/%.c | build/$(1)
-	$$(CC) $$(CFLAGS) $(2) -c $$< -o $$@
+	$$(CC) $$(CFLAGS) $(2) -c $$< -o $$@       # $$< = first prerequisite (source file)
 
 build/$(1)/test_%: test/%.c $$(SAN_$(1)_OBJS) | build/$(1)
-	$$(CC) $$(CFLAGS) $(2) $$^ -o $$@
+	$$(CC) $$(CFLAGS) $(2) $$^ -o $$@           # $$^ = all prerequisites
 
 build/$(1):
 	mkdir -p $$@
 
 .PHONY: $(1)
 $(1): $$(SAN_$(1)_TESTS)
-	@for t in $$^; do echo "$(1): $$$$t"; $$$$t; done
+	@for t in $$^; do echo "$(1): $$$$t"; $$$$t; done   # $$$$ = literal $$ in shell
 endef
 
+# Instantiate the template for each sanitizer:
 $(eval $(call MAKE_SANITIZER_RULES,asan,-fsanitize=address -g))
 $(eval $(call MAKE_SANITIZER_RULES,ubsan,-fsanitize=undefined -g))</code></pre>
                 </div>
@@ -430,7 +445,9 @@ check: test asan ubsan coverage
                     <h2><i class="fas fa-search me-2 text-teal"></i>Valgrind Integration</h2>
 
                     <pre><code class="language-makefile">VALGRIND     := valgrind
-VGFLAGS      := --leak-check=full --error-exitcode=1 --quiet
+VGFLAGS      := --leak-check=full \               # report every leaked allocation
+                --error-exitcode=1 \               # exit 1 on memory errors (→ Make fails)
+                --quiet                            # suppress info banners, show errors only
 
 .PHONY: valgrind
 valgrind: $(TEST_BINS)

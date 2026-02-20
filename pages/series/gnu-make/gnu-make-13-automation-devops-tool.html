@@ -280,20 +280,21 @@ deploy: build ## Deploy artifact to staging server
 
                     <p>GNU coding standards define <code>install</code>, <code>install-strip</code>, <code>uninstall</code>, and <code>DESTDIR</code> for staged installs. Following these conventions makes your software compatible with package managers.</p>
 
-                    <pre><code class="language-makefile">PREFIX   ?= /usr/local
-BINDIR   := $(PREFIX)/bin
-LIBDIR   := $(PREFIX)/lib
-INCDIR   := $(PREFIX)/include/$(PROJECT)
-MANDIR   := $(PREFIX)/share/man/man1
+                    <pre><code class="language-makefile"># ── GNU install conventions ──
+PREFIX   ?= /usr/local                       # root install path (overridable)
+BINDIR   := $(PREFIX)/bin                     # executables
+LIBDIR   := $(PREFIX)/lib                     # static/shared libraries
+INCDIR   := $(PREFIX)/include/$(PROJECT)      # public headers
+MANDIR   := $(PREFIX)/share/man/man1          # man pages
 
-INSTALL         := install
-INSTALL_PROGRAM := $(INSTALL) -m 755
-INSTALL_DATA    := $(INSTALL) -m 644
-INSTALL_DIR     := $(INSTALL) -d
+INSTALL         := install                    # coreutils install (preserves perms)
+INSTALL_PROGRAM := $(INSTALL) -m 755          # executable permission bits
+INSTALL_DATA    := $(INSTALL) -m 644          # read-only data permission bits
+INSTALL_DIR     := $(INSTALL) -d              # -d creates directories recursively
 
 .PHONY: install
 install: all ## Install to $(PREFIX) (use DESTDIR= for staged install)
-	$(INSTALL_DIR)   $(DESTDIR)$(BINDIR)
+	$(INSTALL_DIR)   $(DESTDIR)$(BINDIR)       # DESTDIR= prefix for staged/packaging installs
 	$(INSTALL_DIR)   $(DESTDIR)$(LIBDIR)
 	$(INSTALL_DIR)   $(DESTDIR)$(INCDIR)
 	$(INSTALL_DIR)   $(DESTDIR)$(MANDIR)
@@ -304,7 +305,7 @@ install: all ## Install to $(PREFIX) (use DESTDIR= for staged install)
 
 .PHONY: install-strip
 install-strip: install ## Install with debug symbols stripped
-	strip $(DESTDIR)$(BINDIR)/$(TARGET)
+	strip $(DESTDIR)$(BINDIR)/$(TARGET)        # remove symbols → smaller binary
 
 .PHONY: uninstall
 uninstall: ## Remove installed files
@@ -388,19 +389,20 @@ db-seed: ## Populate test database (atomic transaction)
                 <div id="packaging" class="blog-content mt-5">
                     <h2><i class="fas fa-box me-2 text-teal"></i>Release Packaging</h2>
 
-                    <pre><code class="language-makefile">VERSION     ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo 0.0.0)
+                    <pre><code class="language-makefile"># Derive version from latest git tag, falling back to 0.0.0
+VERSION     ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo 0.0.0)
 DIST_NAME   := $(PROJECT)-$(VERSION)
 DIST_DIR    := dist/$(DIST_NAME)
 
 .PHONY: dist release
 dist: ## Create source tarball in dist/
 	mkdir -p $(DIST_DIR)
-	git archive HEAD | tar -x -C $(DIST_DIR)
+	git archive HEAD | tar -x -C $(DIST_DIR)  # export tracked files at HEAD
 	tar czf dist/$(DIST_NAME).tar.gz -C dist $(DIST_NAME)
 	@echo "Source archive: dist/$(DIST_NAME).tar.gz"
 
 release: dist ## Tag, build, and prepare binaries for release
-	git tag -a v$(VERSION) -m "Release v$(VERSION)"
+	git tag -a v$(VERSION) -m "Release v$(VERSION)"   # annotated tag
 	$(MAKE) -j$(NPROC) all
 	mkdir -p dist/$(DIST_NAME)/bin
 	cp build/$(TARGET) dist/$(DIST_NAME)/bin/
@@ -412,6 +414,8 @@ release: dist ## Tag, build, and prepare binaries for release
                     <h2><i class="fas fa-sync-alt me-2 text-teal"></i>Reproducible Builds</h2>
 
                     <pre><code class="language-makefile"># Strip timestamps and non-deterministic metadata from gcc output:
+# These -fprefix-map flags replace $(PWD) with '.' in debug info/macros
+# so binaries built in different directories produce identical bytes.
 CFLAGS += -ffile-prefix-map=$(PWD)=.
 CFLAGS += -fdebug-prefix-map=$(PWD)=.
 CFLAGS += -fmacro-prefix-map=$(PWD)=.
@@ -420,9 +424,9 @@ CFLAGS += -fmacro-prefix-map=$(PWD)=.
 # Use tar's --sort and --mtime options (GNU tar 1.28+)
 dist:
 	tar czf dist.tar.gz \
-	    --sort=name \
-	    --mtime='1970-01-01 00:00:00' \
-	    --owner=0 --group=0 --numeric-owner \
+	    --sort=name \                        # alphabetical file ordering
+	    --mtime='1970-01-01 00:00:00' \       # fixed timestamp (epoch)
+	    --owner=0 --group=0 --numeric-owner \ # root:root, no usernames
 	    dist/</code></pre>
 
                     <h3>Try It — Self-Documenting Help &amp; Install</h3>
