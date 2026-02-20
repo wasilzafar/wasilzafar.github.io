@@ -271,7 +271,7 @@ endif</code></pre>
                     <h2><i class="fab fa-github me-2 text-teal"></i>GitHub Actions</h2>
 
                     <h3 id="gha-basic">Basic Workflow</h3>
-                    <pre><code class="language-bash"># .github/workflows/build.yml
+                    <pre><code class="language-yaml"># .github/workflows/build.yml
 name: Build and Test
 
 on: [push, pull_request]
@@ -301,7 +301,7 @@ jobs:
           files: coverage.info</code></pre>
 
                     <h3 id="gha-matrix">Matrix Builds</h3>
-                    <pre><code class="language-bash">jobs:
+                    <pre><code class="language-yaml">jobs:
   matrix-build:
     strategy:
       matrix:
@@ -321,7 +321,7 @@ jobs:
         run: make test CC=${{ matrix.compiler }}</code></pre>
 
                     <h3 id="gha-cache">Object File Caching</h3>
-                    <pre><code class="language-bash">      - name: Cache ccache directory
+                    <pre><code class="language-yaml">      - name: Cache ccache directory
         uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
@@ -343,7 +343,7 @@ jobs:
                 <div id="gitlab-ci" class="blog-content mt-5">
                     <h2><i class="fab fa-gitlab me-2 text-teal"></i>GitLab CI</h2>
 
-                    <pre><code class="language-bash"># .gitlab-ci.yml
+                    <pre><code class="language-yaml"># .gitlab-ci.yml
 image: gcc:latest
 
 variables:
@@ -430,6 +430,74 @@ artifact: all ## Create CI artifact archive
 .PHONY: artifact-clean
 artifact-clean:
 	rm -rf artifact/ $(ARTIFACT) $(ARTIFACT).sha256</code></pre>
+
+                    <h3>Try It — CI-Style Build &amp; Artifact</h3>
+                    <p>Create a project with CI targets and artifact packaging:</p>
+
+                    <pre><code class="language-bash">mkdir -p src include
+git init -q   # VERSION uses git describe
+
+cat > include/app.h << 'EOF'
+#ifndef APP_H
+#define APP_H
+void greet(void);
+#endif
+EOF
+
+cat > src/main.c << 'EOF'
+#include &lt;stdio.h&gt;
+#include "app.h"
+void greet(void) { printf("Hello from CI build\n"); }
+int main(void) { greet(); return 0; }
+EOF
+
+cat > Makefile << 'EOF'
+CC       := gcc
+CFLAGS   := -Wall -Wextra -Iinclude -O2
+TARGET   := myapp
+PROJECT  := myapp
+VERSION  ?= $(shell git describe --tags --always 2>/dev/null || echo 0.0.1)
+ARTIFACT := $(PROJECT)-$(VERSION)-linux-amd64.tar.gz
+
+.PHONY: all ci artifact artifact-clean clean info
+
+all: build/$(TARGET)
+
+build/$(TARGET): src/main.c
+	@mkdir -p build
+	$(CC) $(CFLAGS) -o $@ $^
+
+ci: clean all ## CI gate target
+	@echo "CI build passed — version $(VERSION)"
+
+artifact: all ## Create CI artifact archive
+	mkdir -p artifact/bin artifact/include
+	cp build/$(TARGET) artifact/bin/
+	cp include/*.h artifact/include/ 2>/dev/null || true
+	tar czf $(ARTIFACT) -C artifact .
+	sha256sum $(ARTIFACT) > $(ARTIFACT).sha256
+	@echo "Artifact: $(ARTIFACT)"
+
+artifact-clean:
+	rm -rf artifact/ $(ARTIFACT) $(ARTIFACT).sha256
+
+clean: artifact-clean
+	rm -rf build
+
+info:
+	@echo "CC       = $(CC)"
+	@echo "CFLAGS   = $(CFLAGS)"
+	@echo "VERSION  = $(VERSION)"
+	@echo "TARGET   = $(TARGET)"
+	@echo "ARTIFACT = $(ARTIFACT)"
+EOF
+
+make info
+make ci
+make artifact
+tar tzf myapp-*.tar.gz       # inspect archive contents
+cat myapp-*.sha256           # verify checksum
+make clean</code></pre>
                 </div>
 
                 <!-- Next Steps -->
@@ -516,6 +584,7 @@ artifact-clean:
     <script src="../../../js/main.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-makefile.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
