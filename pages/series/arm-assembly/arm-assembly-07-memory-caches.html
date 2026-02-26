@@ -233,18 +233,18 @@
                     </div>
 
                     <h3 id="why-ordering">Why Memory Ordering Matters</h3>
-                    <p>Modern CPUs <strong>reorder memory accesses</strong> for performance — stores may complete out of order, loads may be satisfied from store buffers before writing to cache, and the memory system may merge adjacent writes. Without explicit ordering constraints, shared-memory algorithms like spinlocks, message queues, and RCU break <em>silently</em>. The bug won’t crash immediately — it will manifest as rare data corruption under load, on specific hardware, at 3 AM. ARM’s weak ordering model is significantly more aggressive than x86’s Total Store Order (TSO), meaning code that works on Intel may break on ARM without proper barriers.</p>
+                    <p>Modern CPUs <strong>reorder memory accesses</strong> for performance — stores may complete out of order, loads may be satisfied from store buffers before writing to cache, and the memory system may merge adjacent writes. Without explicit ordering constraints, shared-memory algorithms like spinlocks, message queues, and RCU break <em>silently</em>. The bug won't crash immediately — it will manifest as rare data corruption under load, on specific hardware, at 3 AM. ARM's weak ordering model is significantly more aggressive than x86's Total Store Order (TSO), meaning code that works on Intel may break on ARM without proper barriers.</p>
 
                     <div class="highlight-box highlight-crimson">
                         <i class="fas fa-exclamation-triangle me-2"></i>
-                        <strong>The x86 Trap:</strong> On x86, most memory operations are naturally ordered (TSO guarantees store-store and load-load ordering). Developers coming from x86 often <em>accidentally</em> write correct concurrent code without explicit barriers. When porting this code to ARM, hidden ordering assumptions break. The Linux kernel’s ARM port required hundreds of barrier insertions that were invisible on x86.
+                        <strong>The x86 Trap:</strong> On x86, most memory operations are naturally ordered (TSO guarantees store-store and load-load ordering). Developers coming from x86 often <em>accidentally</em> write correct concurrent code without explicit barriers. When porting this code to ARM, hidden ordering assumptions break. The Linux kernel's ARM port required hundreds of barrier insertions that were invisible on x86.
                     </div>
 
                     <!-- Section 2: Memory Model -->
                     <h2 id="memory-model">ARM Memory Model</h2>
 
                     <h3 id="weak-ordering">Weak vs Strong Ordering</h3>
-                    <p>x86 uses <strong>Total Store Order (TSO)</strong> — stores become globally visible in program order, and loads are never reordered before earlier loads. ARM uses a <strong>weaker model</strong>: loads and stores to Normal memory may be observed by other CPUs in <em>any order</em> unless device memory or barrier instructions are used. This means the hardware can reorder loads past stores, stores past stores, and loads past loads — all three are allowed. The ARM architecture manual guarantees only <em>address dependency ordering</em> (if load B depends on the address from load A, B won’t execute before A).</p>
+                    <p>x86 uses <strong>Total Store Order (TSO)</strong> — stores become globally visible in program order, and loads are never reordered before earlier loads. ARM uses a <strong>weaker model</strong>: loads and stores to Normal memory may be observed by other CPUs in <em>any order</em> unless device memory or barrier instructions are used. This means the hardware can reorder loads past stores, stores past stores, and loads past loads — all three are allowed. The ARM architecture manual guarantees only <em>address dependency ordering</em> (if load B depends on the address from load A, B won't execute before A).</p>
 
                     <div class="table-responsive">
                         <table class="table table-bordered table-sm">
@@ -315,19 +315,19 @@
 
                     <div class="highlight-box">
                         <i class="fas fa-info-circle me-2"></i>
-                        <strong>Apple M-series VIPT trick:</strong> Apple’s M1/M2 use 128 KB L1 caches (larger than typical) with 16 KB pages. They avoid aliasing by using 8-way associativity: 128 KB / 8 = 16 KB per way, keeping index+offset within 14 bits. The ARM architecture spec explicitly permits this design because the index bits fall within the page offset.
+                        <strong>Apple M-series VIPT trick:</strong> Apple's M1/M2 use 128 KB L1 caches (larger than typical) with 16 KB pages. They avoid aliasing by using 8-way associativity: 128 KB / 8 = 16 KB per way, keeping index+offset within 14 bits. The ARM architecture spec explicitly permits this design because the index bits fall within the page offset.
                     </div>
 
                     <h3 id="cache-coherency">Cache Coherency (MESI)</h3>
-                    <p>ARM’s interconnect (CCI, CCN, CMN, or DSU) maintains coherency using a <strong>MOESI-like protocol</strong> with five states per cache line:</p>
+                    <p>ARM's interconnect (CCI, CCN, CMN, or DSU) maintains coherency using a <strong>MOESI-like protocol</strong> with five states per cache line:</p>
                     <ul>
-                        <li><strong>Modified (M)</strong> — Dirty and exclusive. This core has the only valid copy, and it’s been written to.</li>
+                        <li><strong>Modified (M)</strong> — Dirty and exclusive. This core has the only valid copy, and it's been written to.</li>
                         <li><strong>Owned (O)</strong> — Dirty but shared. This core supplies data to snoop requests; other cores hold stale Shared copies.</li>
                         <li><strong>Exclusive (E)</strong> — Clean and exclusive. Matches main memory; can transition to M without bus traffic.</li>
                         <li><strong>Shared (S)</strong> — Clean and shared. Multiple cores hold identical copies; must invalidate others before writing.</li>
                         <li><strong>Invalid (I)</strong> — Line is not present or has been invalidated.</li>
                     </ul>
-                    <p>Hardware coherency is <strong>automatic for Inner Shareable Normal memory</strong> — when Core 0 stores to address X, the interconnect invalidates or updates X in Core 1’s cache. Software barriers are only needed for:</p>
+                    <p>Hardware coherency is <strong>automatic for Inner Shareable Normal memory</strong> — when Core 0 stores to address X, the interconnect invalidates or updates X in Core 1's cache. Software barriers are only needed for:</p>
                     <ol>
                         <li>Ordering guarantees (when <em>which</em> accesses become visible matters)</li>
                         <li>I-cache/D-cache coherency (the I-cache is <strong>not</strong> hardware-coherent with the D-cache)</li>
@@ -377,7 +377,7 @@ MRS  x1, CLIDR_EL1      // Cache Level ID Register
                     </div>
                     <div class="highlight-box highlight-crimson">
                         <i class="fas fa-exclamation-triangle me-2"></i>
-                        <strong>DC IVAC is dangerous:</strong> It <em>discards</em> dirty data without writing it back. If any cache line in the range has been modified, those modifications are lost. Only use DC IVAC for DMA receive buffers where you know the CPU hasn’t written to the range. For all other cases, use DC CIVAC.
+                        <strong>DC IVAC is dangerous:</strong> It <em>discards</em> dirty data without writing it back. If any cache line in the range has been modified, those modifications are lost. Only use DC IVAC for DMA receive buffers where you know the CPU hasn't written to the range. For all other cases, use DC CIVAC.
                     </div>
 
                     <pre><code class="language-armasm">// Flush a range of memory to PoC (for DMA)
@@ -535,11 +535,11 @@ spin_unlock:
 
                     <h3 id="ldapr">LDAPR (ARMv8.3 Relaxed Acquire)</h3>
                     <p><code>LDAPR</code> (Load-AcquirePC) was added in ARMv8.3 as a <strong>weaker alternative to LDAR</strong>. While LDAR enforces full acquire ordering (no reordering of <em>any</em> subsequent access), LDAPR only prevents reordering of the load relative to <em>subsequent stores to the same address</em>. Specifically, LDAPR allows later loads to other addresses to be reordered before it — a relaxation that can improve performance in read-heavy workloads.</p>
-                    <p>LDAPR maps to the C++ <code>memory_order_consume</code> concept (data-dependency ordering). In practice, the Linux kernel uses LDAPR for its <code>smp_load_acquire()</code> implementation on ARMv8.3+ systems, falling back to LDAR on older cores. The performance difference is measurable on workloads with frequent acquire loads followed by independent reads — LDAPR allows the CPU’s load queue to service those reads out of order.</p>
+                    <p>LDAPR maps to the C++ <code>memory_order_consume</code> concept (data-dependency ordering). In practice, the Linux kernel uses LDAPR for its <code>smp_load_acquire()</code> implementation on ARMv8.3+ systems, falling back to LDAR on older cores. The performance difference is measurable on workloads with frequent acquire loads followed by independent reads — LDAPR allows the CPU's load queue to service those reads out of order.</p>
 
                     <div class="highlight-box highlight-navy">
                         <i class="fas fa-graduation-cap me-2"></i>
-                        <strong>Ordering hierarchy:</strong> <code>LDR</code> (no ordering) &lt; <code>LDAPR</code> (reorder stores only by address dependency) &lt; <code>LDAR</code> (full acquire: nothing reorders before this load). Choose the weakest that satisfies your algorithm’s correctness requirements.
+                        <strong>Ordering hierarchy:</strong> <code>LDR</code> (no ordering) &lt; <code>LDAPR</code> (reorder stores only by address dependency) &lt; <code>LDAR</code> (full acquire: nothing reorders before this load). Choose the weakest that satisfies your algorithm's correctness requirements.
                     </div>
 
                     <h3 id="lse-atomics">LSE Atomic Operations (ARMv8.1)</h3>
@@ -577,7 +577,7 @@ spin_unlock:
                     <h2 id="tlb-maintenance">TLB Maintenance</h2>
 
                     <h3 id="tlbi-ops">TLBI Operations</h3>
-                    <p>TLB invalidation instructions follow a naming convention: <code>TLBI &lt;type&gt;&lt;level&gt;&lt;shareability&gt;</code>. The <code>IS</code> suffix broadcasts the invalidation to all CPUs in the Inner Shareable domain — without it, only the local CPU’s TLB is affected:</p>
+                    <p>TLB invalidation instructions follow a naming convention: <code>TLBI &lt;type&gt;&lt;level&gt;&lt;shareability&gt;</code>. The <code>IS</code> suffix broadcasts the invalidation to all CPUs in the Inner Shareable domain — without it, only the local CPU's TLB is affected:</p>
                     <div class="table-responsive">
                         <table class="table table-bordered table-sm">
                             <thead class="table-dark">
@@ -592,7 +592,7 @@ spin_unlock:
                             </tbody>
                         </table>
                     </div>
-                    <p>Always follow TLBI with <code>DSB ISH</code> to ensure the invalidation completes on all cores before proceeding, then <code>ISB</code> if the current CPU’s translations were affected. Missing the DSB creates a race where another core may still use a stale TLB entry.</p>
+                    <p>Always follow TLBI with <code>DSB ISH</code> to ensure the invalidation completes on all cores before proceeding, then <code>ISB</code> if the current CPU's translations were affected. Missing the DSB creates a race where another core may still use a stale TLB entry.</p>
 
                     <h3 id="break-before-make">Break-Before-Make Sequence</h3>
                     <pre><code class="language-armasm">// Correct page table entry update (Break-Before-Make)
@@ -611,7 +611,7 @@ update_pte:
                     <h2 id="device-memory">Device &amp; Non-Cacheable Memory</h2>
                     <p>Memory-mapped I/O registers <strong>must</strong> be mapped as Device memory in the page tables — typically <code>Device-nGnRnE</code> (no Gathering, no Reordering, no Early-write-Acknowledgement), the strictest device type. This prevents the CPU from:</p>
                     <ul>
-                        <li><strong>Gathering:</strong> Merging two 32-bit writes into a single 64-bit write (which the peripheral wouldn’t understand)</li>
+                        <li><strong>Gathering:</strong> Merging two 32-bit writes into a single 64-bit write (which the peripheral wouldn't understand)</li>
                         <li><strong>Reordering:</strong> Issuing writes to different MMIO registers out of order (which could violate hardware init sequences)</li>
                         <li><strong>Early acknowledgement:</strong> Reporting a write as "complete" before it actually reaches the device bus (which could miss error status)</li>
                     </ul>
@@ -624,7 +624,7 @@ update_pte:
                         </div>
                         <h5>UART Init: When Memory Type Matters</h5>
                         <div class="card-content">
-                            <p>A common embedded bug: mapping a UART’s control registers as Normal cacheable memory. The CPU caches the status register value, so polling <code>UART_FR</code> (flag register) for "transmit FIFO not full" returns a stale cached value — the loop either spins forever or overwrites data in the FIFO. Mapping as <code>Device-nGnRnE</code> forces every load to read from the actual hardware register, and every store to reach the FIFO in program order.</p>
+                            <p>A common embedded bug: mapping a UART's control registers as Normal cacheable memory. The CPU caches the status register value, so polling <code>UART_FR</code> (flag register) for "transmit FIFO not full" returns a stale cached value — the loop either spins forever or overwrites data in the FIFO. Mapping as <code>Device-nGnRnE</code> forces every load to read from the actual hardware register, and every store to reach the FIFO in program order.</p>
                         </div>
                     </div>
 
@@ -634,7 +634,7 @@ update_pte:
                     </div>
 
                     <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
-                    <p>In this part we explored the foundations of ARM’s memory system — from the <strong>weakly-ordered memory model</strong> that gives hardware maximum reordering freedom, through <strong>memory attribute types</strong> (Normal, Device, Non-Cacheable) and <strong>shareability domains</strong> that control coherency scope, to the <strong>set-associative cache hierarchy</strong> with VIPT L1 and PIPT L2/L3, maintained by the MOESI coherency protocol.</p>
+                    <p>In this part we explored the foundations of ARM's memory system — from the <strong>weakly-ordered memory model</strong> that gives hardware maximum reordering freedom, through <strong>memory attribute types</strong> (Normal, Device, Non-Cacheable) and <strong>shareability domains</strong> that control coherency scope, to the <strong>set-associative cache hierarchy</strong> with VIPT L1 and PIPT L2/L3, maintained by the MOESI coherency protocol.</p>
                     <p>We covered the practical tools: <strong>DC operations</strong> for flushing data to main memory (essential for DMA), <strong>IC operations</strong> for I-cache coherency after JIT compilation, the <strong>three barrier instructions</strong> (DMB for ordering, DSB for completion, ISB for pipeline flush) with their option variants, <strong>acquire/release semantics</strong> (LDAR/STLR) that eliminate explicit barriers in lock primitives, <strong>LSE atomics</strong> that replace LDXR/STXR loops, <strong>TLB maintenance</strong> with the critical break-before-make sequence, and <strong>device memory</strong> mapping requirements for MMIO safety.</p>
 
                     <h3>Practice Exercises</h3>
