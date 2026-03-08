@@ -225,6 +225,12 @@
     isb
 .endm</code></pre>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/el2-hcr-configuration-bits.webp" alt="HCR_EL2 register bit configuration for ARM hypervisor" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/el2-hcr-configuration-bits.webp" width="1024" height="1024">
+                            <figcaption>HCR_EL2 register configuration — key control bits (VM, IMO, FMO, TVM, RW) that define hypervisor trap behavior and guest execution environment</figcaption>
+                        </figure>
+
                     <!-- VMID / ASID -->
                     <h2 id="vmid-asid">VMID, ASID &amp; TLB Tagging</h2>
                     <div class="highlight-box highlight-navy">
@@ -234,6 +240,12 @@
                         <strong>VMID (16-bit, VTTBR_EL2[55:48])</strong>: Tags stage-2 translations per VM. Switching VMs (VTTBR_EL2) does not flush translations from the previous VM if VMIDs differ.<br>
                         Combined tag: {VMID, ASID} = effectively 32-bit, enough for 65K VMs each with 65K processes.
                     </div>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/vmid-asid-tlb-tagging.webp" alt="VMID and ASID TLB tagging hierarchy for ARM virtualization" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/vmid-asid-tlb-tagging.webp" width="1024" height="1024">
+                            <figcaption>TLB tagging hierarchy — VMID identifies the VM and ASID identifies the process, creating a combined 32-bit tag that avoids full TLB flushes on context switches</figcaption>
+                        </figure>
 
                     <pre><code class="language-armasm">// Putting VMID 7 + stage-2 page table root at physical address 0x50000000
 // into VTTBR_EL2 (Virtualization Translation Table Base Register, EL2)
@@ -257,6 +269,11 @@ isb</code></pre>
                     <h2 id="stage2">Stage-2 Page Table Walks</h2>
                     <p>When HCR_EL2.VM=1, every memory access from EL0/EL1 goes through two translations. First the guest MMU resolves VA→IPA (Intermediate Physical Address) using the guest's TTBR0/TTBR1. Then the hardware page table walker performs a second walk (IPA→PA) using the hypervisor's stage-2 tables rooted at VTTBR_EL2. Both walks are performed entirely by hardware — no software emulation needed.</p>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/stage2-page-table-walk.webp" alt="Two-stage address translation from VA to IPA to PA" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/stage2-page-table-walk.webp" width="1024" height="1024">
+                            <figcaption>Two-stage address translation — guest VA → IPA via stage-1 tables (EL1) followed by IPA → PA via stage-2 tables (EL2), both performed in hardware</figcaption>
+                        </figure>
                     <pre><code class="language-armasm">// Stage-2 page table descriptor format (identical to stage-1 but:
 //  - bits [9:8] = S2AP (Stage-2 Access Permissions, not AP)
 //  - bit 10 = S2AP[1], bit 9 = S2AP[0]
@@ -354,6 +371,12 @@ vm_enter:
                     <h2 id="vgic">Virtual GICv3</h2>
                     <p>ARM GICv3 includes a virtualisation layer. EL2 programs <strong>List Registers</strong> (<code>ICH_LR&lt;n&gt;_EL2</code>) to inject virtual interrupts into the currently running vCPU. When the guest reads the GIC CPU interface registers, the hardware returns the values from the List Registers rather than the physical registers — no emulation trap needed for most interrupt operations.</p>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/virtual-gicv3-interrupt-injection.webp" alt="Virtual GICv3 interrupt injection via list registers" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/virtual-gicv3-interrupt-injection.webp" width="1024" height="1024">
+                            <figcaption>Virtual GICv3 architecture — hypervisor programs ICH_LR list registers to inject virtual interrupts into guest vCPUs without trapping</figcaption>
+                        </figure>
+
                     <pre><code class="language-armasm">// Inject virtual IRQ #32 (guest SGI 0) into vCPU currently on this physical CPU
 // ICH_LR0_EL2 layout:
 //   [63]    = State=01 (Pending=0b01)
@@ -414,6 +437,12 @@ qemu-system-aarch64 \
                     <!-- SMMU -->
                     <h2 id="smmu">SMMU Stage-2 for DMA Isolation</h2>
                     <p>Without an IOMMU/SMMU, a guest could program a DMA-capable PCIe device to read/write any physical address — bypassing all CPU-side page table protections. The ARM System Memory Management Unit (SMMU v3) applies stage-2 translation to DMA transactions from devices, using the same VMID/stage-2 tables as the CPU. A guest can only DMA to IPA ranges that the hypervisor maps in the stage-2 table.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/smmu-dma-isolation-stage2.webp" alt="SMMU stage-2 DMA isolation architecture" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/smmu-dma-isolation-stage2.webp" width="1024" height="1024">
+                            <figcaption>SMMU stage-2 DMA isolation — device DMA transactions pass through stage-2 translation using the same VMID-tagged tables, preventing cross-VM memory access</figcaption>
+                        </figure>
 
                     <pre><code class="language-bash"># Check SMMU presence on an ARM server
 dmesg | grep -i smmu

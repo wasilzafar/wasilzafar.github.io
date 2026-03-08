@@ -221,6 +221,12 @@
 
                     <p>Cortex-M cores (M0, M0+, M3, M4, M7, M23, M33, M55, M85) are Harvard-architecture processors without an MMU, running exclusively in Thumb or Thumb-2 state. There is no AArch64, no EL system, and no separate secure monitor — though Cortex-M23/M33/M55 add a simplified TrustZone-M for IoT security. The entire exception and interrupt model fits in a 4 KB region-of-interest: the System Control Space (SCS) at 0xE000E000.</p>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/cortex-m-profile-architecture-overview.webp" alt="Cortex-M processor profile architecture showing Harvard bus, Thumb-2 pipeline, NVIC, and System Control Space" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/cortex-m-profile-architecture-overview.webp" width="1024" height="1024">
+                            <figcaption>Figure 1: Cortex-M profile architecture — Harvard bus, Thumb-2 pipeline, NVIC, SysTick, and SCS mapped at 0xE000E000</figcaption>
+                        </figure>
+
                     <div class="highlight-box highlight-navy">
                         <i class="fas fa-home me-2"></i>
                         <strong>Analogy — The Kitchen Appliance vs. the Mainframe:</strong> Think of Cortex-A as a full desktop computer: it has virtual memory, multiple privilege levels, and runs a complex OS. Cortex-M is more like a dedicated kitchen appliance — a microwave or dishwasher — with one job, a simple control panel (Thumb-2), a built-in timer (SysTick), and an alarm system (NVIC) that wakes it when the door opens. There is no operating system; the firmware <em>is</em> the entire software. This simplicity gives Cortex-M deterministic interrupt response in as few as 12 clock cycles and power consumption measured in micro-amps during sleep.
@@ -231,6 +237,12 @@
 
                     <h3 id="16-32-bit">16-bit vs 32-bit Encoding</h3>
                     <p>Thumb-2 mixes 16-bit and 32-bit encodings in the same instruction stream. The 16-bit subset covers the most common operations (MOV, ADD, LDR, STR, push/pop, branches) for code density. The 32-bit Thumb-2 extensions add the full barrel-shifter operands, more registers, wider immediates, multiply-accumulate, and SIMD/DSP instructions. The assembler selects the shorter encoding automatically unless forced with the .W (wide) or .N (narrow) suffixes.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/thumb2-16bit-32bit-encoding-comparison.webp" alt="Thumb-2 instruction encoding comparison showing 16-bit narrow and 32-bit wide formats" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/thumb2-16bit-32bit-encoding-comparison.webp" width="1024" height="1024">
+                            <figcaption>Figure 2: Thumb-2 encoding — 16-bit narrow instructions vs 32-bit wide extensions with barrel shifter operands</figcaption>
+                        </figure>
 
                     <pre><code class="language-armasm">// 16-bit Thumb (narrow) — most efficient for Cortex-M0
 MOVS  r0, #42          // 16-bit: set r0=42, update flags
@@ -271,6 +283,12 @@ ADDLE r5, r3, #1
 
                     <h3 id="reset-handler">Reset Handler &amp; Stack Setup</h3>
                     <p>The Cortex-M vector table starts at address 0x00000000 (or the address in VTOR). Entry 0 is the initial stack pointer value (loaded into MSP at reset). Entry 1 is the reset handler address. All vector entries use odd addresses (bit[0]=1) to indicate Thumb mode. The hardware never executes ARM state code on Cortex-M.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/cortex-m-vector-table-memory-layout.webp" alt="Cortex-M vector table memory layout showing initial SP, reset handler, and exception entries" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/cortex-m-vector-table-memory-layout.webp" width="1024" height="1024">
+                            <figcaption>Figure 3: Cortex-M vector table layout — entries 0 (initial MSP) through SysTick and external IRQs starting at 0x00000000</figcaption>
+                        </figure>
 
                     <pre><code class="language-armasm">// Cortex-M4 minimal vector table (GAS syntax)
     .section ".vectors", "a", %progbits
@@ -340,6 +358,12 @@ hardfault_handler:
 
                     <h3 id="nvic-config">Priority Configuration</h3>
                     <p>The NVIC supports up to 240 external interrupts (IRQs) with configurable priorities. Priority width varies by implementation (typically 3–8 bits, with higher numerical value = lower priority). Cortex-M3/M4/M7 support preemption grouping via AIRCR.PRIGROUP: this splits the priority byte into group priority (preemption) and sub-priority (tie-breaking) bits. Lower group priority number = higher precedence and can preempt running handlers.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/nvic-priority-configuration-diagram.webp" alt="NVIC priority configuration showing group priority, sub-priority, and preemption levels" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/nvic-priority-configuration-diagram.webp" width="1024" height="1024">
+                            <figcaption>Figure 4: NVIC priority architecture — PRIGROUP splitting, preemption groups, and nested interrupt handling</figcaption>
+                        </figure>
 
                     <pre><code class="language-armasm">// NVIC register base: 0xE000E100
 // Enable IRQ #37 (e.g., USART2 on STM32)
@@ -418,6 +442,12 @@ systick_handler:
                     <h2 id="peripherals">Peripheral Register Access (GPIO &amp; MMIO)</h2>
 
                     <p>Every Cortex-M peripheral is memory-mapped. GPIO ports, UART controllers, ADC converters, and DMA engines are accessed by reading and writing 32-bit registers at fixed addresses. The vendor datasheet gives register offsets from each peripheral's base address. The key discipline is: <strong>read-modify-write</strong> (load register, mask bits, OR in new value, store back) to avoid clobbering other fields in the same register.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/gpio-mmio-register-access-flow.webp" alt="GPIO and MMIO register access flow showing read-modify-write pattern and bit-banding" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/gpio-mmio-register-access-flow.webp" width="1024" height="1024">
+                            <figcaption>Figure 5: Memory-mapped I/O access patterns — read-modify-write for GPIO, atomic bit-banding alias region</figcaption>
+                        </figure>
 
                     <h3 id="gpio-config">GPIO Configuration — Blinking an LED</h3>
 

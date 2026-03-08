@@ -219,6 +219,12 @@
 
                     <p>TrustZone adds a single hardware bit — the NS (Non-Secure) bit — to every bus transaction on the AMBA AXI bus. Peripherals and DRAM controllers use this bit to enforce access control: Secure-world transactions (NS=0) can reach any address; Non-Secure transactions (NS=1) are blocked from Secure-only regions by the TZASC (TrustZone Address Space Controller) and TZPC (TrustZone Protection Controller). The CPU's current world is determined by SCR_EL3.NS at EL3, and by the implied state when running below EL3.</p>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/trustzone-secure-nonsecure-worlds.webp" alt="TrustZone architecture showing Secure and Non-Secure worlds with NS bit on bus transactions" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/trustzone-secure-nonsecure-worlds.webp" width="1024" height="1024">
+                            <figcaption>TrustZone world architecture — NS bit tags every bus transaction, enforced by TZASC and TZPC controllers</figcaption>
+                        </figure>
+
                     <!-- Worlds -->
                     <h2 id="worlds">Secure vs Non-Secure Worlds</h2>
 
@@ -244,6 +250,12 @@ ISB</code></pre>
                     <h3 id="ns-bit">NS Bit &amp; Memory Tagging</h3>
                     <p>Every read/write from the CPU carries the current world's NS bit through the cache and memory bus. The TZASC (typically AXI TrustZone Address Space Controller v1/v2 or GPC for newer SoCs) is configured at boot by Secure firmware to mark regions as Secure-only. Non-Secure masters attempting to access those physical pages receive a bus abort. This is enforced in hardware, independent of the MMU, making TrustZone the foundation for features like Android Strongbox keys, iOS Secure Enclave equivalents, and DRM content protection.</p>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/ns-bit-memory-access-enforcement.webp" alt="TZASC memory access enforcement diagram showing Secure and Non-Secure regions with NS bit filtering" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/ns-bit-memory-access-enforcement.webp" width="1024" height="1024">
+                            <figcaption>TZASC memory partitioning — hardware enforces NS-bit filtering independent of MMU configuration</figcaption>
+                        </figure>
+
                     <h3 id="secure-registers">Banked Registers per World</h3>
                     <p>Each world has its own complete set of EL0/EL1 system registers: TTBR0_EL1, TTBR1_EL1, TCR_EL1, SCTLR_EL1, SPSR_EL1, ELR_EL1, SP_EL0, SP_EL1, and the entire NEON/FP register file. When EL3 switches worlds by writing SCR_EL3.NS and executing ERET, the processor transparently switches to the Secure copies of these registers, giving the trusted OS its own fully independent virtual memory space and register state.</p>
 
@@ -252,6 +264,12 @@ ISB</code></pre>
 
                     <h3 id="smccc">SMCCC Calling Convention</h3>
                     <p>The ARM SMC Calling Convention (SMCCC v1.2) standardises how software invokes EL3 services. x0 contains the function identifier (32-bit encoding: [31]=call type, [30:24]=OEN, [16]=SMC32/64, [15:0]=function). x1–x7 carry arguments. EL3 services return results in x0–x3 (SMCCC ≥ 1.2: also x4–x7). This convention is used by PSCI, vendor-specific services, and hypervisor SMC calls.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/smccc-calling-convention-flow.webp" alt="SMCCC calling convention flow showing x0 function identifier and x1-x7 argument registers for EL3 service invocation" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/smccc-calling-convention-flow.webp" width="1024" height="1024">
+                            <figcaption>SMCCC v1.2 calling convention — function ID in x0, arguments in x1–x7, return values in x0–x3</figcaption>
+                        </figure>
 
                     <pre><code class="language-armasm">// SMCCC example: PSCI CPU_ON to boot a secondary CPU
 // Function ID: 0xC4000003 = PSCI64 CPU_ON
@@ -312,6 +330,12 @@ el3_smc_handler:
                     <h4 id="hardware-rot">Hardware Root of Trust</h4>
                     <p>A Hardware Root of Trust (HRoT) anchors the entire TrustZone security model in tamper-resistant silicon. Without it, even a perfectly configured TF-A boot chain could be subverted by flashing modified firmware. The HRoT ensures that the very first instruction executed after power-on is authentic and untampered.</p>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/tfa-hardware-root-of-trust.webp" alt="Hardware Root of Trust chain showing OTP fuses, ROTPK verification, anti-rollback counters, and certificate chain" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/tfa-hardware-root-of-trust.webp" width="1024" height="1024">
+                            <figcaption>Hardware Root of Trust — OTP fuses store ROTPK hash and anti-rollback counters anchoring the TF-A boot chain</figcaption>
+                        </figure>
+
                     <p><strong>OTP Fuses for Boot Key Storage:</strong> The SoC contains One-Time Programmable (OTP) fuses — eFuses that are physically burned during manufacturing. These store the SHA-256 hash of the root-of-trust public key (ROTPK). BL1 in ROM reads this hash and verifies BL2's certificate chain against it. Because eFuses are write-once, an attacker cannot replace the key even with physical access to the chip.</p>
 
                     <p><strong>Anti-Rollback Counters:</strong> OTP fuses also store monotonic anti-rollback counters (NV counters). Each signed firmware image includes a minimum counter value; BL1/BL2 refuse to load any image whose counter is below the fused value. When a security-critical update ships, the new firmware burns the next fuse bit, permanently preventing rollback to vulnerable versions.</p>
@@ -333,6 +357,12 @@ el3_smc_handler:
 
                     <h3 id="ns-to-s">Non-Secure → Secure</h3>
                     <p>The Non-Secure OS issues an SMC to request a Trusted Application service (e.g., decrypting a key with OP-TEE). EL3 (BL31) receives the SMC, saves the entire Non-Secure CPU context (x0–x30, SP_EL0, SP_EL1, ELR_EL1, SPSR_EL1, all FP/NEON registers) to a context save area, then restores the Secure EL1 context and sets SCR_EL3.NS=0 before ERETing to the trusted OS.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/world-switch-context-save-restore.webp" alt="World switch sequence diagram showing context save, SCR_EL3.NS toggle, context restore, and ERET between Secure and Non-Secure worlds" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/world-switch-context-save-restore.webp" width="1024" height="1024">
+                            <figcaption>World switch assembly flow — EL3 saves one world’s context, toggles SCR_EL3.NS, restores the other, and ERETs</figcaption>
+                        </figure>
 
                     <h3 id="s-to-ns">Secure → Non-Secure Return</h3>
                     <pre><code class="language-armasm">// OP-TEE: return result to Non-Secure caller via SMC

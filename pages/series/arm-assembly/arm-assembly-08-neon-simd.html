@@ -269,6 +269,11 @@
                     </ul>
                     <p>Writing to <code>Dn</code> or any smaller view <strong>zero-extends</strong> the upper bits of the 128-bit register to zero. This eliminates the partial-register stalls that plagued x86's SSE→AVX transitions — on ARM, there is never a penalty for mixing 64-bit and 128-bit NEON operations on the same register.</p>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/neon-v-register-views.webp" alt="NEON V register aliasing showing Q, D, S, H, and B views of the same 128-bit register" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/neon-v-register-views.webp" width="1024" height="1024">
+                            <figcaption>NEON V register aliasing: 128-bit Qn, 64-bit Dn, 32-bit Sn, 16-bit Hn, and 8-bit Bn views of the same physical register with zero-extension behaviour</figcaption>
+                        </figure>
                     <h3 id="lane-notation">Lane Notation (Vn.nT)</h3>
                     <div class="experiment-card">
                         <div class="experiment-meta"><span class="badge bg-teal">Reference</span><span class="badge bg-navy">Lane Type Suffixes</span></div>
@@ -298,6 +303,12 @@ ST1  {V2.16B}, [x2]      // Store result</code></pre>
 
                     <h3 id="mul-mla">MUL / MLA / MLS</h3>
                     <p><code>MUL Vd.nT, Vn.nT, Vm.nT</code> performs <strong>element-wise multiplication</strong> — each lane of Vn is multiplied by the corresponding lane of Vm, with the result truncated to the same lane width. <code>MLA</code> (Multiply-Accumulate) computes <code>Vd += Vn × Vm</code>, and <code>MLS</code> (Multiply-Subtract) computes <code>Vd -= Vn × Vm</code>. These are supported for integer arrangements: <code>8B/16B, 4H/8H, 2S/4S</code>. There is <strong>no 64-bit integer multiply</strong> in NEON — for widening multiplication (e.g., 16×16→32), use <code>SMULL/UMULL</code> (signed/unsigned multiply long) which doubles the lane width.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/neon-element-wise-multiply.webp" alt="NEON element-wise multiply showing lane-by-lane MUL and MLA accumulate operations" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/neon-element-wise-multiply.webp" width="1024" height="1024">
+                            <figcaption>NEON element-wise MUL, MLA (multiply-accumulate), and SMULL (widening multiply) operations across 4S lanes</figcaption>
+                        </figure>
 
                     <pre><code class="language-armasm">// FIR filter inner loop kernel (multiply-accumulate)
 LD1  {V0.4S}, [x0], #16     // Load 4 input samples
@@ -358,6 +369,12 @@ ST1   {V2.16B}, [x1]</code></pre>
                         <li><code>UZP2</code> — De-interleave odd lanes: <code>→ [b0,b1,b2,b3]</code></li>
                     </ul>
                     <p>In image processing, camera sensors output interleaved RGGB Bayer data. UZP1/UZP2 can separate even and odd rows for demosaicing, while ZIP1/ZIP2 re-interleave the processed output for display.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/neon-zip-uzp-interleave.webp" alt="ZIP1/ZIP2 interleave and UZP1/UZP2 de-interleave permutation operations on 4S lanes" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/neon-zip-uzp-interleave.webp" width="1024" height="1024">
+                            <figcaption>ZIP1/ZIP2 (interleave) and UZP1/UZP2 (de-interleave) permutations: transforming [a0,a1,a2,a3] + [b0,b1,b2,b3] lane arrangements</figcaption>
+                        </figure>
 
                     <pre><code class="language-armasm">// Transpose 2×2 matrix of float32 using ZIP
 // V0 = [a0, a1, a2, a3], V1 = [b0, b1, b2, b3]
@@ -458,6 +475,13 @@ FADDP S0, V0.2S             // Pairwise add again: scalar [a+b+c+d]</code></pre>
 
                     <h3 id="sdot-udot">SDOT / UDOT (ARMv8.2-DotProd)</h3>
                     <p><code>SDOT Vd.4S, Vn.16B, Vm.16B</code> computes <strong>four 8-bit dot products in parallel</strong>: each group of 4 consecutive bytes from Vn is multiplied element-wise by the corresponding 4 bytes from Vm, and the four products are summed and <em>accumulated</em> into a 32-bit lane of Vd. This provides <strong>4× the throughput</strong> of manual widening multiply-add chains (8→16 MUL + 16-bit ADALP), making it the primary instruction for INT8 quantised neural network inference.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/neon-sdot-dot-product.webp" alt="SDOT instruction computing four parallel 8-bit dot products accumulated into 32-bit lanes" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/neon-sdot-dot-product.webp" width="1344" height="768">
+                            <figcaption>SDOT operation: four groups of 4×8-bit multiplies accumulated into 32-bit lanes, providing 4× throughput for INT8 neural network inference</figcaption>
+                        </figure>
+
                     <p>The indexed form <code>SDOT Vd.4S, Vn.16B, Vm.4B[lane]</code> broadcasts a single 4-byte group from Vm across all dot products — perfect for matrix-vector multiplication where one operand is a shared weight vector. <code>UDOT</code> is the unsigned equivalent, used when activations are unsigned (common after ReLU in neural networks).</p>
 
                     <div class="experiment-card">
@@ -492,6 +516,11 @@ SDOT  V8.4S, V0.16B, V4.16B  // Row 3
                     </ul>
                     <p><code>ST1</code> is the store equivalent. The single-lane forms are invaluable for scatter/gather-style access patterns and for loading the final partial vector when the array length isn't a multiple of the vector width.</p>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/neon-ld4-rgba-deinterleave.webp" alt="LD4 structured load de-interleaving RGBA pixel data into four separate V registers" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/neon-ld4-rgba-deinterleave.webp" width="1344" height="768">
+                            <figcaption>LD4 structured load: de-interleaving RGBA pixel data from memory into four separate V registers for independent channel processing</figcaption>
+                        </figure>
                     <h3 id="ld2-st2">LD2 / ST2 — De-interleave 2 Channels</h3>
                     <pre><code class="language-armasm">// Load interleaved stereo audio and de-interleave
 // Memory: [L0,R0, L1,R1, L2,R2, L3,R3, L4,R4, L5,R5, L6,R6, L7,R7]
