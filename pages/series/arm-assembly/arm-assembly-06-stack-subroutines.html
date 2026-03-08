@@ -243,6 +243,12 @@
                     <h3 id="argument-regs">Argument &amp; Return Registers</h3>
                     <p>The first 8 integer or pointer arguments are passed in <strong>X0–X7</strong> (or W0–W7 for 32-bit values). The return value comes back in <strong>X0</strong> (or X0:X1 for 128-bit returns). Register <strong>X8</strong> has a special role: when a function returns a large struct by value (>16 bytes), the <em>caller</em> allocates space and passes a pointer to it in X8 — the callee writes the result through that pointer. For floating-point and SIMD, the first 8 arguments use <strong>V0–V7</strong> independently from the integer registers, and the FP return value is in V0.</p>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/aapcs64-register-roles.webp" alt="AAPCS64 register allocation diagram showing caller-saved, callee-saved, and special-purpose registers" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/aapcs64-register-roles.webp" width="1024" height="1024">
+                            <figcaption>AAPCS64 register allocation: caller-saved (X0–X15), callee-saved (X19–X28), and special-purpose registers (FP, LR, SP)</figcaption>
+                        </figure>
+
                     <div class="experiment-card">
                         <div class="experiment-meta"><span class="badge bg-teal">AAPCS64</span><span class="badge bg-navy">Register Map</span></div>
                         <h5>Complete Register Role Reference</h5>
@@ -312,6 +318,12 @@
                     </ol>
                     <p>The total frame size must be a <strong>multiple of 16 bytes</strong>. If your locals use 12 bytes, the frame is padded to 16. The <code>STP x29, x30, [sp, #-N]!</code> instruction both allocates the frame (decrementing SP by N) and saves the frame pointer and link register in a single atomic operation.</p>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/stack-frame-layout.webp" alt="AArch64 stack frame layout showing saved FP/LR pair, callee-saved registers, and local variables" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/stack-frame-layout.webp" width="1024" height="1024">
+                            <figcaption>AArch64 stack frame layout: saved FP/LR pair at the top, callee-saved registers, and local variable slots growing downward in memory</figcaption>
+                        </figure>
+
                     <h3 id="prologue-pattern">Prologue Pattern</h3>
                     <pre><code class="language-armasm">// Standard AAPCS64 function prologue
 my_function:
@@ -351,6 +363,12 @@ my_fn:
 
                     <h3 id="integer-args">Integer &amp; Pointer Arguments</h3>
                     <p>The first 8 integer or pointer arguments go in <strong>X0–X7</strong> (W0–W7 for 32-bit types). Types narrower than 64 bits are zero-extended (for <code>unsigned</code>) or sign-extended (for <code>signed</code>) to fill the full 64-bit register. A 128-bit integer (e.g., <code>__int128</code>) occupies a pair of consecutive registers — the first 128-bit arg uses X0:X1 (low half in X0).</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/argument-passing-registers.webp" alt="Integer arguments mapped to X0–X7 and floating-point arguments to V0–V7 with stack overflow" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/argument-passing-registers.webp" width="1024" height="1024">
+                            <figcaption>Argument passing: integer/pointer arguments in X0–X7, FP/SIMD arguments in V0–V7, with stack overflow for additional parameters</figcaption>
+                        </figure>
 
                     <pre><code class="language-armasm">// C: int64_t sum(int a, long b, char *p, unsigned short s)
 // a → w0 (sign-extended to x0), b → x1, p → x2, s → w3 (zero-extended)
@@ -414,6 +432,11 @@ caller:
                     </ul>
                     <p>A variadic function's prologue saves all 8 GP registers (X0–X7) and all 8 FP registers (V0–V7) to the <em>register save area</em> on the stack, so <code>va_arg</code> can retrieve unnamed arguments from either area. This is more complex than x86-64 but avoids the need for stack probing.</p>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/variadic-va-list-structure.webp" alt="AArch64 va_list structure with GP save area, FP/SIMD save area, and stack overflow region" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/variadic-va-list-structure.webp" width="1024" height="1024">
+                            <figcaption>AArch64 va_list structure: GP register save area, FP/SIMD save area, and stack overflow region with offset pointers</figcaption>
+                        </figure>
                     <h3 id="va-arg-impl">Implementing va_arg in Assembly</h3>
                     <p>For an integer <code>va_arg</code>: check <code>__gr_offs</code> — if it's less than 0, the next argument is still in the register save area at <code>__gr_top + __gr_offs</code>. Increment <code>__gr_offs</code> by 8. If <code>__gr_offs</code> reaches 0, all GP save slots are consumed; subsequent arguments come from <code>__stack</code> (the overflow area), advancing the pointer by 8 each time. For FP arguments, the same logic applies using <code>__vr_offs</code>/<code>__vr_top</code> with 16-byte increments (SIMD register width).</p>
 
@@ -439,6 +462,12 @@ caller:
 
                     <h3 id="leaf-no-frame">Leaf Function (No Frame)</h3>
                     <p>A <strong>leaf function</strong> — one that makes no further function calls — is the most efficient function form on AArch64. If it only uses caller-saved registers (X0–X15), it does NOT need to save LR, does NOT need a stack frame, and does NOT need to adjust SP. The entire function is just the body plus <code>RET</code>. This eliminates the STP/LDP prologue/epilogue overhead entirely — a significant win for small utility functions called millions of times.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/leaf-vs-nonleaf-functions.webp" alt="Leaf function versus non-leaf function execution paths showing frame overhead differences" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/leaf-vs-nonleaf-functions.webp" width="1024" height="1024">
+                            <figcaption>Leaf function (no frame overhead) versus non-leaf function (full prologue/epilogue with STP/LDP) execution paths</figcaption>
+                        </figure>
 
                     <pre><code class="language-armasm">// Leaf function — no frame needed
 add_two:

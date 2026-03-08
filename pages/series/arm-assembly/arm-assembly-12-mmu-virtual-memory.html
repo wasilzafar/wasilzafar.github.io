@@ -219,6 +219,13 @@
                     </div>
 
                     <p>AArch64 virtual address translation converts a 64-bit virtual address to a physical address through a multi-level page table walk. Two independent address spaces exist: TTBR0_EL1 covers user space (VA bits[63:56] = 0x00) and TTBR1_EL1 covers kernel space (VA bits[63:56] = 0xFF). Both ranges and granule choices are encoded in TCR_EL1. Memory attributes (cacheability, shareability, device type) come from MAIR_EL1, indexed by a 3-bit AttrIndx field in each page table descriptor.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/virtual-address-translation-walk.webp" alt="Multi-level page table walk diagram showing L0 through L3 translation from virtual address to physical address" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/virtual-address-translation-walk.webp" width="1024" height="1024">
+                            <figcaption>AArch64 address translation walk — four-level page table lookup from virtual address to physical frame</figcaption>
+                        </figure>
+
                     <div class="highlight-box highlight-navy">
                         <i class="fas fa-building me-2"></i>
                         <strong>Real-World Analogy &mdash; The Library Index Card System:</strong> Think of the MMU as a <strong>library card catalogue</strong>. Books (data) are stored on physical shelves at specific physical addresses. But patrons never navigate by shelf number &mdash; they look up a <strong>virtual reference</strong> (call number) in the catalogue. The catalogue has multiple levels: first you find the floor directory (L0 table), then the aisle (L1), then the shelf section (L2), then the exact shelf position (L3/page). <strong>Two separate catalogues</strong> (TTBR0 and TTBR1) exist &mdash; one for public readers (user space) and a restricted one for librarians (kernel space). Access permissions on each card (AP bits) determine who can read which books &mdash; and the PXN/UXN bits prevent patrons from executing the library code manuals. The <strong>TLB</strong> is the librarian's memory of recently looked-up books, avoiding the full catalogue walk every time.
@@ -244,6 +251,12 @@
 
                     <h3 id="t0sz-t1sz">T0SZ / T1SZ Address Range</h3>
                     <p>TCR_EL1.T0SZ defines the size of the TTBR0 address space as 2^(64-T0SZ) bytes. Linux typically uses T0SZ=25 giving a 512 GB user address space (0x0000_0000_0000_0000 to 0x0000_007F_FFFF_FFFF). TCR_EL1.T1SZ mirrors this for the kernel TTBR1 range. Addresses outside both ranges generate an address size fault.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/tcr-el1-address-space-split.webp" alt="TCR_EL1 T0SZ/T1SZ address space split showing TTBR0 user range and TTBR1 kernel range" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/tcr-el1-address-space-split.webp" width="1024" height="1024">
+                            <figcaption>TCR_EL1 address space configuration — T0SZ/T1SZ define the TTBR0 (user) and TTBR1 (kernel) VA ranges</figcaption>
+                        </figure>
 
                     <h3 id="granule">Granule Selection (TG0/TG1)</h3>
                     <p>TG0/TG1 select the page granule: 00=4KB, 01=64KB, 10=16KB. The 4KB granule is the most common (used by Linux) and gives 512-entry tables at each level. The 64KB granule reduces walk depth and TLB pressure for workloads with large contiguous allocations (common in HPC/NUMA systems like Cavium Thunder).</p>
@@ -272,6 +285,12 @@ ISB</code></pre>
                     <h3 id="attr-indices">Attribute Index (AttrIndx)</h3>
                     <p>MAIR_EL1 holds eight 8-bit attribute encodings (indices 0–7). Each page table descriptor references one via its 3-bit AttrIndx field. A typical kernel setup uses: index 0 = Device-nGnRnE (MMIO, strictly ordered), index 1 = Normal, Inner/Outer Write-Back, Read-Allocate, Write-Allocate (cached RAM), index 2 = Normal, Non-Cacheable (uncached DMA buffers).</p>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/mair-el1-attribute-indices.webp" alt="MAIR_EL1 eight attribute index slots mapping to Device and Normal memory type encodings" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/mair-el1-attribute-indices.webp" width="1024" height="1024">
+                            <figcaption>MAIR_EL1 attribute index slots — eight 8-bit encodings for Device-nGnRnE, Normal cached, and Non-Cacheable types</figcaption>
+                        </figure>
+
                     <pre><code class="language-armasm">// MAIR_EL1 encoding for three common attribute types
 // Attr[0] = 0x00 = Device-nGnRnE (strictly-ordered MMIO)
 // Attr[1] = 0xFF = Normal, Inner/Outer WB/WA/RA (cacheable)
@@ -289,6 +308,12 @@ ISB</code></pre>
 
                     <h3 id="block-page">Block vs Page vs Table Entries</h3>
                     <p>A 4KB-granule descriptor is 8 bytes. Bits[1:0] identify the type: 00/01 = invalid, 11 = table (points to next-level table), 01 at leaf = page (4 KB), 01 at L1/L2 = block (1 GB or 2 MB respectively). Block entries eliminate one or two levels of walk, reducing TLB miss latency for large contiguous regions. Linux uses 2 MB huge pages extensively for the kernel image and large anonymous mappings.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/page-table-descriptor-bit-fields.webp" alt="AArch64 page table descriptor bit field layout showing AP, UXN, PXN, AF, SH, and AttrIndx positions" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/page-table-descriptor-bit-fields.webp" width="1024" height="1024">
+                            <figcaption>4KB page descriptor format — permission (AP), execute-never (UXN/PXN), access flag (AF), and attribute index fields</figcaption>
+                        </figure>
 
                     <h3 id="descriptor-bits">AP, UXN, PXN, AF, SH bits</h3>
                     <pre><code class="language-armasm">// 4KB page descriptor bit fields (simplified):
@@ -399,6 +424,12 @@ ISB</code></pre>
 
                     <h3 id="break-before-make">Break-Before-Make Rule</h3>
                     <p>When changing a live page table entry from one valid mapping to another (e.g., changing permissions or PA), the ARM architecture requires Break-Before-Make: first write an invalid descriptor, execute a DSB, issue the appropriate TLBI, issue another DSB, then write the new valid descriptor. Skipping this can expose a window where both old and new mappings coexist in different cores' TLBs, causing undefined behaviour. For read-only promotions (adding a restriction) the rule is relaxed, but erring on the side of BBM is the safe default.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/break-before-make-sequence.webp" alt="Break-Before-Make sequence diagram showing invalidate, barrier, TLBI, barrier, and remap steps for safe page table updates" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/break-before-make-sequence.webp" width="1024" height="1024">
+                            <figcaption>Break-Before-Make protocol — required sequence for safely updating live page table entries across all cores</figcaption>
+                        </figure>
 
                     <div class="highlight-box">
                         <i class="fas fa-lightbulb me-2"></i>

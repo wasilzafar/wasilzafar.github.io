@@ -232,6 +232,12 @@
 
                     <p>The zero-extension rule is critical: writing <code>S0</code> clears the upper 96 bits of V0 to zero. This prevents stale upper-half data from leaking into subsequent NEON or SVE operations that read V0/Z0 at full width. ARM's scalar FP implementation is <strong>fully IEEE-754-2008 compliant</strong> for binary32 and binary64, including gradual underflow, correct rounding, and all five exception types.</p>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/fp-register-file-aliases.webp" alt="Diagram showing AArch64 V-register file with size-specific aliases (Bn, Hn, Sn, Dn, Qn) and zero-extension behavior" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/fp-register-file-aliases.webp" width="1024" height="1024">
+                            <figcaption>AArch64 unified register file — V0–V31 with scalar FP aliases (Bn/Hn/Sn/Dn/Qn) and zero-extension on write</figcaption>
+                        </figure>
+
                     <!-- FPCR / FPSR -->
                     <h2 id="fpcr-fpsr">FPCR &amp; FPSR System Registers</h2>
                     <p>Two dedicated system registers control FP behaviour. They are accessed via <code>MRS</code>/<code>MSR</code> from any exception level:</p>
@@ -247,6 +253,12 @@
                     </table>
 
                     <p>The FPSR flags are <strong>sticky</strong> &mdash; once set, they remain set until software explicitly clears them. This lets you run a long computation and check for exceptions at the end rather than after every instruction. The <code>FZ</code> (flush-to-zero) bit in FPCR forces denormalised results to zero, trading IEEE compliance for performance on cores where denormal handling is slow (typically 10&ndash;100&times; slower). Most game engines and ML frameworks enable FZ; scientific code leaves it off.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/fpcr-fpsr-bit-layout.webp" alt="Bit field layout of FPCR and FPSR system registers showing rounding mode, flush-to-zero, and exception flag positions" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/fpcr-fpsr-bit-layout.webp" width="1024" height="1024">
+                            <figcaption>FPCR and FPSR register bit fields — rounding mode selection, flush-to-zero control, and sticky exception flags</figcaption>
+                        </figure>
 
                     <h3 id="rounding-modes">Rounding Modes (RMode field)</h3>
                     <p>FPCR bits [23:22] select the default rounding mode used by all FP instructions unless overridden by a per-instruction rounding variant:</p>
@@ -334,6 +346,12 @@ FDIV  d0, d1, d2       // d0 = d1 / d2 (expensive — 10–20 cycles typical)</c
 
                     <p>The single-rounding property makes FMADD both <strong>faster</strong> (one instruction instead of two) and <strong>more accurate</strong> (one rounding error instead of two). This is not just a micro-optimisation: the Kahan summation algorithm, compensated dot product, and double-double arithmetic all rely on the fused semantics to achieve correctness. The compiler flag <code>-ffp-contract=fast</code> allows GCC/Clang to fuse separate <code>FMUL</code> + <code>FADD</code> sequences into <code>FMADD</code> automatically.</p>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/fmadd-single-rounding.webp" alt="Diagram illustrating FMADD fused multiply-add with single rounding versus separate FMUL and FADD with two rounding steps" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/fmadd-single-rounding.webp" width="1024" height="1024">
+                            <figcaption>FMADD single-rounding semantics — the intermediate product is held at infinite precision before a single final rounding</figcaption>
+                        </figure>
+
                     <pre><code class="language-armasm">// y = a * x + b  →  FMADD
 FMADD  d0, d1, d2, d3   // d0 = d3 + d1*d2
 
@@ -407,6 +425,12 @@ FRINTN  d0, d1       // Round to nearest, ties to even (the default)</code></pre
 
                     <p>The <strong>unordered</strong> case is the trap for the unwary: when either operand is NaN, the V (overflow) flag is set. This means <code>B.GT</code>, <code>B.LT</code>, and <code>B.EQ</code> all fall through &mdash; none of them fire. To detect NaN, use <code>FCMP Dn, Dn</code> (compare a register against itself) followed by <code>B.VS</code>: any non-NaN value equals itself, so <code>V=1</code> implies NaN.</p>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/fcmp-condition-flags.webp" alt="FCMP comparison result to NZCV condition flag mapping including ordered and unordered (NaN) cases" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/fcmp-condition-flags.webp" width="1024" height="1024">
+                            <figcaption>FCMP condition flag outcomes — ordered comparisons set N/Z/C flags while unordered (NaN) inputs set the V flag</figcaption>
+                        </figure>
+
                     <p><code>FCCMP Sn, Sm, #nzcv, cond</code> is the conditional compare variant: if <code>cond</code> is true, it performs the FP comparison; if <code>cond</code> is false, it loads the immediate <code>#nzcv</code> into the flags instead. This enables <strong>multi-condition chains</strong> without branches &mdash; for example, testing <code>(a &gt; 0.0 &amp;&amp; b &lt; 1.0)</code> in two instructions with no branch.</p>
 
                     <pre><code class="language-armasm">FCMP   d0, d1        // Set flags: d0 vs d1
@@ -458,6 +482,12 @@ FCVTAS x0, d0         // double → int64 (round to nearest, ties away)</code></
                     </table>
 
                     <p><strong>FEAT_FP16</strong> adds full IEEE-754 binary16 arithmetic: every standard FP instruction (<code>FADD</code>, <code>FMUL</code>, <code>FMADD</code>, <code>FCMP</code>, etc.) accepts <code>Hn</code> register operands. This doubles the throughput compared to FP32 on cores that support it (the same 128-bit datapath processes 8 FP16 values versus 4 FP32). Apple's M-series chips and Cortex-A76+ cores implement FEAT_FP16.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/fp16-bf16-format-comparison.webp" alt="Comparison of IEEE FP16 and BFloat16 bit formats showing exponent and mantissa field widths" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/fp16-bf16-format-comparison.webp" width="1024" height="1024">
+                            <figcaption>FP16 vs BF16 bit format comparison — FP16 has 5-bit exponent / 10-bit mantissa while BF16 has 8-bit exponent / 7-bit mantissa</figcaption>
+                        </figure>
 
                     <p><strong>FEAT_BF16</strong> adds BFloat16, which keeps the same 8-bit exponent as FP32 (avoiding overflow that plagues FP16 at values &gt; 65504) but reduces the mantissa to 7 bits. The key instructions are:</p>
                     <ul>

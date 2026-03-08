@@ -204,6 +204,12 @@
 
                     <p>ARM64e is Apple's implementation of ARMv8.3-A Pointer Authentication combined with ARMv8.5-A BTI. The ISA gains new instructions (PACIA/AUTIA families), the ABI gains new calling convention requirements (PACIASP in prologues), and the hardware gain new registers (APxxx keys). On macOS, this coexists with the Mach-O binary format, dyld interposition, and Apple's hardened runtime — all of which influences how hand-written assembly must be structured.</p>
 
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/arm64e-vs-aarch64-pac-bti-extensions.webp" alt="ARM64e vs standard AArch64 showing PAC and BTI extensions" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/arm64e-vs-aarch64-pac-bti-extensions.webp" width="1024" height="1024">
+                            <figcaption>ARM64e extends standard AArch64 with Pointer Authentication Codes and Branch Target Identification for hardware-enforced security</figcaption>
+                        </figure>
+
                     <div class="highlight-box highlight-navy">
                         <i class="fas fa-passport me-2"></i>
                         <strong>Analogy — The Airport Security Check:</strong> Think of Pointer Authentication as a passport stamp system. When you enter a function (arrive at the gate), the CPU stamps your return address (passport) with a cryptographic signature (PACIASP). When you leave (AUTIASP), security checks the stamp — if it's been tampered with (buffer overflow corrupted LR), you're denied boarding (SIGILL crash). BTI is the designated entry point system: you can only enter the terminal through authorised doors (marked with BTI instructions). If malicious code tries to jump into the middle of a function (sneak through a service entrance), the hardware blocks it. Together, PAC + BTI create a zero-overhead security perimeter that makes Apple Silicon one of the most exploit-resistant consumer platforms ever shipped.
@@ -212,6 +218,12 @@
                     <!-- PAC -->
                     <h2 id="pac">Pointer Authentication Codes (PAC)</h2>
                     <p>PAC uses spare bits in 64-bit virtual addresses (bits 63–49 on systems with fewer than 50-bit VA) to store a cryptographic MAC. The key is a hardware register (APIAKey_EL1) not accessible from EL0. Signing inserts the PAC; stripping/authenticating removes it. Forgery causes an authentication fault (SIGSEGV on macOS).</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/pointer-authentication-pac-sign-verify.webp" alt="Pointer Authentication sign and verify flow using spare virtual address bits" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/pointer-authentication-pac-sign-verify.webp" width="1024" height="1024">
+                            <figcaption>Pointer Authentication Code flow: PACIASP signs the return address using spare VA bits, AUTIASP verifies on function return</figcaption>
+                        </figure>
 
                     <h3 id="paciasp">PACIASP / AUTIASP</h3>
                     <pre><code class="language-armasm">// ARM64e function prologue/epilogue — required by Apple ABI for
@@ -264,6 +276,13 @@ XPACD x0                       // Remove PAC bits: x0 = raw VA
 
                     <!-- BTI -->
                     <h2 id="bti">Branch Target Identification (BTI)</h2>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/bti-branch-target-landing-pads.webp" alt="Branch Target Identification enforcing valid indirect branch landing pads" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/bti-branch-target-landing-pads.webp" width="1024" height="1024">
+                            <figcaption>BTI enforcement: indirect branches via BLR and BR must land on BTI c, BTI j, or BTI jc instructions — unauthorized targets trigger a fault</figcaption>
+                        </figure>
+
                     <pre><code class="language-armasm">// BTI: valid indirect branch targets must start with BTI instruction
 // Enabled via GNU_PROPERTY_AARCH64_FEATURE_1_BTI in ELF note or
 // _COMM_PAGE_CPU_CAPABILITIES bit on macOS
@@ -300,6 +319,12 @@ _general_entry:
 
                     <h3 id="load-commands">Mach-O Header &amp; Load Commands</h3>
                     <p>Every macOS binary starts with a <code>mach_header_64</code> (magic 0xFEEDFACF for 64-bit). This is followed by load commands: LC_SEGMENT_64 defines virtual memory regions; LC_DYLD_INFO_ONLY carries bind/lazy-bind/export trie tables; LC_SYMTAB holds the symbol table; LC_DYSYMTAB holds dynamic symbol info. Unlike ELF, Mach-O has no separate section headers independent of segments — sections are nested inside LC_SEGMENT_64 commands.</p>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/macho-binary-format-segments-layout.webp" alt="Mach-O binary format showing header, load commands, and segment layout" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/macho-binary-format-segments-layout.webp" width="1024" height="1024">
+                            <figcaption>Mach-O binary structure: mach_header_64 followed by LC_SEGMENT_64 load commands containing nested __TEXT and __DATA sections</figcaption>
+                        </figure>
 
                     <pre><code class="language-bash"># Inspect Mach-O structure
 otool -h -l /usr/bin/clang | head -60
@@ -372,6 +397,13 @@ call_printf_example:
                     <h2 id="apple-abi">Apple ARM64 ABI Specifics</h2>
 
                     <h3 id="frame-pointer">Mandatory Frame Pointer</h3>
+
+                        <figure class="article-figure">
+                            <img src="../../../images/series/arm-assembly/apple-arm64-abi-frame-pointer-chain.webp" alt="Apple ARM64 ABI mandatory frame pointer chain for stack unwinding" loading="lazy"
+                                 data-actual-src="../../../images/series/arm-assembly/apple-arm64-abi-frame-pointer-chain.webp" width="1024" height="1024">
+                            <figcaption>Apple ARM64 ABI frame pointer chain: x29 links each stack frame for reliable crash report symbolication and Instruments profiling</figcaption>
+                        </figure>
+
                     <pre><code class="language-armasm">// Apple ARM64 ABI requires x29 (frame pointer) always valid on non-leaf calls
 // This enables reliable stack unwinding for crash reports and Instruments profiling
 // Unlike Linux where -fomit-frame-pointer is common, Apple mandates x29
