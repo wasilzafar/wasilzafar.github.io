@@ -101,7 +101,7 @@
                 <div class="blog-meta">
                     <span><i class="fas fa-calendar me-2"></i>March 19, 2026</span>
                     <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
-                    <span class="reading-time"><i class="fas fa-clock me-1"></i>22 min read</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>24 min read</span>
                     <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
                 </div>
                 <p class="lead">AArch64's scalar floating-point architecture: the shared V-register file, IEEE-754 single/double/half precision, register moves and conversions, arithmetic with fused multiply-add, comparison flags and branchless selection, rounding control via FPCR, and the FP16 and BF16 extensions for ML inference.</p>
@@ -123,6 +123,7 @@
                 <ul>
                     <li><a href="#rounding-modes" onclick="closeNav()">Rounding Modes (RMode field)</a></li>
                     <li><a href="#exception-traps" onclick="closeNav()">FP Exception Traps</a></li>
+                    <li><a href="#glibc-vfp-math" onclick="closeNav()">glibc ARM Math &amp; VFP Assembly</a></li>
                 </ul>
             </li>
             <li>
@@ -294,6 +295,46 @@
                     </table>
 
                     <p>Enabling a trap bit in FPCR causes the processor to take a synchronous exception (routed through the EL1 vector table) when that FP exception fires. In practice, <strong>almost no production code enables FP traps</strong>. Linux and macOS leave all traps masked. Instead, glibc checks FPSR flags in <code>fenv.h</code> functions (<code>fetestexcept()</code>, <code>feraiseexcept()</code>) after critical computations. The one common use case for traps is debugging: enabling the IOC trap during development catches NaN-producing code paths immediately rather than letting quiet NaNs propagate silently through an entire pipeline.</p>
+
+                    <h3 id="glibc-vfp-math">glibc ARM Math Library &amp; VFP Assembly</h3>
+                    <p>Beyond <code>fenv.h</code>, glibc&rsquo;s math library (<code>libm</code>) ships hand-written VFP and NEON assembly routines for performance-critical functions on ARM. When you call <code>sinf()</code>, <code>cosf()</code>, <code>expf()</code>, or <code>logf()</code> from C on an ARM system, <strong>you are not running generic C code</strong> — glibc dispatches to architecture-specific implementations that exploit the hardware:</p>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Library</span><span class="bias-tag bg-navy">Performance</span></div>
+                        <div class="card-content">
+                            <h5>glibc ARM Math Optimisations</h5>
+                            <ul>
+                                <li><strong>Single-precision routines (<code>sinf</code>, <code>cosf</code>, <code>expf</code>, <code>logf</code>)</strong>: Implemented in hand-tuned AArch64 assembly using FMUL/FADD/FMADD sequences with carefully computed polynomial coefficients. The <code>sinf</code> implementation uses a 7th-degree minimax polynomial evaluated entirely in NEON/FP registers — no memory spills, no branch mispredictions.</li>
+                                <li><strong>NEON-vectorised string functions</strong>: Functions like <code>memcpy()</code>, <code>memset()</code>, and <code>strlen()</code> use LDP/STP pairs on AArch64 and NEON VLDM/VSTM on AArch32 for throughput up to 2&times; the naive byte-loop. On SVE-capable cores (Neoverse V1+), glibc further uses predicated SVE loads for dynamic-length vectorisation.</li>
+                                <li><strong>VFP-accelerated <code>fenv.h</code></strong>: The <code>fegetround()</code> / <code>fesetround()</code> implementations read/write FPCR directly via MRS/MSR rather than using a software flag — a single instruction instead of a function call.</li>
+                                <li><strong>IFUNC dispatch</strong>: glibc uses GNU indirect functions (<code>__attribute__((ifunc))</code>) to select the optimal implementation at process startup. On a Cortex-A76 with NEON, <code>memcpy</code> resolves to an unrolled LDP/STP loop; on an SVE2-capable Neoverse V2, it resolves to the SVE variant — all transparently, with no application code changes.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <pre><code class="language-armasm">// Simplified view: how glibc's sinf() works on AArch64
+// (actual source: sysdeps/aarch64/fpu/sinf_advsimd.c + .S)
+//
+// 1. Range reduction: map input x to [-π/4, π/4]
+//    n = round(x * (2/π))
+//    r = x - n * (π/2)        ← exact via FMA: FMSUB d1, d0, d2, d3
+//
+// 2. Polynomial approximation (7th degree minimax):
+//    sin(r) ≈ r + c3*r³ + c5*r⁵ + c7*r⁷
+//    Evaluated with FMADD chains (no rounding between steps):
+FMUL   d4, d1, d1             // r²
+FMADD  d5, d4, d7, d6         // c5 + c7*r²
+FMADD  d5, d4, d5, d3         // c3 + r²*(c5 + c7*r²)
+FMUL   d5, d5, d4             // r² * polynomial
+FMADD  d0, d5, d1, d1         // r + r³*polynomial = sin(r)
+//
+// 3. Sign correction based on quadrant (XOR with sign bit)
+// Total: ~15 FP instructions, fully pipelined, no branches</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Key Insight:</strong> The FMADD (fused multiply-add) instruction is critical for math library accuracy: <code>FMADD d0, d1, d2, d3</code> computes <code>d1*d2 + d3</code> with a <strong>single rounding</strong> at the end, rather than rounding after the multiply and again after the add. This extra precision is why glibc&rsquo;s ARM <code>sinf()</code> achieves &lt;1 ULP error across the entire input range — the FMA hardware preserves the full intermediate product before adding.
+                    </div>
 
                     <!-- FMOV / FCVT -->
                     <h2 id="fmov-fcvt">FMOV &amp; FCVT</h2>

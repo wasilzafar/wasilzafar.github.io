@@ -5,9 +5,9 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="robots" content="index, follow" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="ARM microarchitecture deep dive: out-of-order pipelines, reorder buffers, register renaming, branch prediction (bimodal, two-level, TAGE), store-to-load forwarding, cache organisation, and TLB management on Cortex-A55 vs Cortex-A78 vs Neoverse N2." />
+    <meta name="description" content="ARM microarchitecture deep dive: out-of-order pipelines, reorder buffers, register renaming, branch prediction (bimodal, two-level, TAGE), micro-op cache, store-to-load forwarding, cache organisation, TLB management, Neoverse N1 architecture, and Graviton2 on Cortex-A55 vs Cortex-A78 vs Neoverse N2." />
     <meta name="author" content="Wasil Zafar" />
-    <meta name="keywords" content="ARM microarchitecture, ARM out-of-order pipeline, ARM reorder buffer, ARM branch prediction TAGE, Cortex-A78 pipeline, Neoverse N2 microarchitecture, store-to-load forwarding ARM, ARM cache TLB" />
+    <meta name="keywords" content="ARM microarchitecture, ARM out-of-order pipeline, ARM reorder buffer, ARM branch prediction TAGE, Cortex-A78 pipeline, Neoverse N1 microarchitecture, Neoverse N2, micro-op cache ARM, op cache, AWS Graviton2, store-to-load forwarding ARM, ARM cache TLB" />
     <meta property="og:title" content="ARM Assembly Part 21: ARM Microarchitecture Deep Dive" />
     <meta property="og:description" content="Understand ARM CPU internals: OOO execution, reorder buffers, register renaming, branch prediction, caches, and TLB management on modern Cortex-A and Neoverse cores." />
     <meta property="og:type" content="article" />
@@ -96,7 +96,7 @@
                 <div class="blog-meta">
                     <span><i class="fas fa-calendar me-2"></i>May 28, 2026</span>
                     <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
-                    <span class="reading-time"><i class="fas fa-clock me-1"></i>25 min read</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>50 min read</span>
                     <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
                 </div>
                 <p class="lead">Understanding what happens below the ISA boundary explains every counter-intuitive performance result from Part 18. This part maps the journey from instruction fetch and branch prediction down through register renaming, the reorder buffer, execution ports, store queues, and the cache/TLB hierarchy.</p>
@@ -111,12 +111,26 @@
             <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
         </div>
         <ol>
-            <li><a href="#introduction" onclick="closeNav()">Pipeline Overview</a></li>
+            <li><a href="#introduction" onclick="closeNav()">Pipeline Overview</a>
+                <ul>
+                    <li><a href="#op-cache" onclick="closeNav()">Micro-Op Cache (Op Cache)</a></li>
+                </ul>
+            </li>
             <li><a href="#ooo" onclick="closeNav()">Out-of-Order Execution</a></li>
-            <li><a href="#branch-prediction" onclick="closeNav()">Branch Prediction</a></li>
+            <li><a href="#branch-prediction" onclick="closeNav()">Branch Prediction</a>
+                <ul>
+                    <li><a href="#branch-prediction" onclick="closeNav()">TAGE Predictor</a></li>
+                    <li><a href="#ras-depth" onclick="closeNav()">Return Address Stack (RAS)</a></li>
+                </ul>
+            </li>
             <li><a href="#memory-subsystem" onclick="closeNav()">Memory Subsystem</a></li>
             <li><a href="#cache" onclick="closeNav()">Cache &amp; TLB Architecture</a></li>
-            <li><a href="#core-comparison" onclick="closeNav()">Core Comparison</a></li>
+            <li><a href="#core-comparison" onclick="closeNav()">Core Comparison</a>
+                <ul>
+                    <li><a href="#neoverse-n1" onclick="closeNav()">Neoverse N1</a></li>
+                    <li><a href="#neoverse-n2" onclick="closeNav()">Neoverse N2</a></li>
+                </ul>
+            </li>
             <li><a href="#asm-implications" onclick="closeNav()">Assembly Implications</a></li>
             <li><a href="#case-study" onclick="closeNav()">Case Study: M1 vs Cortex-X2</a></li>
             <li><a href="#exercises" onclick="closeNav()">Hands-On Exercises</a></li>
@@ -187,6 +201,66 @@
                         Fetch → Decode → Rename → Dispatch → Issue → Execute → Writeback → Commit (Retire). Each stage can hide work from the ISA programmer but every stage has capacity limits that show up as performance bottlenecks.
                     </div>
 
+                    <h3 id="op-cache">The Micro-Op Cache (Op Cache)</h3>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Analogy — Pre-Chopped Ingredients:</strong> Continuing our restaurant kitchen analogy, the first time a complex recipe is prepared, the chef must read the full cookbook page (instruction fetch), parse the written steps (decode), and break compound steps into simple actions — "crack 3 eggs, sift 200g flour, fold gently" (micro-ops). A smart kitchen writes these pre-parsed steps on a quick-reference card and pins it to the wall. Next time the same dish is ordered, the chef grabs the card directly — skipping the cookbook entirely. This quick-reference card is the <strong>micro-op cache</strong>.
+                    </div>
+
+                    <p>Modern ARM cores don't execute the raw instructions you write in assembly. Instead, the decode stage breaks each instruction into one or more <strong>micro-operations (µops)</strong> — simpler internal operations that map directly to execution ports. A simple instruction like <code>ADD X0, X1, X2</code> produces a single µop, but complex instructions like <code>LDP X0, X1, [X2, #16]!</code> (load-pair with writeback) may decompose into 2–3 µops internally.</p>
+
+                    <p>The <strong>micro-op cache</strong> (also called <em>op cache</em>, <em>µop cache</em>, or <em>decoded stream buffer</em>) stores already-decoded µops from recently executed code. When the program counter hits a region already in the op cache, the front-end bypasses both the L1 instruction cache fetch and the decode stage entirely, delivering pre-decoded µops directly to the rename/dispatch stage at full pipeline width.</p>
+
+                    <pre><code class="language-armasm">// Without op cache — full pipeline every time:
+//   Fetch (L1I) → Decode → Rename → Dispatch → Execute
+//   Decode is 1–3 cycle latency depending on instruction complexity
+
+// With op cache — hot code path:
+//   Op Cache Hit → Rename → Dispatch → Execute
+//   Saves 1–3 cycles of front-end latency on every iteration of a hot loop
+
+// Instructions that benefit most from op cache:
+LDP  X0, X1, [X2], #16    // Decomposes to 2–3 µops (2 loads + pointer update)
+CSEL X3, X4, X5, EQ       // Conditional select — 1 µop but complex decode
+MADD X6, X7, X8, X9       // Multiply-add — 1 µop on fused pipe, 2 on split
+
+// Tight hot loops fit entirely in op cache → decode bandwidth never limits IPC</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-table me-2"></i>
+                        <strong>L1 Instruction Cache vs Micro-Op Cache:</strong>
+                        <br><br>
+                        <strong>L1I Cache:</strong> Stores raw encoded instruction bytes (32 bits per ARM instruction). Capacity: 32–64 KB. Feeds the decode stage which must parse each instruction every time.
+                        <br><br>
+                        <strong>Micro-Op Cache:</strong> Stores already-decoded µops (internal format). Capacity: 1,500–4,000 µops (varies by core). Bypasses decode entirely — delivers µops directly to rename at full width.
+                        <br><br>
+                        <strong>Key trade-off:</strong> The op cache is much smaller than L1I (it caches decoded results, not raw bytes), so only the hottest code paths benefit. For large code footprints (databases, compilers), the L1I path remains essential. For tight inner loops (crypto, BLAS, codecs), the op cache eliminates decode as a bottleneck.
+                    </div>
+
+                    <h4>Op Cache on ARM vs x86</h4>
+
+                    <p>Intel introduced its µop cache (called the <strong>Decoded Stream Buffer</strong>, or DSB) in Sandy Bridge (2011). On x86, the µop cache is critical because x86 instructions are variable-length (1–15 bytes) and require complex decoding. ARM instructions are fixed-length (4 bytes in AArch64), so the raw decode cost is lower — but it's still non-trivial for multi-µop instructions and for sustaining peak 4–8 wide decode every cycle.</p>
+
+                    <p>ARM introduced the op cache starting with <strong>Cortex-A76 (2018)</strong>. It was a key factor in A76 closing the single-thread IPC gap with Intel's mobile Core i5 — and this same front-end innovation carried directly into the server-class <strong>Neoverse N1</strong> (which we'll explore below). Every subsequent ARM big core (A77, A78, X1, X2, N2, V2) has retained and expanded the op cache.</p>
+
+                    <table class="table table-bordered table-sm">
+                        <thead><tr><th>Property</th><th>ARM (A76/A78/N1)</th><th>x86 (Intel, Alder Lake)</th></tr></thead>
+                        <tbody>
+                            <tr><td>Name</td><td>Micro-op cache / Op cache</td><td>Decoded Stream Buffer (DSB)</td></tr>
+                            <tr><td>Introduced</td><td>Cortex-A76 (2018)</td><td>Sandy Bridge (2011)</td></tr>
+                            <tr><td>Capacity</td><td>~1,500–3,000 µops</td><td>~4,000 µops</td></tr>
+                            <tr><td>Decode bypass</td><td>Skips 4-wide decode</td><td>Skips complex x86 decoder (4+1 wide)</td></tr>
+                            <tr><td>Relative benefit</td><td>Moderate (fixed-length ISA)</td><td>Large (variable-length ISA)</td></tr>
+                            <tr><td>Best for</td><td>Hot loops, repeated call sites</td><td>Same, plus mitigating decode bottleneck</td></tr>
+                        </tbody>
+                    </table>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Assembly Tip:</strong> To maximize op cache benefit, keep your hot inner loops small — ideally under ~1,500 µops. If a hot function has many cold branches (error handling, debug paths), move them out-of-line so the op cache isn't polluted with rarely-executed code. The compiler flag <code>-ffunction-sections</code> and linker's <code>--gc-sections</code> can help separate hot and cold code paths.
+                    </div>
+
                     <h2 id="ooo">Out-of-Order Execution</h2>
 
                     <h3>Register Renaming</h3>
@@ -249,9 +323,82 @@ MUL  X7, X6, X3    // Depends on X6 → more serialisation
                     <h3>TAGE Predictor</h3>
                     <p>Tagged GEometric history length (TAGE) uses a base bimodal table plus K tagged tables indexed by hash(PC, GHR[0:2^k−1]). The longest history that hits provides the prediction. A "use-count" meta-predictor arbitrates ties. Cortex-A78 and Neoverse N2 implement variants of TAGE achieving >98% accuracy on SPECint workloads.</p>
 
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>TAGE in Plain English:</strong> Imagine you're predicting whether a friend will order coffee or tea at every meeting. A simple predictor remembers only the <em>last</em> choice (bimodal). A correlated predictor notices "she orders tea when it's raining" — it uses recent context (the weather = global history). TAGE goes further: it keeps <em>multiple</em> notebooks with different memory spans — one tracks the last 4 meetings, another the last 16, another the last 64. When making a prediction, TAGE checks the notebook with the <em>longest matching</em> history. If your friend switched from coffee to tea exactly every 32 meetings, only the 64-meeting notebook would catch the pattern. This multi-scale approach is why TAGE achieves >98% accuracy — it adapts to both short patterns (tight loops) and long patterns (phase changes in server workloads).
+                    </div>
+
+                    <h4>How TAGE Works Internally</h4>
+
+                    <pre><code class="language-armasm">// ── TAGE Predictor Architecture (simplified) ──
+//
+//  ┌──────────────┐
+//  │  Base Table   │  Bimodal predictor: 2-bit counters indexed by PC
+//  │  (T0)         │  Always provides a default prediction
+//  └──────┬───────┘
+//         │
+//  ┌──────┴───────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+//  │ Tagged T1     │  │ Tagged T2     │  │ Tagged T3     │  │ Tagged T4     │
+//  │ History: 4    │  │ History: 16   │  │ History: 64   │  │ History: 256  │
+//  │ hash(PC,GHR4) │  │ hash(PC,GHR16)│  │ hash(PC,GHR64)│  │ hash(PC,GHR256)│
+//  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
+//
+// Prediction rule:
+//   1. All tables are looked up in parallel using PC+GHR of different lengths
+//   2. Each tagged table entry has: { tag, 3-bit counter, 2-bit useful counter }
+//   3. The table with the LONGEST matching history provides the prediction
+//   4. If no tagged table hits → fall back to base bimodal table T0
+//
+// Why "GEometric"?
+//   Table history lengths grow geometrically: 4, 16, 64, 256, ...
+//   This covers patterns at every scale without excessive hardware cost</code></pre>
+
+                    <h4>TAGE on ARM Cores: Parameters by Generation</h4>
+
+                    <p>ARM doesn't publish exact TAGE table sizes (they're proprietary), but TRM documents and academic reverse-engineering reveal approximate parameters:</p>
+
+                    <table class="table table-bordered table-sm">
+                        <thead><tr><th>Parameter</th><th>Cortex-A78</th><th>Neoverse N1</th><th>Neoverse N2</th></tr></thead>
+                        <tbody>
+                            <tr><td>Predictor Type</td><td>TAGE variant</td><td>TAGE variant (A76-derived)</td><td>Enhanced TAGE</td></tr>
+                            <tr><td>Tagged Tables</td><td>~4–5 tables</td><td>~4–5 tables</td><td>~5–6 tables</td></tr>
+                            <tr><td>Max History Length</td><td>~200 branches</td><td>~200 branches</td><td>~400+ branches</td></tr>
+                            <tr><td>Total Entries (approx)</td><td>~10K</td><td>~10K</td><td>~16K+</td></tr>
+                            <tr><td>SPECint Accuracy</td><td>>97%</td><td>>97%</td><td>>98%</td></tr>
+                            <tr><td>Misprediction Penalty</td><td>~11 cycles</td><td>~10 cycles</td><td>~13 cycles (deeper pipeline)</td></tr>
+                            <tr><td>Loop Predictor</td><td>Yes</td><td>Yes</td><td>Yes (enhanced)</td></tr>
+                            <tr><td>Indirect Predictor</td><td>Separate ITT</td><td>Separate ITT</td><td>Larger ITT + BTAC</td></tr>
+                        </tbody>
+                    </table>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Why N2's TAGE Is Bigger:</strong> Server workloads (databases, web servers, JIT compilers) have much deeper branch history patterns than mobile apps. A database query executor might follow a branch pattern that only repeats after 300+ other branches — mobile apps rarely create such long-distance correlations. N2's expanded TAGE tables with ~400+ branch history depth catch these server-specific patterns, saving millions of pipeline flushes per second under load.
+                    </div>
+
+                    <pre><code class="language-armasm">// ── Diagnosing branch predictor behaviour on ARM server cores ──
+// PMU event 0x10: BR_MIS_PRED  (mispredicted branches)
+// PMU event 0x12: BR_PRED      (correctly predicted branches)
+// PMU event 0x21: BR_MIS_PRED_RETIRED (architecturally mispredicted)
+
+// Quick misprediction rate formula:
+//   miss_rate = BR_MIS_PRED / (BR_MIS_PRED + BR_PRED)
+//
+// On Neoverse N2 running SPEC CPU 2017:
+//   Typical miss rate: 1.5–2.5% (integer), 0.5–1.5% (floating-point)
+//   Compare: Cortex-A55 (no TAGE): 5–10% miss rate on same workloads
+//   Compare: Intel Golden Cove (TAGE-like): 1–2% miss rate
+
+// Example: perf on ARM Linux server (Graviton3 / Azure Cobalt):
+// $ perf stat -e branches,branch-misses ./my_workload
+// Result: 2,000,000,000 branches, 30,000,000 misses → 1.5% miss rate</code></pre>
+
                     <h3>Branch Target Buffer (BTB) &amp; Return Address Stack (RAS)</h3>
+
+                    <p>While the TAGE predictor decides <em>whether</em> a branch is taken, the <strong>Branch Target Buffer (BTB)</strong> predicts <em>where</em> it goes — the target address. For conditional branches the target is encoded in the instruction, but for indirect branches (<code>BR Xn</code>, <code>BLR Xn</code>), the BTB must remember previously seen target addresses. The <strong>Return Address Stack (RAS)</strong> is a specialised predictor for function returns: every <code>BL</code> pushes the return address, and every <code>RET</code> pops it.</p>
+
                     <pre><code class="language-armasm">// BTB Miss: indirect branch (BR Xn) where target changes frequently
-// Triggering BTB miss costs ~20 cycles pipeline flush on A78
+// Triggering BTB miss costs ~20 cycles pipeline flush on A78, ~24 cycles on N2
 // Perf event: 0x010 = BR_MIS_PRED
 mrs x0, pmcr_el0
 // ... configure PMU event 0x010 as in Part 18 ...
@@ -260,14 +407,48 @@ mrs x0, pmcr_el0
 BLR X9        // BTB must predict X9 content — if wrong: flush + refetch
 
 // Static indirect branches (e.g. switch jump table): BTB usually correct after warmup
-// Dynamic virtual dispatch: 1 call site → many targets → BTB capacity exhausted
+// Dynamic virtual dispatch: 1 call site → many targets → BTB capacity exhausted</code></pre>
 
-// RAS (Return Address Stack, ~16–32 deep):
-BL  func      // Pushes PC+4 onto RAS
-...
-func:
-    ...
-    RET       // Pops RAS → correct most of the time (mismatch on longjmp/setjmp)</code></pre>
+                    <h4 id="ras-depth">Return Address Stack (RAS) Depth</h4>
+
+                    <p>The RAS is a small hardware stack that predicts return addresses with near-perfect accuracy for normal call/return patterns. Each <code>BL</code> (Branch-with-Link) pushes the return address onto the RAS; each <code>RET</code> pops the top entry to predict the return target. As long as the call depth doesn't exceed the RAS size, and code doesn't use <code>longjmp</code>, <code>setjmp</code>, or exception-based control flow, the RAS achieves ~99.9% prediction accuracy.</p>
+
+                    <pre><code class="language-armasm">// ── RAS (Return Address Stack) Operation ──
+//
+// Normal call/return sequence:
+BL  func_a      // Push PC+4 onto RAS → RAS: [ret_a]
+  BL  func_b    //   Push PC+4 → RAS: [ret_b, ret_a]
+    BL  func_c  //     Push PC+4 → RAS: [ret_c, ret_b, ret_a]
+    RET         //     Pop ret_c → correct ✓
+  RET           //   Pop ret_b → correct ✓
+RET             // Pop ret_a → correct ✓
+
+// What breaks the RAS:
+// 1. Call depth exceeds RAS size → oldest entries lost
+// 2. longjmp/setjmp → unwinding pops don't match pushes
+// 3. Exceptions/signals → async stack unwinding corrupts RAS state
+// 4. Tail calls (B instead of BL+RET) → RAS not pushed, but no RET to mismatch
+
+// RET vs BR X30:
+RET             // Uses RAS predictor → near-instant prediction (0–1 cycle)
+BR  X30         // Uses BTB → may miss if X30 value not in BTB → 10–20 cycle penalty
+// ALWAYS use RET for function returns, never BR X30</code></pre>
+
+                    <table class="table table-bordered table-sm">
+                        <thead><tr><th>Parameter</th><th>Cortex-A55</th><th>Cortex-A78</th><th>Neoverse N1</th><th>Neoverse N2</th></tr></thead>
+                        <tbody>
+                            <tr><td>BTB Entries</td><td>~512</td><td>~8K</td><td>~8K</td><td>~12K</td></tr>
+                            <tr><td>BTB Ways</td><td>2-way</td><td>4-way</td><td>4-way</td><td>4–8 way</td></tr>
+                            <tr><td>RAS Depth (entries)</td><td>~8</td><td>~16</td><td>~16</td><td>~32</td></tr>
+                            <tr><td>Indirect Target Table</td><td>None</td><td>Separate ITT</td><td>Separate ITT</td><td>Expanded ITT</td></tr>
+                            <tr><td>BTB Miss Penalty</td><td>~8 cycles</td><td>~20 cycles</td><td>~18 cycles</td><td>~24 cycles</td></tr>
+                        </tbody>
+                    </table>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>N2's Deeper RAS Matters for Servers:</strong> Server workloads like web frameworks (Spring, Express) and database engines (PostgreSQL, MySQL) often have call stacks 20–30 functions deep during request processing. N1's 16-entry RAS overflows at depth 17, causing a misprediction on every return from that point. N2's 32-entry RAS handles typical server call depths without overflow. If your profiler shows unexpected <code>BR_MIS_PRED</code> spikes concentrated at function returns, RAS overflow is the likely cause — consider reducing call depth via inlining or restructuring deep call chains.
+                    </div>
 
                     <h2 id="memory-subsystem">Memory Subsystem</h2>
 
@@ -361,6 +542,201 @@ ISB                  // Flush pipeline after TLB change
                         <strong>Cortex-A78 (performance core, 2020–2023 smartphones):</strong> 4-wide decode; 160-entry ROB; 6 execution ports; 2 load + 1 store / cycle; TAGE branch predictor; 3.6 IPC peak; ~2.5W TDP in 5 nm silicon.
                         <br><br>
                         <strong>Neoverse N2 (server, 2022+):</strong> 4-wide decode; 400-entry ROB; 8 execution ports; 3 load + 2 store / cycle (SVE adds vector load/store ports); CHI interconnect for cache coherence at rack scale; ~4.0 IPC peak; 10W+ TDP.
+                    </div>
+
+                    <h3 id="neoverse-n1">Neoverse N1 — ARM's Datacenter Breakthrough</h3>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Why N1 Matters:</strong> If Cortex-A76 proved ARM could match x86 on a phone, <strong>Neoverse N1</strong> proved ARM could compete in the datacenter. Launched by ARM in 2019 and deployed as the heart of <strong>AWS Graviton2</strong> (2020), N1-based instances delivered ~40% better price-performance than comparable x86 instances — a watershed moment that convinced the industry ARM belongs in the server room.
+                    </div>
+
+                    <p>Neoverse N1 is ARM's first-generation server-class core. It is derived from the same <strong>Cortex-A76 "Enyo" microarchitecture</strong> that revolutionized mobile performance in 2018, but re-tuned for throughput, reliability, and multi-socket server environments. Think of it as the A76's older sibling who traded the thin smartphone chassis for a well-cooled server rack.</p>
+
+                    <h4>N1 Microarchitecture at a Glance</h4>
+
+                    <pre><code class="language-armasm">// ── Neoverse N1 Front-End ──
+// Fetch:  4-wide fetch, up to 8 instructions per cycle from op cache
+// Decode: 4-wide decode (same as A76) — fixed-length ISA simplifies this
+// Op Cache: ~1,500 µop cache (inherited from A76, bypasses decode)
+// Branch Predictor: TAGE variant, >97% accuracy on server workloads
+
+// ── N1 Back-End (Out-of-Order Engine) ──
+// ROB:   ~128 entries (same depth as A76 — prioritizing per-core efficiency)
+// Issue:  8 issue slots → 6 execution ports
+// Ports:  2× integer ALU, 1× multiply/divide, 2× load, 1× store
+// SIMD:   2× 128-bit NEON pipes (no SVE on N1 — SVE arrived with N2)
+
+// ── N1 Memory Subsystem (server-optimised) ──
+// L1I: 64 KB, 4-way
+// L1D: 64 KB, 4-way  (double the typical mobile A76 L1D of 32 KB)
+// L2:  512 KB–1 MB per core (configurable by SoC vendor)
+// L3:  Shared via CMN-600 mesh — up to 32 MB per chip
+// Coherence: AMBA CHI (Cache-Coherent Hub Interface) for multi-chip systems</code></pre>
+
+                    <h4>What N1 Changed vs Mobile A76</h4>
+
+                    <p>Although N1 shares A76's core pipeline, ARM made targeted modifications for server workloads:</p>
+
+                    <table class="table table-bordered table-sm">
+                        <thead><tr><th>Feature</th><th>Cortex-A76 (Mobile)</th><th>Neoverse N1 (Server)</th><th>Why It Changed</th></tr></thead>
+                        <tbody>
+                            <tr><td>L1D Cache</td><td>32 KB</td><td>64 KB</td><td>Server workloads have larger working sets</td></tr>
+                            <tr><td>L2 Cache</td><td>256–512 KB</td><td>512 KB–1 MB</td><td>Database/web server hot data is larger</td></tr>
+                            <tr><td>Interconnect</td><td>DSU (4-core cluster)</td><td>CMN-600 mesh (up to 128 cores)</td><td>Scale to server-grade core counts</td></tr>
+                            <tr><td>RAS (Reliability)</td><td>Basic</td><td>Full ARMv8.2 RAS</td><td>ECC, error injection, fault recovery for 24/7 uptime</td></tr>
+                            <tr><td>Virtualisation</td><td>ARMv8.2</td><td>ARMv8.2 + nested virt hints</td><td>Cloud providers run thousands of VMs per host</td></tr>
+                            <tr><td>Crypto</td><td>AES/SHA</td><td>AES/SHA + SM3/SM4</td><td>Chinese crypto standards for global cloud markets</td></tr>
+                            <tr><td>Power Target</td><td>~1.5W per core (5 nm)</td><td>~1W per core (7 nm, efficiency-optimised)</td><td>128-core chip must fit in a 200W TDP envelope</td></tr>
+                        </tbody>
+                    </table>
+
+                    <h4>N1 in the Real World: AWS Graviton2</h4>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Cloud</span><span class="bias-tag bg-crimson">Industry</span><span class="bias-tag bg-navy">Real-World</span></div>
+                        <div class="card-content">
+                            <h5>How Graviton2 Changed Cloud Computing</h5>
+                            <p>AWS designed the <strong>Graviton2</strong> processor around 64 Neoverse N1 cores on a single chip, manufactured at TSMC 7nm. When it launched in 2020, it became the most successful ARM server deployment in history:</p>
+                            <ul>
+                                <li><strong>64 cores / 64 threads</strong> — no SMT (each core is a full pipeline, simplifying scheduling)</li>
+                                <li><strong>32 MB shared L3</strong> via CMN-600 mesh interconnect</li>
+                                <li><strong>8-channel DDR4-3200</strong> — 307 GB/s memory bandwidth</li>
+                                <li><strong>~40% better price-performance</strong> vs Intel Xeon (m6g vs m5 instances)</li>
+                                <li><strong>~20% lower power</strong> — N1's efficiency means AWS could pack more compute per rack</li>
+                            </ul>
+                            <p><strong>Key insight:</strong> Graviton2 didn't try to win on single-thread speed (N1's 128-entry ROB is modest). Instead, it won on <em>throughput per watt per dollar</em> — packing 64 efficient cores where Intel offered 32 power-hungry ones. This is the same design philosophy that made ARM dominant in mobile, now applied to the datacenter.</p>
+                            <p><strong>Impact:</strong> After Graviton2's success, every major cloud provider followed — Microsoft built Azure Cobalt (Neoverse N2), Google deployed Axion (N2-based), and Oracle adopted Ampere Altra (N1-based). ARM server market share grew from &lt;1% (2019) to ~15% (2024).</p>
+                        </div>
+                    </div>
+
+                    <h4>N1 → N2 → N3: The Neoverse Roadmap</h4>
+
+                    <p>Understanding where N1 sits in ARM's server roadmap helps contextualise performance expectations:</p>
+
+                    <table class="table table-bordered table-sm">
+                        <thead><tr><th>Core</th><th>Year</th><th>Base</th><th>Decode</th><th>ROB</th><th>SVE</th><th>Key Cloud Chip</th></tr></thead>
+                        <tbody>
+                            <tr><td><strong>Neoverse N1</strong></td><td>2019</td><td>A76</td><td>4-wide</td><td>~128</td><td>None</td><td>AWS Graviton2, Ampere Altra</td></tr>
+                            <tr><td><strong>Neoverse V1</strong></td><td>2020</td><td>X1</td><td>5-wide</td><td>~288</td><td>SVE 256-bit</td><td>AWS Graviton3</td></tr>
+                            <tr><td><strong>Neoverse N2</strong></td><td>2022</td><td>A710</td><td>5-wide</td><td>~400</td><td>SVE2 128-bit</td><td>Azure Cobalt 100, Google Axion</td></tr>
+                            <tr><td><strong>Neoverse V2</strong></td><td>2023</td><td>X3</td><td>5-wide</td><td>~400+</td><td>SVE2 128-bit</td><td>AWS Graviton4, NVIDIA Grace</td></tr>
+                            <tr><td><strong>Neoverse N3</strong></td><td>2025</td><td>A725</td><td>6-wide</td><td>~450+</td><td>SVE2</td><td>(upcoming deployments)</td></tr>
+                        </tbody>
+                    </table>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>N-series vs V-series:</strong> ARM's Neoverse lineup has two tracks. The <strong>N-series</strong> (N1, N2, N3) prioritises <em>throughput per watt</em> — more cores, smaller area, cloud-native workloads. The <strong>V-series</strong> (V1, V2, V3) prioritises <em>single-thread performance</em> — wider pipelines, deeper ROBs, HPC and AI workloads. Think of N as "many efficient workers" and V as "fewer but faster specialists."
+                    </div>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-code me-2"></i>
+                        <strong>Assembly Impact — Writing for N1:</strong> When targeting Neoverse N1, keep these micro-architectural traits in mind: (1) the 128-entry ROB is <em>smaller</em> than A78's 160 — don't assume deep OOO windows for memory-level parallelism; (2) N1 has no SVE — use NEON (128-bit) for SIMD, not SVE instructions; (3) the 64 KB L1D (vs 32 KB on mobile A76) means you can use larger tile sizes in blocking optimizations; (4) CMN-600 L3 latency is higher than mobile DSU — prefetching (<code>PRFM</code>) across NUMA boundaries matters more.
+                    </div>
+
+                    <h3 id="neoverse-n2">Neoverse N2 — The Cloud-Native Workhorse</h3>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>N1 to N2 in One Sentence:</strong> If Neoverse N1 proved ARM <em>could</em> compete in the datacenter, <strong>Neoverse N2</strong> proved ARM could <em>dominate</em> it — delivering 40% higher single-thread performance over N1 while adding SVE2, a deeper out-of-order engine, and the ARMv9 security features (MTE, BTI) that enterprise customers demand.
+                    </div>
+
+                    <p>Neoverse N2 (2022) is ARM's second-generation cloud-native server core. While N1 was derived from the mobile Cortex-A76, N2 is based on <strong>Cortex-A710</strong> — the first ARMv9 mid-core. ARM redesigned the front-end (5-wide decode, larger TAGE, expanded BTB), deepened the out-of-order engine (400-entry ROB, more execution ports), and added SVE2 for vector workloads. N2 powers <strong>Microsoft Azure Cobalt 100</strong> (128 cores), <strong>Google Axion</strong>, and <strong>Ampere AmpereOne</strong>.</p>
+
+                    <h4>N2 Microarchitecture — Full Breakdown</h4>
+
+                    <pre><code class="language-armasm">// ── Neoverse N2 Front-End ──
+// Fetch:  8-wide fetch (2× the visible 5-wide decode width)
+// Decode: 5-wide decode (vs 4-wide on N1) — 25% more instructions per cycle
+// Op Cache: ~3,000 µop cache (doubled vs N1's ~1,500)
+// Branch Predictor: Enhanced TAGE, ~5–6 tagged tables
+//   - Max history depth: ~400 branches (vs ~200 on N1)
+//   - SPECint accuracy: >98%
+//   - Separate loop predictor for counted loops
+// BTB: ~12K entries, 4–8 way (vs ~8K on N1)
+// RAS: ~32 entries deep (vs ~16 on N1)
+// Misprediction penalty: ~13 cycles (deeper pipeline than N1's ~10)
+
+// ── N2 Back-End (Out-of-Order Engine) ──
+// ROB:   ~400 entries (3× deeper than N1's ~128)
+// Issue:  10 issue slots → 8 execution ports
+// Ports:  2× integer ALU + 1× integer ALU/branch
+//         1× multiply/divide
+//         3× load (vs 2 on N1)
+//         2× store (vs 1 on N1)
+//         2× 128-bit NEON/SVE2 pipes
+// SVE2:  128-bit vector length (fixed, not scalable on N2)
+//        Enables: bit manipulation, crypto, ML inference instructions
+
+// ── N2 Memory Subsystem ──
+// L1I: 64 KB, 4-way set-associative, 64-byte lines
+// L1D: 64 KB, 4-way set-associative, 64-byte lines
+// L2:  1 MB per core (fixed, not configurable like N1)
+// L3:  Shared via CMN-700 mesh — up to 64 MB per chip
+//      (CMN-700 replaces N1's CMN-600 — lower latency, more cross-links)
+// Coherence: AMBA CHI, CXL-ready for memory expansion
+// DRAM: DDR5-5600 support via SoC integration</code></pre>
+
+                    <h4>N2 Cache Architecture — The 64 KB 4-Way Design</h4>
+
+                    <p>Both N2's <strong>L1 instruction cache</strong> and <strong>L1 data cache</strong> are 64 KB, 4-way set-associative with 64-byte cache lines. This is a deliberate balance between hit rate and access latency:</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-memory me-2"></i>
+                        <strong>Why 64 KB 4-Way?</strong>
+                        <br><br>
+                        <strong>Capacity (64 KB):</strong> Server workloads (web servers, databases, JIT compilers) have larger hot instruction footprints than mobile apps. A 32 KB L1I would thrash on a typical PostgreSQL query executor path. 64 KB captures most hot code paths without increasing access latency beyond ~4 cycles.
+                        <br><br>
+                        <strong>Associativity (4-way):</strong> With 64-byte lines and 64 KB capacity, each way holds 256 sets. 4-way associativity means 4 different cache lines can map to the same set index before eviction — this significantly reduces conflict misses compared to 2-way (which the A55 uses). Going to 8-way would increase hit rate marginally but add ~1 cycle access latency — not worth it for L1.
+                        <br><br>
+                        <strong>64-byte lines:</strong> Match the AMBA CHI bus transfer granularity and align with DRAM burst lengths. Prefetching operates at cache-line granularity, so every L1 miss fetches exactly 64 bytes from L2.
+                    </div>
+
+                    <table class="table table-bordered table-sm">
+                        <thead><tr><th>Cache Level</th><th>Neoverse N1</th><th>Neoverse N2</th><th>Impact of Change</th></tr></thead>
+                        <tbody>
+                            <tr><td>L1I</td><td>64 KB, 4-way</td><td>64 KB, 4-way</td><td>Same — proven size for server instruction locality</td></tr>
+                            <tr><td>L1D</td><td>64 KB, 4-way</td><td>64 KB, 4-way</td><td>Same — optimal for server data working sets</td></tr>
+                            <tr><td>L1 Hit Latency</td><td>~4 cycles</td><td>~4 cycles</td><td>Critical path unchanged</td></tr>
+                            <tr><td>L2 (per core)</td><td>512 KB–1 MB</td><td>1 MB (fixed)</td><td>Consistent sizing simplifies SoC integration</td></tr>
+                            <tr><td>L2 Hit Latency</td><td>~10 cycles</td><td>~12 cycles</td><td>Slightly deeper due to wider data paths</td></tr>
+                            <tr><td>L3 (shared)</td><td>Up to 32 MB (CMN-600)</td><td>Up to 64 MB (CMN-700)</td><td>2× capacity for larger workload isolation</td></tr>
+                            <tr><td>L3 Hit Latency</td><td>~30–40 cycles</td><td>~35–45 cycles</td><td>Mesh topology adds 5 cycles but reduces contention</td></tr>
+                        </tbody>
+                    </table>
+
+                    <h4>N1 vs N2: What Changed and Why</h4>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag bg-teal">Architecture</span><span class="bias-tag bg-crimson">Evolution</span><span class="bias-tag bg-navy">Server</span></div>
+                        <div class="card-content">
+                            <h5>Generational Leap: N1 → N2</h5>
+                            <p>The jump from N1 to N2 is one of the largest generational improvements in ARM server history. Here's why each change mattered:</p>
+                            <table class="table table-bordered table-sm">
+                                <thead><tr><th>Feature</th><th>Neoverse N1</th><th>Neoverse N2</th><th>Why It Matters</th></tr></thead>
+                                <tbody>
+                                    <tr><td>ISA</td><td>ARMv8.2</td><td>ARMv9.0</td><td>MTE, BTI, PAUTH2 — hardware security baseline</td></tr>
+                                    <tr><td>Decode Width</td><td>4-wide</td><td>5-wide</td><td>25% more decode throughput per cycle</td></tr>
+                                    <tr><td>ROB Depth</td><td>~128</td><td>~400</td><td>3× deeper OOO window → far more memory-level parallelism</td></tr>
+                                    <tr><td>Execution Ports</td><td>6</td><td>8</td><td>More parallel execution units</td></tr>
+                                    <tr><td>Load Ports</td><td>2</td><td>3</td><td>50% more memory bandwidth per core</td></tr>
+                                    <tr><td>Store Ports</td><td>1</td><td>2</td><td>2× store throughput — critical for memcpy, database writes</td></tr>
+                                    <tr><td>TAGE History</td><td>~200 branches</td><td>~400+ branches</td><td>Better prediction for deep server call stacks</td></tr>
+                                    <tr><td>BTB Size</td><td>~8K</td><td>~12K</td><td>More indirect branch targets cached</td></tr>
+                                    <tr><td>RAS Depth</td><td>~16</td><td>~32</td><td>No overflow on typical 20–30 deep server call stacks</td></tr>
+                                    <tr><td>SVE Support</td><td>None</td><td>SVE2 (128-bit)</td><td>Crypto, ML inference, bitmanip acceleration</td></tr>
+                                    <tr><td>Interconnect</td><td>CMN-600</td><td>CMN-700</td><td>Lower latency mesh, CXL-ready</td></tr>
+                                    <tr><td>Perf vs N1</td><td>Baseline</td><td>~40% single-thread IPC</td><td>Largest generational IPC gain in Neoverse history</td></tr>
+                                </tbody>
+                            </table>
+                            <p><strong>Design philosophy:</strong> N1 was a "prove it can work" core — conservative ROB, no SVE, mobile DNA. N2 is a purpose-built server core — 400-entry ROB rivals Intel's Golden Cove, 5-wide decode matches AMD Zen 4, and SVE2 provides the vector extensions that HPC and ML inference demand. The result: N2 closes the single-thread IPC gap with x86 to within ~5%, while maintaining ARM's 2–3× better performance-per-watt advantage.</p>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-code me-2"></i>
+                        <strong>Assembly Impact — Writing for N2:</strong> Key differences from N1: (1) the 400-entry ROB means you can afford more inflight memory operations — use <code>PRFM</code> aggressively and unroll loops deeper to exploit memory-level parallelism; (2) 3 load ports means three independent loads can issue per cycle — interleave load-heavy code with compute; (3) SVE2 is available but fixed at 128-bit on N2 — don't expect wider vectors (use <code>CNTB</code> to query vector length at runtime); (4) misprediction penalty is ~13 cycles (vs ~10 on N1) due to the deeper pipeline — branch-heavy code pays a higher cost per miss.
                     </div>
 
                     <h2 id="asm-implications">Assembly Implications</h2>

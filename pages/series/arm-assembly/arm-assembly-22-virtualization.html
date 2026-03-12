@@ -96,7 +96,7 @@
                 <div class="blog-meta">
                     <span><i class="fas fa-calendar me-2"></i>June 4, 2026</span>
                     <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
-                    <span class="reading-time"><i class="fas fa-clock me-1"></i>24 min read</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>27 min read</span>
                     <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
                 </div>
                 <p class="lead">ARM's Virtualization Extensions give EL2 a hardware-enforced isolation boundary between the hypervisor and every guest OS. This part walks the full path from EL3 dropping into EL2, configuring trap controls, programming two-stage page tables, wiring the virtual GIC, and understanding how KVM uses these mechanisms on server ARM hardware.</p>
@@ -118,6 +118,13 @@
             <li><a href="#vm-entry-exit" onclick="closeNav()">VM Entry / Exit Assembly</a></li>
             <li><a href="#vgic" onclick="closeNav()">Virtual GICv3</a></li>
             <li><a href="#kvm" onclick="closeNav()">KVM on ARM64</a></li>
+            <li>
+                <a href="#vhe" onclick="closeNav()">VHE — Virtualization Host Extensions</a>
+                <ul>
+                    <li><a href="#vhe-mechanism" onclick="closeNav()">The E2H Bit &amp; Register Redirection</a></li>
+                    <li><a href="#vhe-guest-context" onclick="closeNav()">Guest Context with VHE</a></li>
+                </ul>
+            </li>
             <li><a href="#smmu" onclick="closeNav()">SMMU Stage-2 for DMA Isolation</a></li>
             <li><a href="#case-study" onclick="closeNav()">Case Study: AWS Graviton &amp; KVM</a></li>
             <li><a href="#exercises" onclick="closeNav()">Hands-On Exercises</a></li>
@@ -433,6 +440,89 @@ qemu-system-aarch64 \
     -drive if=virtio,file=rootfs.qcow2 \
     -serial stdio \
     -display none</code></pre>
+
+                    <!-- VHE -->
+                    <h2 id="vhe">VHE — Virtualization Host Extensions</h2>
+                    <p>Before ARMv8.1-A, running a Type-1 hypervisor like KVM on ARM required an awkward split: the host Linux kernel ran at EL1, and a thin "lowvisor" stub ran at EL2 solely to handle traps and switch contexts. Every guest exit bounced through EL2 down to EL1, adding overhead and complexity. <strong>Virtualization Host Extensions (VHE)</strong>, introduced in ARMv8.1-A (2016), solve this by letting the host kernel run directly at EL2 — the same privilege level as the hypervisor — so there is no extra EL transition on every VM exit.</p>
+
+                    <h3 id="vhe-mechanism">The E2H Bit &amp; Register Redirection</h3>
+                    <p>VHE is activated by setting the <strong>HCR_EL2.E2H</strong> (bit 34) and <strong>HCR_EL2.TGE</strong> (bit 27) bits. When E2H=1, the processor <em>redirects</em> accesses to EL1 system registers so they transparently operate on their EL2 counterparts. This means existing kernel code written for EL1 runs unmodified at EL2 — the CPU silently routes every <code>MRS/MSR</code> to the correct physical register:</p>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">Table</span> VHE Register Redirection (HCR_EL2.E2H=1)</div>
+                        <div class="card-content">
+                            <table class="table table-bordered table-sm">
+                                <thead class="table-dark">
+                                    <tr><th>Code References</th><th>Without VHE (E2H=0)</th><th>With VHE (E2H=1)</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td><code>SCTLR_EL1</code></td><td>SCTLR_EL1</td><td>&rarr; SCTLR_EL2</td></tr>
+                                    <tr><td><code>TTBR0_EL1</code></td><td>TTBR0_EL1</td><td>&rarr; TTBR0_EL2</td></tr>
+                                    <tr><td><code>TTBR1_EL1</code></td><td>TTBR1_EL1</td><td>&rarr; TTBR1_EL2</td></tr>
+                                    <tr><td><code>TCR_EL1</code></td><td>TCR_EL1</td><td>&rarr; TCR_EL2</td></tr>
+                                    <tr><td><code>MAIR_EL1</code></td><td>MAIR_EL1</td><td>&rarr; MAIR_EL2</td></tr>
+                                    <tr><td><code>VBAR_EL1</code></td><td>VBAR_EL1</td><td>&rarr; VBAR_EL2</td></tr>
+                                    <tr><td><code>ELR_EL1</code></td><td>ELR_EL1</td><td>&rarr; ELR_EL2</td></tr>
+                                    <tr><td><code>SPSR_EL1</code></td><td>SPSR_EL1</td><td>&rarr; SPSR_EL2</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <pre><code class="language-armasm">// Enable VHE: set HCR_EL2.E2H (bit 34) and TGE (bit 27)
+// E2H = redirect EL1 sys-regs to EL2 versions
+// TGE = Trap General Exceptions → route EL0 exceptions directly to EL2
+MRS  x0, HCR_EL2
+ORR  x0, x0, #(1 &lt;&lt; 34)       // E2H bit
+ORR  x0, x0, #(1 &lt;&lt; 27)       // TGE bit
+MSR  HCR_EL2, x0
+ISB
+
+// After this, MRS x1, SCTLR_EL1 actually reads SCTLR_EL2
+// The host kernel runs at EL2 as if it were EL1 — no code changes needed
+MRS  x1, SCTLR_EL1            // Redirected → reads SCTLR_EL2
+ORR  x1, x1, #(1 &lt;&lt; 0)       // Enable MMU (M bit)
+ORR  x1, x1, #(1 &lt;&lt; 2)       // Enable data cache (C bit)
+MSR  SCTLR_EL1, x1            // Redirected → writes SCTLR_EL2
+ISB</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Key Insight — Why VHE Matters:</strong> Without VHE, every VM exit required: guest traps to EL2 lowvisor &rarr; save guest state &rarr; switch to EL1 host kernel &rarr; handle exit &rarr; switch back to EL2 &rarr; restore guest state &rarr; ERET. With VHE, the host kernel <em>is</em> at EL2, so the exit path is simply: guest traps to EL2 &rarr; host kernel handles it directly. Linux KVM on ARM enables VHE automatically when the CPU supports it (all Cortex-A cores from A73 onward). AWS Graviton1 (2018) was one of the first cloud processors to rely on VHE for production KVM, eliminating the EL1↔EL2 world-switch overhead entirely.
+                    </div>
+
+                    <h3 id="vhe-guest-context">Guest Context with VHE</h3>
+                    <p>When running a guest VM under VHE, the hypervisor clears the TGE bit so EL0/EL1 exceptions route to the guest kernel. The E2H bit stays set, and the real EL1 registers (now accessible via <code>_EL12</code> suffixed aliases like <code>SCTLR_EL12</code>) are loaded with the guest&rsquo;s saved context. On VM exit, KVM swaps the guest&rsquo;s EL1 register values out and restores the host&rsquo;s:</p>
+
+                    <pre><code class="language-armasm">// Simplified VHE guest entry (KVM __kvm_vcpu_run path)
+// 1. Save host EL1 context (which is really EL2 with E2H)
+MRS  x2, SCTLR_EL1            // Save host SCTLR (redirected EL2)
+STR  x2, [x0, #HOST_SCTLR]
+
+// 2. Load guest EL1 context into the *real* EL1 registers
+//    _EL12 aliases bypass E2H redirection to access true EL1
+LDR  x3, [x1, #GUEST_SCTLR]
+MSR  SCTLR_EL12, x3           // Load guest SCTLR into real EL1 register
+LDR  x3, [x1, #GUEST_TTBR0]
+MSR  TTBR0_EL12, x3           // Load guest TTBR0 into real EL1
+LDR  x3, [x1, #GUEST_VBAR]
+MSR  VBAR_EL12, x3            // Load guest vector table
+
+// 3. Clear TGE so guest exceptions go to guest EL1, not host EL2
+MRS  x4, HCR_EL2
+BIC  x4, x4, #(1 &lt;&lt; 27)       // Clear TGE
+// Set VM bit to enable stage-2 translation for guest
+ORR  x4, x4, #(1 &lt;&lt; 0)       // VM bit
+MSR  HCR_EL2, x4
+ISB
+
+// 4. ERET into guest EL1
+ERET</code></pre>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-history me-2"></i>
+                        <strong>VHE Timeline:</strong> ARMv8.0 (2011) introduced EL2 but required a separate lowvisor. ARMv8.1-A (2016) added VHE (E2H+TGE) so the host kernel could run at EL2 natively. Linux 4.12 (2017) merged KVM VHE support. By Cortex-A75/A76 (2017–2018), all new Cortex-A cores supported VHE, and it became the default KVM mode on ARM. ARMv8.4-A (2017) further enhanced virtualisation with nested virtualisation support (NV/NV2 bits in HCR_EL2).
+                    </div>
 
                     <!-- SMMU -->
                     <h2 id="smmu">SMMU Stage-2 for DMA Isolation</h2>

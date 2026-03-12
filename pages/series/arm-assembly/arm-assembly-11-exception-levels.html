@@ -105,7 +105,7 @@
                 <div class="blog-meta">
                     <span><i class="fas fa-calendar me-2"></i>March 19, 2026</span>
                     <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
-                    <span class="reading-time"><i class="fas fa-clock me-1"></i>23 min read</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>26 min read</span>
                     <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
                 </div>
                 <p class="lead">ARM AArch64's four exception levels (EL0–EL3) form a hardware-enforced privilege hierarchy. This part covers how exceptions are taken and returned, the structure of the VBAR_EL1 vector table, GIC interrupt routing, ESR_EL1 syndrome decoding, and practical fault-debugging techniques in assembly.</p>
@@ -136,6 +136,8 @@
                     <li><a href="#synchronous" onclick="closeNav()">Synchronous Exceptions (SVC/HVC/SMC)</a></li>
                     <li><a href="#irq-fiq" onclick="closeNav()">IRQ / FIQ / SError</a></li>
                     <li><a href="#esr-decoding" onclick="closeNav()">ESR_EL1 Syndrome Decoding</a></li>
+                    <li><a href="#ec-reference" onclick="closeNav()">EC Quick Reference Table</a></li>
+                    <li><a href="#aarch32-compat" onclick="closeNav()">AArch32 Support at Exception Levels</a></li>
                 </ul>
             </li>
             <li>
@@ -305,21 +307,90 @@ MSR DAIF, x19        // Restore previous mask</code></pre>
 // [25]    IL  — Instruction Length (0=16-bit Thumb, 1=32-bit)
 // [24:0]  ISS — Instruction Specific Syndrome
 
-// Common EC values:
-// 0b000000 = Unknown reason
-// 0b010101 = SVC instruction (AArch64)
-// 0b100000 = Instruction Abort from lower EL
-// 0b100100 = Data Abort from lower EL
-// 0b100101 = Data Abort from current EL
-
 // Reading ESR in EL1 handler:
 MRS  x0, ESR_EL1
 LSR  x1, x0, #26          // EC field → x1
 AND  x1, x1, #0x3F        // Mask to 6 bits
-CMP  x1, #0x15            // SVC?
+CMP  x1, #0x15            // EC 0x15 = SVC from AArch64?
 B.EQ handle_svc
-CMP  x1, #0x25            // Data abort (current EL)?
-B.EQ handle_data_abort</code></pre>
+CMP  x1, #0x25            // EC 0x25 = Data abort (current EL)?
+B.EQ handle_data_abort
+CMP  x1, #0x20            // EC 0x20 = Instruction abort (lower EL)?
+B.EQ handle_instr_abort</code></pre>
+
+                    <h4 id="ec-reference">Exception Class (EC) Quick Reference</h4>
+                    <p>The 6-bit EC field in ESR_ELx identifies why the exception occurred. The most important values you will encounter during kernel and hypervisor development are listed below. Note that many EC values come in AArch32/AArch64 pairs — for example, SVC from AArch32 is EC 0x11, while SVC from AArch64 is EC <strong>0x15</strong>.</p>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">Reference</span> ESR Exception Class Values</div>
+                        <div class="card-content">
+                            <table class="table table-bordered table-sm">
+                                <thead class="table-dark">
+                                    <tr><th>EC (hex)</th><th>EC (binary)</th><th>Exception Class</th><th>Typical Cause</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td><code>0x00</code></td><td>000000</td><td>Unknown / Uncategorised</td><td>Exceptions that don&rsquo;t match any defined EC</td></tr>
+                                    <tr><td><code>0x01</code></td><td>000001</td><td>Trapped WFI / WFE</td><td>Guest executes WFI/WFE, trapped by HCR_EL2.TWI/TWE</td></tr>
+                                    <tr><td><code>0x07</code></td><td>000111</td><td>SVE / SIMD / FP trapped</td><td>Access to SIMD/FP regs when CPACR_EL1.FPEN=0</td></tr>
+                                    <tr><td><code>0x0E</code></td><td>001110</td><td>Illegal Execution State</td><td>Invalid PSTATE (e.g. AArch32 at EL where not permitted)</td></tr>
+                                    <tr><td><code>0x11</code></td><td>010001</td><td>SVC from AArch32</td><td>AArch32 <code>SVC #imm</code> → system call (32-bit userspace)</td></tr>
+                                    <tr><td><code>0x12</code></td><td>010010</td><td>HVC from AArch32</td><td>AArch32 <code>HVC #imm</code> → hypervisor call</td></tr>
+                                    <tr><td><code>0x13</code></td><td>010011</td><td>SMC from AArch32</td><td>AArch32 <code>SMC #imm</code> → secure monitor call</td></tr>
+                                    <tr class="table-warning"><td><strong><code>0x15</code></strong></td><td>010101</td><td><strong>SVC from AArch64</strong></td><td>AArch64 <code>SVC #imm</code> → system call (64-bit userspace). The most common EC in a 64-bit Linux kernel.</td></tr>
+                                    <tr><td><code>0x16</code></td><td>010110</td><td>HVC from AArch64</td><td>AArch64 <code>HVC #imm</code> → hypervisor call (KVM, PSCI)</td></tr>
+                                    <tr><td><code>0x17</code></td><td>010111</td><td>SMC from AArch64</td><td>AArch64 <code>SMC #imm</code> → secure monitor call (TF-A/ATF)</td></tr>
+                                    <tr><td><code>0x18</code></td><td>011000</td><td>MSR / MRS / System trap</td><td>Trapped system register access from lower EL</td></tr>
+                                    <tr><td><code>0x19</code></td><td>011001</td><td>SVE access trapped</td><td>SVE instruction when CPACR_EL1.ZEN=0</td></tr>
+                                    <tr><td><code>0x20</code></td><td>100000</td><td>Instruction Abort (lower EL)</td><td>EL0 code fetch from unmapped / no-execute page</td></tr>
+                                    <tr><td><code>0x21</code></td><td>100001</td><td>Instruction Abort (current EL)</td><td>Kernel code fetch from invalid address (kernel bug)</td></tr>
+                                    <tr><td><code>0x22</code></td><td>100010</td><td>PC Alignment Fault</td><td>Branch to unaligned address</td></tr>
+                                    <tr><td><code>0x24</code></td><td>100100</td><td>Data Abort (lower EL)</td><td>EL0 read/write to unmapped page → page fault</td></tr>
+                                    <tr><td><code>0x25</code></td><td>100101</td><td>Data Abort (current EL)</td><td>Kernel null-pointer deref, bad memory access</td></tr>
+                                    <tr><td><code>0x26</code></td><td>100110</td><td>SP Alignment Fault</td><td>Stack pointer not 16-byte aligned</td></tr>
+                                    <tr><td><code>0x2C</code></td><td>101100</td><td>FP Exception (AArch64)</td><td>Unmasked IEEE-754 exception with FPCR trap enabled</td></tr>
+                                    <tr><td><code>0x30</code></td><td>110000</td><td>Breakpoint (lower EL)</td><td>BRK-based debug breakpoint from userspace</td></tr>
+                                    <tr><td><code>0x32</code></td><td>110010</td><td>Software Step (lower EL)</td><td>Single-step trap from debugger (MDSCR_EL1.SS=1)</td></tr>
+                                    <tr><td><code>0x34</code></td><td>110100</td><td>Watchpoint (lower EL)</td><td>Data watchpoint hit from userspace</td></tr>
+                                    <tr><td><code>0x38</code></td><td>111000</td><td>BKPT instruction (AArch32)</td><td>AArch32 <code>BKPT #imm</code></td></tr>
+                                    <tr><td><code>0x3C</code></td><td>111100</td><td>BRK instruction (AArch64)</td><td>AArch64 <code>BRK #imm</code> — used by KASAN, UBSAN</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Key Insight — EC 0x15 in Practice:</strong> When a 64-bit Linux userspace program calls <code>write()</code>, glibc executes <code>SVC #0</code>, which triggers a synchronous exception with EC=0x15 (SVC from AArch64). The kernel&rsquo;s EL1 vector table entry at offset +0x400 (synchronous, from lower EL AArch64) reads <code>ESR_EL1</code>, extracts bits [31:26], compares against 0x15, and branches to the system call handler. If you see EC=0x11 instead, it means a 32-bit AArch32 process made the SVC — which brings us to the topic of AArch32 compatibility.
+                    </div>
+
+                    <h4 id="aarch32-compat">AArch32 Support at Exception Levels</h4>
+                    <p>Modern Cortex-A cores vary in their AArch32 (32-bit ARM/Thumb) support at different exception levels. This is architecturally configurable — <code>HCR_EL2.RW</code> and <code>SCR_EL3.RW</code> control whether lower ELs execute in AArch32 or AArch64 state:</p>
+
+                    <div class="experiment-card">
+                        <div class="card-meta"><span class="bias-tag">Table</span> AArch32 Support by Cortex-A Generation</div>
+                        <div class="card-content">
+                            <table class="table table-bordered table-sm">
+                                <thead class="table-dark">
+                                    <tr><th>Core (Architecture)</th><th>EL0 AArch32</th><th>EL1 AArch32</th><th>EL2 AArch32</th><th>Notes</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td>Cortex-A53 (ARMv8.0-A)</td><td>&check;</td><td>&check;</td><td>&check;</td><td>Full AArch32 at all ELs</td></tr>
+                                    <tr><td>Cortex-A72 (ARMv8.0-A)</td><td>&check;</td><td>&check;</td><td>&check;</td><td>Full AArch32 at all ELs</td></tr>
+                                    <tr><td>Cortex-A75 (ARMv8.2-A)</td><td>&check;</td><td>&check;</td><td>&cross;</td><td>No AArch32 hypervisor; 32-bit OS + apps OK</td></tr>
+                                    <tr><td>Cortex-A76 (ARMv8.2-A)</td><td>&check;</td><td>&check;</td><td>&cross;</td><td>No AArch32 hypervisor; 32-bit OS + apps OK</td></tr>
+                                    <tr><td>Cortex-A78 (ARMv8.2-A)</td><td>&check;</td><td>&check;</td><td>&cross;</td><td>Same as A76</td></tr>
+                                    <tr><td>Cortex-A710 (ARMv9.0-A)</td><td>&check;</td><td>&cross;</td><td>&cross;</td><td>AArch32 at EL0 only — no 32-bit OS kernel</td></tr>
+                                    <tr><td>Cortex-A715 (ARMv9.0-A)</td><td>&cross;</td><td>&cross;</td><td>&cross;</td><td>First Cortex-A with <strong>zero</strong> AArch32 support</td></tr>
+                                    <tr><td>Cortex-X3 / A720 (ARMv9.2-A)</td><td>&cross;</td><td>&cross;</td><td>&cross;</td><td>AArch64-only — no 32-bit apps</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Practical Impact:</strong> On Cortex-A75/A76, you can still run a 32-bit Linux distribution (AArch32 kernel at EL1, 32-bit apps at EL0). Starting with A710, the kernel <em>must</em> be 64-bit — only EL0 (userspace) can execute AArch32 code, supporting legacy 32-bit Android apps. From A715 onward, AArch32 is gone entirely. If your ESR shows EC=0x0E (Illegal Execution State), it may mean an AArch32 binary tried to execute on a core that no longer supports it at that exception level.
+                    </div>
 
                     <!-- Vector Table -->
                     <h2 id="vector-table">Vector Table (VBAR_EL1)</h2>

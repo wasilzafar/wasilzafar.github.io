@@ -104,7 +104,7 @@
                 <div class="blog-meta">
                     <span><i class="fas fa-calendar me-2"></i>February 13, 2026</span>
                     <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
-                    <span class="reading-time"><i class="fas fa-clock me-1"></i>50 min read</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>55 min read</span>
                     <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
                 </div>
                 <p class="lead">Master computational approaches to materials science &mdash; density functional theory (DFT), molecular dynamics, Monte Carlo simulations, finite element methods, phase-field modeling, materials informatics, machine learning for materials discovery, and high-throughput computational screening.</p>
@@ -148,6 +148,7 @@
                 <ul>
                     <li><a href="#informatics" onclick="closeNav()">Materials Databases & Genome</a></li>
                     <li><a href="#ml-discovery" onclick="closeNav()">ML for Materials Discovery</a></li>
+                    <li><a href="#cdvae" onclick="closeNav()">Crystal Diffusion VAE (CDVAE)</a></li>
                     <li><a href="#high-throughput" onclick="closeNav()">High-Throughput Screening</a></li>
                 </ul>
             </li>
@@ -809,8 +810,150 @@ plt.show()</code></pre>
                     <li><strong>Random Forests / Gradient Boosting:</strong> Robust baseline models for tabular composition features. Interpretable via feature importance.</li>
                     <li><strong>Gaussian Process Regression (GPR):</strong> Provides uncertainty estimates alongside predictions &mdash; ideal for active learning loops where you want to know <em>what to compute next</em>.</li>
                     <li><strong>Graph Neural Networks (GNNs):</strong> CGCNN, MEGNet, M3GNet learn directly from crystal structure graphs. State-of-the-art accuracy for formation energy, band gap, and bulk modulus prediction.</li>
-                    <li><strong>Generative models:</strong> VAEs, GANs, and diffusion models trained on crystal structures can propose <em>entirely new</em> compositions and structures not in any existing database. CDVAE (Crystal Diffusion VAE) generates stable crystal structures with desired properties.</li>
+                    <li><strong>Generative models:</strong> VAEs, GANs, and diffusion models trained on crystal structures can propose <em>entirely new</em> compositions and structures not in any existing database. The most influential of these is <strong>CDVAE (Crystal Diffusion VAE)</strong>, covered in depth below.</li>
                 </ul>
+
+                <h4 id="cdvae">Crystal Diffusion VAE (CDVAE) &mdash; Generative Design of New Materials</h4>
+
+                <p>Traditional materials discovery works like searching a library &mdash; you look through existing shelves hoping to find what you need. <strong>CDVAE flips the paradigm</strong>: instead of searching, it <em>designs</em> entirely new crystal structures that have never existed before, optimized for specific properties you care about. Introduced by Xie et al. (2022) at MIT, CDVAE is the first generative model capable of producing <strong>stable, valid, periodic crystal structures</strong> in 3D &mdash; a breakthrough that earned it recognition as a milestone in AI-driven materials discovery.</p>
+
+                <div class="highlight-box">
+                    <i class="fas fa-lightbulb me-2"></i>
+                    <strong>Beginner Analogy:</strong> Imagine you could feed an AI every known architectural blueprint in the world, and it learned the <em>rules</em> of good building design &mdash; load-bearing walls, proper ventilation, structural symmetry. Now you ask it to design a building that doesn't exist yet, optimized for earthquake resistance. That's what CDVAE does for crystal structures: it learns the underlying physics from known crystals and then <strong>generates brand-new stable structures</strong> tailored to your requirements.
+                </div>
+
+                <h5>Why Traditional Generative Models Fail for Crystals</h5>
+
+                <p>Before CDVAE, researchers tried applying standard generative AI (VAEs, GANs) to crystal design, but crystals present unique challenges that images or molecules don't:</p>
+
+                <ul>
+                    <li><strong>Periodicity:</strong> Crystals repeat infinitely in 3D. The model must respect .periodic boundary conditions &mdash; atoms near a unit cell edge interact with atoms at the opposite edge.</li>
+                    <li><strong>Variable composition:</strong> Unlike molecules with fixed atom counts, a unit cell can have anywhere from 1 to 100+ atoms of different elements.</li>
+                    <li><strong>Continuous + discrete:</strong> Atom positions are continuous (x, y, z coordinates), but atom types are discrete (carbon, silicon, oxygen). The model must handle both simultaneously.</li>
+                    <li><strong>Symmetry awareness:</strong> Crystal properties depend on space group symmetry. A slight shift in atom positions can change a conductor into an insulator.</li>
+                </ul>
+
+                <p>CDVAE solves all of these problems by combining two powerful ideas: <strong>Variational Autoencoders (VAEs)</strong> for learning a compressed representation, and <strong>diffusion models</strong> for iteratively refining noisy atom positions into physically valid structures.</p>
+
+                <h5>How CDVAE Works &mdash; The Three-Stage Pipeline</h5>
+
+                <p>CDVAE operates in three stages, each handling a different aspect of crystal generation:</p>
+
+<pre><code class="language-bash">CDVAE Architecture: Three-Stage Crystal Generation Pipeline
+============================================================
+
+    KNOWN CRYSTAL                                              NEW CRYSTAL
+    (Training Data)                                            (Generated)
+    ┌─────────────┐                                          ┌─────────────┐
+    │ ● Si  ● Si  │                                          │ ● Ga  ● N   │
+    │   ● Si      │                                          │   ● Ga      │
+    │ ● Si  ● Si  │                                          │ ● N   ● Ga  │
+    └──────┬──────┘                                          └──────▲──────┘
+           │                                                        │
+           ▼                                                        │
+  ╔════════════════╗    ╔══════════════════╗    ╔════════════════════╗
+  ║   STAGE 1:     ║    ║    STAGE 2:      ║    ║    STAGE 3:       ║
+  ║   ENCODE       ║───▶║    DIFFUSE       ║───▶║    DECODE         ║
+  ╠════════════════╣    ╠══════════════════╣    ╠════════════════════╣
+  ║ Graph Neural   ║    ║ Forward: Add     ║    ║ Predict:          ║
+  ║ Network (GNN)  ║    ║ noise to atom    ║    ║ • Atom types      ║
+  ║                ║    ║ positions        ║    ║   (C, Si, Ga...)  ║
+  ║ Encodes:       ║    ║                  ║    ║ • Lattice params  ║
+  ║ • Atom types   ║    ║ Reverse: Denoise ║    ║   (a, b, c, α,   ║
+  ║ • Positions    ║    ║ step by step     ║    ║    β, γ)          ║
+  ║ • Lattice      ║    ║ to recover valid ║    ║ • Atom positions  ║
+  ║ • Bonds        ║    ║ positions        ║    ║   (x, y, z)       ║
+  ║   ↓            ║    ║   ↓              ║    ║                   ║
+  ║ Latent Vector  ║    ║ Denoising Score  ║    ║ Complete crystal  ║
+  ║ z ∈ ℝᵈ        ║    ║ Matching         ║    ║ structure         ║
+  ╚════════════════╝    ╚══════════════════╝    ╚════════════════════╝
+
+  Learns compressed        Handles continuous        Reconstructs full
+  representation of        atom coordinates via      periodic structure
+  crystal structure        iterative refinement      with valid chemistry</code></pre>
+
+                <p>Let's walk through each stage:</p>
+
+                <div class="highlight-box highlight-navy">
+                    <i class="fas fa-cogs me-2"></i>
+                    <strong>Stage 1 &mdash; Encode (GNN Encoder):</strong> A graph neural network treats each atom as a node and each bond as an edge. It reads the full crystal structure &mdash; atom types, 3D positions, and lattice parameters &mdash; and compresses everything into a compact <strong>latent vector</strong> $z \in \mathbb{R}^d$. Think of this as creating a "fingerprint" that captures the essence of the crystal's geometry and chemistry in a small number of dimensions.
+                </div>
+
+                <div class="highlight-box highlight-navy">
+                    <i class="fas fa-random me-2"></i>
+                    <strong>Stage 2 &mdash; Diffuse (Score Matching):</strong> This is the key innovation. The model takes the atom positions and gradually adds Gaussian noise, blurring them step by step until they look random. Then it learns to <strong>reverse this process</strong> &mdash; starting from random noise and progressively denoising to recover physically valid atom positions. This denoising score matching approach naturally respects the periodic boundary conditions of crystals. It is analogous to how image diffusion models (like DALL-E) start from static and gradually form a coherent picture.
+                </div>
+
+                <div class="highlight-box highlight-navy">
+                    <i class="fas fa-cubes me-2"></i>
+                    <strong>Stage 3 &mdash; Decode (Structure Prediction):</strong> From the denoised atom positions and the latent vector, the decoder predicts three things simultaneously: (1) <strong>atom types</strong> (which element each atom is), (2) <strong>lattice parameters</strong> (the six numbers defining the unit cell shape: $a, b, c, \alpha, \beta, \gamma$), and (3) <strong>fractional coordinates</strong> (exact positions within the cell). The result is a complete, periodic crystal structure ready for validation.
+                </div>
+
+                <h5>What Makes CDVAE Special &mdash; Comparison with Other Approaches</h5>
+
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr><th>Feature</th><th>Standard VAE</th><th>GAN</th><th>CDVAE</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Handles periodicity</strong></td><td>&#10008; No</td><td>&#10008; No</td><td>&#10004; Yes &mdash; periodic equivariant GNN</td></tr>
+                            <tr><td><strong>Variable atom count</strong></td><td>&#10008; Fixed size</td><td>&#10008; Fixed size</td><td>&#10004; Any number of atoms per cell</td></tr>
+                            <tr><td><strong>Continuous + discrete</strong></td><td>Continuous only</td><td>Continuous only</td><td>&#10004; Positions (continuous) + types (discrete)</td></tr>
+                            <tr><td><strong>Stability of outputs</strong></td><td>~15% stable</td><td>~20% stable</td><td><strong>~55% stable</strong> (near-DFT relaxed)</td></tr>
+                            <tr><td><strong>Valid crystal structures</strong></td><td>Often unphysical</td><td>Mode collapse</td><td>&#10004; Periodic, charge-balanced</td></tr>
+                            <tr><td><strong>Property optimization</strong></td><td>Limited</td><td>Conditional</td><td>&#10004; Latent space optimization</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h5>Generating Materials with Target Properties</h5>
+
+                <p>CDVAE's real power lies in <strong>conditional generation</strong> &mdash; not just producing any crystal, but producing crystals with <em>specific desired properties</em>. The process works like this:</p>
+
+                <ol>
+                    <li><strong>Train CDVAE</strong> on a large database of known crystal structures (e.g., Materials Project with 40,000+ structures)</li>
+                    <li><strong>Explore the latent space:</strong> Each point in the latent space $z$ corresponds to a potential crystal. Nearby points represent similar structures.</li>
+                    <li><strong>Optimize in latent space:</strong> Use gradient descent to find latent vectors $z^*$ that a property predictor (trained jointly or separately) predicts will have the desired property &mdash; for example, a band gap of exactly 1.5 eV for solar cells</li>
+                    <li><strong>Decode to crystal:</strong> Pass $z^*$ through the decoder + diffusion denoiser to produce a concrete structure</li>
+                    <li><strong>Validate with DFT:</strong> Run a full DFT relaxation and property calculation on the generated structure to confirm stability and properties</li>
+                </ol>
+
+                <div class="experiment-card">
+                    <h4><i class="fas fa-flask me-2"></i>Case Study: CDVAE Discovers Stable Perovskite Structures</h4>
+                    <div class="meta mb-2">
+                        <span class="badge bg-crimson me-2">Generative AI</span>
+                        <span class="badge bg-teal">Crystal Design</span>
+                    </div>
+                    <div class="content">
+                        <p>In the original 2022 paper by Xie et al. (MIT), CDVAE was trained on three challenging benchmark datasets to demonstrate its capabilities:</p>
+                        <ol>
+                            <li><strong>Perovskites (10,153 structures):</strong> Cubic ABX<sub>3</sub> perovskites widely used in solar cells. CDVAE generated structures with <strong>54.7% structural validity</strong> (vs. 1.6% for standard VAE), and matched the property distribution of formation energy within 0.1 eV/atom.</li>
+                            <li><strong>Carbon allotropes (10,153 structures):</strong> All-carbon structures with diverse lattices (graphite, diamond, fullerene variants). CDVAE achieved <strong>98.5% composition validity</strong> for this single-element challenge.</li>
+                            <li><strong>MP-20 (Materials Project, 45,231 structures):</strong> The most challenging dataset with up to 20 atoms per cell across 56 elements. CDVAE was the first model to generate stable multi-element structures at scale.</li>
+                        </ol>
+                        <p><strong>Key achievement:</strong> Using property-guided optimization in latent space, CDVAE generated perovskite structures with formation energies 15% lower (more stable) than the training data average &mdash; meaning it <em>discovered structures more stable than those it had seen</em>.</p>
+                    </div>
+                    <span class="bias-tag">Perovskites</span>
+                    <span class="bias-tag">Diffusion Models</span>
+                    <span class="bias-tag">Inverse Design</span>
+                </div>
+
+                <h5>Getting Started with CDVAE</h5>
+
+                <p>CDVAE is <strong>open source</strong> and available on GitHub (<code>txie-93/cdvae</code>). For beginners, here's a practical roadmap to understand and use generative crystal models:</p>
+
+                <ol>
+                    <li><strong>Prerequisites:</strong> Understand basic crystallography (Part 2 of this series) and Python. Familiarity with PyTorch and graph neural networks is helpful but not required to use pre-trained models.</li>
+                    <li><strong>Environment setup:</strong> CDVAE requires PyTorch, PyTorch Geometric (for GNNs), and <code>pymatgen</code> (for crystal structure handling). A GPU with 8+ GB VRAM is recommended for training.</li>
+                    <li><strong>Start with pre-trained models:</strong> The repository includes pre-trained weights for perovskite, carbon, and MP-20 datasets. Generate structures first, then validate with the <code>pymatgen</code> structure analyzer.</li>
+                    <li><strong>Validate your outputs:</strong> Always check generated structures against DFT before experimental synthesis. Use the <a href="https://materialsproject.org" target="_blank">Materials Project API</a> to compare formation energies against known phases.</li>
+                </ol>
+
+                <div class="highlight-box">
+                    <i class="fas fa-arrow-right me-2"></i>
+                    <strong>Beyond CDVAE:</strong> Since 2022, several follow-up models have extended CDVAE's ideas &mdash; <strong>DiffCSP</strong> (2023) adds explicit space group symmetry prediction, <strong>UniMat</strong> (2023) unifies molecular and crystal generation, and <strong>MatterGen</strong> (Microsoft, 2024) uses diffusion directly over atom types, positions, and lattice parameters for even higher stability rates (~90%). These all build on the core insight pioneered by CDVAE: <em>diffusion denoising is the right framework for crystal generation</em>.
+                </div>
 
                 <h4>Active Learning and Bayesian Optimization</h4>
 
