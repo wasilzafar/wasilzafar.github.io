@@ -68,7 +68,7 @@
                 <div class="blog-meta">
                     <span><i class="fas fa-calendar me-2"></i>February 6, 2026</span>
                     <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
-                    <span class="reading-time"><i class="fas fa-clock me-1"></i>35 min read</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>37 min read</span>
                     <button onclick="window.print()" class="print-btn"><i class="fas fa-print"></i> Print</button>
                 </div>
                 <p class="lead">Master the ELF format, understand sections (.text, .data, .bss), symbol tables, relocation entries, and the complete linking process from object files to executables and shared libraries.</p>
@@ -90,6 +90,7 @@
                     <li><a href="#text" onclick="closeNav()">.text (Code)</a></li>
                     <li><a href="#data" onclick="closeNav()">.data & .rodata</a></li>
                     <li><a href="#bss" onclick="closeNav()">.bss</a></li>
+                    <li><a href="#bss-elf" onclick="closeNav()">p_filesz vs p_memsz</a></li>
                 </ul>
             </li>
             <li><a href="#symbols" onclick="closeNav()">Symbol Tables</a></li>
@@ -276,6 +277,62 @@ section .rodata         ; Initialized read-only data
                     <pre><code class="language-nasm">section .bss            ; Uninitialized data (zero-filled)
     buffer resb 1024    ; Reserve 1024 bytes
     array resq 100      ; Reserve 100 quadwords</code></pre>
+
+                    <h3 id="bss-elf">How BSS Gets Zeroed: p_filesz vs p_memsz</h3>
+
+                    <p>A common question is: if <code>.bss</code> variables are "zero-filled", who actually writes those zeros? The answer lies in the ELF <strong>program headers</strong> — the structures the OS loader reads to map an executable into memory.</p>
+
+                    <p>Each loadable segment has a <code>PT_LOAD</code> program header containing two critical size fields:</p>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta"><span class="bias-tag">ELF</span><span class="bias-tag">Program Headers</span></div>
+                        <div class="experiment-content">
+                            <h5>p_filesz vs p_memsz in PT_LOAD Segments</h5>
+                            <table class="table table-bordered">
+                                <thead class="table-dark">
+                                    <tr><th>Field</th><th>Meaning</th><th>Example</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td><code>p_offset</code></td><td>Offset into the ELF file where segment data begins</td><td>0x1000</td></tr>
+                                    <tr><td><code>p_vaddr</code></td><td>Virtual address where the segment is loaded</td><td>0x601000</td></tr>
+                                    <tr><td><code>p_filesz</code></td><td>Number of bytes in the <em>file</em> (on disk)</td><td>0x120 (288 bytes)</td></tr>
+                                    <tr><td><code>p_memsz</code></td><td>Number of bytes in <em>memory</em> (at runtime)</td><td>0x920 (2336 bytes)</td></tr>
+                                    <tr><td><code>p_flags</code></td><td>Permissions (R / W / X)</td><td>RW (read-write)</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <p>The key insight: when <code>p_memsz &gt; p_filesz</code>, the loader reads <code>p_filesz</code> bytes from the file (the initialised <code>.data</code> variables) and then <strong>zero-fills</strong> the remaining <code>p_memsz − p_filesz</code> bytes. That zero-filled region is exactly where <code>.bss</code> lives. Because <code>.bss</code> contains no data in the file, it adds zero bytes to the ELF on disk — saving space while still guaranteeing zeroed memory at runtime.</p>
+
+<pre><code class="language-plaintext">ELF File on Disk              Memory at Runtime
+┌───────────────────┐         ┌───────────────────┐
+│   ELF Header      │         │                   │
+├───────────────────┤         │   .text (code)    │
+│   .text (code)    │────────▶│                   │
+├───────────────────┤         ├───────────────────┤
+│   .data (init'd)  │────────▶│   .data (init'd)  │  ← p_filesz bytes
+├───────────────────┤         ├───────────────────┤
+│                   │         │   .bss (zeroed)   │  ← loader writes zeros
+│   (not in file!)  │         │   p_memsz-p_filesz│
+│                   │         ├───────────────────┤
+└───────────────────┘         └───────────────────┘</code></pre>
+
+                    <p>You can inspect these fields with <code>readelf -l</code>:</p>
+
+<pre><code class="language-bash"># Examine program headers — look at the DATA segment
+$ readelf -l program
+
+#   Type   Offset   VirtAddr         FileSiz  MemSiz   Flg
+#   LOAD   0x001000 0x0000000000601000 0x000120 0x000920 RW
+#                                      ^^^^^^^^ ^^^^^^^^
+#                                      p_filesz p_memsz
+#   Difference (0x800 = 2048 bytes) is .bss, zero-filled by the loader</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Why it matters:</strong> This design means a program with a 1 MB <code>.bss</code> array adds exactly <em>zero</em> bytes to the executable file. The linker simply sets <code>p_memsz = p_filesz + bss_size</code>, and the OS kernel's <code>load_elf_binary()</code> function (or the dynamic linker <code>ld.so</code>) handles zero-filling when it maps the segment via <code>mmap</code> + anonymous pages.
+                    </div>
                 </div>
 
                 <div id="symbols" class="blog-content mt-5">
