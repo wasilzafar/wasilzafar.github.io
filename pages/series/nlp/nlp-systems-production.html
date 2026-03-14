@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Part 15 of the Complete NLP Series: Master NLP in production—MLOps, model optimization, quantization, distillation, deployment strategies, monitoring, A/B testing, and scalable NLP pipelines." />
     <meta name="author" content="Wasil Zafar" />
-    <meta name="keywords" content="NLP Production, MLOps, Model Deployment, Quantization, Distillation, ONNX, TensorRT, Docker, Kubernetes, Model Monitoring, A/B Testing, Scalability" />
+    <meta name="keywords" content="NLP Production, MLOps, Model Deployment, Quantization, Distillation, ONNX, TensorRT, Docker, Kubernetes, Model Monitoring, A/B Testing, Scalability, KV Cache, PagedAttention, vLLM, TensorRT-LLM, Continuous Batching, Speculative Decoding, Model Parallelism, TTFT, LLM Inference" />
     <meta property="og:title" content="NLP Systems, Optimization & Production - Complete NLP Series Part 15" />
     <meta property="og:description" content="Deploy and optimize NLP models in production environments with MLOps best practices." />
     <meta property="og:type" content="article" />
@@ -75,7 +75,7 @@
                 <div class="blog-meta">
                     <span><i class="fas fa-calendar me-2"></i>January 27, 2026</span>
                     <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
-                    <span class="reading-time"><i class="fas fa-clock me-1"></i>45 min read</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>60 min read</span>
                     <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
                 </div>
                 <p class="lead">Part 15 of 16: Deploy and optimize NLP models in production environments with MLOps best practices.</p>
@@ -97,6 +97,16 @@
                     <li><a href="#quantization" onclick="closeNav()">Quantization</a></li>
                     <li><a href="#distillation" onclick="closeNav()">Knowledge Distillation</a></li>
                     <li><a href="#pruning" onclick="closeNav()">Pruning & Sparsity</a></li>
+                </ul>
+            </li>
+            <li><a href="#llm-inference" onclick="closeNav()">LLM Inference Optimization</a>
+                <ul>
+                    <li><a href="#kv-cache" onclick="closeNav()">KV Caching & PagedAttention</a></li>
+                    <li><a href="#continuous-batching" onclick="closeNav()">Continuous Batching</a></li>
+                    <li><a href="#speculative-decoding" onclick="closeNav()">Speculative Decoding</a></li>
+                    <li><a href="#model-parallelism" onclick="closeNav()">Model Parallelism</a></li>
+                    <li><a href="#inference-frameworks" onclick="closeNav()">Inference Frameworks</a></li>
+                    <li><a href="#inference-metrics" onclick="closeNav()">Performance Metrics</a></li>
                 </ul>
             </li>
             <li><a href="#deployment" onclick="closeNav()">Deployment Strategies</a>
@@ -631,6 +641,631 @@ compressed_estimate = original_params * 0.5 * 0.25  # 50% pruned, 4x quantized
 print(f"Estimated compression: {original_params/compressed_estimate:.1f}x")
 </code></pre>
                             </div>
+                        </div>
+
+                        <h2 id="llm-inference"><i class="fas fa-bolt me-2"></i>LLM Inference Optimization</h2>
+
+                        <p>While the previous section covered general model compression (quantization, distillation, pruning), large language models introduce a fundamentally different inference challenge. LLMs generate text <strong>one token at a time</strong>—each new token requires a forward pass through the entire model, and generation can run for hundreds or thousands of steps. This autoregressive loop means that naive inference is painfully slow and wasteful: most of the computation is redundant because the model re-examines the same preceding tokens at every step.</p>
+
+                        <p>LLM inference optimization focuses on eliminating this redundancy and maximising GPU utilisation during generation. The techniques below can reduce latency by 5-20× and cut serving costs by 3-10× compared to unoptimised inference, making the difference between a product that costs $0.50 per query and one that costs $0.03.</p>
+
+                        <h3 id="kv-cache">KV Caching &amp; PagedAttention</h3>
+
+                        <p>In the Transformer's self-attention mechanism, every token's representation depends on <strong>Key (K)</strong> and <strong>Value (V)</strong> projections of all preceding tokens. Without caching, generating the 100th token would redundantly recompute the K and V matrices for tokens 1–99. <strong>KV caching</strong> stores these intermediate K/V tensors so they're computed only once, turning each generation step from O(n²) to O(n) in sequence length. This is the single most important inference optimisation—virtually every production system uses it.</p>
+
+                        <div class="highlight-box">
+                            <h4><i class="fas fa-lightbulb me-2"></i>The KV Cache Problem</h4>
+                            <p>KV caching trades memory for speed. A 70B-parameter model with a 4K context window needs ~2 GB of KV cache <em>per request</em>. At 128K context, that grows to ~64 GB. When serving thousands of concurrent users, KV cache memory becomes the primary bottleneck—not model weights.</p>
+                        </div>
+
+<pre><code class="language-python">import numpy as np
+
+# Demonstrate KV caching: with vs without cache
+def attention_without_cache(queries, keys, values):
+    """Standard attention — recomputes everything each step."""
+    seq_len = len(queries)
+    total_ops = 0
+    outputs = []
+    
+    for step in range(seq_len):
+        # At each step, attend over ALL keys/values up to this point
+        q = queries[step]
+        k_all = keys[:step + 1]    # Recomputed every step!
+        v_all = values[:step + 1]  # Recomputed every step!
+        
+        scores = [np.dot(q, k) for k in k_all]
+        total_ops += len(k_all)
+        outputs.append(np.mean(v_all, axis=0))  # Simplified
+    
+    return outputs, total_ops
+
+
+def attention_with_kv_cache(queries, keys, values):
+    """Cached attention — stores K/V and only computes the new token."""
+    seq_len = len(queries)
+    total_ops = 0
+    outputs = []
+    
+    kv_cache_k = []  # Persistent cache
+    kv_cache_v = []
+    
+    for step in range(seq_len):
+        q = queries[step]
+        
+        # Only compute K/V for the NEW token, append to cache
+        kv_cache_k.append(keys[step])
+        kv_cache_v.append(values[step])
+        
+        # Attend using cached K/V (no recomputation)
+        scores = [np.dot(q, k) for k in kv_cache_k]
+        total_ops += 1  # Only 1 new K/V computed
+        outputs.append(np.mean(kv_cache_v, axis=0))
+    
+    return outputs, total_ops
+
+
+# Compare
+np.random.seed(42)
+seq_len = 50
+dim = 64
+queries = [np.random.randn(dim) for _ in range(seq_len)]
+keys = [np.random.randn(dim) for _ in range(seq_len)]
+values = [np.random.randn(dim) for _ in range(seq_len)]
+
+_, ops_no_cache = attention_without_cache(queries, keys, values)
+_, ops_cached = attention_with_kv_cache(queries, keys, values)
+
+print("KV Caching: Computation Savings")
+print("=" * 50)
+print(f"Sequence length:           {seq_len} tokens")
+print(f"Without cache (K/V ops):   {ops_no_cache}")
+print(f"With KV cache (K/V ops):   {ops_cached}")
+print(f"Reduction:                 {(1 - ops_cached/ops_no_cache)*100:.1f}%")
+</code></pre>
+
+                        <p><strong>PagedAttention</strong>, introduced by the vLLM framework, solves the memory fragmentation problem that plagues KV caching. Standard KV caches allocate a contiguous block of GPU memory for each request's maximum possible sequence length. If a request uses only 500 out of 4,096 allocated slots, the remaining 3,596 slots are wasted—but inaccessible to other requests. PagedAttention borrows the concept of <strong>virtual memory paging</strong> from operating systems: it divides the KV cache into fixed-size "pages" (blocks) that are allocated on demand and can be stored non-contiguously in GPU memory.</p>
+
+                        <div class="experiment-card">
+                            <h4><i class="fas fa-memory me-2"></i>PagedAttention: OS-Inspired Memory Management</h4>
+                            <div class="meta mb-2">
+                                <span class="badge bg-teal me-2">vLLM</span>
+                                <span class="badge bg-crimson">Memory Efficiency</span>
+                            </div>
+                            <div class="content">
+                                <table class="table table-bordered">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Aspect</th>
+                                            <th>Traditional KV Cache</th>
+                                            <th>PagedAttention</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td><strong>Memory allocation</strong></td><td>Pre-allocate max sequence length per request</td><td>Allocate fixed-size pages on demand</td></tr>
+                                        <tr><td><strong>Memory waste</strong></td><td>60-80% wasted on average</td><td>&lt;4% internal fragmentation</td></tr>
+                                        <tr><td><strong>Concurrent requests</strong></td><td>Limited by worst-case allocation</td><td>2-4× more requests in same GPU memory</td></tr>
+                                        <tr><td><strong>Shared prefixes</strong></td><td>Duplicated across requests</td><td>Copy-on-write sharing (system prompts)</td></tr>
+                                    </tbody>
+                                </table>
+                                <p class="mb-0"><strong>Impact:</strong> PagedAttention increased vLLM's throughput by 2-4× over HuggingFace Transformers and 1.5-2× over TGI by eliminating memory waste, allowing significantly more concurrent requests on the same GPU hardware.</p>
+                            </div>
+                        </div>
+
+                        <h3 id="continuous-batching">Continuous Batching</h3>
+
+                        <p>Traditional <strong>static batching</strong> groups N requests together and processes them as a single batch. The problem: all requests must wait until the <em>longest</em> response in the batch finishes before any results are returned. If one request generates 10 tokens and another generates 500 tokens, the short request sits idle for 490 extra generation steps.</p>
+
+                        <p><strong>Continuous batching</strong> (also called <em>iteration-level batching</em> or <em>inflight batching</em>) solves this by inserting new requests into the batch at every generation step, and ejecting completed requests immediately. This keeps the GPU saturated at all times rather than wasting cycles on padding.</p>
+
+<pre><code class="language-python">import numpy as np
+
+# Static vs Continuous Batching Simulation
+def simulate_static_batching(requests, batch_size=4):
+    """Static batching: wait for all in batch to finish."""
+    total_time = 0
+    total_idle = 0
+    
+    for i in range(0, len(requests), batch_size):
+        batch = requests[i:i + batch_size]
+        max_tokens = max(batch)
+        batch_time = max_tokens  # Time = longest request
+        
+        # Idle time: sum of (max - each request's length)
+        idle = sum(max_tokens - t for t in batch)
+        total_time += batch_time
+        total_idle += idle
+    
+    return total_time, total_idle
+
+
+def simulate_continuous_batching(requests, batch_size=4):
+    """Continuous batching: eject finished, insert new immediately."""
+    total_time = 0
+    queue = list(requests)
+    active = []
+    
+    # Fill initial batch
+    while queue and len(active) < batch_size:
+        active.append(queue.pop(0))
+    
+    while active:
+        # Process one step
+        total_time += 1
+        active = [t - 1 for t in active]
+        
+        # Remove completed requests (0 tokens left)
+        completed = active.count(0)
+        active = [t for t in active if t > 0]
+        
+        # Immediately insert new requests from queue
+        while queue and len(active) < batch_size:
+            active.append(queue.pop(0))
+    
+    return total_time, 0  # Near-zero idle time
+
+
+# Simulate 20 requests with varying output lengths
+np.random.seed(42)
+requests = np.random.randint(10, 200, size=20).tolist()
+
+static_time, static_idle = simulate_static_batching(requests, batch_size=4)
+continuous_time, _ = simulate_continuous_batching(requests, batch_size=4)
+
+print("Batching Strategy Comparison")
+print("=" * 55)
+print(f"Requests: {len(requests)}, Batch size: 4")
+print(f"Token lengths: min={min(requests)}, max={max(requests)}, "
+      f"avg={np.mean(requests):.0f}")
+print()
+print(f"{'Metric':<30} {'Static':<15} {'Continuous':<15}")
+print("-" * 55)
+print(f"{'Total processing time':<30} {static_time:<15} {continuous_time:<15}")
+print(f"{'Wasted GPU cycles':<30} {static_idle:<15} {'~0':<15}")
+print(f"{'Throughput improvement':<30} {'1.0x':<15} "
+      f"{static_time/continuous_time:.2f}x")
+</code></pre>
+
+                        <h3 id="speculative-decoding">Speculative Decoding</h3>
+
+                        <p><strong>Speculative decoding</strong> accelerates inference by using a small, fast "draft" model to predict multiple tokens ahead, then verifying them all at once with the large target model. The key insight is that LLM inference is <strong>memory-bandwidth bound</strong>, not compute-bound—a single forward pass through a 70B model takes the same time whether it processes 1 token or 5 tokens (because loading model weights from GPU memory dominates). So verifying 5 speculated tokens costs barely more than generating 1 token normally.</p>
+
+                        <div class="experiment-card">
+                            <h4><i class="fas fa-forward me-2"></i>Speculative Decoding: How It Works</h4>
+                            <div class="content">
+<pre><code class="language-python"># Speculative Decoding — Conceptual Walkthrough
+import numpy as np
+
+np.random.seed(42)
+
+def speculative_decode_demo():
+    """
+    Speculative decoding in 4 steps:
+    1. Draft model generates K candidate tokens (fast)
+    2. Target model verifies all K tokens in ONE forward pass
+    3. Accept tokens until first mismatch
+    4. Resample from target distribution at mismatch point
+    """
+    
+    # Simulated token probabilities
+    vocab = ["The", "cat", "sat", "on", "mat", "dog", "ran", "the"]
+    
+    # Step 1: Draft model generates 4 candidates quickly
+    draft_tokens = ["cat", "sat", "on", "the"]  
+    draft_probs = [0.7, 0.8, 0.6, 0.5]  # Draft model's confidence
+    
+    # Step 2: Target model scores ALL 4 tokens in one pass
+    target_probs = [0.65, 0.85, 0.7, 0.3]  # Target model's probabilities
+    
+    print("Speculative Decoding Demo")
+    print("=" * 60)
+    print(f"\nDraft model proposes: {draft_tokens}")
+    print(f"Draft confidence:     {draft_probs}")
+    print(f"Target verification:  {target_probs}")
+    print()
+    
+    # Step 3: Accept/reject using rejection sampling
+    accepted = []
+    for i, (token, p_draft, p_target) in enumerate(
+        zip(draft_tokens, draft_probs, target_probs)
+    ):
+        # Accept if target probability >= draft probability
+        acceptance_rate = min(1.0, p_target / p_draft)
+        random_val = np.random.random()
+        accept = random_val < acceptance_rate
+        
+        status = "ACCEPTED" if accept else "REJECTED"
+        accepted.append((token, accept))
+        print(f"  Token '{token}': p_draft={p_draft:.2f}, "
+              f"p_target={p_target:.2f}, "
+              f"accept_rate={acceptance_rate:.2f} → {status}")
+        
+        if not accept:
+            print(f"  → Resample from target distribution at position {i}")
+            break
+    
+    # Results
+    accepted_tokens = [t for t, a in accepted if a]
+    print(f"\nAccepted {len(accepted_tokens)} of {len(draft_tokens)} "
+          f"draft tokens in ONE target model call")
+    
+    # Speedup analysis
+    K = 4  # Draft length
+    avg_accepted = 2.5  # Typical acceptance rate
+    # Without speculation: 1 target call per token
+    # With speculation: 1 target call per K draft tokens
+    speedup = (avg_accepted + 1) / (1 + K * 0.05)  # Draft cost ~5% of target
+    print(f"\nEstimated speedup: {speedup:.2f}x")
+    print(f"  (Processes ~{avg_accepted:.1f} tokens per target model call "
+          f"instead of 1)")
+
+speculative_decode_demo()
+</code></pre>
+                                <p class="mb-0"><strong>Key requirement:</strong> The draft model must be much faster than the target (typically 10-50× smaller). Common pairings: Llama-7B drafting for Llama-70B, or a model's early layers drafting for the full model (self-speculative decoding). The output is <em>mathematically identical</em> to standard decoding—speculation never degrades quality.</p>
+                            </div>
+                        </div>
+
+                        <h3 id="model-parallelism">Model Parallelism</h3>
+
+                        <p>When a model is too large to fit on a single GPU, <strong>model parallelism</strong> distributes it across multiple devices. This is distinct from <strong>data parallelism</strong> (same model on each GPU, different data)—model parallelism splits the model itself. Two complementary strategies exist:</p>
+
+                        <div class="experiment-card">
+                            <h4><i class="fas fa-sitemap me-2"></i>Tensor vs Pipeline Parallelism</h4>
+                            <div class="content">
+                                <table class="table table-bordered">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Strategy</th>
+                                            <th>How It Splits</th>
+                                            <th>Communication</th>
+                                            <th>Best For</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>Tensor Parallelism (TP)</strong></td>
+                                            <td>Splits individual weight matrices across GPUs (e.g., a 4096×4096 layer split into two 4096×2048 chunks)</td>
+                                            <td>All-reduce after every layer — requires high-bandwidth interconnect (NVLink)</td>
+                                            <td>Within a single node (2-8 GPUs with NVLink)</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Pipeline Parallelism (PP)</strong></td>
+                                            <td>Assigns consecutive layers to different GPUs (e.g., layers 1-20 on GPU 0, layers 21-40 on GPU 1)</td>
+                                            <td>Point-to-point after each stage — tolerates lower bandwidth</td>
+                                            <td>Across nodes connected by InfiniBand/Ethernet</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+<pre><code class="language-python">import numpy as np
+
+# Model Parallelism: Memory and Compute Analysis
+def parallelism_analysis(model_params_b, num_gpus, gpu_mem_gb=80):
+    """Analyse parallelism strategies for large model deployment."""
+    
+    # Model memory (FP16: 2 bytes per parameter)
+    model_mem_gb = model_params_b * 2 / (1024**3)
+    
+    # KV cache memory per request (approximate)
+    kv_per_request_gb = model_params_b * 0.03 / (1024**3)  # ~3% of model
+    
+    print(f"Model Parallelism Analysis: {model_params_b/1e9:.0f}B Parameters")
+    print("=" * 65)
+    print(f"Model memory (FP16):        {model_mem_gb:.1f} GB")
+    print(f"KV cache per request:       {kv_per_request_gb:.2f} GB")
+    print(f"Available GPUs:             {num_gpus} × {gpu_mem_gb} GB")
+    print(f"Total GPU memory:           {num_gpus * gpu_mem_gb} GB")
+    print()
+    
+    # Strategy analysis
+    strategies = {
+        "No Parallelism": {
+            "gpus_needed": int(np.ceil(model_mem_gb / gpu_mem_gb)),
+            "mem_per_gpu": model_mem_gb,
+            "constraint": "Model must fit on 1 GPU"
+        },
+        f"Tensor Parallel (TP={num_gpus})": {
+            "gpus_needed": num_gpus,
+            "mem_per_gpu": model_mem_gb / num_gpus,
+            "constraint": "Needs NVLink between GPUs"
+        },
+        f"Pipeline Parallel (PP={num_gpus})": {
+            "gpus_needed": num_gpus,
+            "mem_per_gpu": model_mem_gb / num_gpus,
+            "constraint": "Adds latency (pipeline bubbles)"
+        },
+        f"TP=2 + PP={num_gpus//2}": {
+            "gpus_needed": num_gpus,
+            "mem_per_gpu": model_mem_gb / num_gpus,
+            "constraint": "Best of both — standard for large models"
+        }
+    }
+    
+    print(f"{'Strategy':<30} {'Mem/GPU':<12} {'Fits?':<8} {'Constraint'}")
+    print("-" * 65)
+    for name, info in strategies.items():
+        fits = "Yes" if info["mem_per_gpu"] <= gpu_mem_gb * 0.85 else "No"
+        print(f"{name:<30} {info['mem_per_gpu']:.1f} GB"
+              f"     {fits:<8} {info['constraint']}")
+    
+    # Remaining memory for KV cache (serving capacity)
+    mem_for_kv = (gpu_mem_gb * num_gpus * 0.85) - model_mem_gb
+    max_concurrent = int(mem_for_kv / kv_per_request_gb) if kv_per_request_gb > 0 else 0
+    print(f"\nServing capacity (TP={num_gpus}):")
+    print(f"  Memory for KV cache:      {mem_for_kv:.1f} GB")
+    print(f"  Max concurrent requests:  ~{max_concurrent}")
+
+
+# Analyse a 70B model on 4× A100 80GB GPUs
+parallelism_analysis(70e9, num_gpus=4, gpu_mem_gb=80)
+print()
+# Analyse a 405B model on 8× H100 80GB GPUs
+parallelism_analysis(405e9, num_gpus=8, gpu_mem_gb=80)
+</code></pre>
+
+                        <h3 id="inference-frameworks">Inference Frameworks</h3>
+
+                        <p>Dedicated LLM inference frameworks bundle KV caching, continuous batching, quantization, and parallelism into production-ready servers. Choosing the right framework depends on your hardware, model, and throughput requirements. Here are the leading options:</p>
+
+                        <div class="experiment-card">
+                            <h4><i class="fas fa-tools me-2"></i>Top LLM Inference Frameworks</h4>
+                            <div class="meta mb-2">
+                                <span class="badge bg-teal me-2">Production Ready</span>
+                                <span class="badge bg-crimson">2025</span>
+                            </div>
+                            <div class="content">
+                                <table class="table table-bordered">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Framework</th>
+                                            <th>Developer</th>
+                                            <th>Key Feature</th>
+                                            <th>Best For</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>vLLM</strong></td>
+                                            <td>UC Berkeley</td>
+                                            <td>PagedAttention — eliminates KV cache memory waste</td>
+                                            <td>High-throughput serving, multi-model</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>TensorRT-LLM</strong></td>
+                                            <td>NVIDIA</td>
+                                            <td>Custom CUDA kernels, FP8 quantization, in-flight batching</td>
+                                            <td>Maximum NVIDIA GPU performance</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>TGI</strong></td>
+                                            <td>Hugging Face</td>
+                                            <td>Native HF model support, Flash Attention, watermarking</td>
+                                            <td>Quick deployment of HF models</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>BentoML</strong></td>
+                                            <td>BentoML Inc.</td>
+                                            <td>Flexible model composition, adaptive batching, REST/gRPC</td>
+                                            <td>Multi-model pipelines, custom logic</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>llama.cpp</strong></td>
+                                            <td>Community</td>
+                                            <td>CPU-optimised C++ inference, GGUF quantization</td>
+                                            <td>Local/edge deployment without GPU</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>SGLang</strong></td>
+                                            <td>Stanford</td>
+                                            <td>RadixAttention for prefix caching, structured generation</td>
+                                            <td>Complex prompting workflows</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+<pre><code class="language-python"># Quick-start examples for popular inference frameworks
+
+# 1. vLLM — High-throughput serving with PagedAttention
+vllm_example = """
+# Install: pip install vllm
+
+# Python API
+from vllm import LLM, SamplingParams
+
+llm = LLM(
+    model="meta-llama/Llama-3.1-8B-Instruct",
+    tensor_parallel_size=2,        # Split across 2 GPUs
+    max_model_len=8192,            # Max context window
+    gpu_memory_utilization=0.90    # Use 90% of GPU memory for KV cache
+)
+
+params = SamplingParams(temperature=0.7, max_tokens=256, top_p=0.9)
+outputs = llm.generate(["Explain KV caching in simple terms:"], params)
+print(outputs[0].outputs[0].text)
+
+# Or run as OpenAI-compatible server:
+# vllm serve meta-llama/Llama-3.1-8B-Instruct --tensor-parallel-size 2
+"""
+print("1. vLLM Example:")
+print(vllm_example)
+
+# 2. TGI (Text Generation Inference) — Hugging Face server
+tgi_example = """
+# Run with Docker (recommended):
+docker run --gpus all -p 8080:80 \\
+    -v $PWD/models:/data \\
+    ghcr.io/huggingface/text-generation-inference:latest \\
+    --model-id meta-llama/Llama-3.1-8B-Instruct \\
+    --quantize bitsandbytes-nf4 \\
+    --max-input-tokens 4096 \\
+    --max-total-tokens 8192
+
+# Query the server:
+curl http://localhost:8080/generate \\
+    -H 'Content-Type: application/json' \\
+    -d '{"inputs": "What is speculative decoding?", "parameters": {"max_new_tokens": 200}}'
+"""
+print("2. TGI Example:")
+print(tgi_example)
+
+# 3. BentoML — Flexible model serving
+bentoml_example = """
+# Install: pip install bentoml openllm
+
+# Serve with OpenLLM (BentoML's LLM extension):
+openllm start meta-llama/Llama-3.1-8B-Instruct \\
+    --backend vllm \\
+    --quantize int4
+
+# Or define custom service (service.py):
+import bentoml
+from vllm import LLM, SamplingParams
+
+@bentoml.service(resources={"gpu": 1, "memory": "16Gi"})
+class LLMService:
+    def __init__(self):
+        self.llm = LLM(model="meta-llama/Llama-3.1-8B-Instruct")
+    
+    @bentoml.api
+    def generate(self, prompt: str, max_tokens: int = 256) -> str:
+        params = SamplingParams(max_tokens=max_tokens, temperature=0.7)
+        output = self.llm.generate([prompt], params)
+        return output[0].outputs[0].text
+"""
+print("3. BentoML Example:")
+print(bentoml_example)
+</code></pre>
+
+                        <h3 id="inference-metrics">Key Performance Metrics</h3>
+
+                        <p>Measuring LLM inference performance requires metrics beyond simple "requests per second." The autoregressive nature of text generation means users experience latency in two distinct phases: waiting for the first token, and then watching tokens stream in. Understanding these metrics is essential for setting SLOs (Service Level Objectives) and identifying bottlenecks.</p>
+
+                        <div class="experiment-card">
+                            <h4><i class="fas fa-chart-bar me-2"></i>LLM Inference Metrics</h4>
+                            <div class="content">
+                                <table class="table table-bordered">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Metric</th>
+                                            <th>Definition</th>
+                                            <th>Target (Production)</th>
+                                            <th>Affected By</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>TTFT</strong><br><small>Time To First Token</small></td>
+                                            <td>Latency from request to first generated token</td>
+                                            <td>&lt;500 ms (interactive),<br>&lt;2s (batch)</td>
+                                            <td>Prompt length, model size, prefill compute</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>TBT</strong><br><small>Time Between Tokens</small></td>
+                                            <td>Average time between consecutive generated tokens</td>
+                                            <td>&lt;50 ms (~20 tokens/s for readable streaming)</td>
+                                            <td>Model size, KV cache, GPU memory bandwidth</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Throughput</strong><br><small>Tokens/second</small></td>
+                                            <td>Total tokens generated per second across all requests</td>
+                                            <td>Depends on GPU — H100 can exceed 10K tokens/s</td>
+                                            <td>Batch size, parallelism, continuous batching</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>E2E Latency</strong><br><small>End-to-End</small></td>
+                                            <td>Total time from request to final token: TTFT + (TBT × output_tokens)</td>
+                                            <td>Varies by output length</td>
+                                            <td>All of the above combined</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+<pre><code class="language-python">import numpy as np
+
+# LLM Inference Performance Calculator
+def calculate_inference_metrics(
+    model_params_b,
+    gpu_bandwidth_tb_s,
+    batch_size,
+    prompt_length,
+    output_length,
+    num_gpus=1,
+    quantization_bits=16
+):
+    """
+    Estimate key LLM inference metrics from hardware specs.
+    
+    The decode phase is memory-bandwidth bound:
+    each token requires loading all model weights from GPU memory.
+    """
+    # Model size in bytes
+    bytes_per_param = quantization_bits / 8
+    model_size_bytes = model_params_b * bytes_per_param
+    model_size_gb = model_size_bytes / (1024**3)
+    
+    # Effective bandwidth across GPUs (GB/s)
+    total_bandwidth_gb_s = gpu_bandwidth_tb_s * 1024 * num_gpus
+    
+    # TTFT (prefill): process all prompt tokens in parallel
+    # Compute-bound: ~2 FLOPs per parameter per token
+    gpu_tflops = gpu_bandwidth_tb_s * 200  # Rough H100 ratio
+    prefill_flops = 2 * model_params_b * prompt_length
+    ttft_ms = (prefill_flops / (gpu_tflops * 1e12)) * 1000
+    
+    # TBT (decode): load full model weights for each token
+    # Memory-bandwidth bound: time = model_size / bandwidth
+    time_per_token_s = model_size_bytes / (total_bandwidth_gb_s * 1024**3)
+    tbt_ms = time_per_token_s * 1000 / batch_size  # Amortised over batch
+    
+    # Throughput
+    tokens_per_second = batch_size / time_per_token_s
+    
+    # End-to-end latency for one request
+    e2e_ms = ttft_ms + (tbt_ms * output_length)
+    
+    return {
+        "model_size_gb": model_size_gb,
+        "ttft_ms": ttft_ms,
+        "tbt_ms": tbt_ms,
+        "tokens_per_second": tokens_per_second,
+        "e2e_latency_ms": e2e_ms
+    }
+
+# Scenario: Llama 3.1 8B on 1× H100
+print("LLM Inference Performance Estimates")
+print("=" * 55)
+
+configs = [
+    {"name": "8B FP16, 1×H100", "params": 8e9, "bw": 3.35,
+     "batch": 1, "prompt": 512, "output": 256, "gpus": 1, "bits": 16},
+    {"name": "8B INT8, 1×H100", "params": 8e9, "bw": 3.35,
+     "batch": 1, "prompt": 512, "output": 256, "gpus": 1, "bits": 8},
+    {"name": "8B INT8, 1×H100 (batch=32)", "params": 8e9, "bw": 3.35,
+     "batch": 32, "prompt": 512, "output": 256, "gpus": 1, "bits": 8},
+    {"name": "70B INT8, 4×H100", "params": 70e9, "bw": 3.35,
+     "batch": 8, "prompt": 512, "output": 256, "gpus": 4, "bits": 8},
+]
+
+print(f"{'Config':<35} {'TTFT':<12} {'TBT':<12} {'Throughput':<15}")
+print("-" * 55)
+for cfg in configs:
+    m = calculate_inference_metrics(
+        cfg["params"], cfg["bw"], cfg["batch"],
+        cfg["prompt"], cfg["output"], cfg["gpus"], cfg["bits"]
+    )
+    print(f"{cfg['name']:<35} {m['ttft_ms']:<12.1f}ms "
+          f"{m['tbt_ms']:<12.1f}ms "
+          f"{m['tokens_per_second']:<15,.0f} tok/s")
+</code></pre>
+
+                        <div class="highlight-box highlight-navy">
+                            <h4><i class="fas fa-info-circle me-2"></i>Putting It All Together</h4>
+                            <p>A modern LLM serving stack combines these techniques in layers: <strong>Quantization</strong> (INT8/INT4) shrinks the model to fit on fewer GPUs → <strong>Tensor parallelism</strong> splits it across GPUs within a node → <strong>KV caching with PagedAttention</strong> manages memory → <strong>Continuous batching</strong> keeps GPUs saturated → <strong>Speculative decoding</strong> accelerates individual requests. Frameworks like vLLM and TensorRT-LLM integrate all of these out of the box.</p>
                         </div>
 
                         <h2 id="deployment"><i class="fas fa-cloud-upload-alt me-2"></i>Deployment Strategies</h2>

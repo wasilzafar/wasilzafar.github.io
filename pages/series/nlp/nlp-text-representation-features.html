@@ -75,7 +75,7 @@
                 <div class="blog-meta">
                     <span><i class="fas fa-calendar me-2"></i>January 27, 2026</span>
                     <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
-                    <span class="reading-time"><i class="fas fa-clock me-1"></i>28 min read</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>33 min read</span>
                     <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
                 </div>
                 <p class="lead">Part 3 of 16: Turn text into numbers—Bag of Words, TF-IDF, N-grams, and feature engineering for NLP models.</p>
@@ -97,6 +97,7 @@
                 <ul>
                     <li><a href="#bow-implementation" onclick="closeNav()">Implementation</a></li>
                     <li><a href="#bow-limitations" onclick="closeNav()">Limitations</a></li>
+                    <li><a href="#cosine-similarity" onclick="closeNav()">Cosine Similarity</a></li>
                 </ul>
             </li>
             <li><a href="#tfidf" onclick="closeNav()">TF-IDF</a>
@@ -426,6 +427,130 @@ print("\nBinary BoW (first doc):", binary_matrix.toarray()[0][:10])
                             </table>
                         </div>
 
+                        <h3 id="cosine-similarity">Measuring Similarity: Cosine Similarity</h3>
+
+                        <p>Once documents or words are represented as numerical vectors, we need a reliable way to measure <strong>how similar</strong> two vectors are. The most widely used metric in NLP is <strong>cosine similarity</strong>, which measures the cosine of the angle between two vectors in high-dimensional space. It tells you whether two vectors point in roughly the same direction, regardless of their magnitude (length).</p>
+
+                        <div class="highlight-box">
+                            <h4><i class="fas fa-ruler-combined me-2"></i>The Formula</h4>
+                            <p>For two vectors <strong>A</strong> and <strong>B</strong>, cosine similarity is defined as:</p>
+                            <p class="text-center"><strong>cos(&theta;) = (A &middot; B) / (||A|| &times; ||B||)</strong></p>
+                            <ul class="mb-0">
+                                <li><strong>A &middot; B</strong> (dot product) = sum of element-wise products</li>
+                                <li><strong>||A||</strong> = Euclidean norm (magnitude) of vector A</li>
+                                <li><strong>Range:</strong> &minus;1 (opposite) to +1 (identical direction). For non-negative vectors like BoW or TF-IDF the range is 0 to +1.</li>
+                            </ul>
+                        </div>
+
+                        <p><strong>Why cosine over Euclidean distance?</strong> In text, document length varies enormously. A 10-page article about "machine learning" will have much larger raw word counts than a 2-sentence abstract on the same topic, so their Euclidean distance would be large even though they discuss the same subject. Cosine similarity ignores magnitude and focuses on <em>direction</em>, making it robust to document length differences.</p>
+
+                        <div class="experiment-card">
+                            <h4><i class="fas fa-ruler me-2"></i>Cosine Similarity vs Euclidean Distance</h4>
+                            <div class="meta mb-2">
+                                <span class="badge bg-teal me-2">Geometric Intuition</span>
+                                <span class="badge bg-crimson">Core Concept</span>
+                            </div>
+                            <div class="content">
+                                <table class="table table-bordered">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Property</th>
+                                            <th>Cosine Similarity</th>
+                                            <th>Euclidean Distance</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td><strong>Measures</strong></td><td>Angle between vectors (direction)</td><td>Straight-line distance (magnitude)</td></tr>
+                                        <tr><td><strong>Range</strong></td><td>&minus;1 to +1 (0 to +1 for positive vectors)</td><td>0 to &infin;</td></tr>
+                                        <tr><td><strong>Length-sensitive?</strong></td><td>No &mdash; normalizes by magnitude</td><td>Yes &mdash; longer documents appear more distant</td></tr>
+                                        <tr><td><strong>Best for</strong></td><td>Comparing text, high-dimensional sparse vectors</td><td>Low-dimensional, similar-scale data</td></tr>
+                                        <tr><td><strong>Interpretation</strong></td><td>1 = identical direction, 0 = unrelated</td><td>0 = identical, larger = more different</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+<pre><code class="language-python"># Understanding cosine similarity step by step
+import numpy as np
+
+def cosine_similarity_manual(vec_a, vec_b):
+    """Compute cosine similarity from scratch."""
+    dot_product = np.dot(vec_a, vec_b)
+    norm_a = np.linalg.norm(vec_a)
+    norm_b = np.linalg.norm(vec_b)
+    return dot_product / (norm_a * norm_b)
+
+# Example 1: Two documents about similar topics
+doc_ML = np.array([3, 2, 0, 1, 0])   # "machine learning data model algorithm"
+doc_AI = np.array([2, 1, 0, 1, 1])   # "machine learning neural model network"
+doc_cook = np.array([0, 0, 3, 0, 0]) # "recipe recipe recipe"
+
+print("Cosine similarities:")
+print(f"  ML vs AI:      {cosine_similarity_manual(doc_ML, doc_AI):.4f}")  # ~0.89 (similar)
+print(f"  ML vs Cooking:  {cosine_similarity_manual(doc_ML, doc_cook):.4f}")  # 0.0 (unrelated)
+print(f"  AI vs Cooking:  {cosine_similarity_manual(doc_AI, doc_cook):.4f}")  # 0.0 (unrelated)
+
+# Example 2: Magnitude doesn't matter
+short_doc = np.array([1, 1, 0])   # short article about topic A
+long_doc  = np.array([5, 5, 0])   # long article about topic A (same proportions)
+diff_doc  = np.array([0, 0, 3])   # article about topic B
+
+print("\nLength invariance:")
+print(f"  Short vs Long (same topic): {cosine_similarity_manual(short_doc, long_doc):.4f}")  # 1.0
+print(f"  Short vs Different topic:   {cosine_similarity_manual(short_doc, diff_doc):.4f}")  # 0.0
+
+# Euclidean distance would incorrectly show short and long as very different:
+euclidean = np.linalg.norm(short_doc - long_doc)
+print(f"  Euclidean (short vs long): {euclidean:.2f} (misleadingly large!)")</code></pre>
+
+<pre><code class="language-python"># Practical usage with scikit-learn
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+
+# Four documents
+documents = [
+    "Machine learning algorithms detect patterns in data",
+    "Deep learning neural networks learn representations",
+    "Baking bread requires flour yeast and patience",
+    "Supervised learning models predict outcomes from data"
+]
+
+# Convert to TF-IDF vectors
+vectorizer = TfidfVectorizer()
+tfidf_matrix = vectorizer.fit_transform(documents)
+
+# Compute pairwise cosine similarity
+sim_matrix = cosine_similarity(tfidf_matrix)
+
+print("Pairwise Cosine Similarity:\n")
+for i in range(len(documents)):
+    for j in range(i + 1, len(documents)):
+        print(f"  Doc {i+1} vs Doc {j+1}: {sim_matrix[i][j]:.3f}")
+        # Doc 1 vs 2 ~0.15 (both ML), Doc 1 vs 3 ~0.00 (unrelated),
+        # Doc 1 vs 4 ~0.30 (very similar)
+
+# Find most similar document to a query
+query = "pattern recognition using neural networks"
+query_vec = vectorizer.transform([query])
+scores = cosine_similarity(query_vec, tfidf_matrix).flatten()
+
+print("\nQuery:", query)
+for idx in np.argsort(scores)[::-1]:
+    print(f"  [{scores[idx]:.3f}] {documents[idx]}")</code></pre>
+
+                        <div class="highlight-box highlight-navy">
+                            <h4><i class="fas fa-info-circle me-2"></i>Where Cosine Similarity Appears Throughout NLP</h4>
+                            <ul class="mb-0">
+                                <li><strong>Information retrieval:</strong> Ranking search results by query-document similarity</li>
+                                <li><strong>Word embeddings:</strong> Finding semantically similar words (king &minus; man + woman &asymp; queen)</li>
+                                <li><strong>Document clustering:</strong> Grouping similar articles, emails, or reviews</li>
+                                <li><strong>Duplicate detection:</strong> Identifying near-duplicate content or plagiarism</li>
+                                <li><strong>Recommendation systems:</strong> Suggesting content similar to what a user liked</li>
+                                <li><strong>BERTScore:</strong> Evaluating text generation quality using contextual embedding similarity</li>
+                            </ul>
+                        </div>
+
                         <h2 id="tfidf"><i class="fas fa-balance-scale me-2"></i>TF-IDF</h2>
 
                         <p><strong>TF-IDF (Term Frequency-Inverse Document Frequency)</strong> is a numerical statistic that reflects how important a word is to a document within a collection. Unlike raw word counts, TF-IDF balances term frequency against document frequency, giving higher weight to words that are frequent in a specific document but rare across the corpus. This makes it invaluable for document retrieval, keyword extraction, and text classification.</p>
@@ -481,11 +606,9 @@ for word in ['machine', 'learning', 'great', 'future']:
                         <p><strong>Inverse Document Frequency (IDF)</strong> measures how much information a term provides—whether it's common or rare across documents. Terms appearing in many documents get lower IDF scores, while rare terms get higher scores. The standard formula is IDF(t) = log(N / df(t)), where N is the total number of documents and df(t) is the number of documents containing term t.</p>
 
 <pre><code class="language-python">import numpy as np
-from collections import Counter
 
 def compute_idf(corpus):
     """Compute IDF for all terms in a corpus."""
-    # Get all unique terms
     all_terms = set()
     doc_term_sets = []
     for doc in corpus:
@@ -497,35 +620,35 @@ def compute_idf(corpus):
     idf_scores = {}
     
     for term in all_terms:
-        # Count documents containing this term
         df = sum(1 for doc_terms in doc_term_sets if term in doc_terms)
-        # Standard IDF with smoothing to avoid division by zero
+        # Smooth IDF: log((N + 1) / (df + 1)) + 1
         idf_scores[term] = np.log((N + 1) / (df + 1)) + 1
     
     return idf_scores
 
-# Example corpus
+# Corpus designed so terms appear in different numbers of documents
 corpus = [
-    "the cat sat on the mat",
-    "the dog ran in the park",
-    "machine learning is fascinating",
-    "deep learning uses neural networks",
-    "the future of machine learning is bright"
+    "machine learning is used in data science",        # "machine" in 4 docs
+    "deep learning is a branch of machine learning",   # "learning" in 5 docs
+    "machine learning models predict data patterns",   # "is" in 4 docs
+    "machine intelligence uses neural networks",       # "data" in 3 docs
+    "deep neural networks learn complex patterns"      # "deep" in 2 docs
 ]
 
 idf_scores = compute_idf(corpus)
 
-# Sort by IDF (highest = most discriminative)
-sorted_idf = sorted(idf_scores.items(), key=lambda x: x[1], reverse=True)
-print("IDF Scores (highest = most distinctive):")
-print(f"{'Term':<15} {'IDF Score':<10} {'Interpretation'}")
+# Sort by IDF and show ALL terms to reveal the full range
+sorted_idf = sorted(idf_scores.items(), key=lambda x: x[1])
+print(f"IDF Scores across {len(corpus)} documents:")
+print(f"{'Term':<15} {'df':<5} {'IDF':<8} {'Interpretation'}")
 print("-" * 50)
-for term, score in sorted_idf[:10]:
-    interp = "Common" if score < 1.5 else "Moderate" if score < 2.0 else "Rare/Distinctive"
-    print(f"{term:<15} {score:<10.3f} {interp}")
-</code></pre>
+for term, score in sorted_idf:
+    df = sum(1 for d in corpus if term in d.lower().split())
+    interp = "Very common" if df >= 4 else "Common" if df == 3 else "Moderate" if df == 2 else "Rare"
+    print(f"{term:<15} {df:<5} {score:<8.3f} {interp}")
+# "learning" (df=5) → lowest IDF;  "science" (df=1) → highest IDF</code></pre>
 
-                        <p>Notice how common words like "the" have low IDF scores, while domain-specific terms like "neural" or "networks" have higher scores. This discrimination ability is what makes TF-IDF so effective for document retrieval and classification.</p>
+                        <p>Notice how "learning" (appearing in all 5 documents) has the lowest IDF score, while terms appearing in only 1 document (like "science" or "complex") have the highest scores. Terms at intermediate frequencies—"deep" (2 docs), "data" (3 docs), "machine" (4 docs)—fall in between. This discrimination ability is what makes TF-IDF so effective for document retrieval and classification.</p>
 
                         <h3 id="tfidf-variants">TF-IDF Variants</h3>
 
