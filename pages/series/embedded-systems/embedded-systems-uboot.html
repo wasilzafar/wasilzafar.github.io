@@ -158,6 +158,7 @@
         <ol>
             <li><a href="#introduction" onclick="closeNav()">Introduction to Bootloaders</a></li>
             <li><a href="#boot-process" onclick="closeNav()">Boot Process Architecture</a></li>
+            <li><a href="#why-spl-needed" onclick="closeNav()">Why ROM Can't Load U-Boot to DDR Directly</a></li>
             <li><a href="#uboot-architecture" onclick="closeNav()">U-Boot Architecture</a></li>
             <li><a href="#environment" onclick="closeNav()">Environment Configuration</a></li>
             <li><a href="#device-tree" onclick="closeNav()">Device Tree Basics</a></li>
@@ -292,32 +293,223 @@
                             </div>
 
 <pre><code class="language-text">Power On
-    ¦
-    ?
+    │
+    ▼
 +-----------------+
-¦  ROM Bootloader ¦  ? Fixed in silicon, reads boot pins
-¦   (on-chip)     ¦  ? Loads SPL from SD/eMMC/SPI/UART
+│  ROM Bootloader │  → Fixed in silicon, reads boot pins
+│   (on-chip)     │  → Loads SPL from SD/eMMC/SPI/UART
 +-----------------+
-         ?
+         │
+         ▼
 +-----------------+
-¦    U-Boot SPL   ¦  ? Runs from internal SRAM (~128KB)
-¦  (MLO/SPL.bin)  ¦  ? Initializes DRAM controller
+│    U-Boot SPL   │  → Runs from internal SRAM (~128KB)
+│  (MLO/SPL.bin)  │  → Initializes DRAM controller
 +-----------------+
-         ?
+         │
+         ▼
 +-----------------+
-¦     U-Boot      ¦  ? Full bootloader in DRAM
-¦   (u-boot.bin)  ¦  ? Environment, commands, boot scripts
+│     U-Boot      │  → Full bootloader in DRAM
+│   (u-boot.bin)  │  → Environment, commands, boot scripts
 +-----------------+
-         ?
+         │
+         ▼
 +-----------------+
-¦  Linux Kernel   ¦  ? zImage/Image + DTB loaded to DRAM
-¦   + Device Tree ¦  ? U-Boot jumps to kernel entry point
+│  Linux Kernel   │  → zImage/Image + DTB loaded to DRAM
+│   + Device Tree │  → U-Boot jumps to kernel entry point
 +-----------------+
-         ?
+         │
+         ▼
 +-----------------+
-¦ Root Filesystem ¦  ? Kernel mounts rootfs, runs init
-¦    (rootfs)     ¦
+│ Root Filesystem │  → Kernel mounts rootfs, runs init
+│    (rootfs)     │
 +-----------------+
+</code></pre>
+
+                            <h2 id="why-spl-needed"><i class="fas fa-question-circle me-2 text-teal"></i>Why ROM Can&rsquo;t Load U-Boot to DDR Directly</h2>
+
+                            <p>A frequently asked question in embedded Linux BSP development is: <strong>Why can&rsquo;t the ROM Boot Loader (RBL) of an ARM SoC like the AM335x skip the SPL stage and load U-Boot directly into DDR RAM?</strong> The answer lies in a fundamental hardware reality&mdash;DDR RAM is <em>board-specific</em>, not <em>chip-specific</em>.</p>
+
+                            <div class="highlight-box highlight-crimson">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <strong>The Core Problem:</strong> The ROM code is burned into the SoC during chip manufacturing. It has <strong>absolutely no knowledge</strong> of what DDR memory (if any) will be connected to the chip in the final product. Without knowing the DDR type, manufacturer, and timing parameters, the DDR controller cannot be initialized&mdash;and without initialization, DDR RAM is completely inaccessible. You cannot read from or write to uninitialized DDR.
+                            </div>
+
+                            <h3>DDR Is Board-Specific, Not Chip-Specific</h3>
+
+                            <p>Consider three companies (X, Y, Z) all designing products with the <strong>same</strong> TI AM335x SoC:</p>
+
+                            <div class="experiment-card">
+                                <h4><i class="fas fa-industry me-2"></i>Same Chip, Different DDR Configurations</h4>
+                                <div class="card-meta mb-2">
+                                    <span class="badge bg-teal">AM335x SoC</span>
+                                    <span class="badge bg-navy">Board Design</span>
+                                </div>
+                                <div class="content">
+                                    <table class="table table-bordered table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Company</th>
+                                                <th>Product</th>
+                                                <th>DDR Type</th>
+                                                <th>DDR Manufacturer</th>
+                                                <th>Example Part</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td><strong>X</strong></td>
+                                                <td>Industrial gateway</td>
+                                                <td>DDR3</td>
+                                                <td>Micron</td>
+                                                <td>MT41K256M16HA</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Y</strong></td>
+                                                <td>HMI display panel</td>
+                                                <td>DDR2</td>
+                                                <td>Transcend</td>
+                                                <td>TS64MLS64V6F</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Z</strong></td>
+                                                <td>Simple sensor node</td>
+                                                <td>None</td>
+                                                <td>&mdash;</td>
+                                                <td>Uses only on-chip 64KB SRAM</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <p>Each DDR chip has <strong>unique tuning parameters</strong>&mdash;CAS latency, tRCD, tRP, tRAS, clock speed, bandwidth, size, number of ranks, and on-die termination settings. These values come from the DDR manufacturer&rsquo;s datasheet and <strong>must be programmed into the SoC&rsquo;s EMIF (External Memory Interface) registers</strong> before a single byte can be read from or written to DDR.</p>
+
+                            <h3>What the ROM Boot Loader Actually Does</h3>
+
+                            <p>Since the RBL cannot initialize DDR, it does only what it <em>can</em> do with hardware it <em>knows</em> about&mdash;the on-chip internal SRAM:</p>
+
+                            <ol>
+                                <li><strong>Reads boot pin configuration</strong> (SYSBOOT pins) to determine the boot device order (SD card, eMMC, SPI, UART, USB, Ethernet)</li>
+                                <li><strong>Searches for the SPL binary</strong> (called <code>MLO</code> on TI platforms) on the selected boot device</li>
+                                <li><strong>Loads the SPL into on-chip SRAM</strong> (~128KB on AM335x at address <code>0x402F0400</code>)&mdash;this is the <em>only</em> memory available at this stage</li>
+                                <li><strong>Jumps to the SPL entry point</strong> to hand off control</li>
+                            </ol>
+
+                            <div class="highlight-box">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>SRAM Size Constraint:</strong> The AM335x has only ~128KB of on-chip SRAM. A full U-Boot binary is typically 400KB&ndash;800KB&mdash;it simply <strong>does not fit</strong> in internal SRAM. This is the second reason an SPL stage is required: the SPL is a minimal bootloader (&lt;100KB) designed to fit in SRAM, initialize DDR, and then load the full U-Boot into the now-available DDR space.
+                            </div>
+
+                            <h3>What the SPL Must Do</h3>
+
+                            <p>The SPL (Secondary Program Loader) is the <strong>first piece of user-modifiable code</strong> that runs on the SoC. Its primary job is DDR initialization:</p>
+
+                            <ol>
+                                <li><strong>Configure PLLs and clocks</strong> for the DDR controller</li>
+                                <li><strong>Set DDR PHY parameters</strong>&mdash;read/write DQS ratios, FIFO settings, leveling values</li>
+                                <li><strong>Program EMIF timing registers</strong>&mdash;tRCD, tRP, tRAS, tRFC, refresh rate, all from the DDR chip&rsquo;s datasheet</li>
+                                <li><strong>Configure SDRAM type, size, and bank mapping</strong></li>
+                                <li><strong>Run hardware leveling</strong> (if supported) to calibrate signal delays on the PCB traces</li>
+                                <li><strong>Load U-Boot from boot device into DDR</strong> (now accessible)</li>
+                                <li><strong>Jump to U-Boot entry point</strong> in DDR</li>
+                            </ol>
+
+<pre><code class="language-c">// SPL DDR3 initialization for BeagleBone Black (AM335x)
+// File: board/ti/am335x/board.c in U-Boot source tree
+
+#include &lt;asm/arch/ddr_defs.h&gt;
+#include &lt;asm/arch/sys_proto.h&gt;
+
+// Kingston DDR3L timing parameters (from chip datasheet)
+static const struct ddr_data ddr3_bbb_data = {
+    .datardsratio0    = MT41K256M16HA125E_RD_DQS,
+    .datawdsratio0    = MT41K256M16HA125E_WR_DQS,
+    .datafwsratio0    = MT41K256M16HA125E_PHY_FIFO_WE,
+    .datawrsratio0    = MT41K256M16HA125E_PHY_WR_DATA,
+};
+
+static const struct emif_regs ddr3_bbb_emif = {
+    .sdram_config     = MT41K256M16HA125E_EMIF_SDCFG,
+    .ref_ctrl         = MT41K256M16HA125E_EMIF_SDREF,
+    .sdram_tim1       = MT41K256M16HA125E_EMIF_TIM1,
+    .sdram_tim2       = MT41K256M16HA125E_EMIF_TIM2,
+    .sdram_tim3       = MT41K256M16HA125E_EMIF_TIM3,
+    .zq_config        = MT41K256M16HA125E_ZQ_CFG,
+    .emif_ddr_phy_ctlr_1 = MT41K256M16HA125E_EMIF_READ_LATENCY,
+};
+
+// Called by SPL early in boot
+void sdram_init(void) {
+    config_ddr(400,                   // DDR clock: 400 MHz
+               &ddr3_bbb_ioctrl,      // I/O control settings
+               &ddr3_bbb_data,        // DDR PHY data
+               &ddr3_bbb_cmd_ctrl,    // DDR command control
+               &ddr3_bbb_emif,        // EMIF timing registers
+               0);                    // Board revision
+}
+</code></pre>
+
+                            <h3>Changing DDR for a Custom Board</h3>
+
+                            <p>If you design a custom board using the AM335x but with a <strong>different DDR3 chip</strong> (e.g., Transcend instead of Kingston), you must:</p>
+
+                            <ol>
+                                <li><strong>Obtain the DDR datasheet</strong> from the new manufacturer</li>
+                                <li><strong>Extract timing parameters</strong>&mdash;tRCD, tRP, tRAS, tRFC, CAS latency, write recovery time</li>
+                                <li><strong>Update the DDR header macros</strong> in <code>include/configs/</code> or the board-specific header file</li>
+                                <li><strong>Modify the board file</strong> (<code>board/ti/am335x/board.c</code> or your custom board directory)</li>
+                                <li><strong>Rebuild SPL</strong> to generate a new <code>MLO</code> binary with your DDR parameters</li>
+                                <li><strong>Test thoroughly</strong>&mdash;run memory stress tests (<code>mtest</code> in U-Boot, <code>memtester</code> in Linux)</li>
+                            </ol>
+
+<pre><code class="language-c">// Example: Changing DDR3 params for a Transcend DDR3 chip
+// File: include/configs/custom_am335x.h
+
+// Original BeagleBone Black (Kingston MT41K256M16HA-125)
+// #define MT41K256M16HA125E_EMIF_TIM1  0x0AAAD4DB
+// #define MT41K256M16HA125E_EMIF_TIM2  0x266B7FDA
+// #define MT41K256M16HA125E_EMIF_TIM3  0x501F867F
+
+// New Transcend DDR3 chip (from datasheet)
+#define CUSTOM_DDR3_EMIF_TIM1     0x0AAAE4DB  // Different tRCD
+#define CUSTOM_DDR3_EMIF_TIM2     0x266B7FDA  // Same tRTP, tWR
+#define CUSTOM_DDR3_EMIF_TIM3     0x501F867F  // Same tRFC
+#define CUSTOM_DDR3_EMIF_SDCFG    0x61C05332  // 512MB, 16-bit bus
+#define CUSTOM_DDR3_EMIF_SDREF    0x0000093B  // Refresh rate
+#define CUSTOM_DDR3_ZQ_CFG        0x50074BE4
+#define CUSTOM_DDR3_READ_LATENCY  0x100007    // PHY read latency
+</code></pre>
+
+                            <div class="highlight-box highlight-crimson">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <strong>Critical Warning:</strong> Never assume DDR parameters from one manufacturer will work with another&mdash;even for the same DDR generation and speed grade. A Kingston DDR3-1600 and a Transcend DDR3-1600 can have different tRCD, tRP, and tRAS values. Using incorrect timing causes <strong>silent memory corruption</strong>, intermittent crashes, or complete boot failure. Always verify parameters against the specific part number&rsquo;s datasheet.
+                            </div>
+
+<pre><code class="language-text">Boot Flow Summary: Why SPL Exists
+===================================
+
+  ROM Bootloader (on-chip, fixed)
+  │
+  │  → Cannot init DDR (doesn't know what DDR is connected)
+  │  → Only has access to on-chip SRAM (~128KB)
+  │  → Loads SPL/MLO from SD/eMMC/SPI/UART into SRAM
+  │
+  ▼
+  SPL (runs from SRAM, user-built)
+  │
+  │  → YOU configure DDR type, timing, and size in SPL code
+  │  → SPL initializes DDR controller + DDR PHY
+  │  → DDR RAM is now accessible!
+  │  → SPL loads full U-Boot from boot device into DDR
+  │
+  ▼
+  U-Boot (runs from DDR, full features)
+  │
+  │  → Loads kernel + DTB + rootfs into DDR
+  │  → Boots Linux
+  │
+  ▼
+  Linux Kernel (runs from DDR)
 </code></pre>
 
                             <h2 id="uboot-architecture"><i class="fas fa-sitemap me-2 text-teal"></i>U-Boot Architecture</h2>
@@ -361,8 +553,8 @@ make -j$(nproc)
 
 # Output files
 ls -la MLO u-boot.img
-# MLO        ? SPL (Secondary Program Loader)
-# u-boot.img ? Full U-Boot binary
+# MLO        → SPL (Secondary Program Loader)
+# u-boot.img → Full U-Boot binary
 </code></pre>
 
                             <h2 id="environment"><i class="fas fa-cog me-2 text-teal"></i>Environment Configuration</h2>
@@ -580,7 +772,7 @@ make -j$(nproc)
                                 <i class="fas fa-rocket"></i>
                                 <strong>Key Takeaways:</strong>
                                 <ul>
-                                    <li>Boot stages: ROM ? SPL ? U-Boot ? Kernel ? Init</li>
+                                    <li>Boot stages: ROM &rarr; SPL &rarr; U-Boot &rarr; Kernel &rarr; Init</li>
                                     <li>SPL initializes DRAM, loads full U-Boot</li>
                                     <li>Environment variables control boot behavior</li>
                                     <li>Device Tree describes hardware to kernel</li>
