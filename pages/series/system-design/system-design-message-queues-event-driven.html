@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Master asynchronous communication patterns for distributed systems. Learn message queues, event-driven architecture, Kafka, RabbitMQ, and event sourcing patterns." />
     <meta name="author" content="Wasil Zafar" />
-    <meta name="keywords" content="Message Queues, Event-Driven Architecture, Kafka, RabbitMQ, Pub/Sub, Event Sourcing, CQRS, System Design, Asynchronous" />
+    <meta name="keywords" content="Message Queues, Event-Driven Architecture, Kafka, RabbitMQ, Pub/Sub, Event Sourcing, CQRS, Transactional Outbox, Idempotent Consumer, Polling Publisher, CDC, System Design, Asynchronous" />
     <meta property="og:title" content="System Design Series Part 7: Message Queues & Event-Driven" />
     <meta property="og:description" content="Master message queues and event-driven architecture for building scalable asynchronous systems." />
     <meta property="og:type" content="article" />
@@ -89,7 +89,7 @@
                 <div class="blog-meta">
                     <span><i class="fas fa-calendar me-2"></i>January 25, 2026</span>
                     <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
-                    <span class="reading-time"><i class="fas fa-clock me-1"></i>40 min read</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>55 min read</span>
                     <button onclick="window.print()" class="print-btn"><i class="fas fa-print"></i> Print</button>
                 </div>
                 <p class="lead">Master asynchronous communication patterns for building resilient distributed systems. Learn message queues, event-driven architecture, Kafka, RabbitMQ, and event sourcing patterns.</p>
@@ -115,6 +115,7 @@
                 <ul>
                     <li><a href="#event-driven" onclick="closeNav()">Event Fundamentals</a></li>
                     <li><a href="#event-sourcing" onclick="closeNav()">Event Sourcing & CQRS</a></li>
+                    <li><a href="#transactional-messaging" onclick="closeNav()">Transactional Messaging</a></li>
                 </ul>
             </li>
             <li><a href="#technologies" onclick="closeNav()">Technologies</a>
@@ -174,7 +175,7 @@
                             </a>
                             <a href="system-design-microservices-architecture.html" class="step-card">
                                 <div class="step-num completed"><i class="fas fa-check"></i></div>
-                                <div class="step-info"><h6>Microservices Architecture</h6><small>Service decomposition, API gateways, sagas</small></div>
+                                <div class="step-info"><h6>Microservices Architecture</h6><small>Decomposition, discovery, testing, resilience</small></div>
                             </a>
                             <a href="system-design-api-rest-graphql.html" class="step-card">
                                 <div class="step-num completed"><i class="fas fa-check"></i></div>
@@ -182,7 +183,7 @@
                             </a>
                             <div class="step-card current">
                                 <div class="step-num active">7</div>
-                                <div class="step-info"><h6>Message Queues & Event-Driven</h6><small>Kafka, RabbitMQ, event sourcing</small></div>
+                                <div class="step-info"><h6>Message Queues & Event-Driven</h6><small>Kafka, outbox, event sourcing, idempotent consumers</small></div>
                                 <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
                             </div>
                             <a href="system-design-cap-theorem-consistency.html" class="step-card">
@@ -683,6 +684,218 @@ class OrderReadModel:
                     <div class="highlight-box">
                         <i class="fas fa-lightbulb"></i>
                         <strong>When to Use:</strong> Event Sourcing + CQRS shine in domains with complex business logic, audit requirements, or high read/write asymmetry. Overkill for simple CRUD applications.
+                    </div>
+
+                    <h3 id="transactional-messaging">Transactional Messaging</h3>
+                    <p>A fundamental challenge in event-driven microservices: how do you <strong>atomically update a database and publish a message</strong>? If you update the DB but the message publish fails, other services never learn about the change. If the publish succeeds but the DB write fails, downstream services act on phantom data.</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-mail-bulk me-2"></i>Transactional Outbox Pattern</h4>
+                        <div class="experiment-content">
+                            <p>Write messages to an <strong>outbox table</strong> in the same database transaction as the business data. A separate relay process reads the outbox and publishes to the message broker.</p>
+<pre><code class="language-python"># Transactional Outbox Pattern — full implementation
+import json
+import uuid
+import time
+
+class OrderService:
+    """Business logic that needs to publish events atomically."""
+    
+    def __init__(self, db):
+        self.db = db  # Database connection
+    
+    def create_order(self, user_id, items, total):
+        order_id = str(uuid.uuid4())
+        
+        # SINGLE database transaction — both writes or neither
+        with self.db.transaction() as tx:
+            # 1. Business data write
+            tx.execute(
+                "INSERT INTO orders (id, user_id, total, status) "
+                "VALUES (%s, %s, %s, 'created')",
+                (order_id, user_id, total)
+            )
+            for item in items:
+                tx.execute(
+                    "INSERT INTO order_items (order_id, product_id, qty) "
+                    "VALUES (%s, %s, %s)",
+                    (order_id, item["product_id"], item["qty"])
+                )
+            
+            # 2. Outbox write (SAME transaction)
+            event_payload = json.dumps({
+                "order_id": order_id,
+                "user_id": user_id,
+                "total": total,
+                "items": items
+            })
+            tx.execute(
+                "INSERT INTO outbox "
+                "(id, aggregate_type, aggregate_id, event_type, payload) "
+                "VALUES (%s, 'Order', %s, 'OrderCreated', %s)",
+                (str(uuid.uuid4()), order_id, event_payload)
+            )
+        
+        return order_id
+
+# Outbox table schema:
+# CREATE TABLE outbox (
+#     id UUID PRIMARY KEY,
+#     aggregate_type VARCHAR(255),
+#     aggregate_id VARCHAR(255),
+#     event_type VARCHAR(255),
+#     payload JSONB,
+#     created_at TIMESTAMP DEFAULT NOW(),
+#     published BOOLEAN DEFAULT FALSE
+# );
+print("Outbox guarantees: DB write + event are in same transaction")</code></pre>
+                        </div>
+                    </div>
+
+                    <h4>Relay Strategies: Polling vs Log Tailing</h4>
+                    <p>The outbox table needs a relay process to publish events to the broker. Two main approaches:</p>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Strategy</th>
+                                <th>How It Works</th>
+                                <th>Latency</th>
+                                <th>Complexity</th>
+                                <th>Tools</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Polling Publisher</strong></td>
+                                <td>Periodically query <code>SELECT * FROM outbox WHERE published = FALSE</code>, publish each event, mark as published</td>
+                                <td>Medium (polling interval, e.g., 500ms–5s)</td>
+                                <td>Low — simple SQL + broker client</td>
+                                <td>Custom code, Spring Integration</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Transaction Log Tailing (CDC)</strong></td>
+                                <td>Read the database's write-ahead log (WAL/binlog) in real time, extract outbox inserts, and publish as events</td>
+                                <td>Low (near real-time, sub-second)</td>
+                                <td>High — CDC infrastructure required</td>
+                                <td>Debezium, Maxwell, AWS DMS</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-database me-2"></i>Polling Publisher Implementation</h4>
+                        <div class="experiment-content">
+<pre><code class="language-python"># Polling Publisher — simple relay that polls the outbox
+import time
+
+class OutboxPollingRelay:
+    """Polls outbox table and publishes events to message broker."""
+    
+    def __init__(self, db, broker, poll_interval=1.0, batch_size=100):
+        self.db = db
+        self.broker = broker
+        self.poll_interval = poll_interval
+        self.batch_size = batch_size
+    
+    def run(self):
+        """Main loop — run as a background thread or separate process."""
+        while True:
+            published = self.poll_and_publish()
+            if published == 0:
+                time.sleep(self.poll_interval)
+    
+    def poll_and_publish(self):
+        rows = self.db.query(
+            "SELECT id, event_type, aggregate_type, aggregate_id, payload "
+            "FROM outbox WHERE published = FALSE "
+            "ORDER BY created_at ASC LIMIT %s",
+            (self.batch_size,)
+        )
+        
+        for row in rows:
+            # Publish to broker (topic derived from aggregate type)
+            topic = f"{row['aggregate_type']}.{row['event_type']}"
+            self.broker.publish(
+                topic=topic,
+                key=row["aggregate_id"],
+                value=row["payload"],
+                headers={"outbox_id": row["id"]}
+            )
+            
+            # Mark as published
+            self.db.execute(
+                "UPDATE outbox SET published = TRUE WHERE id = %s",
+                (row["id"],)
+            )
+        
+        return len(rows)
+
+print("Polling Publisher: simple, reliable, slightly higher latency")
+print("Add index: CREATE INDEX idx_outbox_unpublished ON outbox (published, created_at)")</code></pre>
+                        </div>
+                    </div>
+
+                    <h4>Idempotent Consumer</h4>
+                    <p>With at-least-once delivery (the standard guarantee in distributed messaging), consumers <strong>must be idempotent</strong> — processing the same message multiple times should produce the same result:</p>
+
+                    <div class="experiment-card">
+                        <h4><i class="fas fa-redo me-2"></i>Idempotent Consumer Pattern</h4>
+                        <div class="experiment-content">
+<pre><code class="language-python"># Idempotent Consumer — deduplication via processed message tracking
+import json
+
+class IdempotentEventHandler:
+    """Base class ensuring each message is processed exactly once."""
+    
+    def __init__(self, db):
+        self.db = db
+    
+    def handle(self, message):
+        message_id = message["message_id"]
+        
+        with self.db.transaction() as tx:
+            # Check if already processed (SELECT FOR UPDATE for safety)
+            already = tx.query_one(
+                "SELECT 1 FROM processed_messages WHERE message_id = %s "
+                "FOR UPDATE",
+                (message_id,)
+            )
+            
+            if already:
+                print(f"Duplicate message {message_id} — skipping")
+                return  # Idempotent: no side effects
+            
+            # Process the message (implemented by subclass)
+            self._process(message, tx)
+            
+            # Record that we processed this message
+            tx.execute(
+                "INSERT INTO processed_messages (message_id, processed_at) "
+                "VALUES (%s, NOW())",
+                (message_id,)
+            )
+    
+    def _process(self, message, tx):
+        raise NotImplementedError
+
+class PaymentHandler(IdempotentEventHandler):
+    def _process(self, message, tx):
+        tx.execute(
+            "INSERT INTO payments (order_id, amount, status) "
+            "VALUES (%s, %s, 'charged')",
+            (message["order_id"], message["total"])
+        )
+
+# Clean up old records with TTL
+# DELETE FROM processed_messages WHERE processed_at &lt; NOW() - INTERVAL '7 days'
+print("Strategies: message_id dedup table, DB unique constraint, or idempotent operations")</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Key Insight:</strong> Not all operations need a dedup table. Some operations are <strong>naturally idempotent</strong>: <code>SET status = 'shipped'</code> is idempotent (re-applying changes nothing), but <code>balance = balance + amount</code> is NOT (re-applying double-charges). Design for idempotency first; add dedup tracking when needed.
                     </div>
                 </div>
 
