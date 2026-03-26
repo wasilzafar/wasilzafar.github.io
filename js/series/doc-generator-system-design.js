@@ -1841,33 +1841,33 @@ Object.assign(DocGenerator, {
 
 
   // ============================================================
-  // 15. SYSTEM DESIGN INTERVIEW WORKSHEET
+  // 15. SYSTEM DESIGN QUESTIONS & TRADE-OFFS
   // ============================================================
 
   generateInterviewWorksheetWord: async function(filename, data) {
     var sections = [
-      { heading: 'System Design Interview Worksheet', content: [
-        'Problem: ' + (data.problem || 'N/A'),
-        'Time Allotted: ' + (data.timeLimit || 'N/A'),
+      { heading: 'System Design Questions & Trade-offs', content: [
+        'Design Question: ' + (data.problem || 'N/A'),
+        'Scale Constraints: ' + (data.constraints || 'N/A'),
         'Date: ' + new Date().toLocaleDateString()
       ]},
       { heading: '1. Functional Requirements', content: (data.functionalReqs || 'Not specified').split('\n') },
       { heading: '2. Non-Functional Requirements', content: (data.nonFunctionalReqs || 'Not specified').split('\n') },
       { heading: '3. Back-of-Envelope Estimations', content: (data.estimations || 'Not specified').split('\n') },
       { heading: '4. High-Level Design', content: (data.highLevelDesign || 'Not specified').split('\n') },
-      { heading: '5. Deep Dive Topics', content: (data.deepDive || 'Not specified').split('\n') },
+      { heading: '5. Trade-off Analysis', content: (data.tradeoffs || 'Not specified').split('\n') },
       { heading: '6. Bottlenecks & Mitigations', content: (data.bottlenecks || 'Not specified').split('\n') }
     ];
-    return this.generateWord(filename, { title: 'Interview Worksheet – ' + (data.problem || ''), author: data.authorName || '', sections: sections });
+    return this.generateWord(filename, { title: 'Questions & Trade-offs – ' + (data.problem || ''), author: data.authorName || '', sections: sections });
   },
 
   generateInterviewWorksheetExcel: function(filename, data) {
     var wb = XLSX.utils.book_new();
     // Overview
     var overview = [
-      ['SYSTEM DESIGN INTERVIEW WORKSHEET'],
-      ['Problem / Design Question', data.problem || ''],
-      ['Time Allotted', data.timeLimit || ''],
+      ['SYSTEM DESIGN QUESTIONS & TRADE-OFFS'],
+      ['Design Question', data.problem || ''],
+      ['Scale Constraints', data.constraints || ''],
       ['Date', new Date().toLocaleDateString()]
     ];
     var ws1 = XLSX.utils.aoa_to_sheet(overview);
@@ -1896,8 +1896,8 @@ Object.assign(DocGenerator, {
       ['HIGH-LEVEL DESIGN'],
       [data.highLevelDesign || ''],
       [],
-      ['DEEP DIVE TOPICS'],
-      [data.deepDive || ''],
+      ['TRADE-OFF ANALYSIS'],
+      [data.tradeoffs || ''],
       [],
       ['BOTTLENECKS & MITIGATIONS'],
       [data.bottlenecks || '']
@@ -1910,9 +1910,9 @@ Object.assign(DocGenerator, {
 
   generateInterviewWorksheetPDF: function(filename, data) {
     var lines = [
-      { text: 'SYSTEM DESIGN INTERVIEW WORKSHEET', size: 18, bold: true },
-      { text: 'Problem: ' + (data.problem || ''), size: 13 },
-      { text: 'Time Allotted: ' + (data.timeLimit || 'N/A'), size: 10 },
+      { text: 'SYSTEM DESIGN QUESTIONS & TRADE-OFFS', size: 18, bold: true },
+      { text: 'Design Question: ' + (data.problem || ''), size: 13 },
+      { text: 'Scale Constraints: ' + (data.constraints || 'N/A'), size: 10 },
       { text: 'Date: ' + new Date().toLocaleDateString(), size: 9 },
       { text: ' ', size: 6 },
       { text: '── FUNCTIONAL REQUIREMENTS ──', size: 14, bold: true },
@@ -1927,13 +1927,13 @@ Object.assign(DocGenerator, {
       { text: '── HIGH-LEVEL DESIGN ──', size: 14, bold: true },
       { text: data.highLevelDesign || 'Not specified', size: 10 },
       { text: ' ', size: 6 },
-      { text: '── DEEP DIVE TOPICS ──', size: 14, bold: true },
-      { text: data.deepDive || 'Not specified', size: 10 },
+      { text: '── TRADE-OFF ANALYSIS ──', size: 14, bold: true },
+      { text: data.tradeoffs || 'Not specified', size: 10 },
       { text: ' ', size: 6 },
       { text: '── BOTTLENECKS & MITIGATIONS ──', size: 14, bold: true },
       { text: data.bottlenecks || 'Not specified', size: 10 }
     ];
-    return this.generatePDF(filename, { title: 'System Design Interview Worksheet', lines: lines });
+    return this.generatePDF(filename, { title: 'System Design Questions & Trade-offs', lines: lines });
   },
 
   // ============================================================
@@ -2212,13 +2212,13 @@ Object.assign(DocGenerator, {
     },
     int: function(s) {
       return [
-        { heading: 'Interview Worksheet', content: [
-          'Problem: ' + (s.problem || 'N/A') + '  |  Time Limit: ' + (s.timeLimit || 'N/A'),
+        { heading: 'Questions & Trade-offs', content: [
+          'Design Question: ' + (s.problem || 'N/A') + '  |  Constraints: ' + (s.constraints || 'N/A'),
           { type: 'heading', text: 'Functional Requirements' }, s.functionalReqs || 'Not specified',
           { type: 'heading', text: 'Non-Functional Requirements' }, s.nonFunctionalReqs || 'Not specified',
           { type: 'heading', text: 'Back-of-Envelope Estimations' }, s.estimations || 'Not specified',
           { type: 'heading', text: 'High-Level Design' }, s.highLevelDesign || 'Not specified',
-          { type: 'heading', text: 'Deep Dive Topics' }, s.deepDive || 'Not specified',
+          { type: 'heading', text: 'Trade-off Analysis' }, s.tradeoffs || 'Not specified',
           { type: 'heading', text: 'Bottlenecks & Mitigations' }, s.bottlenecks || 'Not specified'
         ]}
       ];
@@ -2251,7 +2251,7 @@ Object.assign(DocGenerator, {
       db:'Database Design', ms:'Microservices', api:'API Design',
       eda:'Event-Driven', adr:'Architecture Decision', rl:'Rate Limiting',
       obs:'Observability', cs:'Case Study', lld:'Low-Level Design',
-      dist:'Distributed Systems', sec:'Security', int:'Interview Worksheet'
+      dist:'Distributed Systems', sec:'Security', int:'Questions & Trade-offs'
     };
 
     // Summary sheet
