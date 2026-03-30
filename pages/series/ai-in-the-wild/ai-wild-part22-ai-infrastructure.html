@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="AI infrastructure at scale: GPUs, TPUs, memory hierarchies, distributed training strategies (DDP, FSDP, pipeline parallelism), and the engineering of large-scale ML systems. Part 22 of 24." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="AI infrastructure, GPU training, TPU, distributed training, data parallelism, model parallelism, FSDP, mixed precision training, Kubernetes ML, inference serving" />
+    <meta property="og:title" content="AI Infrastructure, Hardware &amp; Scaling — AI in the Wild Series Part 22" />
+    <meta property="og:description" content="Training and serving large AI models requires a deep understanding of hardware capabilities, memory constraints, and distributed systems — this article covers the engineering that makes large-scale AI possible." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-30" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>AI Infrastructure, Hardware &amp; Scaling — AI in the Wild Series Part 22 - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/ai-in-the-wild/ai-wild-part22-ai-infrastructure.html" />
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied', 'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', { 'ad_storage': 'granted', 'ad_user_data': 'granted', 'ad_personalization': 'granted', 'analytics_storage': 'granted' });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});
+        var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
+        j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+        })(window,document,'script','dataLayer','GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking "Accept All", you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="../../categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+                <h1 class="display-4 fw-bold mb-3">AI Infrastructure, Hardware &amp; Scaling</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>March 30, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>32 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Training and serving large AI models requires a deep understanding of hardware capabilities, memory constraints, and distributed systems — this article covers the engineering that makes large-scale AI possible.</p>
+            </div>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#ai-hardware" onclick="closeNav()">AI Hardware Landscape</a>
+                <ul>
+                    <li><a href="#gpus" onclick="closeNav()">GPUs for ML</a></li>
+                    <li><a href="#tpus-accelerators" onclick="closeNav()">TPUs &amp; Custom Accelerators</a></li>
+                    <li><a href="#gpu-comparison-table" onclick="closeNav()">GPU Comparison Table</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#memory-hierarchy" onclick="closeNav()">Memory Hierarchy &amp; Bottlenecks</a>
+                <ul>
+                    <li><a href="#memory-bandwidth" onclick="closeNav()">Memory Bandwidth &amp; HBM</a></li>
+                    <li><a href="#activation-checkpointing" onclick="closeNav()">Activation Checkpointing &amp; Gradient Accumulation</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#distributed-training" onclick="closeNav()">Distributed Training</a>
+                <ul>
+                    <li><a href="#data-parallelism" onclick="closeNav()">Data Parallelism (DDP) — Code</a></li>
+                    <li><a href="#model-parallelism" onclick="closeNav()">Model &amp; Pipeline Parallelism</a></li>
+                    <li><a href="#training-strategies-table" onclick="closeNav()">Training Strategies Comparison</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#mixed-precision" onclick="closeNav()">Mixed Precision &amp; GPU Profiling</a>
+                <ul>
+                    <li><a href="#fp16-bf16" onclick="closeNav()">FP16, BF16 &amp; AMP</a></li>
+                    <li><a href="#profiling-code" onclick="closeNav()">GPU Profiling — Code</a></li>
+                    <li><a href="#flash-attention" onclick="closeNav()">Flash Attention &amp; Kernel Fusion</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#inference-serving" onclick="closeNav()">Inference Optimisation &amp; Serving</a>
+                <ul>
+                    <li><a href="#k8s-deployment" onclick="closeNav()">Kubernetes Deployment — Code</a></li>
+                </ul>
+            </li>
+            <li><a href="#exercises" onclick="closeNav()">Practical Exercises</a></li>
+            <li><a href="#doc-generator" onclick="closeNav()">Infrastructure Plan Generator</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                    <div id="ai-hardware" class="blog-content">
+
+                        <div class="series-nav-path">
+                            <div class="sn-header">
+                                <div class="path-icon"><i class="fas fa-robot"></i></div>
+                                <h4>AI in the Wild: Real-World Applications &amp; Ethics</h4>
+                                <div class="path-subtitle">Your 24-part learning path &bull; Currently on Step 22</div>
+                            </div>
+                            <div class="path-steps">
+                                <a href="ai-wild-part01-landscape-overview.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>AI &amp; ML Landscape Overview</h6><small>Paradigms, ecosystem map, real-world applications at a glance</small></div>
+                                </a>
+                                <a href="ai-wild-part02-ml-foundations.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>ML Foundations for Practitioners</h6><small>Supervised learning, bias-variance, model evaluation</small></div>
+                                </a>
+                                <a href="ai-wild-part03-nlp.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>Natural Language Processing</h6><small>Tokenization, embeddings, transformers, semantic search</small></div>
+                                </a>
+                                <a href="ai-wild-part04-computer-vision.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>Computer Vision in the Real World</h6><small>CNNs, ViTs, detection, segmentation, deployment patterns</small></div>
+                                </a>
+                                <a href="ai-wild-part05-recommender-systems.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>Recommender Systems</h6><small>Collaborative filtering, content-based, two-tower models</small></div>
+                                </a>
+                                <a href="ai-wild-part06-reinforcement-learning.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>Reinforcement Learning Applications</h6><small>Q-learning, policy gradients, RLHF, real-world deployments</small></div>
+                                </a>
+                                <a href="ai-wild-part07-conversational-ai.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>Conversational AI &amp; Chatbots</h6><small>Dialogue systems, intent detection, RAG, production bots</small></div>
+                                </a>
+                                <a href="ai-wild-part08-llms.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>Large Language Models</h6><small>Architecture, scaling laws, capabilities, limitations</small></div>
+                                </a>
+                                <a href="ai-wild-part09-prompt-engineering.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>Prompt Engineering &amp; In-Context Learning</h6><small>Chain-of-thought, few-shot, structured outputs, prompt patterns</small></div>
+                                </a>
+                                <a href="ai-wild-part10-finetuning-rlhf.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>Fine-tuning, RLHF &amp; Model Alignment</h6><small>LoRA, instruction tuning, DPO, alignment techniques</small></div>
+                                </a>
+                                <a href="ai-wild-part11-generative-ai.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>Generative AI Applications</h6><small>Diffusion models, GANs, image/audio/video generation</small></div>
+                                </a>
+                                <a href="ai-wild-part12-multimodal-ai.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>Multimodal AI</h6><small>Vision-language models, audio-text, cross-modal retrieval</small></div>
+                                </a>
+                                <a href="ai-wild-part13-ai-agents.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>AI Agents &amp; Agentic Workflows</h6><small>Tool use, planning, memory, multi-agent orchestration</small></div>
+                                </a>
+                                <a href="ai-wild-part14-ai-healthcare.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>AI in Healthcare &amp; Life Sciences</h6><small>Diagnostics, drug discovery, clinical NLP, regulatory landscape</small></div>
+                                </a>
+                                <a href="ai-wild-part15-ai-finance.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>AI in Finance &amp; Fraud Detection</h6><small>Credit scoring, anomaly detection, algorithmic trading</small></div>
+                                </a>
+                                <a href="ai-wild-part16-autonomous-systems.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>AI in Autonomous Systems &amp; Robotics</h6><small>Perception, planning, control, sim-to-real transfer</small></div>
+                                </a>
+                                <a href="ai-wild-part17-ai-security.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>AI Security &amp; Adversarial Robustness</h6><small>Adversarial attacks, poisoning, model extraction, defences</small></div>
+                                </a>
+                                <a href="ai-wild-part18-xai.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>Explainable AI &amp; Interpretability</h6><small>SHAP, LIME, attention, mechanistic interpretability</small></div>
+                                </a>
+                                <a href="ai-wild-part19-ai-ethics.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>AI Ethics &amp; Bias Mitigation</h6><small>Fairness metrics, dataset auditing, debiasing techniques</small></div>
+                                </a>
+                                <a href="ai-wild-part20-mlops.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>MLOps &amp; Model Deployment</h6><small>CI/CD for ML, feature stores, monitoring, drift detection</small></div>
+                                </a>
+                                <a href="ai-wild-part21-edge-ai.html" class="step-card">
+                                    <div class="step-num completed"><i class="fas fa-check"></i></div>
+                                    <div class="step-info"><h6>Edge AI &amp; On-Device Intelligence</h6><small>Quantization, pruning, TFLite, CoreML, embedded inference</small></div>
+                                </a>
+                                <div class="step-card current">
+                                    <div class="step-num active">22</div>
+                                    <div class="step-info"><h6>AI Infrastructure, Hardware &amp; Scaling</h6><small>GPUs, TPUs, distributed training, memory hierarchy</small></div>
+                                    <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                                </div>
+                                <a href="ai-wild-part23-responsible-ai.html" class="step-card">
+                                    <div class="step-num upcoming">23</div>
+                                    <div class="step-info"><h6>Responsible AI Governance</h6><small>Risk frameworks, model cards, auditing, organisational practice</small></div>
+                                </a>
+                                <a href="ai-wild-part24-ai-policy.html" class="step-card">
+                                    <div class="step-num upcoming">24</div>
+                                    <div class="step-info"><h6>AI Policy, Regulation &amp; Future Directions</h6><small>EU AI Act, global frameworks, emerging risks, what's next</small></div>
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal"><i class="fas fa-robot me-1"></i>AI in the Wild</span>
+                                <span class="badge bg-secondary ms-2">Part 22 of 24</span>
+                            </div>
+                            <h4>About This Article</h4>
+                            <p>This article covers the hardware and systems engineering that underpins large-scale AI — from GPU and TPU architectures to memory hierarchies, distributed training strategies, mixed-precision computation, and production inference serving. You will come away with working knowledge of when to apply each parallelism strategy, how to profile and optimise GPU memory, and how to deploy ML workloads on Kubernetes at scale.</p>
+                            <div class="bias-tags">
+                                <span class="bias-tag">GPU/TPU</span>
+                                <span class="bias-tag">Distributed Training</span>
+                                <span class="bias-tag">FSDP / ZeRO</span>
+                                <span class="bias-tag">Mixed Precision</span>
+                                <span class="bias-tag">FlashAttention</span>
+                                <span class="bias-tag">Kubernetes ML</span>
+                            </div>
+                        </div>
+
+                        <h2><i class="fas fa-microchip me-2 text-teal"></i>AI Hardware Landscape</h2>
+                        <p>Modern deep learning is, at its core, a story about matrix multiplication done at extraordinary scale. A transformer with 70 billion parameters performs hundreds of billions of multiply-accumulate operations in a single forward pass, and training requires doing this millions of times while tracking gradients through every layer. General-purpose CPUs are designed for low-latency sequential execution — they excel at running operating systems, web servers, and branchy business logic, but their small number of powerful cores and modest memory bandwidth make them hopelessly inefficient for the dense, regular, parallel arithmetic that deep learning demands. The GPU's SIMD (single instruction, multiple data) architecture, with thousands of smaller cores capable of executing the same operation simultaneously across thousands of data elements, is a fundamentally better fit.</p>
+
+                        <p>The hardware landscape today organises into three tiers. At the top are NVIDIA GPUs — the H100 and A100 remain the dominant training accelerators, with the Blackwell B200 entering hyperscaler deployments. Google's TPUs (v4 and v5) power nearly all of Google's own model training and are available to external customers through Google Cloud TPU. The third tier is fast-moving custom silicon: AWS Trainium for training and Inferentia for inference, AMD's MI300X as the most credible NVIDIA alternative, and specialised processors from Graphcore (IPU), Cerebras (WSE-3), and SambaNova. Inference workloads add a fourth category — Apple Silicon's unified memory architecture makes M3 and M4 chips surprisingly competitive for running quantised models locally, and Qualcomm's Snapdragon X Elite brings similar capabilities to the PC ecosystem.</p>
+
+                        <p>The trade-offs between these platforms are not primarily about peak FLOP ratings. Training large models requires high memory capacity (to hold parameters, gradients, and optimiser states), high memory bandwidth (to feed those thousands of cores quickly enough to keep them busy), and a fast interconnect between chips (because no single chip can hold a frontier model). Inference prioritises latency and cost per token over peak throughput. Choosing hardware requires mapping your workload's arithmetic intensity, memory footprint, and batch size to the platform's roofline — not comparing spec sheets in isolation.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Key Insight:</strong> The bottleneck in large-model training is almost never raw compute — it is memory bandwidth and inter-accelerator communication. An H100 has 3.9 PFLOPS of BF16 compute but only 3.35 TB/s of HBM bandwidth. Most transformer operations are memory-bandwidth bound at realistic batch sizes, meaning the chip spends more time waiting for data than computing. Hardware selection must be made with the full system stack in mind, not just peak FLOP ratings.
+                        </div>
+
+                        <h3 id="gpus">GPUs for ML</h3>
+                        <p>NVIDIA's GPU architecture is built around Streaming Multiprocessors (SMs) — each SM contains CUDA cores for general arithmetic, Tensor Cores for matrix multiply-accumulate, and shared SRAM for fast on-chip data exchange. The H100 SXM5 has 132 SMs, each with 4th-generation Tensor Cores that execute a 16x16 matrix multiply in a single clock cycle in FP16 or BF16. The architectural evolution from Volta (V100, 2017) through Ampere (A100, 2020) and Hopper (H100, 2022) has repeatedly doubled useful throughput for ML workloads. Hopper added the Transformer Engine, which automatically selects FP8 precision where safe during the forward and backward pass, unlocking a further doubling of throughput over BF16. The Blackwell B200 (2024) goes further with FP4 support, 192 GB HBM3e, and a 10 TB/s interconnect for multi-chip module (MCM) configurations.</p>
+
+                        <p>For practitioners, the specs that matter most are: HBM capacity (80 GB on the A100 and H100 SXM5, 192 GB on the H200 and B200), HBM bandwidth (2 TB/s on A100, 3.35 TB/s on H100, 4.8 TB/s on H200), and NVLink bandwidth for multi-GPU communication (600 GB/s bidirectional on NVLink 4.0 in a DGX H100 system). A DGX H100 node packs 8 H100s connected via NVSwitch, delivering 900 GB/s all-to-all bandwidth within the node — fast enough that intra-node all-reduce is rarely a bottleneck. Inter-node communication over InfiniBand (400 Gb/s HDR or 800 Gb/s NDR) is typically 3–4 orders of magnitude slower, which shapes distributed training strategies profoundly.</p>
+
+                        <p>The CUDA ecosystem is NVIDIA's deepest moat. Over a decade of library development (cuBLAS, cuDNN, NCCL, cuSPARSE), tooling (Nsight Systems, Nsight Compute), and framework integration (PyTorch, JAX, TensorFlow all target CUDA natively) means that switching costs are enormous. AMD's ROCm platform offers a HIP programming model that is syntactically close to CUDA and supports most PyTorch operations, but the ecosystem gaps — missing or slower libraries, less mature debugging tooling, limited operator coverage for custom kernels — remain genuine friction for teams considering migration. The MI300X, with 192 GB of HBM3 and 5.3 TB/s aggregate bandwidth, is technically compelling for inference workloads, but most production training clusters remain on NVIDIA hardware pending maturity of the software stack.</p>
+
+                        <h3 id="tpus-accelerators">TPUs &amp; Custom Accelerators</h3>
+                        <p>Google's Tensor Processing Units were designed from the ground up for the matrix arithmetic of neural networks. A TPU core is a systolic array — a grid of multiply-accumulate units arranged so that data flows through the array in a regular, pipelined pattern without any of the branching and scheduling overhead of a general-purpose processor. This makes TPUs highly efficient for exactly the workloads that appear in training: large matrix multiplications with regular shapes and no data-dependent branching. The v4 TPU pod provides 1.1 EFLOPS of BF16 compute across 4,096 chips connected with a high-speed 3D torus interconnect; the v5p pod extends this to near-exascale capacity. TPUs are almost exclusively programmed through JAX (via XLA compilation) or TensorFlow — PyTorch/XLA provides a compatibility layer, but the user experience for custom kernels and dynamic shapes is rougher than on CUDA.</p>
+
+                        <p>AWS Trainium (Trn1/Trn2) is designed for large-scale LLM training and is priced at roughly 20–30% below comparable NVIDIA instances on AWS. The NeuronSDK compiles models from PyTorch and TensorFlow to run on Trainium hardware; the compiler performs operator fusion and layout transformations automatically. AWS Inferentia (Inf1/Inf2) targets inference specifically, delivering some of the lowest cost-per-token numbers available in the cloud for deployed LLMs. The trade-off is a narrower programming model — Trainium works best with standard transformer architectures and standard operators; custom CUDA kernels and non-standard operations require manual porting or cannot be expressed at all. For teams building proprietary model architectures or custom training loops with unusual operators, NVIDIA remains the only choice that guarantees full flexibility.</p>
+
+                        <h3 id="gpu-comparison-table">GPU Comparison Table</h3>
+                        <p>Choosing hardware for ML training or inference requires understanding the landscape of available accelerators. The table below compares the most commonly used GPUs across dimensions that matter in practice — memory capacity for fitting large models, compute throughput for training speed, interconnect for multi-GPU scaling, and rough cost positioning.</p>
+
+                        <div class="table-responsive">
+                            <table class="table table-bordered thead-dark">
+                                <thead class="thead-dark">
+                                    <tr>
+                                        <th>GPU</th>
+                                        <th>HBM Memory</th>
+                                        <th>TF32 TFLOPS</th>
+                                        <th>FP16 TFLOPS</th>
+                                        <th>NVLink</th>
+                                        <th>Price Range</th>
+                                        <th>Best For</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>NVIDIA H100 SXM5</strong></td>
+                                        <td>80 GB HBM3</td>
+                                        <td>989</td>
+                                        <td>1,979</td>
+                                        <td>NVLink 4.0 (900 GB/s)</td>
+                                        <td>$25k–$35k</td>
+                                        <td>LLM training, frontier model research</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>NVIDIA A100 SXM4</strong></td>
+                                        <td>80 GB HBM2e</td>
+                                        <td>312</td>
+                                        <td>624 (w/ sparsity)</td>
+                                        <td>NVLink 3.0 (600 GB/s)</td>
+                                        <td>$10k–$15k</td>
+                                        <td>Production training, mid-size LLMs</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>NVIDIA V100 SXM2</strong></td>
+                                        <td>32 GB HBM2</td>
+                                        <td>130</td>
+                                        <td>125</td>
+                                        <td>NVLink 2.0 (300 GB/s)</td>
+                                        <td>$3k–$8k (used)</td>
+                                        <td>Legacy training, budget research</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>NVIDIA RTX A6000</strong></td>
+                                        <td>48 GB GDDR6</td>
+                                        <td>154</td>
+                                        <td>309</td>
+                                        <td>NVLink bridge (112 GB/s)</td>
+                                        <td>$4k–$6k</td>
+                                        <td>Workstation training, fine-tuning</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>NVIDIA L40S</strong></td>
+                                        <td>48 GB GDDR6</td>
+                                        <td>362</td>
+                                        <td>733</td>
+                                        <td>NVLink bridge</td>
+                                        <td>$8k–$12k</td>
+                                        <td>Inference at scale, multi-modal</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>NVIDIA RTX 4090 (Consumer)</strong></td>
+                                        <td>24 GB GDDR6X</td>
+                                        <td>82</td>
+                                        <td>165</td>
+                                        <td>None</td>
+                                        <td>$1,500–$2,000</td>
+                                        <td>Consumer fine-tuning, local inference</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </div><!-- end #ai-hardware blog-content -->
+
+                    <div id="memory-hierarchy" class="blog-content mt-5">
+                        <h2><i class="fas fa-memory me-2 text-teal"></i>Memory Hierarchy &amp; Bottlenecks</h2>
+                        <p>Understanding GPU memory hierarchy is essential for diagnosing performance issues. At the top of the hierarchy sits HBM (High Bandwidth Memory) — a stacked DRAM technology integrated directly onto the GPU package via silicon interposer. HBM delivers up to 4.8 TB/s of bandwidth on the H200, compared to around 900 GB/s for GDDR6X DRAM used in consumer GPUs. Below HBM, the on-chip SRAM (L2 cache and SM-level shared memory) operates at roughly 10–20 TB/s but is orders of magnitude smaller: the H100 has only 50 MB of L2 and 228 KB of shared memory per SM, totalling around 33 MB of shared memory across all SMs. Main system memory (CPU RAM) and storage (NVMe, object storage) form the lower tiers and are accessed via PCIe — at PCIe 5.0 x16, this provides only about 63 GB/s, two orders of magnitude below HBM bandwidth.</p>
+
+                        <p>This hierarchy creates a clear priority for optimisation: the goal is to keep data in SRAM as long as possible, minimise HBM round trips, and never access PCIe or system memory during critical compute paths. The roofline model is the canonical framework for analysing whether a specific operation is compute-bound or memory-bandwidth-bound: plot achievable FLOPS against arithmetic intensity (FLOPS per byte of memory traffic). Operations with high arithmetic intensity (large matrix multiplications, convolutions with large kernels) sit on the compute-bound "roof"; operations with low arithmetic intensity (elementwise ops, layer norm, many attention patterns) sit on the memory-bandwidth-bound "wall". Most practical transformer training operations at real batch sizes fall on or below the memory bandwidth wall, meaning the GPU is not compute-saturated — it is waiting for data.</p>
+
+                        <h3 id="memory-bandwidth">Memory Bandwidth &amp; HBM</h3>
+                        <p>The practical consequence of HBM bandwidth as the primary bottleneck is that many optimisations that appear to add computation actually improve total training throughput by reducing HBM reads and writes. This is counterintuitive to developers accustomed to CPU optimisation, where avoiding computation is almost always the goal. On GPU, a sequence of four elementwise operations (each reading from and writing to HBM independently) is far slower than one fused kernel that performs all four in registers without HBM traffic. This is why operator fusion, enabled by torch.compile and Triton custom kernels, is a primary tool for GPU performance optimisation.</p>
+
+                        <p>Memory capacity determines model size. For BF16 training, a model parameter consumes 2 bytes. An optimiser state (Adam) requires an additional 8 bytes per parameter (two 32-bit moments). Gradients consume another 2–4 bytes per parameter. Activations are a function of batch size, sequence length, and model width — for a typical transformer, activation memory at training time can exceed parameter memory for long sequences. The practical consequence is that a 7B parameter model in BF16 requires roughly 7B x 16 bytes (parameters + gradients + Adam states) = approximately 112 GB just for the parameter-related state, before any activations — more than a single A100's 80 GB. This is why even "small" LLMs require multi-GPU setups for full fine-tuning.</p>
+
+                        <h3 id="activation-checkpointing">Activation Checkpointing &amp; Gradient Accumulation</h3>
+                        <p>Activation checkpointing (also called gradient checkpointing in PyTorch) is a technique that trades compute for memory by recomputing intermediate activations during the backward pass instead of storing them. In standard backpropagation, every intermediate activation tensor from the forward pass must be retained until its gradient is computed — this is where most of the "activation memory" is consumed. Checkpointing divides the network into segments, discards activations at segment boundaries after the forward pass, and recomputes them on-the-fly during the backward pass. The memory savings are proportional to the number of checkpointed segments: checkpointing every layer reduces activation memory from O(L) layers to roughly O(sqrt(L)), at the cost of a single extra forward pass computation. The result is typically a 4–8x reduction in activation memory with a 20–30% compute overhead — almost always worth it when memory is the binding constraint.</p>
+
+                        <p>Gradient accumulation solves a different problem: effective batch size constraints. When training with very small per-GPU batch sizes (due to memory limits), a single gradient update has high noise, which slows convergence. Gradient accumulation runs multiple forward and backward passes before calling <code>optimizer.step()</code>, accumulating gradients across micro-batches without applying them. This allows an effective batch size of N times micro_batch_size without requiring the full batch to fit in memory simultaneously. PyTorch's DDP provides a <code>no_sync()</code> context manager specifically for gradient accumulation, which suppresses the all-reduce communication during accumulation steps and only synchronises at the update step, preserving communication efficiency.</p>
+
+                        <div class="experiment-card">
+                            <div class="card-meta mb-2">
+                                <span class="badge bg-teal text-white">Practitioner Tip</span>
+                            </div>
+                            <h4>Memory Estimation Before Training</h4>
+                            <p>Before launching a multi-day training run, estimate your memory requirements: <strong>Total GPU memory needed = (model parameters x bytes_per_param) x (1 + grad_factor + optimizer_factor) + activation_memory</strong>. For Adam + BF16: each parameter needs ~16 bytes (2 BF16 + 8 Adam states + 4 FP32 master weights + 2 BF16 gradients). A 13B model needs roughly 208 GB — 3x H100 minimum, 4x with headroom for activations. Use <code>torch.cuda.memory_summary()</code> after a single forward+backward step to validate your estimate before scaling to a full cluster.</p>
+                        </div>
+
+                    </div><!-- end #memory-hierarchy blog-content -->
+
+                    <div id="distributed-training" class="blog-content mt-5">
+                        <h2><i class="fas fa-network-wired me-2 text-teal"></i>Distributed Training</h2>
+                        <p>No single GPU can hold or train a frontier model. GPT-4 is estimated at over 1 trillion parameters; Llama 3 405B has 405 billion. Even at INT8 quantisation, these models require hundreds of gigabytes of memory just for the weights — far beyond any single chip. Training them requires parallelism across dozens, hundreds, or thousands of GPUs. Three fundamental paradigms exist, each splitting a different dimension of the training problem: data parallelism splits the data across GPUs (each GPU holds a full model copy); model parallelism splits the model itself across GPUs (each GPU holds only part of the model); and pipeline parallelism stages the model's layers across GPUs like an assembly line. Production LLM training combines all three in 3D parallelism, as implemented by Megatron-LM and DeepSpeed.</p>
+
+                        <h3 id="data-parallelism">Data Parallelism (DDP) — Code</h3>
+                        <p>Data Distributed Parallel (DDP) is the most straightforward parallelism strategy. Each GPU receives a different mini-batch of data and computes gradients independently. After each backward pass, gradients are synchronised across all GPUs using an all-reduce collective operation (typically ring-allreduce), ensuring every GPU's copy of the model receives the same gradient update. The all-reduce is communication-efficient: ring-allreduce transfers exactly 2(N-1)/N of the total gradient tensor across N GPUs, and NCCL's implementation overlaps it with computation for maximum efficiency. DDP achieves near-linear scaling up to 8 GPUs within a node (where NVLink bandwidth makes all-reduce fast), with decreasing efficiency at larger node counts due to slower inter-node InfiniBand bandwidth.</p>
+
+                        <pre><code class="language-python">import torch
+import torch.distributed as dist
+import torch.multiprocessing as mp
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data.distributed import DistributedSampler
+
+def setup(rank, world_size):
+    """Initialize the distributed process group."""
+    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+    torch.cuda.set_device(rank)
+
+def cleanup():
+    dist.destroy_process_group()
+
+def train(rank, world_size, model_class, dataset):
+    setup(rank, world_size)
+
+    # Each process handles a partition of the data
+    sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank)
+    loader = torch.utils.data.DataLoader(dataset, batch_size=64, sampler=sampler)
+
+    # Wrap model in DDP -- synchronizes gradients across all GPUs after backward pass
+    model = model_class().cuda(rank)
+    ddp_model = DDP(model, device_ids=[rank])
+
+    optimizer = torch.optim.Adam(ddp_model.parameters(), lr=1e-3 * world_size)  # scale LR
+
+    for epoch in range(10):
+        sampler.set_epoch(epoch)  # ensures different shuffling per epoch
+        for batch_x, batch_y in loader:
+            batch_x, batch_y = batch_x.cuda(rank), batch_y.cuda(rank)
+            loss = criterion(ddp_model(batch_x), batch_y)
+            optimizer.zero_grad()
+            loss.backward()      # auto-syncs gradients via all_reduce
+            optimizer.step()
+
+        if rank == 0:  # only log from process 0
+            print(f"Epoch {epoch+1}: loss={loss.item():.4f}")
+
+    cleanup()
+
+# Launch on 4 GPUs (or 4 nodes x 1 GPU)
+if __name__ == "__main__":
+    world_size = 4
+    mp.spawn(train, args=(world_size, MyModel, train_dataset), nprocs=world_size)
+    # Linear scaling: 4x GPUs -> ~3.8x throughput (near-linear efficiency with DDP)</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Linear Scaling Rule:</strong> When multiplying the number of GPUs by N in DDP, scale the learning rate by N (linear scaling rule, Goyal et al. 2017). This preserves the effective per-sample gradient magnitude across larger effective batch sizes. Apply a warmup period of 5–10 epochs at the start of training to avoid instability from the large initial learning rate.
+                        </div>
+
+                        <h3 id="model-parallelism">Model &amp; Pipeline Parallelism (FSDP, Megatron)</h3>
+                        <p>When a model is too large to fit in a single GPU's memory — even with gradient checkpointing — the model itself must be sharded across GPUs. Two main strategies exist. Tensor parallelism (as implemented by Megatron-LM) splits individual weight matrices and their corresponding computations across GPUs. For a transformer's attention layer, the Q, K, V projection matrices can each be column-sharded across T GPUs, with each GPU computing its shard of the attention output. The shards are then all-gathered for the subsequent operations. Tensor parallelism has very fine communication granularity (all-reduces at every layer boundary), so it requires the fast intra-node NVLink bandwidth to be effective and is rarely applied across nodes.</p>
+
+                        <p>PyTorch's Fully Sharded Data Parallel (FSDP) implements ZeRO-3 (Zero Redundancy Optimizer Stage 3) — each GPU stores only a shard of the model parameters, gradients, and optimiser states. Before each forward or backward operation, the required parameters are all-gathered from all GPUs, the computation is performed, and then the parameters are immediately discarded (re-sharded). This gives the memory footprint of model parallelism with the programming model of data parallelism — you wrap any nn.Module with FSDP and it handles the sharding transparently. FSDP can train models of arbitrary size as long as a single layer's parameters fit in memory. In practice, it enables training of 70B+ parameter models on 8 A100s, where DDP would require hundreds of GPUs just to hold the model state.</p>
+
+                        <p>Pipeline parallelism divides the model's layers into stages and assigns each stage to a different set of GPUs. One GPU runs the first N layers; the next GPU receives intermediate activations and runs the following N layers; and so on, like an assembly line. This allows models of arbitrary depth to be trained across GPUs that cannot hold the full model individually. The main challenge is the "pipeline bubble": while GPU 1 is processing the backward pass of batch k, GPUs 2–4 are idle waiting for the gradient flow. Efficient pipeline schedules (GPipe, PipeDream, 1F1B) reduce the bubble to around 1/number_of_stages fraction of total compute time.</p>
+
+                        <h3 id="training-strategies-table">Distributed Training Strategies Comparison</h3>
+                        <div class="table-responsive">
+                            <table class="table table-bordered thead-dark">
+                                <thead class="thead-dark">
+                                    <tr>
+                                        <th>Strategy</th>
+                                        <th>How It Splits Work</th>
+                                        <th>GPU Memory Reduction</th>
+                                        <th>Communication Overhead</th>
+                                        <th>When to Use</th>
+                                        <th>Tool / Library</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>DDP</strong> (Data Parallel)</td>
+                                        <td>Each GPU sees different data batch; full model replica on each GPU</td>
+                                        <td>None (full model copy per GPU)</td>
+                                        <td>Low — one all-reduce per backward pass</td>
+                                        <td>Model fits on one GPU; scale throughput</td>
+                                        <td>PyTorch DDP, Horovod</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Pipeline Parallelism</strong></td>
+                                        <td>Model layers split across GPUs in stages (GPU1 = layers 1–8, GPU2 = layers 9–16...)</td>
+                                        <td>Linear reduction by number of stages</td>
+                                        <td>Medium — micro-batch bubble overhead (10–20%)</td>
+                                        <td>Very deep models; sequential layer chains</td>
+                                        <td>Megatron-LM, GPipe, PyTorch PipelineParallel</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Tensor Parallelism</strong></td>
+                                        <td>Individual weight matrices column/row-sharded across GPUs</td>
+                                        <td>Linear by tensor-parallel degree</td>
+                                        <td>High — all-reduce at every layer; requires NVLink</td>
+                                        <td>Largest models; intra-node only</td>
+                                        <td>Megatron-LM, tensor-parallel in NeMo</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>ZeRO (DeepSpeed)</strong></td>
+                                        <td>Shards optimizer states (Stage 1), gradients (Stage 2), or params+grads+optimizer (Stage 3) across GPUs</td>
+                                        <td>Up to 8x (ZeRO-3 vs DDP)</td>
+                                        <td>Low–Medium — extra all-gathers vs DDP</td>
+                                        <td>Large models; when FSDP API is limiting</td>
+                                        <td>DeepSpeed, PyTorch FSDP (ZeRO-3 equivalent)</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </div><!-- end #distributed-training blog-content -->
+
+                    <div id="mixed-precision" class="blog-content mt-5">
+                        <h2><i class="fas fa-tachometer-alt me-2 text-teal"></i>Mixed Precision &amp; GPU Profiling</h2>
+                        <p>Floating-point numbers encode three components: sign (1 bit), exponent (dynamic range), and mantissa (precision). FP32 uses 8 exponent bits and 23 mantissa bits. FP16 uses 5 exponent bits and 10 mantissa bits — it has higher precision than FP32 for numbers close to 1, but a much smaller dynamic range (maximum value ~65,504 vs ~3.4x10^38). BF16 (bfloat16) retains FP32's 8 exponent bits but reduces the mantissa to 7 bits, preserving the full dynamic range while halving memory and doubling Tensor Core throughput. BF16 has become the default for LLM training precisely because gradient magnitudes span many orders of magnitude during training — FP16's limited dynamic range causes underflow or overflow in gradients without dynamic loss scaling, while BF16 rarely does.</p>
+
+                        <p>FP8 (supported natively by the H100 Transformer Engine) goes further, with two variants: E4M3 (4 exponent bits, 3 mantissa, high precision) for the forward pass and E5M2 (5 exponent bits, 2 mantissa, high range) for gradients. FP8 roughly doubles throughput over BF16 again, but requires careful per-tensor scaling to avoid precision loss. Published results from Llama 3.1 and similar models show FP8 training matching BF16 loss curves with no significant quality degradation when implemented carefully.</p>
+
+                        <h3 id="fp16-bf16">FP16, BF16 &amp; AMP</h3>
+                        <p>PyTorch's Automatic Mixed Precision (AMP) makes mixed-precision training nearly transparent. The <code>torch.amp.autocast</code> context manager wraps the forward pass and automatically casts supported operations to BF16 or FP16 — matmuls, convolutions, and attention ops are cast down for speed, while reduction operations (softmax, layer norm) remain in FP32 for stability. For FP16 training, the <code>GradScaler</code> multiplies the loss by a large scaling factor before the backward pass and divides gradients back afterward, preventing FP16 underflow in small gradient values. With BF16, GradScaler is typically unnecessary. The master weights pattern keeps FP32 parameter copies for the optimiser update step while using BF16 for the forward and backward passes — this ensures that small gradient updates applied by Adam are not lost to BF16's reduced mantissa precision.</p>
+
+                        <h3 id="profiling-code">GPU Profiling &amp; Memory Optimisation — Code</h3>
+                        <p>Before optimising, profile. PyTorch's built-in profiler captures CPU and CUDA execution timelines, memory allocations, and kernel launch statistics. The example below demonstrates profiling a training loop and applying mixed-precision and gradient checkpointing to address the bottlenecks found. The profiler output integrates directly with TensorBoard's trace viewer for visual inspection.</p>
+
+                        <pre><code class="language-python">import torch
+from torch.profiler import profile, ProfilerActivity, tensorboard_trace_handler
+
+# Profile GPU memory and compute utilization
+model = LargeTransformerModel().cuda()
+optimizer = torch.optim.AdamW(model.parameters())
+
+with profile(
+    activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+    record_shapes=True,
+    profile_memory=True,
+    with_stack=True,
+    on_trace_ready=tensorboard_trace_handler("./profiler_logs")
+) as prof:
+    for step, (x, y) in enumerate(train_loader):
+        x, y = x.cuda(), y.cuda()
+
+        # Mixed precision training: 2x speedup, 50% memory reduction
+        with torch.cuda.amp.autocast():
+            output = model(x)
+            loss = criterion(output, y)
+
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+
+        if step == 5: break  # profile first 5 steps
+
+print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=10))
+# Output: which operations consume the most GPU memory
+# Common bottleneck: attention mechanism O(n^2) memory for long sequences
+
+# Memory optimization techniques:
+torch.cuda.empty_cache()                              # free cached but unused memory
+model = model.half()                                  # float16 -> 2x less VRAM
+# gradient checkpointing: recompute activations during backward instead of storing
+from torch.utils.checkpoint import checkpoint_sequential
+model.encoder = checkpoint_sequential(model.encoder, chunks=4)
+# Reduces activation memory by 4x at cost of ~30% compute overhead</code></pre>
+
+                        <h3 id="flash-attention">Flash Attention &amp; Kernel Fusion</h3>
+                        <p>Standard scaled dot-product attention computes Q*K^T, divides by sqrt(d_k), applies softmax, and multiplies by V. The problem is that the full N x N attention matrix must be written to HBM and read back for the softmax, generating O(N^2) memory traffic in addition to O(N^2 * d) arithmetic. For N=4,096 and d=128 on an H100, this means writing and reading a ~128 MB matrix repeatedly — a substantial bandwidth cost that dwarfs the actual compute. FlashAttention (Dao et al., 2022) rewrites attention to be IO-aware: it tiles Q, K, V matrices into blocks that fit within SRAM, computes the softmax incrementally using the online softmax algorithm, and produces the output without ever writing the full attention matrix to HBM. On an A100, FlashAttention achieves 2–4x speedup over standard attention and a roughly 5–20x reduction in HBM memory use, depending on sequence length.</p>
+
+                        <p>FlashAttention-2 improved work partitioning across warps within each SM, achieving better GPU utilisation, and introduced support for variable-length sequences and GQA/MQA. FlashAttention-3 (targeting Hopper and later) exploits the H100's asynchronous copy engine (TMA) and WGMMA instructions to overlap data loading with compute, and adds FP8 support with per-tile quantisation. FlashAttention is now the default attention implementation in PyTorch's <code>F.scaled_dot_product_attention</code> (SDPA), which dispatches to it automatically when inputs are on CUDA. More broadly, kernel fusion — combining multiple elementwise operations (ReLU, LayerNorm, residual adds, bias terms) into a single GPU kernel — eliminates intermediate HBM reads and writes. The OpenAI Triton language makes writing custom fused kernels practical without raw CUDA expertise, and <code>torch.compile</code> performs automatic kernel fusion for PyTorch graphs.</p>
+
+                    </div><!-- end #mixed-precision blog-content -->
+
+                    <div id="inference-serving" class="blog-content mt-5">
+                        <h2><i class="fas fa-server me-2 text-teal"></i>Inference Optimisation &amp; Serving</h2>
+                        <p>Inference has fundamentally different constraints from training. Training optimises for total compute efficiency — keeping GPUs utilised as long as possible. Inference must optimise for time-to-first-token (TTFT), inter-token latency, throughput (tokens per second per GPU), and cost per token — often simultaneously, with conflicting trade-offs. The central resource constraint is HBM: at inference time, weights must be loaded once (a large fixed cost), and then the KV cache for every active request must fit alongside them. For a Llama 3 70B model at BF16, the weights alone consume about 140 GB — more than one H100 can hold. Serving requires tensor parallelism across at least two H100s just for the weights, leaving limited HBM headroom for KV cache.</p>
+
+                        <p>Continuous batching (as implemented in vLLM, TGI, and SGLang) is the most impactful single serving optimisation. Naive static batching waits for a fixed batch of requests to arrive before starting a forward pass, and holds every slot until the longest sequence finishes — wasting GPU cycles on empty slots. Continuous batching instead inserts new requests into the batch as soon as slots become available after other sequences finish, keeping GPU utilisation high. vLLM's PagedAttention manages KV cache using virtual memory paging, allocating non-contiguous HBM pages to each sequence rather than requiring contiguous buffers — typically achieving 2–4x higher throughput than naive implementations on the same hardware.</p>
+
+                        <p>Speculative decoding uses a small, fast draft model to generate candidate next tokens, which the large target model then verifies in a single parallel forward pass. Because the verification step processes multiple tokens simultaneously (rather than one at a time), and because most draft proposals are accepted, effective throughput improves by 2–3x with no change to the output distribution. Weight quantisation for inference — GPTQ (post-training quantisation to INT4 or INT8 per weight), AWQ (activation-aware weight quantisation), and GGUF (the format used by llama.cpp for CPU and consumer GPU inference) — trades a small amount of accuracy for roughly 4x memory reduction and 2–3x throughput improvement on memory-bandwidth-bound generation.</p>
+
+                        <h3 id="k8s-deployment">Kubernetes ML Inference Deployment — Code</h3>
+                        <p>Production ML serving in enterprise environments almost always runs on Kubernetes. The following example shows a complete GPU-accelerated inference deployment with health probes, resource requests, horizontal pod autoscaling, and proper secrets management for model registry URIs. The NVIDIA device plugin must be installed as a DaemonSet on the cluster for GPU scheduling to work.</p>
+
+                        <pre><code class="language-bash"># GPU-accelerated inference deployment on Kubernetes
+# Assumes: NVIDIA device plugin installed, kubeconfig configured
+
+# 1. Create the deployment manifest
+cat &gt; churn-api-deployment.yaml &lt;&lt; 'EOF'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: churn-prediction-api
+  labels:
+    app: churn-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: churn-api
+  template:
+    metadata:
+      labels:
+        app: churn-api
+    spec:
+      containers:
+      - name: churn-api
+        image: acr.azurecr.io/churn-api:v2.1.0
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1"
+            nvidia.com/gpu: "1"    # request 1 GPU per pod
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+            nvidia.com/gpu: "1"
+        ports:
+        - containerPort: 8080
+        env:
+        - name: MODEL_URI
+          valueFrom:
+            secretKeyRef:
+              name: mlflow-secrets
+              key: model-uri
+        livenessProbe:
+          httpGet: {path: /health, port: 8080}
+          initialDelaySeconds: 30
+        readinessProbe:
+          httpGet: {path: /health, port: 8080}
+          initialDelaySeconds: 15
+EOF
+
+kubectl apply -f churn-api-deployment.yaml
+
+# 2. Horizontal Pod Autoscaler: scale based on GPU utilization
+kubectl autoscale deployment churn-prediction-api \
+  --min=2 --max=10 \
+  --cpu-percent=70
+
+# 3. Monitor deployment
+kubectl rollout status deployment/churn-prediction-api
+kubectl top pods -l app=churn-api</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Key Insight:</strong> GPU memory — specifically HBM capacity and bandwidth — is the single most important resource constraint in AI systems. Everything else is downstream of it. The number of parameters you can train, the batch size you can run, the context length you can serve, and the number of concurrent requests you can handle all reduce, ultimately, to how much HBM you have and how fast you can read from it. When evaluating hardware, optimisations, or architectures, always ask the memory question first.
+                        </div>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Production Warning:</strong> Distributed training bugs are among the hardest to reproduce and diagnose in all of software engineering. A gradient synchronisation error or a ZeRO sharding bug may not surface until thousands of GPU-hours into a training run — by which time you have wasted significant compute and cannot easily reconstruct the faulty state. Enable deterministic mode (<code>torch.use_deterministic_algorithms(True)</code>) in early debugging, instrument gradient norms and loss scaling coefficients as training metrics from the first step, and establish a "canary run" pattern — a short 100-step training run on a small cluster with known-good outputs used to validate any infrastructure change before committing to a full run.
+                        </div>
+
+                    </div><!-- end #inference-serving blog-content -->
+
+                    <div id="exercises" class="blog-content mt-5">
+                        <h2><i class="fas fa-dumbbell me-2 text-teal"></i>Practical Exercises</h2>
+                        <p>These exercises ground the infrastructure concepts in hands-on experimentation. Work through them from beginner to advanced — each builds your intuition about the hardware constraints that govern large-scale AI. You do not need expensive hardware for the first two; a free Google Colab GPU (T4) or Kaggle P100 is sufficient.</p>
+
+                        <div class="experiment-card">
+                            <div class="card-meta mb-2">
+                                <span class="badge bg-navy text-white">Exercise 1</span>
+                                <span class="badge bg-secondary ms-2">Beginner</span>
+                            </div>
+                            <h4>Profile a ResNet-50 Forward Pass</h4>
+                            <p>Profile a forward pass of a ResNet-50 model using <code>torch.profiler</code>. Identify the top 3 most time-consuming operations. For each, record: (a) the kernel name, (b) the CUDA time vs CPU time, (c) whether it is memory-bandwidth-bound or compute-bound. Compare profiling results on CPU vs GPU. What is the most surprising finding? Inspect the memory timeline — at which layer does peak activation memory occur? Use <code>prof.key_averages().table(sort_by="cuda_time_total")</code> to generate your report. As an extension, repeat the profiling with and without <code>torch.compile(model)</code> and document the difference in kernel fusion and total CUDA time.</p>
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="card-meta mb-2">
+                                <span class="badge bg-navy text-white">Exercise 2</span>
+                                <span class="badge bg-secondary ms-2">Intermediate</span>
+                            </div>
+                            <h4>Mixed-Precision Training Comparison</h4>
+                            <p>Implement mixed-precision training (FP16) for a CNN. Using a fixed architecture and dataset (e.g., ResNet-18 on CIFAR-100), measure three things: (a) training speed improvement in samples/second for FP32 vs FP16, (b) peak memory reduction using <code>torch.cuda.max_memory_allocated()</code>, and (c) final model accuracy vs full FP32 precision after the same number of epochs. Repeat for BF16 if your hardware supports it. Document: does the AMP overhead during the first epoch differ from subsequent epochs? At what batch size does AMP provide the largest relative speedup, and why? Note any numerical instability symptoms (loss spikes, NaN gradients) and how the GradScaler prevents them.</p>
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="card-meta mb-2">
+                                <span class="badge bg-navy text-white">Exercise 3</span>
+                                <span class="badge bg-secondary ms-2">Advanced</span>
+                            </div>
+                            <h4>2-GPU DDP Scaling Efficiency</h4>
+                            <p>Set up 2-GPU DDP training on a multi-GPU machine (or simulate with 2 processes on CPU using the Gloo backend for testing the code path without expensive hardware). Measure the scaling efficiency vs single-GPU training: (a) compute throughput in samples/second per GPU, (b) gradient synchronisation overhead using NCCL activity tracking via the profiler, and (c) overall wall-clock time to reach a target validation accuracy. Calculate the actual scaling efficiency as: (single-GPU throughput x 2) / (2-GPU throughput). Benchmark across three model sizes (small/medium/large) to see how scaling efficiency varies with the compute-to-communication ratio. Document the crossover point where communication overhead becomes significant, and explain why it scales with model size in the direction it does.</p>
+                        </div>
+
+                    </div><!-- end #exercises blog-content -->
+
+                    <div id="doc-generator" class="blog-content mt-5">
+                        <h2><i class="fas fa-file-export me-2 text-teal"></i>AI Infrastructure Plan Generator</h2>
+                        <p>Use this tool to document your AI infrastructure architecture decisions and generate a professional planning document. Define your hardware choices, training strategy, and operational approach — then export as Word, Excel, PDF, or PowerPoint for sharing with engineering leadership and finance stakeholders.</p>
+
+                        <div class="canvas-form-container">
+                            <div class="canvas-form-header">
+                                <h3><i class="fas fa-server me-2"></i>AI Infrastructure Plan Generator</h3>
+                                <p class="canvas-form-description">Define your ML infrastructure architecture and generate a professional planning document. Download as Word, Excel, PDF, or PowerPoint.</p>
+                                <span id="aiInfraBadge" class="draft-badge" style="display:none;"><i class="fas fa-save me-1"></i>Draft Saved</span>
+                            </div>
+
+                            <form id="aiInfraForm" class="canvas-form">
+                                <div class="form-row">
+                                    <div class="form-group" style="grid-column: 1 / -1;">
+                                        <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                        <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label><i class="fas fa-building me-1"></i>System / Project Name <span class="required">*</span></label>
+                                        <input type="text" id="infraSysName" placeholder="e.g., LLM Training Platform v2">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-brain me-1"></i>Model Type <span class="required">*</span></label>
+                                        <input type="text" id="infraModelType" placeholder="e.g., 7B parameter transformer, ResNet-50, BERT fine-tune">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label><i class="fas fa-microchip me-1"></i>GPU / Accelerator Type</label>
+                                        <select id="infraGPUType">
+                                            <option value="">Select accelerator...</option>
+                                            <option value="A100">NVIDIA A100</option>
+                                            <option value="H100">NVIDIA H100</option>
+                                            <option value="V100">NVIDIA V100</option>
+                                            <option value="A6000">NVIDIA A6000</option>
+                                            <option value="consumer">Consumer GPU (RTX 4090 / 3090)</option>
+                                            <option value="TPU">Google TPU</option>
+                                            <option value="custom_asic">Custom ASIC (Trainium / Inferentia)</option>
+                                            <option value="cpu_only">CPU-only</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-layer-group me-1"></i>Training Scale</label>
+                                        <select id="infraTrainingScale">
+                                            <option value="">Select scale...</option>
+                                            <option value="single_gpu">Single GPU</option>
+                                            <option value="multi_gpu">Multi-GPU (single node)</option>
+                                            <option value="multi_node">Multi-Node (cluster)</option>
+                                            <option value="cloud_managed">Cloud Managed (SageMaker / Vertex AI)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group" style="grid-column: 1 / -1;">
+                                        <label><i class="fas fa-rocket me-1"></i>Inference Target &amp; Requirements</label>
+                                        <textarea id="infraInferenceTarget" rows="3" placeholder="e.g., p50 latency &lt;100ms, 1000 req/s peak, Kubernetes on GKE, real-time or batch?"></textarea>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label><i class="fas fa-chart-line me-1"></i>Monitoring Stack</label>
+                                        <input type="text" id="infraMonitoringStack" placeholder="e.g., Prometheus + Grafana, MLflow, W&amp;B">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-expand-arrows-alt me-1"></i>Scaling Strategy</label>
+                                        <input type="text" id="infraScalingStrategy" placeholder="e.g., HPA on GPU utilisation, spot instances for training">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label><i class="fas fa-dollar-sign me-1"></i>Cost Optimisation Approach</label>
+                                        <input type="text" id="infraCostOptimization" placeholder="e.g., spot/preemptible GPUs, model quantisation, batching strategy">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-shield-alt me-1"></i>Disaster Recovery Plan</label>
+                                        <input type="text" id="infraDisasterRecovery" placeholder="e.g., checkpoint every 500 steps, multi-region inference endpoints">
+                                    </div>
+                                </div>
+
+                                <div id="aiInfraSuccess" class="form-success" style="display:none;">
+                                    <i class="fas fa-check-circle me-2"></i>
+                                    <span id="aiInfraSuccessText"></span>
+                                </div>
+
+                                <div class="form-actions">
+                                    <button type="button" class="btn-generate" onclick="aiInfraHandler.generate('word')"><i class="fas fa-file-word me-2"></i>Word</button>
+                                    <button type="button" class="btn-generate btn-excel" onclick="aiInfraHandler.generate('excel')"><i class="fas fa-file-excel me-2"></i>Excel</button>
+                                    <button type="button" class="btn-generate btn-pdf" onclick="aiInfraHandler.generate('pdf')"><i class="fas fa-file-pdf me-2"></i>PDF</button>
+                                    <button type="button" class="btn-generate btn-ppt" onclick="aiInfraHandler.generate('ppt')"><i class="fas fa-file-powerpoint me-2"></i>PowerPoint</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div><!-- end #doc-generator blog-content -->
+
+                    <div id="conclusion" class="blog-content mt-5">
+                        <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion &amp; Next Steps</h2>
+                        <p>The AI infrastructure stack is not a detail left to platform engineers — it is the physical substrate that determines what models can be built, at what cost, and with what reliability. Working upward from silicon: GPU and TPU architectures provide the raw compute through Tensor Cores and systolic arrays optimised for matrix multiply. HBM provides the memory bandwidth that feeds those compute units, and its capacity constrains everything from trainable model size to serving batch size. Activation checkpointing, gradient accumulation, and mixed precision (BF16, FP8) extend what can be done within fixed hardware budgets. Distributed training — data parallelism via FSDP and ZeRO, tensor parallelism via Megatron-LM, pipeline parallelism for depth — scales training to models far too large for any single device. FlashAttention and kernel fusion squeeze efficient use out of every byte of HBM bandwidth. And at the serving layer, continuous batching, PagedAttention, speculative decoding, and quantisation make inference economically viable at scale.</p>
+
+                        <p>Infrastructure knowledge compounds with model knowledge. A practitioner who understands only model architecture cannot diagnose why training loss diverged after a checkpoint restart, or why serving latency doubles under moderate concurrency, or why gradient norms explode at a specific layer configuration. Conversely, an infrastructure engineer who does not understand the model has no principled basis for choosing parallelism strategies or precision formats. The practitioners who build the most capable and reliable AI systems are those who hold both levels of understanding simultaneously — and who know which knob to turn when the system misbehaves.</p>
+
+                        <p>As you move into the final two articles of this series, carry the infrastructure lens with you: the governance and policy questions in Parts 23 and 24 are ultimately questions about what gets built with this machinery, and understanding the machinery makes the governance stakes concrete. A responsible AI practitioner who understands that a 70B parameter model requires a minimum of four H100s to serve at production scale has a fundamentally different intuition about the economics, access, and policy dimensions of AI than one who treats models as abstract services delivered by an invisible cloud.</p>
+
+                        <div class="series-next">
+                            <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                            <p>In <a href="ai-wild-part23-responsible-ai.html"><strong>Part 23: Responsible AI Governance</strong></a>, we examine how organisations govern the AI systems they build — covering risk frameworks (NIST AI RMF, EU AI Act), model cards, datasheets, AI auditing, and the organisational practices that separate responsible deployment from theatre.</p>
+                        </div>
+
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book me-2"></i>Continue This Series</h3>
+                            <div class="related-post-item">
+                                <h5>Part 21: Edge AI &amp; On-Device Intelligence</h5>
+                                <p>Quantization, pruning, TFLite, CoreML, and the engineering of running AI models on constrained embedded hardware — the counterpoint to large-scale infrastructure.</p>
+                                <a href="ai-wild-part21-edge-ai.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 23: Responsible AI Governance</h5>
+                                <p>Risk frameworks, model cards, AI auditing, and the organisational practices for ensuring the AI systems you deploy are safe, fair, and accountable.</p>
+                                <a href="ai-wild-part23-responsible-ai.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 20: MLOps &amp; Model Deployment</h5>
+                                <p>CI/CD for ML, feature stores, model registries, monitoring, and drift detection — the operational layer that sits above the infrastructure covered here.</p>
+                                <a href="ai-wild-part20-mlops.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                    </div><!-- end #conclusion blog-content -->
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.</p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small"><i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a></p>
+                    <p class="small mt-3"><a href="/" class="text-light text-decoration-none">Home</a> | <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a></p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">Enjoying this content? &#9749; <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator" title="Current Section"><i class="fas fa-tag"></i><span id="categoryText">Technology</span></div>
+
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-ai-in-the-wild.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <script>
+        var aiInfraPersistence = new FormPersistence('aiw-p22-draft', {
+            'infraSysName': 'systemName',
+            'infraModelType': 'modelType',
+            'infraGPUType': 'gpuType',
+            'infraTrainingScale': 'trainingScale',
+            'infraInferenceTarget': 'inferenceTarget',
+            'infraMonitoringStack': 'monitoringStack',
+            'infraCostOptimization': 'costOptimization',
+            'infraDisasterRecovery': 'disasterRecovery',
+            'infraScalingStrategy': 'scalingStrategy'
+        }, 'aiInfraBadge');
+
+        var aiInfraHandler = new CanvasFormHandler({
+            formId: 'aiInfraForm',
+            successId: 'aiInfraSuccess',
+            successTextId: 'aiInfraSuccessText',
+            persistence: aiInfraPersistence,
+            filenameField: 'systemName',
+            filenameSuffix: '-ai-infra-plan',
+            requiredFields: ['infraSysName', 'infraModelType'],
+            requiredMessage: 'Please fill in System Name and Model Type.',
+            docType: 'MLOpsPipeline'
+        });
+        document.addEventListener('DOMContentLoaded', function() { aiInfraPersistence.init(); });
+    </script>
+</body>
+</html>
