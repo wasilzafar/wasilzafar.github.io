@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Master CMSIS-Core internals — how core_cmX.h structures map to hardware, NVIC priority grouping and preemption, SysTick time-base generation, and SCB fault registers for HardFault diagnosis. Part 2 of 20." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="CMSIS-Core, NVIC, SysTick, core_cm4.h, interrupt priority, HardFault, CFSR, ARM Cortex-M, embedded systems" />
+    <meta property="og:title" content="CMSIS-Core: Registers, NVIC &amp; SysTick — CMSIS Mastery Series Part 2" />
+    <meta property="og:description" content="How core_cmX.h gives you type-safe register access, how the NVIC works across priority levels, and how SysTick drives every RTOS tick — the processor-level APIs you'll use in every embedded project." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>CMSIS-Core: Registers, NVIC &amp; SysTick — CMSIS Mastery Series Part 2 - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/cmsis/cmsis-part02-core-registers-nvic-systick.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting (6 themes) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'ad_user_data': 'granted',
+            'ad_personalization': 'granted',
+            'analytics_storage': 'granted'
+        });
+
+        gtag('set', 'url_passthrough', true);
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+            var f = d.getElementsByTagName(s)[0],
+                j = d.createElement(s),
+                dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking &ldquo;Accept All&rdquo;, you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">CMSIS Part 2: CMSIS-Core &mdash; Registers, NVIC &amp; SysTick</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>March 31, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>25 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">How core_cmX.h gives you type-safe register access, how the NVIC works across priority levels, and how SysTick drives every RTOS tick &mdash; the processor-level APIs you'll use in every embedded project.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#cmsis-core-structure" onclick="closeNav()">CMSIS-Core Structure</a></li>
+            <li><a href="#register-access" onclick="closeNav()">Register-Level Programming</a></li>
+            <li>
+                <a href="#nvic" onclick="closeNav()">NVIC: Nested Vectored Interrupt Controller</a>
+                <ul>
+                    <li><a href="#priority-grouping" onclick="closeNav()">Priority Grouping</a></li>
+                    <li><a href="#enable-disable" onclick="closeNav()">Enable / Disable IRQs</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#systick" onclick="closeNav()">SysTick Timer</a>
+                <ul>
+                    <li><a href="#systick-setup" onclick="closeNav()">1 ms Tick Generation</a></li>
+                    <li><a href="#delay-impl" onclick="closeNav()">Delay Implementation</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#fault-registers" onclick="closeNav()">Core Debug &amp; Fault Registers</a>
+                <ul>
+                    <li><a href="#cfsr" onclick="closeNav()">CFSR / HFSR / BFAR</a></li>
+                    <li><a href="#hardfault-handler" onclick="closeNav()">HardFault Handler</a></li>
+                </ul>
+            </li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#nvic-tool" onclick="closeNav()">NVIC Configuration Reference Generator</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 1 — CMSIS-CORE STRUCTURE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="cmsis-core-structure" class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Series Context:</strong> This is Part 2 of the 20-part CMSIS Mastery Series. Part 1 established the ecosystem overview; here we go deep into the processor-level API that underpins every CMSIS project.
+                    </div>
+
+                    <!-- Series Navigation Path -->
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>CMSIS Mastery Series</h4>
+                            <div class="path-subtitle">Your 20-step learning path &bull; Currently on Step 2</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="cmsis-part01-overview-ecosystem.html" class="step-card">
+                                <div class="step-num completed">1</div>
+                                <div class="step-info"><h6>Overview &amp; ARM Cortex-M Ecosystem</h6><small>CMSIS layers, Cortex-M families, memory map, toolchains</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <div class="step-card current">
+                                <div class="step-num active">2</div>
+                                <div class="step-info"><h6>CMSIS-Core: Registers, NVIC &amp; SysTick</h6><small>core_cmX.h, register access, interrupt controller, SysTick timer</small></div>
+                                <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                            </div>
+                            <a href="cmsis-part03-startup-linker-vector-table.html" class="step-card">
+                                <div class="step-num upcoming">3</div>
+                                <div class="step-info"><h6>Startup Code, Linker Scripts &amp; Vector Table</h6><small>Reset handler, BSS init, scatter files, boot process</small></div>
+                            </a>
+                            <a href="cmsis-part04-rtos2-threads-mutexes.html" class="step-card">
+                                <div class="step-num upcoming">4</div>
+                                <div class="step-info"><h6>CMSIS-RTOS2: Threads, Mutexes &amp; Semaphores</h6><small>Thread management, synchronization primitives, scheduling</small></div>
+                            </a>
+                            <a href="cmsis-part05-rtos2-queues-events.html" class="step-card">
+                                <div class="step-num upcoming">5</div>
+                                <div class="step-info"><h6>CMSIS-RTOS2: Message Queues &amp; Event Flags</h6><small>Inter-thread comms, ISR-to-thread, real-time design patterns</small></div>
+                            </a>
+                            <a href="cmsis-part06-dsp-filters-fft.html" class="step-card">
+                                <div class="step-num upcoming">6</div>
+                                <div class="step-info"><h6>CMSIS-DSP: Filters, FFT &amp; Math Functions</h6><small>FIR/IIR filters, FFT, SIMD optimizations</small></div>
+                            </a>
+                            <a href="cmsis-part07-driver-uart-spi-i2c.html" class="step-card">
+                                <div class="step-num upcoming">7</div>
+                                <div class="step-info"><h6>CMSIS-Driver: UART, SPI &amp; I2C</h6><small>Driver abstraction layer, callbacks, DMA integration</small></div>
+                            </a>
+                            <a href="cmsis-part08-pack-software-components.html" class="step-card">
+                                <div class="step-num upcoming">8</div>
+                                <div class="step-info"><h6>CMSIS-Pack &amp; Software Components</h6><small>Pack files, device support, dependency management</small></div>
+                            </a>
+                            <a href="cmsis-part09-debugging-dap-coresight.html" class="step-card">
+                                <div class="step-num upcoming">9</div>
+                                <div class="step-info"><h6>Debugging with CMSIS-DAP &amp; CoreSight</h6><small>SWD/JTAG, HardFault analysis, ITM tracing</small></div>
+                            </a>
+                            <a href="cmsis-part10-portable-firmware.html" class="step-card">
+                                <div class="step-num upcoming">10</div>
+                                <div class="step-info"><h6>Portable Firmware: Multi-Vendor Projects</h6><small>HAL vs CMSIS, cross-platform BSPs, reusable libraries</small></div>
+                            </a>
+                            <a href="cmsis-part11-interrupts-concurrency.html" class="step-card">
+                                <div class="step-num upcoming">11</div>
+                                <div class="step-info"><h6>Interrupts, Concurrency &amp; Real-Time Constraints</h6><small>Interrupt latency, critical sections, lock-free programming</small></div>
+                            </a>
+                            <a href="cmsis-part12-memory-management.html" class="step-card">
+                                <div class="step-num upcoming">12</div>
+                                <div class="step-info"><h6>Memory Management in Embedded Systems</h6><small>Static vs dynamic, heap fragmentation, memory pools</small></div>
+                            </a>
+                            <a href="cmsis-part13-low-power-optimization.html" class="step-card">
+                                <div class="step-num upcoming">13</div>
+                                <div class="step-info"><h6>Low Power &amp; Energy Optimization</h6><small>Sleep modes, clock gating, tickless RTOS, power profiling</small></div>
+                            </a>
+                            <a href="cmsis-part14-dma-data-handling.html" class="step-card">
+                                <div class="step-num upcoming">14</div>
+                                <div class="step-info"><h6>DMA &amp; High-Performance Data Handling</h6><small>DMA basics, peripheral transfers, zero-copy techniques</small></div>
+                            </a>
+                            <a href="cmsis-part15-security-trustzone.html" class="step-card">
+                                <div class="step-num upcoming">15</div>
+                                <div class="step-info"><h6>Security: ARMv8-M &amp; TrustZone</h6><small>Secure/non-secure worlds, secure boot, firmware protection</small></div>
+                            </a>
+                            <a href="cmsis-part16-bootloaders-firmware-updates.html" class="step-card">
+                                <div class="step-num upcoming">16</div>
+                                <div class="step-info"><h6>Bootloaders &amp; Firmware Updates</h6><small>OTA updates, dual-bank flash, fail-safe strategies</small></div>
+                            </a>
+                            <a href="cmsis-part17-testing-validation.html" class="step-card">
+                                <div class="step-num upcoming">17</div>
+                                <div class="step-info"><h6>Testing &amp; Validation</h6><small>Unity/Ceedling unit tests, HIL testing, integration testing</small></div>
+                            </a>
+                            <a href="cmsis-part18-performance-optimization.html" class="step-card">
+                                <div class="step-num upcoming">18</div>
+                                <div class="step-info"><h6>Performance Optimization</h6><small>Compiler flags, inline assembly, cache (M7/M33), profiling</small></div>
+                            </a>
+                            <a href="cmsis-part19-embedded-software-architecture.html" class="step-card">
+                                <div class="step-num upcoming">19</div>
+                                <div class="step-info"><h6>Embedded Software Architecture</h6><small>Layered design, event-driven, state machines, component-based</small></div>
+                            </a>
+                            <a href="cmsis-part20-tooling-workflow.html" class="step-card">
+                                <div class="step-num upcoming">20</div>
+                                <div class="step-info"><h6>Tooling &amp; Workflow (Professional Level)</h6><small>CI/CD for embedded, MISRA, static analysis, Doxygen</small></div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <h2><i class="fas fa-file-code me-2 text-teal"></i>CMSIS-Core Structure</h2>
+
+                    <p>CMSIS-Core is entirely header-based — there is no library to link. Every function you call is either a macro expansion or an <code>__STATIC_INLINE</code> function that the compiler inlines at the call site, generating zero function-call overhead. The entry point for any project is including the device header, which pulls in the appropriate core header automatically.</p>
+
+                    <p>The header hierarchy is well-defined: your device header (e.g., <code>stm32f407xx.h</code>) includes the processor-specific core header, which includes the compiler-specific intrinsics header. You never include core headers directly.</p>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Header File</th>
+                                <th>Target Core(s)</th>
+                                <th>ISA</th>
+                                <th>Key Additions Over Previous</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>core_cm0.h</code></td>
+                                <td>Cortex-M0</td>
+                                <td>ARMv6-M</td>
+                                <td>Base NVIC (8 IRQs), SysTick, SCB — minimal subset</td>
+                            </tr>
+                            <tr>
+                                <td><code>core_cm0plus.h</code></td>
+                                <td>Cortex-M0+</td>
+                                <td>ARMv6-M</td>
+                                <td>MPU support, vector table offset register (VTOR)</td>
+                            </tr>
+                            <tr>
+                                <td><code>core_cm3.h</code></td>
+                                <td>Cortex-M3</td>
+                                <td>ARMv7-M</td>
+                                <td>Full NVIC (240 IRQs), DWT, ITM, FPB, bit-band, UDIV</td>
+                            </tr>
+                            <tr>
+                                <td><code>core_cm4.h</code></td>
+                                <td>Cortex-M4 / M4F</td>
+                                <td>ARMv7E-M</td>
+                                <td>DSP intrinsics (__QADD, __SMULL), optional FPU registers</td>
+                            </tr>
+                            <tr>
+                                <td><code>core_cm7.h</code></td>
+                                <td>Cortex-M7</td>
+                                <td>ARMv7E-M</td>
+                                <td>Double-precision FPU, L1 cache maintenance (SCB_CleanDCache)</td>
+                            </tr>
+                            <tr>
+                                <td><code>core_cm23.h</code></td>
+                                <td>Cortex-M23</td>
+                                <td>ARMv8-M Base</td>
+                                <td>TrustZone SAU registers, IDAU, secure/non-secure NVIC banks</td>
+                            </tr>
+                            <tr>
+                                <td><code>core_cm33.h</code></td>
+                                <td>Cortex-M33</td>
+                                <td>ARMv8-M Main</td>
+                                <td>Full TrustZone + DSP + optional FPU, MSPLIM/PSPLIM</td>
+                            </tr>
+                            <tr>
+                                <td><code>core_cm55.h</code></td>
+                                <td>Cortex-M55</td>
+                                <td>ARMv8.1-M</td>
+                                <td>Helium (MVE) vector intrinsics, 4-stage pipeline support</td>
+                            </tr>
+                            <tr>
+                                <td><code>core_cm85.h</code></td>
+                                <td>Cortex-M85</td>
+                                <td>ARMv8.1-M</td>
+                                <td>OoO execution hints, Pacbti (PAC/BTI) pointer authentication</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p>Beyond the core-specific header, every CMSIS-Core installation includes three cross-cutting headers:</p>
+                    <ul>
+                        <li><strong><code>cmsis_compiler.h</code></strong> — maps compiler-agnostic macros (<code>__STATIC_INLINE</code>, <code>__PACKED</code>, <code>__WEAK</code>) to GCC, ARMClang, and IAR equivalents.</li>
+                        <li><strong><code>cmsis_version.h</code></strong> — exposes <code>__CM_CMSIS_VERSION</code> and <code>__CM_CMSIS_VERSION_MAIN</code> for compile-time version checks.</li>
+                        <li><strong><code>mpu_armv7.h</code> / <code>mpu_armv8.h</code></strong> — MPU configuration helpers for the respective ISA generations.</li>
+                    </ul>
+
+                    <h3>Key Macros: __IO, __IM, __OM, and Memory Barriers</h3>
+
+                    <pre><code class="language-c">/*
+ * CMSIS-Core qualifier macros (defined in cmsis_compiler.h)
+ *
+ * __IO   volatile — read/write peripheral register
+ * __IM   volatile const — read-only peripheral register (Input)
+ * __OM   volatile — write-only peripheral register (Output)
+ *
+ * These are the qualifiers used on every field in the peripheral structs
+ * generated from SVD files.
+ */
+
+/* Example from core_cm4.h — SysTick register structure */
+typedef struct {
+    __IOM uint32_t CTRL;   /*!< SysTick Control and Status Register */
+    __IOM uint32_t LOAD;   /*!< SysTick Reload Value Register       */
+    __IOM uint32_t VAL;    /*!< SysTick Current Value Register      */
+    __IM  uint32_t CALIB;  /*!< SysTick Calibration Register        */
+} SysTick_Type;
+
+/* __STATIC_INLINE: expands to 'static inline' on GCC/Clang,
+ * '__inline' on IAR — ensures zero-overhead helper functions */
+__STATIC_INLINE uint32_t SysTick_Config(uint32_t ticks) {
+    if ((ticks - 1UL) > SysTick_LOAD_RELOAD_Msk) { return 1UL; }
+    SysTick->LOAD = (uint32_t)(ticks - 1UL);
+    NVIC_SetPriority(SysTick_IRQn, (1UL << __NVIC_PRIO_BITS) - 1UL);
+    SysTick->VAL  = 0UL;
+    SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk |
+                    SysTick_CTRL_TICKINT_Msk    |
+                    SysTick_CTRL_ENABLE_Msk;
+    return 0UL;
+}
+
+/* Memory barrier intrinsics — critical after register writes */
+__DSB();  /* Data Synchronisation Barrier: ensures all memory
+             accesses complete before the next instruction     */
+__ISB();  /* Instruction Synchronisation Barrier: flushes the
+             pipeline, required after changing VTOR or enabling
+             the FPU via CPACR                                 */
+__DMB();  /* Data Memory Barrier: ordering only, no completion */</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Why barriers matter:</strong> Cortex-M processors can reorder memory accesses for performance. After writing to a clock enable register (e.g., <code>RCC->AHB1ENR</code>), a <code>__DSB()</code> guarantees the peripheral has received the enable before any read-modify-write to its registers. Omitting this causes rare, hard-to-reproduce bugs — typically only visible at high clock speeds.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 2 — REGISTER ACCESS
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="register-access" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-sliders-h me-2 text-teal"></i>Register-Level Programming</h2>
+
+                    <p>CMSIS-Core gives you two layers of register access: the peripheral struct (generated from SVD files and included in device headers) and direct bit manipulation using the bitmask/position macros that accompany every struct field. The combination produces readable, portable, and compiler-optimisable code.</p>
+
+                    <pre><code class="language-c">/*
+ * Three equivalent ways to set GPIOA pin 5 as output:
+ * The CMSIS struct approach is preferred for readability.
+ */
+
+/* Method 1: Raw address arithmetic (never do this in production) */
+*((volatile uint32_t *)0x40020000) = (*((volatile uint32_t *)0x40020000)
+                                      & ~(0x3UL << 10)) | (0x1UL << 10);
+
+/* Method 2: CMSIS struct + raw bit shift (acceptable) */
+GPIOA->MODER = (GPIOA->MODER & ~(0x3UL << 10)) | (0x1UL << 10);
+
+/* Method 3: CMSIS struct + named masks (preferred) */
+GPIOA->MODER = (GPIOA->MODER & ~GPIO_MODER_MODER5_Msk)
+             | (GPIO_MODER_MODER5_0);  /* Output mode = 0b01 */
+
+/*
+ * CMSIS Peripheral Struct Layout — how it maps to hardware:
+ *
+ * The device header declares a struct whose fields are at fixed
+ * offsets matching the reference manual register layout.
+ * A macro then creates a pointer to the peripheral's base address.
+ *
+ * #define GPIOA  ((GPIO_TypeDef *) GPIOA_BASE)
+ * GPIOA_BASE is 0x40020000 for STM32F4.
+ *
+ * So GPIOA->MODER is *(volatile uint32_t *)(0x40020000 + 0x00)
+ * And GPIOA->BSRR  is *(volatile uint32_t *)(0x40020000 + 0x18)
+ */
+
+/* Reading a peripheral register safely */
+uint32_t ahb1_enabled = RCC->AHB1ENR;  /* single read — compiler
+                                           cannot cache this due to
+                                           __IO (volatile) qualifier */
+
+/* Atomic set/clear using BSRR (Bit Set/Reset Register) */
+GPIOA->BSRR = (1UL << 5);          /* Set PA5   — upper 16 bits clear */
+GPIOA->BSRR = (1UL << (5 + 16));   /* Reset PA5 — lower 16 bits clear */</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 3 — NVIC
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="nvic" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-bolt me-2 text-teal"></i>NVIC: Nested Vectored Interrupt Controller</h2>
+
+                    <p>The NVIC is the heart of real-time responsiveness in Cortex-M systems. It manages up to 240 external interrupts plus 16 system exceptions, with hardware priority arbitration, tail-chaining, and late-arrival optimisation that deliver deterministic interrupt latency without software overhead.</p>
+
+                    <h3 id="priority-grouping">Priority Grouping</h3>
+
+                    <p>The NVIC uses a single 8-bit priority register per interrupt, but only the top <code>__NVIC_PRIO_BITS</code> bits are implemented (typically 3–8 bits depending on the device). These bits are further split into <em>preemption priority</em> (high-order) and <em>subpriority</em> (low-order) by the priority grouping configuration in SCB->AIRCR.</p>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Group</th>
+                                <th>AIRCR PRIGROUP</th>
+                                <th>Preemption Bits</th>
+                                <th>Subpriority Bits</th>
+                                <th>Preemption Levels</th>
+                                <th>Subpriority Levels</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Group 0</strong></td>
+                                <td>0b011</td>
+                                <td>0</td>
+                                <td>4 (of 4 implemented)</td>
+                                <td>1 (no preemption)</td>
+                                <td>16</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Group 1</strong></td>
+                                <td>0b100</td>
+                                <td>1</td>
+                                <td>3</td>
+                                <td>2</td>
+                                <td>8</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Group 2</strong></td>
+                                <td>0b101</td>
+                                <td>2</td>
+                                <td>2</td>
+                                <td>4</td>
+                                <td>4</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Group 3</strong></td>
+                                <td>0b110</td>
+                                <td>3</td>
+                                <td>1</td>
+                                <td>8</td>
+                                <td>2</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Group 4</strong></td>
+                                <td>0b111</td>
+                                <td>4</td>
+                                <td>0</td>
+                                <td>16</td>
+                                <td>1 (no subpriority)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Priority Grouping Rule:</strong> FreeRTOS and most RTOSes require Group 4 (all bits as preemption, no subpriority). Setting any other grouping while using configMAX_SYSCALL_INTERRUPT_PRIORITY will cause undefined behaviour in critical sections. Always set priority grouping before initialising the RTOS.
+                    </div>
+
+                    <pre><code class="language-c">/*
+ * NVIC Priority Grouping — complete configuration example
+ * Target: STM32F4 (Cortex-M4, 4 implemented priority bits = 16 levels)
+ */
+#include "stm32f407xx.h"
+
+/* Set all 4 bits as preemption priority (Group 4 = FreeRTOS compatible) */
+NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_4);
+
+/*
+ * NVIC_SetPriority / NVIC_GetPriority
+ * IRQn_Type is a signed enum: negative values are system exceptions,
+ * positive values are device interrupts.
+ */
+
+/* Configure USART1 interrupt at preemption priority 6 (mid-range) */
+NVIC_SetPriority(USART1_IRQn, 6U);
+
+/* Configure TIM2 interrupt at preemption priority 5 (higher than USART) */
+NVIC_SetPriority(TIM2_IRQn, 5U);
+
+/* Enable the interrupts */
+NVIC_EnableIRQ(USART1_IRQn);
+NVIC_EnableIRQ(TIM2_IRQn);
+
+/* Verify configuration */
+uint32_t usart_prio = NVIC_GetPriority(USART1_IRQn);  /* returns 6 */
+
+/* Disable an interrupt */
+NVIC_DisableIRQ(USART1_IRQn);
+
+/* Software-trigger an interrupt (useful for testing) */
+NVIC_SetPendingIRQ(TIM2_IRQn);
+
+/* Clear a pending interrupt (e.g., after spurious trigger) */
+NVIC_ClearPendingIRQ(TIM2_IRQn);
+
+/* Check if an interrupt is currently active (executing its ISR) */
+uint32_t active = NVIC_GetActive(TIM2_IRQn);</code></pre>
+
+                    <h3 id="enable-disable">Save/Restore IRQ State — Critical Sections</h3>
+
+                    <pre><code class="language-c">/*
+ * Portable critical section using CMSIS primask intrinsics.
+ * __get_PRIMASK() / __set_PRIMASK() work on all Cortex-M variants.
+ * This pattern is safe for nested critical sections.
+ */
+
+uint32_t enter_critical(void) {
+    uint32_t primask_state = __get_PRIMASK();
+    __disable_irq();   /* sets PRIMASK = 1, blocks all maskable IRQs */
+    __DSB();
+    __ISB();
+    return primask_state;  /* caller saves the previous state */
+}
+
+void exit_critical(uint32_t primask_state) {
+    __set_PRIMASK(primask_state);  /* restores, not unconditionally enables */
+}
+
+/* Usage */
+void update_shared_buffer(uint8_t *data, uint32_t len) {
+    uint32_t state = enter_critical();
+    /* --- critical section: safe to modify shared data --- */
+    memcpy(g_shared_buffer, data, len);
+    g_shared_buffer_len = len;
+    /* ---------------------------------------------------- */
+    exit_critical(state);
+}
+
+/*
+ * On ARMv8-M with TrustZone you also have FAULTMASK for masking
+ * configurable faults, and BASEPRI for selective IRQ masking:
+ */
+__set_BASEPRI(configMAX_SYSCALL_INTERRUPT_PRIORITY << (8 - __NVIC_PRIO_BITS));
+/* Only masks interrupts at priority >= configMAX_SYSCALL_INTERRUPT_PRIORITY.
+ * Interrupts at higher priority (lower number) still preempt.
+ * This is exactly what FreeRTOS taskENTER_CRITICAL() does internally. */</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 4 — SYSTICK
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="systick" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-stopwatch me-2 text-teal"></i>SysTick Timer</h2>
+
+                    <p>SysTick is a 24-bit down-counter built into every Cortex-M core. It counts from LOAD down to zero, triggers the SysTick exception (IRQ -1), reloads, and repeats. Because it is part of the processor — not a vendor peripheral — <code>SysTick_Config()</code> and <code>SysTick_Handler</code> are identical across every Cortex-M MCU.</p>
+
+                    <h3 id="systick-setup">Complete 1 ms Tick Generation</h3>
+
+                    <pre><code class="language-c">/*
+ * SysTick 1 ms time-base — complete implementation.
+ * SystemCoreClock is set by SystemInit() (called from startup code)
+ * and updated by SystemCoreClockUpdate() after any clock change.
+ */
+#include "stm32f407xx.h"  /* or any Cortex-M device header */
+
+/* Global tick counter — volatile because it is modified in an ISR */
+static volatile uint32_t g_uwTick = 0U;
+
+/**
+ * @brief  Initialise SysTick for 1 ms interrupts.
+ *         SysTick_Config() is a CMSIS-Core inline function.
+ * @retval 0 on success, 1 if ticks value is out of range.
+ */
+uint32_t HAL_InitTick(uint32_t TickPriority) {
+    /* Configure SysTick to generate interrupt every 1 ms */
+    if (SysTick_Config(SystemCoreClock / 1000U) != 0U) {
+        return 1U;  /* Reload value exceeds 24-bit maximum */
+    }
+
+    /* Set SysTick interrupt priority (lowest by default) */
+    if (TickPriority < (1UL << __NVIC_PRIO_BITS)) {
+        NVIC_SetPriority(SysTick_IRQn, TickPriority);
+    }
+    return 0U;
+}
+
+/* SysTick exception handler — runs every 1 ms */
+void SysTick_Handler(void) {
+    g_uwTick++;
+    /* If using FreeRTOS, also call xPortSysTickHandler() here */
+}
+
+/* Read current tick count */
+uint32_t HAL_GetTick(void) {
+    return g_uwTick;
+}
+
+/* Suspend/resume tick for low-power modes */
+void HAL_SuspendTick(void) {
+    SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk;
+}
+
+void HAL_ResumeTick(void) {
+    SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk;
+}</code></pre>
+
+                    <h3 id="delay-impl">Delay Implementations: Millisecond and Microsecond</h3>
+
+                    <pre><code class="language-c">/*
+ * Blocking millisecond delay using SysTick tick counter.
+ * Safe against uint32_t rollover (after ~49.7 days at 1 kHz).
+ */
+void delay_ms(uint32_t ms) {
+    uint32_t start = g_uwTick;
+    /* Subtraction is safe even if g_uwTick wraps around */
+    while ((g_uwTick - start) < ms) {
+        /* Optionally: __WFI() to enter sleep between ticks */
+    }
+}
+
+/*
+ * Microsecond delay using DWT (Data Watchpoint and Trace) cycle counter.
+ * DWT is available on Cortex-M3/M4/M7/M33 and above.
+ * Must enable DWT before use (done once at startup).
+ */
+void DWT_Init(void) {
+    /* Enable DWT by setting TRCENA in CoreDebug DEMCR */
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0U;                             /* Reset cycle counter */
+    DWT->CTRL  |= DWT_CTRL_CYCCNTENA_Msk;        /* Enable cycle counter */
+}
+
+void delay_us(uint32_t us) {
+    uint32_t cycles = us * (SystemCoreClock / 1000000U);
+    uint32_t start  = DWT->CYCCNT;
+    while ((DWT->CYCCNT - start) < cycles) {}
+}
+
+/*
+ * Periodic task using absolute tick — avoids drift accumulation.
+ * Pattern used by FreeRTOS vTaskDelayUntil() and osDelayUntil().
+ */
+void periodic_sensor_task(void) {
+    uint32_t next_tick = g_uwTick;
+    for (;;) {
+        next_tick += 10U;  /* 10 ms period */
+        sample_sensors();
+        /* Wait until next_tick — subtracts time already spent in task */
+        while ((int32_t)(g_uwTick - next_tick) < 0) {}
+    }
+}</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>SysTick and RTOS:</strong> When using FreeRTOS, the RTOS hijacks SysTick_Handler. Do not call <code>SysTick_Config()</code> before <code>vTaskStartScheduler()</code> — the scheduler configures SysTick itself. In tickless idle mode, FreeRTOS may reprogram LOAD dynamically to sleep for multiple ticks at once.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 5 — FAULT REGISTERS
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="fault-registers" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-bug me-2 text-teal"></i>Core Debug &amp; Fault Registers</h2>
+
+                    <p>When your firmware faults, the Cortex-M processor saves state automatically onto the stack and vectors to a fault handler. The <strong>System Control Block (SCB)</strong> contains a set of status registers that precisely describe what went wrong — invaluable for diagnosing HardFaults, BusFaults, MemFaults, and UsageFaults in production firmware.</p>
+
+                    <h3 id="cfsr">Reading CFSR, HFSR, and BFAR</h3>
+
+                    <pre><code class="language-c">/*
+ * SCB Fault Status Registers — definitions from core_cm4.h
+ *
+ * SCB->CFSR  Configurable Fault Status Register (32-bit, 3 sub-registers)
+ *   Bits  7:0   MMSR  — MemManage Fault Status (byte)
+ *   Bits 15:8   BFSR  — BusFault Status (byte)
+ *   Bits 31:16  UFSR  — UsageFault Status (halfword)
+ *
+ * SCB->HFSR  HardFault Status Register
+ *   Bit 1       VECTTBL — fault on vector table read
+ *   Bit 30      FORCED  — escalated from configurable fault
+ *   Bit 31      DEBUGEVT — debug event (reserved in non-debug use)
+ *
+ * SCB->BFAR  BusFault Address Register — valid when BFSR.BFARVALID set
+ * SCB->MMFAR MemManage Fault Address Register — valid when MMSR.MMARVALID set
+ */
+
+typedef struct {
+    uint32_t cfsr;   /* Configurable Fault Status Register */
+    uint32_t hfsr;   /* HardFault Status Register          */
+    uint32_t dfsr;   /* Debug Fault Status Register        */
+    uint32_t afsr;   /* Auxiliary Fault Status Register    */
+    uint32_t bfar;   /* BusFault Address Register          */
+    uint32_t mmfar;  /* MemManage Fault Address Register   */
+    uint32_t r0, r1, r2, r3, r12, lr, pc, xpsr; /* stacked registers */
+} FaultInfo_t;
+
+static volatile FaultInfo_t g_fault_info;
+
+void capture_fault_registers(void) {
+    g_fault_info.cfsr  = SCB->CFSR;
+    g_fault_info.hfsr  = SCB->HFSR;
+    g_fault_info.dfsr  = SCB->DFSR;
+    g_fault_info.afsr  = SCB->AFSR;
+    g_fault_info.bfar  = SCB->BFAR;
+    g_fault_info.mmfar = SCB->MMFAR;
+    /* Clear sticky fault bits by writing 1 to them */
+    SCB->CFSR = SCB->CFSR;
+    SCB->HFSR = SCB->HFSR;
+}
+
+/* Decode CFSR field meanings */
+void decode_cfsr(uint32_t cfsr) {
+    /* MemManage faults (bits 7:0) */
+    if (cfsr & SCB_CFSR_IACCVIOL_Msk) { /* Instruction access violation */ }
+    if (cfsr & SCB_CFSR_DACCVIOL_Msk) { /* Data access violation        */ }
+    if (cfsr & SCB_CFSR_MMARVALID_Msk){ /* SCB->MMFAR holds valid addr  */ }
+    /* BusFault (bits 15:8) */
+    if (cfsr & SCB_CFSR_IBUSERR_Msk)  { /* Instruction bus error        */ }
+    if (cfsr & SCB_CFSR_PRECISERR_Msk){ /* Precise data bus error       */ }
+    if (cfsr & SCB_CFSR_IMPRECISERR_Msk){ /* Imprecise bus error        */ }
+    if (cfsr & SCB_CFSR_BFARVALID_Msk){ /* SCB->BFAR holds valid addr   */ }
+    /* UsageFault (bits 31:16) */
+    if (cfsr & SCB_CFSR_UNDEFINSTR_Msk){ /* Undefined instruction       */ }
+    if (cfsr & SCB_CFSR_INVSTATE_Msk) { /* Invalid state (e.g., THUMB) */ }
+    if (cfsr & SCB_CFSR_DIVBYZERO_Msk){ /* Divide by zero (if enabled) */ }
+    if (cfsr & SCB_CFSR_UNALIGNED_Msk){ /* Unaligned access (if enabled)*/ }
+}</code></pre>
+
+                    <h3 id="hardfault-handler">HardFault Handler with UART Logging</h3>
+
+                    <pre><code class="language-c">/*
+ * HardFault handler that extracts the stacked register frame
+ * and logs fault information over UART before halting.
+ *
+ * The __attribute__((naked)) prevents the compiler from generating
+ * a function prologue/epilogue that would clobber MSP/PSP.
+ */
+
+/* Assembly trampoline — extracts correct stack pointer */
+__attribute__((naked)) void HardFault_Handler(void) {
+    __asm volatile (
+        "tst   lr, #4          \n"  /* Test EXC_RETURN bit 2         */
+        "ite   eq              \n"  /* If EQ: came from MSP, else PSP */
+        "mrseq r0, msp         \n"
+        "mrsne r0, psp         \n"
+        "ldr   r1, =HardFault_Handler_C \n"
+        "bx    r1              \n"
+    );
+}
+
+/* C handler receives pointer to the stacked exception frame */
+void HardFault_Handler_C(uint32_t *stacked_args) {
+    volatile uint32_t stacked_r0  = stacked_args[0];
+    volatile uint32_t stacked_r1  = stacked_args[1];
+    volatile uint32_t stacked_r2  = stacked_args[2];
+    volatile uint32_t stacked_r3  = stacked_args[3];
+    volatile uint32_t stacked_r12 = stacked_args[4];
+    volatile uint32_t stacked_lr  = stacked_args[5];
+    volatile uint32_t stacked_pc  = stacked_args[6];
+    volatile uint32_t stacked_xpsr= stacked_args[7];
+
+    /* Log to UART (assuming UART already initialised) */
+    uart_printf("[HARDFAULT] PC=0x%08X LR=0x%08X\r\n",
+                stacked_pc, stacked_lr);
+    uart_printf("[HARDFAULT] CFSR=0x%08X HFSR=0x%08X\r\n",
+                SCB->CFSR, SCB->HFSR);
+    if (SCB->CFSR & SCB_CFSR_BFARVALID_Msk) {
+        uart_printf("[HARDFAULT] BFAR=0x%08X (bus fault address)\r\n",
+                    SCB->BFAR);
+    }
+    if (SCB->CFSR & SCB_CFSR_MMARVALID_Msk) {
+        uart_printf("[HARDFAULT] MMFAR=0x%08X (memmanage fault addr)\r\n",
+                    SCB->MMFAR);
+    }
+
+    /* Store in retention RAM if available, then reset or halt */
+    for (;;) { __BKPT(0); }  /* Break to debugger if attached */
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 6 — EXERCISES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="exercises" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-dumbbell me-2 text-teal"></i>Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 1</span>
+                            <span class="badge bg-success text-white ms-2">Beginner</span>
+                        </div>
+                        <h4>Enable/Disable an IRQ with Save &amp; Restore</h4>
+                        <p>Implement a reentrant <code>IRQSave(IRQn_Type irq)</code> / <code>IRQRestore(IRQn_Type irq, uint32_t saved)</code> pair that saves whether the IRQ was enabled before disabling it, then correctly re-enables it only if it was enabled before. Test with nested calls to verify correctness. Use <code>NVIC_GetEnableIRQ()</code> to inspect state.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">NVIC</span>
+                            <span class="bias-tag">Critical Sections</span>
+                            <span class="bias-tag">Reentrancy</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 2</span>
+                            <span class="badge bg-warning text-dark ms-2">Intermediate</span>
+                        </div>
+                        <h4>SysTick-Based Microsecond Delay</h4>
+                        <p>Implement a <code>delay_us(uint32_t us)</code> function using <em>only</em> the SysTick current value register (<code>SysTick->VAL</code>) and LOAD register — without using DWT. Account for the reload event (counter wrapping from 0 to LOAD). Validate accuracy by toggling a GPIO and measuring the period on an oscilloscope or logic analyser.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">SysTick</span>
+                            <span class="bias-tag">Timing</span>
+                            <span class="bias-tag">Counter Wrap</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 3</span>
+                            <span class="badge bg-danger text-white ms-2">Advanced</span>
+                        </div>
+                        <h4>HardFault Handler with UART Fault Report</h4>
+                        <p>Deliberately trigger three different fault types: (a) null pointer dereference (MemManage/BusFault), (b) unaligned access (UsageFault — enable via <code>SCB->CCR |= SCB_CCR_UNALIGN_TRP_Msk</code>), (c) divide-by-zero (enable via <code>SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk</code>). Your HardFault handler must identify each type from CFSR and transmit the fault address (BFAR/MMFAR) over UART before halting.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">HardFault</span>
+                            <span class="bias-tag">SCB->CFSR</span>
+                            <span class="bias-tag">Fault Analysis</span>
+                            <span class="bias-tag">UART Debug</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 7 — DOCUMENT GENERATOR
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="nvic-tool" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-file-alt me-2 text-teal"></i>NVIC Configuration Reference Generator</h2>
+
+                    <p>Use this tool to document your project's NVIC configuration — MCU, priority grouping, interrupt list with priorities. Download as Word, Excel, PDF, or PPTX for design review, team handover, or MISRA compliance documentation.</p>
+
+                    <div class="canvas-form" id="cmsisNvicForm">
+                        <h4 class="canvas-form-title"><i class="fas fa-bolt me-2"></i>NVIC Configuration Reference Generator</h4>
+                        <p class="form-help-text">Document your NVIC interrupt configuration. Download as Word, Excel, PDF, or PPTX.</p>
+                        <div id="cmsisNvicBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <p class="form-privacy-notice"><i class="fas fa-shield-alt"></i> All data stays in your browser. Nothing is sent to or stored on any server.</p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="nvicProjectName">Project Name *</label>
+                                <input type="text" id="nvicProjectName" placeholder="e.g., Motor Controller Firmware v1.2">
+                            </div>
+                            <div class="form-group">
+                                <label for="nvicMcu">Target MCU *</label>
+                                <input type="text" id="nvicMcu" placeholder="e.g., STM32G474RET6, nRF52840">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="nvicCortexCore">Cortex-M Core</label>
+                                <select id="nvicCortexCore">
+                                    <option value="">Select core...</option>
+                                    <option value="Cortex-M0">Cortex-M0 (ARMv6-M)</option>
+                                    <option value="Cortex-M0+">Cortex-M0+ (ARMv6-M)</option>
+                                    <option value="Cortex-M3">Cortex-M3 (ARMv7-M)</option>
+                                    <option value="Cortex-M4">Cortex-M4 (ARMv7E-M)</option>
+                                    <option value="Cortex-M4F">Cortex-M4F (ARMv7E-M + FPU)</option>
+                                    <option value="Cortex-M7">Cortex-M7 (ARMv7E-M)</option>
+                                    <option value="Cortex-M23">Cortex-M23 (ARMv8-M Base)</option>
+                                    <option value="Cortex-M33">Cortex-M33 (ARMv8-M Main)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="nvicPriorityBits">Implemented Priority Bits</label>
+                                <select id="nvicPriorityBits">
+                                    <option value="">Select...</option>
+                                    <option value="2">2 bits (4 levels)</option>
+                                    <option value="3">3 bits (8 levels)</option>
+                                    <option value="4">4 bits (16 levels)</option>
+                                    <option value="8">8 bits (256 levels)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="nvicPriorityGrouping">Priority Grouping (AIRCR)</label>
+                                <select id="nvicPriorityGrouping">
+                                    <option value="">Select grouping...</option>
+                                    <option value="Group 0 — 0 preemption / all subpriority">Group 0 — 0 preemption / all subpriority</option>
+                                    <option value="Group 1 — 1 preemption / rest subpriority">Group 1 — 1 preemption / rest subpriority</option>
+                                    <option value="Group 2 — 2 preemption / rest subpriority">Group 2 — 2 preemption / rest subpriority</option>
+                                    <option value="Group 3 — 3 preemption / 1 subpriority">Group 3 — 3 preemption / 1 subpriority</option>
+                                    <option value="Group 4 — all preemption / 0 subpriority (FreeRTOS)">Group 4 — all preemption / 0 subpriority (FreeRTOS)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="nvicSysTickFreq">SysTick Frequency (Hz)</label>
+                                <input type="text" id="nvicSysTickFreq" placeholder="e.g., 1000 (1 kHz = 1 ms tick)">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label for="nvicInterruptList">Interrupt List (one per line: IRQ name, priority, preemption, subpriority)</label>
+                                <textarea id="nvicInterruptList" rows="6" placeholder="e.g.,&#10;USART1_IRQn, 6, 6, 0&#10;TIM2_IRQn, 5, 5, 0&#10;DMA1_Stream0_IRQn, 4, 4, 0&#10;SysTick_IRQn, 15, 15, 0 (lowest)"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label for="nvicNotes">Notes / Design Decisions</label>
+                                <textarea id="nvicNotes" rows="3" placeholder="e.g.,&#10;FreeRTOS configMAX_SYSCALL_INTERRUPT_PRIORITY = 5 (priorities 5–15 are RTOS-safe)&#10;Hardware timer at priority 4 is intentionally above RTOS syscall level"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="cmsisNvicHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="cmsisNvicHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="cmsisNvicHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-generate" onclick="cmsisNvicHandler.generatePPTX()"><i class="fas fa-file-powerpoint me-1"></i>PPTX</button>
+                            <button class="btn-reset" onclick="cmsisNvicHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="cmsisNvicSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="cmsisNvicSuccessText"></span></div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 8 — CONCLUSION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="conclusion" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion &amp; Next Steps</h2>
+
+                    <p>In this article we have thoroughly covered the processor-level CMSIS-Core API:</p>
+                    <ul>
+                        <li>The <strong>core_cmX.h header hierarchy</strong> — from core_cm0.h through core_cm85.h — gives you type-safe, zero-overhead access to every processor register via <code>__IO</code>/<code>__IM</code>/<code>__OM</code> qualifiers and <code>__STATIC_INLINE</code> functions.</li>
+                        <li><strong>Memory barrier intrinsics</strong> (<code>__DSB()</code>, <code>__ISB()</code>, <code>__DMB()</code>) are not optional — they are required after clock enables and before critical sections to guarantee correctness across all Cortex-M pipeline configurations.</li>
+                        <li>The <strong>NVIC priority grouping</strong> must be configured before any interrupt is enabled — especially before starting an RTOS. Group 4 (all bits as preemption) is the safest choice for FreeRTOS-based projects.</li>
+                        <li><strong>SysTick_Config()</strong> gives you a portable 1 ms time-base in a single call; the DWT cycle counter extends this to microsecond-accurate delays on M3/M4/M7/M33.</li>
+                        <li>The <strong>SCB fault registers</strong> (CFSR, HFSR, BFAR, MMFAR) encode exactly what went wrong — a proper HardFault handler reads and logs these before halting, transforming cryptic crashes into actionable diagnostics.</li>
+                    </ul>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="cmsis-part03-startup-linker-vector-table.html"><strong>Part 3: Startup Code, Linker Scripts &amp; Vector Table</strong></a>, we'll step back even further — to the very first instruction the CPU executes after reset. We'll trace the complete path from power-on through Reset_Handler, <code>.data</code> copy, BSS zero-fill, <code>SystemInit()</code>, and finally <code>main()</code>, and learn exactly how GCC linker scripts control every byte's placement in flash and SRAM.</p>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 3: Startup Code, Linker Scripts &amp; Vector Table</h5>
+                            <p>Understand the reset handler, BSS/data initialisation, vector table relocation, and the complete boot sequence from reset to main().</p>
+                            <a href="cmsis-part03-startup-linker-vector-table.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 4: CMSIS-RTOS2 — Threads, Mutexes &amp; Semaphores</h5>
+                            <p>Master the CMSIS-RTOS2 API for thread management, synchronisation primitives, and scheduling with FreeRTOS or Keil RTX5.</p>
+                            <a href="cmsis-part04-rtos2-threads-mutexes.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 5: CMSIS-RTOS2 — Message Queues &amp; Event Flags</h5>
+                            <p>Inter-thread communication patterns, ISR-to-thread signaling, and real-time design patterns using CMSIS-RTOS2 primitives.</p>
+                            <a href="cmsis-part05-rtos2-queues-events.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div><!-- end col-lg-8 -->
+            </div><!-- end row -->
+        </div><!-- end container -->
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> |
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> |
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? &#9749; <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Document Generation -->
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-cmsis.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- NVIC Configuration Form Handler -->
+    <script>
+        var cmsisNvicPersistence = new FormPersistence('cmsis-p02-nvic-draft', {
+            'nvicProjectName':    'projectName',
+            'nvicMcu':            'mcu',
+            'nvicCortexCore':     'cortexCore',
+            'nvicPriorityBits':   'priorityBits',
+            'nvicPriorityGrouping': 'priorityGrouping',
+            'nvicInterruptList':  'interruptList',
+            'nvicSysTickFreq':    'sysTickFreq',
+            'nvicNotes':          'notes'
+        }, 'cmsisNvicBadge');
+
+        var cmsisNvicHandler = new CanvasFormHandler({
+            formId:         'cmsisNvicForm',
+            successId:      'cmsisNvicSuccess',
+            successTextId:  'cmsisNvicSuccessText',
+            persistence:    cmsisNvicPersistence,
+            filenameField:  'projectName',
+            filenameSuffix: '-nvic-config',
+            requiredFields: ['nvicProjectName', 'nvicMcu'],
+            requiredMessage:'Please enter a Project Name and Target MCU.',
+            docType:        'CmsisCoreConfig'
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            cmsisNvicPersistence.init();
+        });
+    </script>
+
+</body>
+</html>

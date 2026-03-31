@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Master ARM CoreSight debug architecture, CMSIS-DAP USB probes, SWD vs JTAG protocols, hardware and software breakpoints, watchpoints, HardFault stack-trace decoding, and real-time ITM tracing. Part 9 of 20." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="CMSIS-DAP, CoreSight, SWD, JTAG, HardFault, ITM tracing, DWT, embedded debugging, ARM debug" />
+    <meta property="og:title" content="Debugging with CMSIS-DAP &amp; CoreSight — CMSIS Mastery Series Part 9" />
+    <meta property="og:description" content="How ARM's CoreSight debug architecture works under the hood — from the Debug Access Port through SWD/JTAG to GDB — and how to systematically diagnose HardFaults, race conditions, and timing bugs." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>CMSIS Part 9: Debugging with CMSIS-DAP &amp; CoreSight — CMSIS Mastery Series - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/cmsis/cmsis-part09-debugging-dap-coresight.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting (6 themes) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'ad_user_data': 'granted',
+            'ad_personalization': 'granted',
+            'analytics_storage': 'granted'
+        });
+
+        gtag('set', 'url_passthrough', true);
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+            var f = d.getElementsByTagName(s)[0],
+                j = d.createElement(s),
+                dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking &ldquo;Accept All&rdquo;, you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">CMSIS Part 9: Debugging with CMSIS-DAP &amp; CoreSight</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>March 31, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>35 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">How ARM's CoreSight debug architecture works under the hood — from the Debug Access Port through SWD/JTAG to GDB — and how to systematically diagnose HardFaults, race conditions, and timing bugs.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#coresight-arch" onclick="closeNav()">CoreSight Debug Architecture</a>
+                <ul>
+                    <li><a href="#dap-overview" onclick="closeNav()">Debug Access Port (DAP)</a></li>
+                    <li><a href="#coresight-components" onclick="closeNav()">ITM, ETM, TPIU, DWT, FPB</a></li>
+                </ul>
+            </li>
+            <li><a href="#swd-jtag" onclick="closeNav()">SWD vs JTAG Protocols</a>
+                <ul>
+                    <li><a href="#swd-timing" onclick="closeNav()">SWD Bit-Banging &amp; Timing</a></li>
+                    <li><a href="#protocol-comparison" onclick="closeNav()">Protocol Comparison</a></li>
+                </ul>
+            </li>
+            <li><a href="#cmsis-dap" onclick="closeNav()">CMSIS-DAP Probes</a>
+                <ul>
+                    <li><a href="#daplink" onclick="closeNav()">DAPLink Open-Source Probe</a></li>
+                    <li><a href="#probe-comparison" onclick="closeNav()">Probe Comparison Table</a></li>
+                </ul>
+            </li>
+            <li><a href="#debug-techniques" onclick="closeNav()">Debug Techniques</a>
+                <ul>
+                    <li><a href="#breakpoints" onclick="closeNav()">Hardware vs Software Breakpoints</a></li>
+                    <li><a href="#watchpoints" onclick="closeNav()">Data Watchpoints (DWT)</a></li>
+                </ul>
+            </li>
+            <li><a href="#fault-debugging" onclick="closeNav()">HardFault Debugging</a>
+                <ul>
+                    <li><a href="#cfsr-registers" onclick="closeNav()">CFSR, HFSR, BFAR, MMFAR</a></li>
+                    <li><a href="#hardfault-handler" onclick="closeNav()">Fault Handler Implementation</a></li>
+                </ul>
+            </li>
+            <li><a href="#itm-tracing" onclick="closeNav()">ITM Real-Time Tracing</a>
+                <ul>
+                    <li><a href="#itm-printf" onclick="closeNav()">ITM printf Implementation</a></li>
+                    <li><a href="#dwt-profiling" onclick="closeNav()">DWT Cycle Counter Profiling</a></li>
+                </ul>
+            </li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#debug-tool" onclick="closeNav()">Debug Plan Generator</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 1 — CORESIGHT ARCHITECTURE (first: no mt-5)
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="coresight-arch" class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Series Context:</strong> This is Part 9 of 20 in the CMSIS Mastery Series. With our foundational layers in place — Core, RTOS2, DSP, drivers, and Pack — we now turn to debugging: the skill that separates professional embedded developers from those who spend days on bugs that should take minutes. This article covers the hardware debug infrastructure that every Cortex-M device ships with.
+                    </div>
+
+                    <!-- Series Navigation Path -->
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>CMSIS Mastery Series</h4>
+                            <div class="path-subtitle">Your 20-step learning path &bull; Currently on Step 9</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="cmsis-part01-overview-ecosystem.html" class="step-card">
+                                <div class="step-num completed">1</div>
+                                <div class="step-info"><h6>Overview &amp; ARM Cortex-M Ecosystem</h6><small>CMSIS layers, Cortex-M families, memory map, toolchains</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="cmsis-part02-core-registers-nvic-systick.html" class="step-card">
+                                <div class="step-num completed">2</div>
+                                <div class="step-info"><h6>CMSIS-Core: Registers, NVIC &amp; SysTick</h6><small>core_cmX.h, register access, interrupt controller, SysTick timer</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="cmsis-part03-startup-linker-vector-table.html" class="step-card">
+                                <div class="step-num completed">3</div>
+                                <div class="step-info"><h6>Startup Code, Linker Scripts &amp; Vector Table</h6><small>Reset handler, BSS init, scatter files, boot process</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="cmsis-part04-rtos2-threads-mutexes.html" class="step-card">
+                                <div class="step-num completed">4</div>
+                                <div class="step-info"><h6>CMSIS-RTOS2: Threads, Mutexes &amp; Semaphores</h6><small>Thread management, synchronization primitives, scheduling</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="cmsis-part05-rtos2-queues-events.html" class="step-card">
+                                <div class="step-num completed">5</div>
+                                <div class="step-info"><h6>CMSIS-RTOS2: Message Queues &amp; Event Flags</h6><small>Inter-thread comms, ISR-to-thread, real-time design patterns</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="cmsis-part06-dsp-filters-fft.html" class="step-card">
+                                <div class="step-num completed">6</div>
+                                <div class="step-info"><h6>CMSIS-DSP: Filters, FFT &amp; Math Functions</h6><small>FIR/IIR filters, FFT, SIMD optimizations</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="cmsis-part07-driver-uart-spi-i2c.html" class="step-card">
+                                <div class="step-num completed">7</div>
+                                <div class="step-info"><h6>CMSIS-Driver: UART, SPI &amp; I2C</h6><small>Driver abstraction layer, callbacks, DMA integration</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="cmsis-part08-pack-software-components.html" class="step-card">
+                                <div class="step-num completed">8</div>
+                                <div class="step-info"><h6>CMSIS-Pack &amp; Software Components</h6><small>Pack files, device support, dependency management</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <div class="step-card current">
+                                <div class="step-num active">9</div>
+                                <div class="step-info"><h6>Debugging with CMSIS-DAP &amp; CoreSight</h6><small>SWD/JTAG, HardFault analysis, ITM tracing</small></div>
+                                <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                            </div>
+                            <a href="cmsis-part10-portable-firmware.html" class="step-card">
+                                <div class="step-num upcoming">10</div>
+                                <div class="step-info"><h6>Portable Firmware: Multi-Vendor Projects</h6><small>HAL vs CMSIS, cross-platform BSPs, reusable libraries</small></div>
+                            </a>
+                            <a href="cmsis-part11-interrupts-concurrency.html" class="step-card">
+                                <div class="step-num upcoming">11</div>
+                                <div class="step-info"><h6>Interrupts, Concurrency &amp; Real-Time Constraints</h6><small>Interrupt latency, critical sections, lock-free programming</small></div>
+                            </a>
+                            <a href="cmsis-part12-memory-management.html" class="step-card">
+                                <div class="step-num upcoming">12</div>
+                                <div class="step-info"><h6>Memory Management in Embedded Systems</h6><small>Static vs dynamic, heap fragmentation, memory pools</small></div>
+                            </a>
+                            <a href="cmsis-part13-low-power-optimization.html" class="step-card">
+                                <div class="step-num upcoming">13</div>
+                                <div class="step-info"><h6>Low Power &amp; Energy Optimization</h6><small>Sleep modes, clock gating, tickless RTOS, power profiling</small></div>
+                            </a>
+                            <a href="cmsis-part14-dma-data-handling.html" class="step-card">
+                                <div class="step-num upcoming">14</div>
+                                <div class="step-info"><h6>DMA &amp; High-Performance Data Handling</h6><small>DMA basics, peripheral transfers, zero-copy techniques</small></div>
+                            </a>
+                            <a href="cmsis-part15-security-trustzone.html" class="step-card">
+                                <div class="step-num upcoming">15</div>
+                                <div class="step-info"><h6>Security: ARMv8-M &amp; TrustZone</h6><small>Secure/non-secure worlds, secure boot, firmware protection</small></div>
+                            </a>
+                            <a href="cmsis-part16-bootloaders-firmware-updates.html" class="step-card">
+                                <div class="step-num upcoming">16</div>
+                                <div class="step-info"><h6>Bootloaders &amp; Firmware Updates</h6><small>OTA updates, dual-bank flash, fail-safe strategies</small></div>
+                            </a>
+                            <a href="cmsis-part17-testing-validation.html" class="step-card">
+                                <div class="step-num upcoming">17</div>
+                                <div class="step-info"><h6>Testing &amp; Validation</h6><small>Unity/Ceedling unit tests, HIL testing, integration testing</small></div>
+                            </a>
+                            <a href="cmsis-part18-performance-optimization.html" class="step-card">
+                                <div class="step-num upcoming">18</div>
+                                <div class="step-info"><h6>Performance Optimization</h6><small>Compiler flags, inline assembly, cache (M7/M33), profiling</small></div>
+                            </a>
+                            <a href="cmsis-part19-embedded-software-architecture.html" class="step-card">
+                                <div class="step-num upcoming">19</div>
+                                <div class="step-info"><h6>Embedded Software Architecture</h6><small>Layered design, event-driven, state machines, component-based</small></div>
+                            </a>
+                            <a href="cmsis-part20-tooling-workflow.html" class="step-card">
+                                <div class="step-num upcoming">20</div>
+                                <div class="step-info"><h6>Tooling &amp; Workflow (Professional Level)</h6><small>CI/CD for embedded, MISRA, static analysis, Doxygen</small></div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <h2><i class="fas fa-bug me-2 text-teal"></i>CoreSight Debug Architecture</h2>
+
+                    <p>ARM CoreSight is the debug and trace infrastructure built into every ARM Cortex-M processor. It is not a single block — it is a hierarchy of components connected via the Advanced Peripheral Bus (APB) and the Advanced High-performance Bus (AHB), all accessible from outside the chip through a Debug Access Port. Understanding this architecture is essential because every debugger interaction — setting a breakpoint, reading a variable, decoding a HardFault — works through this system.</p>
+
+                    <h3 id="dap-overview">Debug Access Port (DAP)</h3>
+
+                    <p>The DAP is the top-level interface between the external debug probe and the on-chip debug infrastructure. It sits in the system's domain and provides two types of Access Ports: the AHB-AP (for memory-mapped access to the processor's memory space — code, RAM, peripheral registers) and the APB-AP (for access to the CoreSight component registers themselves — ITM, ETM, DWT, FPB). The probe communicates with the DAP via either SWD or JTAG, then routes requests through the appropriate AP to read or write memory, control execution, or configure trace.</p>
+
+                    <h3 id="coresight-components">ITM, ETM, TPIU, DWT, FPB</h3>
+
+                    <p>The CoreSight ecosystem includes several specialised components that work together to provide debug and trace capability without requiring the processor to halt:</p>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="experiment-card">
+                                <div class="experiment-meta">
+                                    <span class="badge bg-navy text-white"><i class="fas fa-terminal me-1"></i>ITM</span>
+                                </div>
+                                <h4>Instrumentation Trace Macrocell</h4>
+                                <p>Software-controlled trace. Firmware writes to <code>ITM-&gt;PORT[n]</code> stimulus registers and the data is serialised out of the TPIU as trace packets — invisible to the application's timing, unlike UART printf. Supports 32 independent ports; port 0 is conventionally used for text output, port 1 for RTOS event logging.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="experiment-card">
+                                <div class="experiment-meta">
+                                    <span class="badge bg-teal text-white"><i class="fas fa-watch me-1"></i>DWT</span>
+                                </div>
+                                <h4>Data Watchpoint &amp; Trace Unit</h4>
+                                <p>Provides hardware watchpoints (break on data access at an address), cycle counting via <code>DWT-&gt;CYCCNT</code>, and PC sampling. The cycle counter is invaluable for microsecond-precision profiling without modifying code logic — just read CYCCNT before and after the code under test.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="experiment-card">
+                                <div class="experiment-meta">
+                                    <span class="badge bg-navy text-white"><i class="fas fa-stop me-1"></i>FPB</span>
+                                </div>
+                                <h4>Flash Patch &amp; Breakpoint Unit</h4>
+                                <p>Provides hardware breakpoints — on M3/M4/M7 you get 6 instruction comparators and 2 literal comparators. Hardware breakpoints work in flash (unlike software breakpoints which require writable memory). The FPB also supports flash patching: replacing flash addresses with RAM-resident patches without reflashing.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="experiment-card">
+                                <div class="experiment-meta">
+                                    <span class="badge bg-teal text-white"><i class="fas fa-stream me-1"></i>ETM / TPIU</span>
+                                </div>
+                                <h4>Embedded Trace Macrocell &amp; TPIU</h4>
+                                <p>ETM records the full instruction execution stream — every branch taken, every instruction retired. The TPIU (Trace Port Interface Unit) serialises all trace data (ITM + ETM) onto the physical SWO pin (1-bit) or a 4-bit parallel trace port. Most CMSIS-DAP probes support only SWO (ITM only); parallel ETM trace requires specialist probes like the Arm Embedded Trace Probe.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 2 — SWD vs JTAG
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="swd-jtag" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-network-wired me-2 text-teal"></i>SWD vs JTAG Protocols</h2>
+
+                    <p>Both SWD and JTAG are physical layer protocols for communicating with the DAP. Understanding their differences matters when you are choosing a probe, designing a PCB debug header, or diagnosing connectivity problems.</p>
+
+                    <h3 id="swd-timing">SWD Bit-Banging &amp; Timing</h3>
+
+                    <p>SWD uses only two signals: SWDIO (bidirectional data) and SWCLK (clock). The host drives SWCLK, while SWDIO is driven by the host during request packets and by the target during acknowledgement and data phases. A line turnaround period separates direction changes. Here is an illustrative bit-banging sequence (simplified for readability — production probes use hardware shift registers):</p>
+
+                    <pre><code class="language-c">/**
+ * SWD line reset + JTAG-to-SWD switch sequence (simplified illustration).
+ * In practice this is done in hardware by the CMSIS-DAP probe firmware.
+ *
+ * Physical signals: SWDIO (GPIO output/input) and SWCLK (GPIO output)
+ */
+
+/* Step 1: Drive SWDIO high, send 50+ clock pulses (line reset) */
+/* SWDIO = HIGH for 50 clocks */
+for (int i = 0; i < 50; i++) {
+    SWCLK_LOW();  __NOP(); __NOP();
+    SWCLK_HIGH(); __NOP(); __NOP();
+}
+
+/* Step 2: Send JTAG-to-SWD magic sequence 0x9EE7 (16 bits, LSB first) */
+uint16_t magic = 0x9EE7U;
+for (int i = 0; i < 16; i++) {
+    SWDIO_SET((magic >> i) & 1U);
+    SWCLK_LOW();  __NOP(); __NOP();
+    SWCLK_HIGH(); __NOP(); __NOP();
+}
+
+/* Step 3: Line reset again (50 clocks, SWDIO = HIGH) */
+/* Step 4: 2 idle clocks (SWDIO = LOW) */
+/* Step 5: DAP is now in SWD mode — send IDCODE read request */
+
+/**
+ * SWD packet format (8-bit request):
+ *   bit[0]   = start (always 1)
+ *   bit[1]   = APnDP  (0=DP, 1=AP)
+ *   bit[2]   = RnW    (0=write, 1=read)
+ *   bit[3:4] = A[2:3] (register address bits 2–3)
+ *   bit[5]   = parity (odd parity of bits 1–4)
+ *   bit[6]   = stop   (always 0)
+ *   bit[7]   = park   (always 1, line pulled high)
+ *
+ * After request: 1 turnaround + 3-bit ACK from target (OK=001, WAIT=010, FAULT=100)
+ * After ACK:     32-bit data + 1 parity bit (read), or turnaround + 32-bit data + parity (write)
+ */</code></pre>
+
+                    <h3 id="protocol-comparison">Protocol Comparison</h3>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Feature</th>
+                                <th>SWD</th>
+                                <th>JTAG</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Signals required</strong></td>
+                                <td>2 (SWDIO, SWCLK)</td>
+                                <td>4+ (TDI, TDO, TMS, TCK, optional nTRST)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>PCB pin count</strong></td>
+                                <td>Minimal — 10-pin or 5-pin SWD header standard</td>
+                                <td>20-pin standard ARM JTAG header; larger footprint</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Typical max speed</strong></td>
+                                <td>10 MHz (probe-dependent; J-Link up to 50 MHz)</td>
+                                <td>10–25 MHz typical; deterministic for long chains</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Multi-device daisy chain</strong></td>
+                                <td>No — point-to-point only</td>
+                                <td>Yes — JTAG chains support multiple devices/TAPs</td>
+                            </tr>
+                            <tr>
+                                <td><strong>SWO trace support</strong></td>
+                                <td>Yes — SWO (single-pin serial) via third signal</td>
+                                <td>Possible via dedicated trace port; less common</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Cortex-M support</strong></td>
+                                <td>All Cortex-M variants (M0+ does not support JTAG)</td>
+                                <td>M3, M4, M7, M23, M33 (not M0/M0+)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Preferred for</strong></td>
+                                <td>Single-chip embedded, space-constrained PCBs</td>
+                                <td>Complex SoCs, FPGAs, multi-chip debug chains</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Practical Advice:</strong> Always use SWD for new Cortex-M designs. It requires only two pins, is supported by every modern probe, and is mandatory for M0/M0+ devices which have no JTAG support. Add the SWO pin (a third signal) if you want ITM/SWV trace capability.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 3 — CMSIS-DAP PROBES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="cmsis-dap" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-usb me-2 text-teal"></i>CMSIS-DAP Probes</h2>
+
+                    <p>CMSIS-DAP is a firmware standard that defines the USB HID protocol between a debug probe and the host PC. Any microcontroller running CMSIS-DAP firmware appears as a USB HID device and is immediately recognised by CMSIS-DAP compatible debuggers (OpenOCD, pyOCD, J-Link software). This means you can build your own debug probe from an inexpensive MCU board running DAPLink firmware.</p>
+
+                    <h3 id="daplink">DAPLink Open-Source Probe</h3>
+
+                    <p>DAPLink is the reference open-source implementation of the CMSIS-DAP firmware, maintained by ARM. It runs on the LPC11U35, LPC4322, or nRF52840 MCU and provides: USB HID debug interface (CMSIS-DAP v2), USB mass-storage drag-and-drop flashing (drop a .hex/.bin onto the virtual drive), and USB CDC virtual COM port (connects to the target's UART). It is the firmware used on every mbed/Nucleo development board and the Raspberry Pi Debug Probe.</p>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Probe</th>
+                                <th>Protocol</th>
+                                <th>SWO Trace</th>
+                                <th>ETM Trace</th>
+                                <th>Approx. Cost</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>DAPLink / mbed HDK</strong></td>
+                                <td>CMSIS-DAP v1/v2, SWD, JTAG</td>
+                                <td>Yes (SWO)</td>
+                                <td>No</td>
+                                <td>Free (built-in on Nucleo/Discovery)</td>
+                                <td>Open-source; drag-and-drop flash; on most dev boards</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Raspberry Pi Debug Probe</strong></td>
+                                <td>CMSIS-DAP v2, SWD</td>
+                                <td>Yes (SWO)</td>
+                                <td>No</td>
+                                <td>~$12 USD</td>
+                                <td>RP2040-based; excellent OpenOCD support; UART passthrough</td>
+                            </tr>
+                            <tr>
+                                <td><strong>J-Link BASE / EDU</strong></td>
+                                <td>JTAG, SWD, Segger RTT</td>
+                                <td>Yes (SWO)</td>
+                                <td>Yes (J-Link PLUS)</td>
+                                <td>$20 EDU / $500+ BASE</td>
+                                <td>Gold standard; J-Link RTT for zero-overhead tracing; vendor SDK support</td>
+                            </tr>
+                            <tr>
+                                <td><strong>ST-LINK v3</strong></td>
+                                <td>JTAG, SWD, virtual COM</td>
+                                <td>Yes (SWV)</td>
+                                <td>No</td>
+                                <td>~$15 (STLINK-V3MODS)</td>
+                                <td>STM32-focused; excellent CubeIDE integration; CMSIS-DAP via third-party firmware</td>
+                            </tr>
+                            <tr>
+                                <td><strong>ULINK pro (Keil)</strong></td>
+                                <td>JTAG, SWD, CMSIS-DAP v2</td>
+                                <td>Yes (SWV)</td>
+                                <td>Yes (parallel 4-bit)</td>
+                                <td>~$500 USD</td>
+                                <td>Keil MDK native; supports full ETM instruction trace; power measurement</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Black Magic Probe</strong></td>
+                                <td>GDB server (native SWD/JTAG)</td>
+                                <td>Yes (SWO)</td>
+                                <td>No</td>
+                                <td>~$70 USD</td>
+                                <td>No separate GDB server needed — probe IS the GDB server via USB CDC; open firmware</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 4 — DEBUG TECHNIQUES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="debug-techniques" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-crosshairs me-2 text-teal"></i>Debug Techniques</h2>
+
+                    <p>Understanding the physical debug infrastructure lets you use it intentionally rather than accidentally. Two of the most powerful on-chip debug resources are hardware breakpoints (via FPB) and data watchpoints (via DWT). Both operate without modifying the code under test — they are purely hardware mechanisms.</p>
+
+                    <h3 id="breakpoints">Hardware vs Software Breakpoints</h3>
+
+                    <p>Software breakpoints replace an instruction with a <code>BKPT #0</code> opcode. The processor traps on execution, the debugger restores the original instruction, and resumes. This requires writable memory — so software breakpoints work in RAM but fail in flash (read-only) without flash modification cycles. They are unlimited in number but introduce latency from the instruction patch cycle.</p>
+
+                    <p>Hardware breakpoints use the FPB comparators to halt execution when the PC reaches a specific address — without any code modification. The M3/M4/M7 provide 6 instruction comparators. If you set more than 6 hardware breakpoints, the debugger must transparently fall back to software breakpoints for the excess. The FPB also supports conditional breakpoints at the hardware level via value comparisons on M33/M55.</p>
+
+                    <h3 id="watchpoints">Data Watchpoints (DWT)</h3>
+
+                    <p>Watchpoints halt (or trace) on data access at a specific address — reads, writes, or both. This is invaluable for tracking down memory corruption: set a watchpoint on a variable whose value is mysteriously changing, and the processor will halt the moment any code writes to that address, regardless of which thread or interrupt caused it. The M3/M4/M7 provide 4 DWT comparators; the M33 provides 8.</p>
+
+                    <pre><code class="language-c">/**
+ * Programmatic DWT watchpoint configuration via CMSIS registers.
+ * Halts on any write to the address of 'g_shared_counter'.
+ *
+ * Prerequisites: CoreDebug->DEMCR must have TRCENA set (see ITM section below).
+ */
+
+extern volatile uint32_t g_shared_counter;  /* Variable we suspect is corrupted */
+
+void dwt_set_watchpoint(uint32_t address, uint32_t mask_bits, uint32_t function) {
+    /* Check that DWT is available (NOPREG bit = 0 means comparators present) */
+    if ((DWT->CTRL & DWT_CTRL_NUMCOMP_Msk) == 0U) {
+        return;  /* No DWT comparators on this device */
+    }
+
+    /* Comparator 0: watch for write access */
+    DWT->COMP0   = address;          /* Address to watch                         */
+    DWT->MASK0   = mask_bits;        /* 0 = exact address match                  */
+    DWT->FUNCTION0 = function;       /* 0x6 = break on write; 0x7 = break on r/w */
+    /* After this write, any store to 'address' causes a DebugMon or halt event  */
+}
+
+void setup_watchpoint_on_counter(void) {
+    /* Enable DWT (TRCENA must be set in DEMCR first) */
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0U;   /* Reset cycle counter while we are here */
+    DWT->CTRL  |= DWT_CTRL_CYCCNTENA_Msk;  /* Enable cycle counter */
+
+    /* Set watchpoint on g_shared_counter — break on any write */
+    dwt_set_watchpoint((uint32_t)&g_shared_counter,
+                       0U,    /* Exact 4-byte match */
+                       0x6U); /* Function: data write */
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 5 — HARDFAULT DEBUGGING
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="fault-debugging" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-exclamation-circle me-2 text-teal"></i>HardFault Debugging</h2>
+
+                    <p>HardFaults are the Cortex-M's last line of defence — an escalation mechanism that fires when a more specific fault (MemManage, BusFault, UsageFault) cannot be handled or is disabled. For most developers, encountering a HardFault means the debugger shows execution stopped at address <code>0xFFFFFFFF</code> and no useful information. This is unnecessary — the processor has already saved everything you need to diagnose the root cause into the exception stack frame and the fault status registers.</p>
+
+                    <h3 id="cfsr-registers">CFSR, HFSR, BFAR, MMFAR</h3>
+
+                    <p>The Configurable Fault Status Register (CFSR at address <code>0xE000ED28</code>) is a composite of three sub-registers: MMFSR (MemManage fault), BFSR (BusFault), and UFSR (UsageFault). Each bit identifies the specific fault cause. The HardFault Status Register (HFSR) indicates whether the fault was a forced hard fault (escalated from a configurable fault) or a debug event. When BFAR/MMFAR valid bits are set, the corresponding address registers give the faulting address.</p>
+
+                    <h3 id="hardfault-handler">Fault Handler Implementation</h3>
+
+                    <pre><code class="language-c">/**
+ * Complete HardFault handler that:
+ *   1. Detects whether the fault occurred in Thread mode (MSP/PSP) or Handler mode
+ *   2. Extracts the stacked exception frame (saved PC, LR, PSR, R0-R3, R12)
+ *   3. Reads all fault status registers (CFSR, HFSR, BFAR, MMFAR)
+ *   4. Reports via ITM (SWO) — no UART needed, works at any baud rate
+ *
+ * The __attribute__((naked)) prevents the compiler adding a prologue that
+ * would corrupt SP before we inspect it.
+ */
+
+/* ITM channel 0 output — visible in SWV console */
+static void itm_print_hex(const char *label, uint32_t value) {
+    /* In production replace with full ITM_SendChar loop; abbreviated here */
+    (void)label; (void)value;
+    /* See ITM section for full implementation */
+}
+
+/* Called from HardFault_Handler with the correct stack pointer */
+void HardFault_Handler_C(uint32_t *fault_frame, uint32_t lr_value) {
+    /* ── Stacked exception frame (8 words automatically pushed by processor) ── */
+    uint32_t stacked_r0   = fault_frame[0];
+    uint32_t stacked_r1   = fault_frame[1];
+    uint32_t stacked_r2   = fault_frame[2];
+    uint32_t stacked_r3   = fault_frame[3];
+    uint32_t stacked_r12  = fault_frame[4];
+    uint32_t stacked_lr   = fault_frame[5];  /* LR at time of fault */
+    uint32_t stacked_pc   = fault_frame[6];  /* PC at time of fault — the culprit */
+    uint32_t stacked_xpsr = fault_frame[7];
+
+    /* ── Fault status registers ──────────────────────────────────────────────── */
+    uint32_t cfsr  = SCB->CFSR;   /* 0xE000ED28: composite fault status        */
+    uint32_t hfsr  = SCB->HFSR;   /* 0xE000ED2C: hard fault status             */
+    uint32_t dfsr  = SCB->DFSR;   /* 0xE000ED30: debug fault status            */
+    uint32_t mmfar = SCB->MMFAR;  /* 0xE000ED34: MemManage fault address       */
+    uint32_t bfar  = SCB->BFAR;   /* 0xE000ED38: BusFault address              */
+    uint32_t afsr  = SCB->AFSR;   /* 0xE000ED3C: auxiliary fault (vendor-dep.) */
+
+    /* ── Decode which stack was active: EXC_RETURN in LR ──────────────────────
+     * lr_value bit[2]: 0 = MSP was active (Handler mode or Thread/MSP)
+     *                  1 = PSP was active (Thread mode using PSP)          */
+    uint8_t used_psp = (lr_value & 0x4U) ? 1U : 0U;
+
+    /* ── Send to ITM channel 0 for SWO capture ──────────────────────────────── */
+    itm_print_hex("FAULT PC   ", stacked_pc);
+    itm_print_hex("FAULT LR   ", stacked_lr);
+    itm_print_hex("CFSR       ", cfsr);
+    itm_print_hex("HFSR       ", hfsr);
+    itm_print_hex("MMFAR      ", mmfar);
+    itm_print_hex("BFAR       ", bfar);
+    itm_print_hex("PSP active ", (uint32_t)used_psp);
+
+    /* ── Decode CFSR sub-fields for human-readable diagnosis ────────────────── */
+    if (cfsr & SCB_CFSR_IACCVIOL_Msk)  itm_print_hex("MemManage: Instr fetch violation @", mmfar);
+    if (cfsr & SCB_CFSR_DACCVIOL_Msk)  itm_print_hex("MemManage: Data access violation @", mmfar);
+    if (cfsr & SCB_CFSR_IBUSERR_Msk)   itm_print_hex("BusFault:  Instruction prefetch",    0U);
+    if (cfsr & SCB_CFSR_PRECISERR_Msk) itm_print_hex("BusFault:  Precise data bus error @", bfar);
+    if (cfsr & SCB_CFSR_IMPRECISERR_Msk) itm_print_hex("BusFault:  Imprecise (async) error", 0U);
+    if (cfsr & SCB_CFSR_UNDEFINSTR_Msk) itm_print_hex("UsageFault: Undefined instruction",  0U);
+    if (cfsr & SCB_CFSR_UNALIGNED_Msk)  itm_print_hex("UsageFault: Unaligned access",       0U);
+    if (cfsr & SCB_CFSR_DIVBYZERO_Msk)  itm_print_hex("UsageFault: Divide by zero",         0U);
+
+    /* Suppress unused variable warnings in minimal builds */
+    (void)stacked_r0; (void)stacked_r1; (void)stacked_r2; (void)stacked_r3;
+    (void)stacked_r12; (void)stacked_xpsr; (void)dfsr; (void)afsr;
+
+    /* Halt in an infinite loop for debugger attachment */
+    for (;;) { __BKPT(0); }
+}
+
+/**
+ * Naked trampoline: reads the active stack pointer and calls the C handler.
+ * The naked attribute prevents any prologue/epilogue that would alter SP.
+ */
+__attribute__((naked)) void HardFault_Handler(void) {
+    __asm volatile (
+        " tst   lr, #4          \n"  /* Test EXC_RETURN bit[2] (Thread=PSP?) */
+        " ite   eq              \n"
+        " mrseq r0, msp         \n"  /* EQ (bit2=0): use MSP                 */
+        " mrsne r0, psp         \n"  /* NE (bit2=1): use PSP                 */
+        " mov   r1, lr          \n"  /* Pass EXC_RETURN value as second arg  */
+        " b     HardFault_Handler_C \n"
+        ::: "r0", "r1"
+    );
+}</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Critical Step:</strong> The stacked PC value points to the instruction that <em>caused</em> the fault (for precise faults) or the instruction <em>after</em> it (for imprecise BusFault). Open your <code>.map</code> file or disassembly, look up the stacked PC address, and you will find the exact line of C code that triggered the fault. This single register eliminates 90% of HardFault debugging time.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 6 — ITM TRACING
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="itm-tracing" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-wave-square me-2 text-teal"></i>ITM Real-Time Tracing</h2>
+
+                    <p>ITM tracing is one of the most under-used features in embedded development. Unlike UART printf (which blocks execution for milliseconds per character), ITM writes are non-blocking — the processor writes a 32-bit word to the stimulus port register and the hardware handles serialisation to the SWO pin asynchronously. If the ITM FIFO is full, the write is discarded rather than blocking the processor. The host-side SWV (Serial Wire Viewer) tool reconstructs the stream.</p>
+
+                    <h3 id="itm-printf">ITM printf Implementation</h3>
+
+                    <pre><code class="language-c">/**
+ * ITM printf implementation — redirects stdout to ITM channel 0.
+ * Requires: SWO pin connected to probe, SWV enabled in debugger at correct baud.
+ *
+ * Initialisation sequence must be performed once before any ITM writes.
+ */
+
+#include "core_cm4.h"  /* Provides CoreDebug, ITM, DWT register definitions */
+
+/**
+ * Enable ITM trace with SWO output.
+ * @param cpu_clock_hz  Core clock in Hz (e.g. 168000000 for 168 MHz)
+ * @param swo_baud      Desired SWO baud rate (e.g. 2000000 for 2 Mbaud)
+ */
+void ITM_Init(uint32_t cpu_clock_hz, uint32_t swo_baud) {
+    uint32_t prescaler = (cpu_clock_hz / swo_baud) - 1U;
+
+    /* 1. Unlock ITM register access */
+    ITM->LAR = 0xC5ACCE55UL;
+
+    /* 2. Enable TRCENA in DEMCR (master enable for all CoreSight trace) */
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+
+    /* 3. Configure TPIU for asynchronous SWO (NRZ encoding) */
+    TPI->SPPR  = 0x00000002UL;          /* Async SWO NRZ (UART framing)         */
+    TPI->ACPR  = prescaler;             /* Async clock prescaler                 */
+    TPI->FFCR  = 0x00000100UL;         /* Enable TPIU formatter                 */
+
+    /* 4. Enable ITM with all 32 stimulus ports and ATB ID 1 */
+    ITM->TCR = ITM_TCR_ITMENA_Msk      /* Global ITM enable                    */
+             | ITM_TCR_SYNCENA_Msk     /* Enable sync packets                   */
+             | ITM_TCR_DWTENA_Msk      /* Enable DWT packet forwarding via ITM  */
+             | (1UL << ITM_TCR_TraceBusID_Pos); /* ATB ID = 1                  */
+
+    /* 5. Enable all 32 stimulus ports (bit N = port N enabled) */
+    ITM->TER = 0xFFFFFFFFUL;
+}
+
+/**
+ * Write a single character to ITM channel 0.
+ * Returns the character on success, or -1 if ITM is disabled or FIFO is busy.
+ * This is the function used by retarget_putchar / semihosting redirections.
+ */
+int32_t ITM_SendChar(uint32_t port, uint32_t ch) {
+    if ((ITM->TCR & ITM_TCR_ITMENA_Msk) == 0U) return -1;  /* ITM disabled    */
+    if ((ITM->TER & (1UL << port))       == 0U) return -1;  /* Port disabled   */
+
+    /* Wait until the stimulus port FIFO is ready (bit[0] = 1 when ready) */
+    while (ITM->PORT[port].u32 == 0U) { __NOP(); }
+
+    /* Write character — hardware handles SWO serialisation */
+    ITM->PORT[port].u8 = (uint8_t)ch;
+    return (int32_t)ch;
+}
+
+/**
+ * Redirect printf to ITM channel 0.
+ * Implement _write() (GCC newlib) or fputc() (IAR) to call ITM_SendChar.
+ */
+int _write(int fd, char *buf, int len) {
+    (void)fd;
+    for (int i = 0; i < len; i++) {
+        ITM_SendChar(0U, (uint32_t)buf[i]);
+    }
+    return len;
+}</code></pre>
+
+                    <h3 id="dwt-profiling">DWT Cycle Counter for Microsecond Profiling</h3>
+
+                    <pre><code class="language-c">/**
+ * DWT cycle counter — microsecond profiling without modifying target behaviour.
+ *
+ * DWT->CYCCNT increments every CPU clock cycle.
+ * At 168 MHz: 1 µs = 168 counts.  Resolution: 1/168 MHz ≈ 5.95 ns.
+ * Wraps at 2^32 cycles (~25.6 s at 168 MHz — sufficient for most measurements).
+ */
+
+/** Enable the DWT cycle counter. Call once at startup after ITM_Init(). */
+void DWT_CycleCounter_Enable(void) {
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;  /* TRCENA must be set */
+    DWT->CYCCNT = 0U;                                  /* Reset counter      */
+    DWT->CTRL  |= DWT_CTRL_CYCCNTENA_Msk;             /* Enable counter     */
+}
+
+/** Read current cycle count */
+static inline uint32_t DWT_GetCycles(void) {
+    return DWT->CYCCNT;
+}
+
+/** Convert a cycle delta to microseconds. Avoid division if performance matters. */
+static inline uint32_t cycles_to_us(uint32_t cycles, uint32_t cpu_mhz) {
+    return cycles / cpu_mhz;  /* e.g. cycles / 168 for 168 MHz system */
+}
+
+/**
+ * Example: Profile a DSP function using DWT.
+ * No printf overhead inside the measured region — only two register reads.
+ */
+void profile_my_fir_filter(void) {
+    uint32_t t_start, t_end, elapsed_cycles, elapsed_us;
+
+    t_start = DWT_GetCycles();
+
+    /* ── Code under measurement ───────────────────── */
+    arm_fir_f32(&fir_inst, input_buf, output_buf, BLOCK_SIZE);
+    /* ─────────────────────────────────────────────── */
+
+    t_end = DWT_GetCycles();
+    elapsed_cycles = t_end - t_start;         /* Handles 32-bit wrap correctly */
+    elapsed_us     = cycles_to_us(elapsed_cycles, 168U);
+
+    /* Report via ITM — no blocking UART */
+    printf("[PROFILE] FIR filter: %lu cycles = %lu µs\r\n",
+           (unsigned long)elapsed_cycles, (unsigned long)elapsed_us);
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 7 — EXERCISES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="exercises" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-dumbbell me-2 text-teal"></i>Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 1</span>
+                            <span class="badge bg-success text-white ms-2">Beginner</span>
+                        </div>
+                        <h4>Trigger a HardFault Intentionally and Decode CFSR</h4>
+                        <p>Write a small test function that deliberately causes a specific fault type: (a) dereference a null pointer (<code>*(volatile uint32_t *)0x00000000</code>) to trigger a MemManage or BusFault, (b) execute an undefined instruction (<code>__asm volatile(".word 0xF7F0A000")</code>) for a UsageFault, (c) enable the divide-by-zero trap in CCR (<code>SCB-&gt;CCR |= SCB_CCR_DIV_0_TRP_Msk</code>) and divide by zero. For each fault: read CFSR from your debugger's memory view, identify the specific set bits, and match them to the ARM Architecture Reference Manual description. Document your findings — which bits were set, what they mean, and whether BFAR or MMFAR held a valid address.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">HardFault</span>
+                            <span class="bias-tag">CFSR</span>
+                            <span class="bias-tag">Fault Analysis</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 2</span>
+                            <span class="badge bg-warning text-dark ms-2">Intermediate</span>
+                        </div>
+                        <h4>Profile a Function Using the DWT Cycle Counter</h4>
+                        <p>Implement the DWT cycle counter setup from this article. Choose a non-trivial function to profile — for example, a 256-point FFT using CMSIS-DSP, a CRC computation over 1 kB of data, or a sorting algorithm. Measure the cycle count for: (a) default compilation (<code>-O0</code>), (b) size-optimised (<code>-Os</code>), (c) performance-optimised (<code>-O2</code> or <code>-O3</code>). Report the cycle counts and corresponding microsecond values at your MCU's core clock. Note which optimisation level produces the best throughput and verify the results match your theoretical expectation (e.g., FFT should be approximately O(N log N) cycles).</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">DWT</span>
+                            <span class="bias-tag">Profiling</span>
+                            <span class="bias-tag">Optimisation</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 3</span>
+                            <span class="badge bg-danger text-white ms-2">Advanced</span>
+                        </div>
+                        <h4>Stream ITM Data to Host and Visualise via SWV Timeline</h4>
+                        <p>Implement a complete ITM logging system with multiple channels: port 0 for printf output, port 1 for RTOS context switch events (called from osRtxThreadSwitch or FreeRTOS traceTASK_SWITCHED_IN), and port 2 for custom performance counters (DWT cycle snapshots). Configure your debugger (Keil MDK SWV or OpenOCD SWO capture) to receive the trace stream. Verify you can see: (a) text output on port 0 in the SWV console, (b) thread switch timestamps on port 1 in the SWV timeline/event view, (c) cycle count values on port 2. Capture a 5-second trace and identify the task with the highest CPU utilisation. Describe the SWO baud rate configuration and any probe limitations you encountered.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">ITM</span>
+                            <span class="bias-tag">SWV Timeline</span>
+                            <span class="bias-tag">RTOS Tracing</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 8 — DOCUMENT GENERATOR
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="debug-tool" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-file-alt me-2 text-teal"></i>Debug Plan Generator</h2>
+
+                    <p>Use this tool to document your debug strategy — the probe, interface, breakpoints, watchpoints, ITM port assignments, and known faults to investigate. Generate a Word, Excel, PDF, or PPTX document to share with your team or include in project documentation.</p>
+
+                    <div class="canvas-form" id="cmsisDebugForm">
+                        <h4 class="canvas-form-title"><i class="fas fa-bug me-2"></i>CMSIS Debug Plan Generator</h4>
+                        <p class="form-help-text">Document your embedded debug configuration and investigation plan. Download as Word, Excel, PDF, or PPTX.</p>
+                        <div id="cmsisDebugBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <p class="form-privacy-notice"><i class="fas fa-shield-alt"></i> All data stays in your browser. Nothing is sent to or stored on any server.</p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="debugProject">Project Name *</label>
+                                <input type="text" id="debugProject" placeholder="e.g., Motor Controller Firmware Debug Session">
+                            </div>
+                            <div class="form-group">
+                                <label for="debugMcu">Target MCU *</label>
+                                <input type="text" id="debugMcu" placeholder="e.g., STM32F407VGT6, nRF52840, LPC55S69">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="debugProbe">Debug Probe</label>
+                                <select id="debugProbe">
+                                    <option value="">Select probe...</option>
+                                    <option value="DAPLink / mbed HDK">DAPLink / mbed HDK (on-board)</option>
+                                    <option value="Raspberry Pi Debug Probe">Raspberry Pi Debug Probe</option>
+                                    <option value="J-Link BASE">J-Link BASE</option>
+                                    <option value="J-Link EDU">J-Link EDU</option>
+                                    <option value="ST-LINK v3">ST-LINK v3</option>
+                                    <option value="ULINK pro (Keil)">ULINK pro (Keil)</option>
+                                    <option value="Black Magic Probe">Black Magic Probe</option>
+                                    <option value="Custom CMSIS-DAP">Custom CMSIS-DAP</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="debugInterface">Debug Interface</label>
+                                <select id="debugInterface">
+                                    <option value="">Select interface...</option>
+                                    <option value="SWD">SWD (Serial Wire Debug)</option>
+                                    <option value="SWD + SWO">SWD + SWO (with ITM trace)</option>
+                                    <option value="JTAG">JTAG</option>
+                                    <option value="JTAG + ETM Trace">JTAG + ETM Parallel Trace</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="debugBreakpointList">Breakpoints to Set</label>
+                                <textarea id="debugBreakpointList" rows="4" placeholder="e.g.,&#10;HardFault_Handler_C — catch all hard faults&#10;osRtxThreadSwitch — log context switch timing&#10;SPI_TransferComplete — verify DMA callback&#10;app_sensor_read:42 — check return value"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="debugWatchpoints">Data Watchpoints</label>
+                                <textarea id="debugWatchpoints" rows="4" placeholder="e.g.,&#10;&amp;g_shared_counter — watch for unexpected writes&#10;&amp;g_rx_buffer[0] — track buffer overwrite&#10;&amp;rtos_task_list — detect list corruption"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="debugItmPorts">ITM Port Assignments</label>
+                                <textarea id="debugItmPorts" rows="4" placeholder="e.g.,&#10;Port 0: printf / general text output&#10;Port 1: RTOS context switch events&#10;Port 2: DWT cycle count snapshots&#10;Port 3: CAN bus message IDs"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="debugFaultLog">Known Faults to Investigate</label>
+                                <textarea id="debugFaultLog" rows="4" placeholder="e.g.,&#10;HardFault on startup — suspected null deref in SPI init&#10;Stack overflow in comms_task — watchpoint on stack guard&#10;Imprecise BusFault — DMA config error suspected"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="debugTraceGoals">Trace &amp; Profiling Goals</label>
+                                <input type="text" id="debugTraceGoals" placeholder="e.g., Measure ISR latency, verify thread switch overhead < 5 µs">
+                            </div>
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="cmsisDebugHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="cmsisDebugHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="cmsisDebugHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-generate" onclick="cmsisDebugHandler.generatePPTX()"><i class="fas fa-file-powerpoint me-1"></i>PPTX</button>
+                            <button class="btn-reset" onclick="cmsisDebugHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="cmsisDebugSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="cmsisDebugSuccessText"></span></div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 9 — CONCLUSION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="conclusion" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion &amp; Next Steps</h2>
+
+                    <p>ARM's CoreSight infrastructure provides a professional-grade debug and trace ecosystem that is largely invisible until you understand what it offers. The key takeaways from this article:</p>
+                    <ul>
+                        <li>The <strong>CoreSight hierarchy</strong> — DAP &rarr; AHB-AP/APB-AP &rarr; ITM/ETM/DWT/FPB — is the physical path from your debug probe to every breakpoint, watchpoint, and trace event. Understanding it makes probe connectivity problems trivial to diagnose.</li>
+                        <li><strong>SWD is the correct choice</strong> for the vast majority of Cortex-M designs: two signals, supports all variants, lower PCB overhead, and works natively with every modern probe. Add SWO as a third signal if ITM tracing is required.</li>
+                        <li>The <strong>HardFault handler with stacked frame inspection</strong> transforms an opaque crash into a diagnosed line of code in seconds. CFSR + stacked PC is sufficient to resolve &gt;90% of production HardFaults without a debugger attached.</li>
+                        <li><strong>ITM tracing</strong> provides non-blocking, multi-channel data streaming from the target to the host over a single SWO pin. Use it instead of UART printf whenever timing accuracy matters — it imposes no measurable impact on application timing.</li>
+                        <li>The <strong>DWT cycle counter</strong> (<code>DWT-&gt;CYCCNT</code>) enables nanosecond-resolution profiling with two register reads — the most lightweight profiling mechanism available on Cortex-M.</li>
+                    </ul>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="cmsis-part10-portable-firmware.html"><strong>Part 10: Portable Firmware — Multi-Vendor CMSIS Projects</strong></a>, we pivot from debugging individual bugs to designing firmware that targets multiple MCU families. We will cover hardware abstraction layer patterns in C, conditional compilation with CMake board variables, BSP design, and the specific porting deltas between STM32F4, NXP LPC55S69, Nordic nRF52840, and Renesas RA4M1.</p>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 2: CMSIS-Core — Registers, NVIC &amp; SysTick</h5>
+                            <p>The processor-level APIs used in the fault handler — SCB, CFSR, NVIC priority grouping, and SysTick — all originate in CMSIS-Core headers.</p>
+                            <a href="cmsis-part02-core-registers-nvic-systick.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 11: Interrupts, Concurrency &amp; Real-Time Constraints</h5>
+                            <p>Watchpoints and ITM tracing are essential tools for diagnosing race conditions and interrupt latency violations covered in Part 11.</p>
+                            <a href="cmsis-part11-interrupts-concurrency.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 18: Performance Optimization</h5>
+                            <p>The DWT cycle counter profiling technique from this article is used extensively in Part 18 to validate compiler flag and cache optimisation results.</p>
+                            <a href="cmsis-part18-performance-optimization.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div><!-- end col-lg-8 -->
+            </div><!-- end row -->
+        </div><!-- end container -->
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> |
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> |
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? &#9749; <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Document Generation -->
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-cmsis.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- CMSIS Debug Plan Form Handler -->
+    <script>
+        var cmsisDebugPersistence = new FormPersistence('cmsis-p09-debug-draft', {
+            'debugProject':        'projectName',
+            'debugMcu':            'mcu',
+            'debugProbe':          'probe',
+            'debugInterface':      'interface',
+            'debugBreakpointList': 'breakpoints',
+            'debugWatchpoints':    'watchpoints',
+            'debugItmPorts':       'itmPorts',
+            'debugFaultLog':       'faultLog',
+            'debugTraceGoals':     'traceGoals'
+        }, 'cmsisDebugBadge');
+
+        var cmsisDebugHandler = new CanvasFormHandler({
+            formId:         'cmsisDebugForm',
+            successId:      'cmsisDebugSuccess',
+            successTextId:  'cmsisDebugSuccessText',
+            persistence:    cmsisDebugPersistence,
+            filenameField:  'projectName',
+            filenameSuffix: '-cmsis-debug-plan',
+            requiredFields: ['debugProject', 'debugMcu'],
+            requiredMessage:'Please enter a Project Name and Target MCU.',
+            docType:        'CmsisDebugPlan'
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            cmsisDebugPersistence.init();
+        });
+    </script>
+
+</body>
+</html>
