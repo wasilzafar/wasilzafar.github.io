@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Understand ARM Cortex-M startup code, linker script memory regions, vector table layout and relocation, and the complete boot sequence from power-on reset to main() — the foundation of every bare-metal project. Part 3 of 20." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="ARM startup code, linker script, vector table, Reset_Handler, scatter file, BSS init, CMSIS boot, Cortex-M, embedded systems" />
+    <meta property="og:title" content="Startup Code, Linker Scripts &amp; Vector Table — CMSIS Mastery Series Part 3" />
+    <meta property="og:description" content="What actually happens before main() runs — from the reset vector through stack pointer initialisation, data/BSS copy, and system clock setup — plus how linker scripts control every byte's placement in memory." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>Startup Code, Linker Scripts &amp; Vector Table — CMSIS Mastery Series Part 3 - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/cmsis/cmsis-part03-startup-linker-vector-table.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting (6 themes) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'ad_user_data': 'granted',
+            'ad_personalization': 'granted',
+            'analytics_storage': 'granted'
+        });
+
+        gtag('set', 'url_passthrough', true);
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+            var f = d.getElementsByTagName(s)[0],
+                j = d.createElement(s),
+                dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking &ldquo;Accept All&rdquo;, you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">CMSIS Part 3: Startup Code, Linker Scripts &amp; Vector Table</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>March 31, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>28 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">What actually happens before main() runs &mdash; from the reset vector through stack pointer initialisation, data/BSS copy, and system clock setup &mdash; plus how linker scripts control every byte's placement in memory.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#startup-code" onclick="closeNav()">Startup Code Deep Dive</a>
+                <ul>
+                    <li><a href="#reset-handler" onclick="closeNav()">Reset_Handler</a></li>
+                    <li><a href="#data-bss" onclick="closeNav()">.data Copy &amp; .bss Zero-Fill</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#vector-table" onclick="closeNav()">Vector Table</a>
+                <ul>
+                    <li><a href="#weak-handlers" onclick="closeNav()">Weak Handler Aliases</a></li>
+                    <li><a href="#vtor" onclick="closeNav()">VTOR Relocation</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#linker-scripts" onclick="closeNav()">Linker Scripts &amp; Scatter Files</a>
+                <ul>
+                    <li><a href="#memory-block" onclick="closeNav()">MEMORY Block</a></li>
+                    <li><a href="#sections-block" onclick="closeNav()">SECTIONS Block</a></li>
+                </ul>
+            </li>
+            <li><a href="#boot-process" onclick="closeNav()">Boot Process: Reset to main()</a></li>
+            <li><a href="#bootloaders" onclick="closeNav()">Bootloaders &amp; Firmware Updates</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#linker-tool" onclick="closeNav()">Memory Layout Designer</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 1 — STARTUP CODE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="startup-code" class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Series Context:</strong> This is Part 3 of the 20-part CMSIS Mastery Series. Parts 1 and 2 covered the ecosystem and processor-level API. Here we go deeper — below the C runtime — to the very first instruction executed after a power-on reset.
+                    </div>
+
+                    <!-- Series Navigation Path -->
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>CMSIS Mastery Series</h4>
+                            <div class="path-subtitle">Your 20-step learning path &bull; Currently on Step 3</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="cmsis-part01-overview-ecosystem.html" class="step-card">
+                                <div class="step-num completed">1</div>
+                                <div class="step-info"><h6>Overview &amp; ARM Cortex-M Ecosystem</h6><small>CMSIS layers, Cortex-M families, memory map, toolchains</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="cmsis-part02-core-registers-nvic-systick.html" class="step-card">
+                                <div class="step-num completed">2</div>
+                                <div class="step-info"><h6>CMSIS-Core: Registers, NVIC &amp; SysTick</h6><small>core_cmX.h, register access, interrupt controller, SysTick timer</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <div class="step-card current">
+                                <div class="step-num active">3</div>
+                                <div class="step-info"><h6>Startup Code, Linker Scripts &amp; Vector Table</h6><small>Reset handler, BSS init, scatter files, boot process</small></div>
+                                <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                            </div>
+                            <a href="cmsis-part04-rtos2-threads-mutexes.html" class="step-card">
+                                <div class="step-num upcoming">4</div>
+                                <div class="step-info"><h6>CMSIS-RTOS2: Threads, Mutexes &amp; Semaphores</h6><small>Thread management, synchronization primitives, scheduling</small></div>
+                            </a>
+                            <a href="cmsis-part05-rtos2-queues-events.html" class="step-card">
+                                <div class="step-num upcoming">5</div>
+                                <div class="step-info"><h6>CMSIS-RTOS2: Message Queues &amp; Event Flags</h6><small>Inter-thread comms, ISR-to-thread, real-time design patterns</small></div>
+                            </a>
+                            <a href="cmsis-part06-dsp-filters-fft.html" class="step-card">
+                                <div class="step-num upcoming">6</div>
+                                <div class="step-info"><h6>CMSIS-DSP: Filters, FFT &amp; Math Functions</h6><small>FIR/IIR filters, FFT, SIMD optimizations</small></div>
+                            </a>
+                            <a href="cmsis-part07-driver-uart-spi-i2c.html" class="step-card">
+                                <div class="step-num upcoming">7</div>
+                                <div class="step-info"><h6>CMSIS-Driver: UART, SPI &amp; I2C</h6><small>Driver abstraction layer, callbacks, DMA integration</small></div>
+                            </a>
+                            <a href="cmsis-part08-pack-software-components.html" class="step-card">
+                                <div class="step-num upcoming">8</div>
+                                <div class="step-info"><h6>CMSIS-Pack &amp; Software Components</h6><small>Pack files, device support, dependency management</small></div>
+                            </a>
+                            <a href="cmsis-part09-debugging-dap-coresight.html" class="step-card">
+                                <div class="step-num upcoming">9</div>
+                                <div class="step-info"><h6>Debugging with CMSIS-DAP &amp; CoreSight</h6><small>SWD/JTAG, HardFault analysis, ITM tracing</small></div>
+                            </a>
+                            <a href="cmsis-part10-portable-firmware.html" class="step-card">
+                                <div class="step-num upcoming">10</div>
+                                <div class="step-info"><h6>Portable Firmware: Multi-Vendor Projects</h6><small>HAL vs CMSIS, cross-platform BSPs, reusable libraries</small></div>
+                            </a>
+                            <a href="cmsis-part11-interrupts-concurrency.html" class="step-card">
+                                <div class="step-num upcoming">11</div>
+                                <div class="step-info"><h6>Interrupts, Concurrency &amp; Real-Time Constraints</h6><small>Interrupt latency, critical sections, lock-free programming</small></div>
+                            </a>
+                            <a href="cmsis-part12-memory-management.html" class="step-card">
+                                <div class="step-num upcoming">12</div>
+                                <div class="step-info"><h6>Memory Management in Embedded Systems</h6><small>Static vs dynamic, heap fragmentation, memory pools</small></div>
+                            </a>
+                            <a href="cmsis-part13-low-power-optimization.html" class="step-card">
+                                <div class="step-num upcoming">13</div>
+                                <div class="step-info"><h6>Low Power &amp; Energy Optimization</h6><small>Sleep modes, clock gating, tickless RTOS, power profiling</small></div>
+                            </a>
+                            <a href="cmsis-part14-dma-data-handling.html" class="step-card">
+                                <div class="step-num upcoming">14</div>
+                                <div class="step-info"><h6>DMA &amp; High-Performance Data Handling</h6><small>DMA basics, peripheral transfers, zero-copy techniques</small></div>
+                            </a>
+                            <a href="cmsis-part15-security-trustzone.html" class="step-card">
+                                <div class="step-num upcoming">15</div>
+                                <div class="step-info"><h6>Security: ARMv8-M &amp; TrustZone</h6><small>Secure/non-secure worlds, secure boot, firmware protection</small></div>
+                            </a>
+                            <a href="cmsis-part16-bootloaders-firmware-updates.html" class="step-card">
+                                <div class="step-num upcoming">16</div>
+                                <div class="step-info"><h6>Bootloaders &amp; Firmware Updates</h6><small>OTA updates, dual-bank flash, fail-safe strategies</small></div>
+                            </a>
+                            <a href="cmsis-part17-testing-validation.html" class="step-card">
+                                <div class="step-num upcoming">17</div>
+                                <div class="step-info"><h6>Testing &amp; Validation</h6><small>Unity/Ceedling unit tests, HIL testing, integration testing</small></div>
+                            </a>
+                            <a href="cmsis-part18-performance-optimization.html" class="step-card">
+                                <div class="step-num upcoming">18</div>
+                                <div class="step-info"><h6>Performance Optimization</h6><small>Compiler flags, inline assembly, cache (M7/M33), profiling</small></div>
+                            </a>
+                            <a href="cmsis-part19-embedded-software-architecture.html" class="step-card">
+                                <div class="step-num upcoming">19</div>
+                                <div class="step-info"><h6>Embedded Software Architecture</h6><small>Layered design, event-driven, state machines, component-based</small></div>
+                            </a>
+                            <a href="cmsis-part20-tooling-workflow.html" class="step-card">
+                                <div class="step-num upcoming">20</div>
+                                <div class="step-info"><h6>Tooling &amp; Workflow (Professional Level)</h6><small>CI/CD for embedded, MISRA, static analysis, Doxygen</small></div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <h2><i class="fas fa-play-circle me-2 text-teal"></i>Startup Code Deep Dive</h2>
+
+                    <p>When power is applied to a Cortex-M microcontroller, the processor reads two words from address 0x00000000: the initial stack pointer value and the reset vector. It loads the stack pointer into MSP and jumps to the reset vector — typically <code>Reset_Handler</code> in the startup file. No C runtime exists yet. Stack and heap are uninitialised. Global variables have indeterminate values. The startup code's job is to fix all of that before calling <code>main()</code>.</p>
+
+                    <h3 id="reset-handler">Complete ARM Startup Assembly (GCC)</h3>
+
+                    <pre><code class="language-armasm">/**
+ * startup_stm32f407xx.s — Minimal startup file for STM32F407
+ * Adapted from ARM CMSIS Device template (startup_ARMCM4.S)
+ */
+
+    .syntax unified
+    .cpu cortex-m4
+    .fpu softvfp
+    .thumb
+
+/* Stack and Heap sizes — can be overridden by linker script symbols */
+    .set  Stack_Size, 0x400     /* 1 KB default stack */
+    .set  Heap_Size,  0x200     /* 512 bytes default heap */
+
+    .section .stack
+    .align 3
+    .globl __StackTop
+    .globl __StackLimit
+__StackLimit:
+    .space Stack_Size
+    .size  __StackLimit, . - __StackLimit
+__StackTop:
+    .size  __StackTop,   . - __StackTop - Stack_Size
+
+    .section .heap
+    .align 3
+    .globl __HeapBase
+    .globl __HeapLimit
+__HeapBase:
+    .space Heap_Size
+__HeapLimit:
+    .size __HeapBase, . - __HeapBase
+
+/* Vector table — placed in .isr_vector section by linker script */
+    .section .isr_vector, "a", %progbits
+    .align 2
+    .globl __isr_vector
+__isr_vector:
+    .long   __StackTop              /* Initial Stack Pointer          */
+    .long   Reset_Handler           /* Reset Handler                  */
+    .long   NMI_Handler             /* NMI Handler                    */
+    .long   HardFault_Handler       /* HardFault Handler              */
+    .long   MemManage_Handler       /* MPU Fault Handler              */
+    .long   BusFault_Handler        /* Bus Fault Handler              */
+    .long   UsageFault_Handler      /* Usage Fault Handler            */
+    .long   0                       /* Reserved                       */
+    .long   0                       /* Reserved                       */
+    .long   0                       /* Reserved                       */
+    .long   0                       /* Reserved                       */
+    .long   SVC_Handler             /* SVCall Handler                 */
+    .long   DebugMon_Handler        /* Debug Monitor Handler          */
+    .long   0                       /* Reserved                       */
+    .long   PendSV_Handler          /* PendSV Handler                 */
+    .long   SysTick_Handler         /* SysTick Handler                */
+    /* Device-specific interrupts (240 max) follow here              */
+    .long   WWDG_IRQHandler         /* Window WatchDog                */
+    .long   PVD_IRQHandler          /* PVD via EXTI Line              */
+    /* ... (remaining STM32F4 interrupts omitted for brevity) */
+
+    .text
+    .thumb
+    .thumb_func
+    .align 2
+    .globl  Reset_Handler
+    .type   Reset_Handler, %function
+Reset_Handler:
+    /* Copy initialised data from Flash (LMA) to SRAM (VMA) */
+    ldr     r0, =__data_start__
+    ldr     r1, =__data_end__
+    ldr     r2, =__etext           /* load address of .data in Flash */
+    movs    r3, #0
+    b       .L_data_loop_test
+.L_data_loop:
+    ldr     r4, [r2, r3]
+    str     r4, [r0, r3]
+    adds    r3, r3, #4
+.L_data_loop_test:
+    adds    r4, r0, r3
+    cmp     r4, r1
+    bcc     .L_data_loop
+
+    /* Zero-fill the .bss section */
+    ldr     r0, =__bss_start__
+    ldr     r1, =__bss_end__
+    movs    r2, #0
+    b       .L_bss_loop_test
+.L_bss_loop:
+    str     r2, [r0]
+    adds    r0, r0, #4
+.L_bss_loop_test:
+    cmp     r0, r1
+    bcc     .L_bss_loop
+
+    /* Call SystemInit() to configure clocks and memory */
+    bl      SystemInit
+
+    /* Call static constructors (__libc_init_array) */
+    bl      __libc_init_array
+
+    /* Jump to main — should never return */
+    bl      main
+    bx      lr
+    .size Reset_Handler, . - Reset_Handler</code></pre>
+
+                    <h3 id="data-bss">Linking Startup Code to the Linker Script</h3>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>The Key Link:</strong> The symbols <code>__data_start__</code>, <code>__data_end__</code>, <code>__etext</code>, <code>__bss_start__</code>, and <code>__bss_end__</code> are <em>not</em> defined in C or assembly — they are exported by the linker script. The startup assembly reads these addresses at runtime to know exactly where the .data and .bss sections live in flash and SRAM.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 2 — VECTOR TABLE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="vector-table" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-table me-2 text-teal"></i>Vector Table</h2>
+
+                    <p>The vector table is an array of 32-bit addresses stored at a known location (typically the start of flash). Entry 0 is the initial stack pointer; entries 1 onward are exception/interrupt handler addresses. The NVIC uses this table to determine where to jump when an exception fires.</p>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Offset</th>
+                                <th>Exception Number</th>
+                                <th>IRQn</th>
+                                <th>Exception Name</th>
+                                <th>Priority</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>0x0000</td><td>—</td><td>—</td><td>Initial Stack Pointer</td><td>—</td></tr>
+                            <tr><td>0x0004</td><td>1</td><td>—</td><td>Reset</td><td>-3 (highest)</td></tr>
+                            <tr><td>0x0008</td><td>2</td><td>-14</td><td>NMI</td><td>-2</td></tr>
+                            <tr><td>0x000C</td><td>3</td><td>-13</td><td>HardFault</td><td>-1</td></tr>
+                            <tr><td>0x0010</td><td>4</td><td>-12</td><td>MemManage Fault</td><td>Configurable</td></tr>
+                            <tr><td>0x0014</td><td>5</td><td>-11</td><td>BusFault</td><td>Configurable</td></tr>
+                            <tr><td>0x0018</td><td>6</td><td>-10</td><td>UsageFault</td><td>Configurable</td></tr>
+                            <tr><td>0x002C</td><td>11</td><td>-5</td><td>SVCall</td><td>Configurable</td></tr>
+                            <tr><td>0x0030</td><td>12</td><td>-4</td><td>Debug Monitor</td><td>Configurable</td></tr>
+                            <tr><td>0x0038</td><td>14</td><td>-2</td><td>PendSV</td><td>Configurable</td></tr>
+                            <tr><td>0x003C</td><td>15</td><td>-1</td><td>SysTick</td><td>Configurable</td></tr>
+                            <tr><td>0x0040</td><td>16</td><td>0</td><td>IRQ0 (device-specific)</td><td>Configurable</td></tr>
+                            <tr><td>0x0044</td><td>17</td><td>1</td><td>IRQ1 (device-specific)</td><td>Configurable</td></tr>
+                            <tr><td>...</td><td>...</td><td>...</td><td>Up to IRQ239</td><td>Configurable</td></tr>
+                        </tbody>
+                    </table>
+
+                    <h3 id="weak-handlers">Vector Table in C with Weak Default Handlers</h3>
+
+                    <pre><code class="language-c">/*
+ * Vector table definition in C — placed in .isr_vector section.
+ * __attribute__((weak)) allows application code to override any handler
+ * by simply defining a function with the same name.
+ * __attribute__((alias)) makes unimplemented handlers fall through to
+ * the infinite-loop default, avoiding hard-to-find silent faults.
+ */
+
+/* Default handler — catches any unimplemented IRQ */
+void Default_Handler(void) {
+    /* Optionally: capture IPSR to identify which interrupt fired */
+    volatile uint32_t active_irq = __get_IPSR() & 0x1FFU;
+    (void)active_irq;
+    for (;;) {}
+}
+
+/* Weak aliases: override by defining the function in application code */
+void NMI_Handler(void)       __attribute__((weak, alias("Default_Handler")));
+void HardFault_Handler(void) __attribute__((weak));          /* defined separately */
+void MemManage_Handler(void) __attribute__((weak, alias("Default_Handler")));
+void BusFault_Handler(void)  __attribute__((weak, alias("Default_Handler")));
+void UsageFault_Handler(void)__attribute__((weak, alias("Default_Handler")));
+void SVC_Handler(void)       __attribute__((weak, alias("Default_Handler")));
+void PendSV_Handler(void)    __attribute__((weak, alias("Default_Handler")));
+void SysTick_Handler(void)   __attribute__((weak, alias("Default_Handler")));
+/* Device-specific IRQs */
+void USART1_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));
+void TIM2_IRQHandler(void)   __attribute__((weak, alias("Default_Handler")));
+
+/* The actual vector table */
+extern uint32_t __StackTop;  /* Defined by linker script */
+
+__attribute__((section(".isr_vector"), used))
+const void * const g_pfnVectors[] = {
+    (void *)&__StackTop,   /* Initial MSP                     */
+    Reset_Handler,         /* Reset Handler                   */
+    NMI_Handler,
+    HardFault_Handler,
+    MemManage_Handler,
+    BusFault_Handler,
+    UsageFault_Handler,
+    0, 0, 0, 0,            /* Reserved                        */
+    SVC_Handler,
+    DebugMon_Handler,
+    0,                     /* Reserved                        */
+    PendSV_Handler,
+    SysTick_Handler,
+    /* Device interrupts */
+    WWDG_IRQHandler,
+    USART1_IRQHandler,
+    TIM2_IRQHandler,
+    /* ... */
+};</code></pre>
+
+                    <h3 id="vtor">Relocating the Vector Table to SRAM via SCB->VTOR</h3>
+
+                    <pre><code class="language-c">/*
+ * VTOR (Vector Table Offset Register) — allows relocating the vector
+ * table anywhere in memory, aligned to the table size (next power of 2
+ * above number-of-vectors * 4, minimum 128 bytes on Cortex-M3+).
+ *
+ * Use cases:
+ * - Bootloader: application relocates its own vector table to its start
+ * - SRAM execution: copy vector table to SRAM for faster ISR dispatch
+ * - RAM-patching: override individual vectors at runtime
+ */
+
+#define SRAM_BASE       0x20000000U
+#define VECTOR_TABLE_SIZE  (256U * 4U)  /* 256 entries * 4 bytes */
+
+/* Extern: vector table defined in startup file or linker symbol */
+extern const void * const g_pfnVectors[];
+
+void RelocateVectorTable(void) {
+    /* Copy flash vector table to SRAM */
+    uint32_t *src = (uint32_t *)g_pfnVectors;
+    uint32_t *dst = (uint32_t *)SRAM_BASE;
+
+    for (uint32_t i = 0; i < (VECTOR_TABLE_SIZE / 4U); i++) {
+        dst[i] = src[i];
+    }
+
+    /* Point VTOR to SRAM copy — requires alignment to power of 2 */
+    __DSB();
+    SCB->VTOR = SRAM_BASE;
+    __DSB();
+    __ISB();  /* Flush pipeline to ensure VTOR change takes effect */
+}
+
+/*
+ * Patching a single vector at runtime (useful for bootloader jump):
+ */
+void PatchVectorEntry(uint32_t irq_index, void (*handler)(void)) {
+    uint32_t *vtor_base = (uint32_t *)SCB->VTOR;
+    vtor_base[irq_index + 16U] = (uint32_t)handler | 0x1U; /* Thumb bit */
+    __DSB();
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 3 — LINKER SCRIPTS
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="linker-scripts" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-link me-2 text-teal"></i>Linker Scripts &amp; Scatter Files</h2>
+
+                    <p>The linker script is the control file that tells the GNU linker (<code>ld</code>) exactly where to place every section of your program in the target's address space. Every embedded project has one — and understanding it is essential for advanced memory management, bootloaders, and performance optimisation.</p>
+
+                    <h3 id="memory-block">MEMORY Block — Defining Address Regions</h3>
+
+                    <pre><code class="language-bash">/* STM32F407VGT6 GCC Linker Script — complete example
+ * Flash: 1 MB at 0x08000000
+ * SRAM1: 112 KB at 0x20000000
+ * SRAM2: 16 KB at 0x2001C000
+ * CCM RAM: 64 KB at 0x10000000 (core-coupled, zero latency)
+ */
+
+MEMORY {
+    FLASH  (rx)  : ORIGIN = 0x08000000, LENGTH = 1024K
+    SRAM   (rwx) : ORIGIN = 0x20000000, LENGTH = 112K
+    SRAM2  (rwx) : ORIGIN = 0x2001C000, LENGTH = 16K
+    CCMRAM (rwx) : ORIGIN = 0x10000000, LENGTH = 64K
+}
+
+/* Stack and heap sizes — referenced by startup code */
+_Min_Heap_Size  = 0x400;   /* 1 KB minimum heap  */
+_Min_Stack_Size = 0x800;   /* 2 KB minimum stack */</code></pre>
+
+                    <h3 id="sections-block">SECTIONS Block — Placing Code and Data</h3>
+
+                    <pre><code class="language-bash">SECTIONS {
+    /* ── .isr_vector: Vector table at very start of flash ── */
+    .isr_vector : {
+        . = ALIGN(4);
+        KEEP(*(.isr_vector))  /* KEEP prevents garbage collection */
+        . = ALIGN(4);
+    } >FLASH
+
+    /* ── .text: Code and read-only data ── */
+    .text : {
+        . = ALIGN(4);
+        *(.text)           /* .text sections from all object files */
+        *(.text*)          /* .text.funcname (from -ffunction-sections) */
+        *(.glue_7)         /* ARM/Thumb interworking glue               */
+        *(.glue_7t)
+        *(.eh_frame)
+        KEEP(*(.init))
+        KEEP(*(.fini))
+        . = ALIGN(4);
+        _etext = .;        /* Symbol used by startup: end of .text in Flash */
+    } >FLASH
+
+    /* ── .rodata: Read-only data (string literals, const arrays) ── */
+    .rodata : {
+        . = ALIGN(4);
+        *(.rodata)
+        *(.rodata*)
+        . = ALIGN(4);
+    } >FLASH
+
+    /* ── .data: Initialised global/static variables ── */
+    /* LMA (load address) is in Flash; VMA (runtime address) is in SRAM */
+    .data : {
+        . = ALIGN(4);
+        __data_start__ = .;     /* Used by Reset_Handler data copy loop */
+        *(.data)
+        *(.data*)
+        . = ALIGN(4);
+        __data_end__ = .;
+    } >SRAM AT>FLASH           /* Run in SRAM, stored in Flash */
+
+    /* __etext = load address of .data in Flash */
+    __etext = LOADADDR(.data);
+
+    /* ── .bss: Uninitialised global/static variables ── */
+    .bss : {
+        . = ALIGN(4);
+        __bss_start__ = .;
+        *(.bss)
+        *(.bss*)
+        *(COMMON)
+        . = ALIGN(4);
+        __bss_end__ = .;
+    } >SRAM
+
+    /* ── ._user_heap_stack: Heap and stack size check ── */
+    ._user_heap_stack : {
+        . = ALIGN(8);
+        PROVIDE(end = .);
+        PROVIDE(_end = .);
+        . = . + _Min_Heap_Size;
+        . = . + _Min_Stack_Size;
+        . = ALIGN(8);
+    } >SRAM
+
+    /* ── .ccmram: Time-critical code in zero-latency CCM RAM ── */
+    .ccmram : {
+        . = ALIGN(4);
+        _sccmram = .;
+        *(.ccmram)
+        *(.ccmram*)
+        . = ALIGN(4);
+        _eccmram = .;
+    } >CCMRAM AT>FLASH
+
+    /* Discard unwanted sections */
+    /DISCARD/ : {
+        libc.a(*)
+        libm.a(*)
+        libgcc.a(*)
+    }
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 4 — BOOT PROCESS
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="boot-process" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-power-off me-2 text-teal"></i>Boot Process: Reset to main()</h2>
+
+                    <p>Understanding the complete boot sequence lets you diagnose startup failures, implement proper clock configuration, and safely use global variables.</p>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="experiment-card">
+                                <div class="experiment-meta">
+                                    <span class="badge bg-navy text-white"><i class="fas fa-bolt me-1"></i>Step 1</span>
+                                </div>
+                                <h4>Power-On / Hardware Reset</h4>
+                                <p>CPU reads SP from address 0x00000000, then reads the reset vector from 0x00000004. The processor begins executing at the reset vector address (Reset_Handler). All registers except SP are indeterminate. The internal HSI oscillator runs at 16 MHz by default on STM32F4.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="experiment-card">
+                                <div class="experiment-meta">
+                                    <span class="badge bg-teal text-white"><i class="fas fa-copy me-1"></i>Step 2</span>
+                                </div>
+                                <h4>.data Copy: Flash to SRAM</h4>
+                                <p>The startup assembly reads from the load address of .data (in Flash, stored at <code>__etext</code>) and writes to the virtual address (in SRAM, from <code>__data_start__</code> to <code>__data_end__</code>). After this step, all initialised global variables have their correct initial values.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="experiment-card">
+                                <div class="experiment-meta">
+                                    <span class="badge bg-navy text-white"><i class="fas fa-eraser me-1"></i>Step 3</span>
+                                </div>
+                                <h4>.bss Zero-Fill</h4>
+                                <p>All uninitialised global and static variables must be zero per the C standard. The startup code fills the region from <code>__bss_start__</code> to <code>__bss_end__</code> with zeros. The C standard guarantees this; if it is not done, your globals will have random values.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="experiment-card">
+                                <div class="experiment-meta">
+                                    <span class="badge bg-teal text-white"><i class="fas fa-cog me-1"></i>Step 4</span>
+                                </div>
+                                <h4>SystemInit() — Clock &amp; Memory Config</h4>
+                                <p>Called by Reset_Handler before <code>main()</code>. Vendor-provided (e.g., <code>system_stm32f4xx.c</code>). Configures PLL to the target CPU frequency, sets flash wait states, enables FPU (if present), and updates <code>SystemCoreClock</code>. On ARMv8-M, also enables TrustZone partitioning.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <pre><code class="language-c">/*
+ * Minimal SystemInit() for STM32F407 — configure HSE PLL to 168 MHz.
+ * In practice you would use the vendor's clock configuration tool,
+ * but understanding this code demystifies the entire clock tree.
+ */
+void SystemInit(void) {
+    /* Enable FPU — must be done before any FP instruction */
+    SCB->CPACR |= ((3UL << 10*2) | (3UL << 11*2)); /* CP10, CP11 full access */
+    __DSB();
+    __ISB();
+
+    /* Enable HSI (16 MHz internal oscillator) — already on after reset */
+    RCC->CR |= RCC_CR_HSION;
+    while (!(RCC->CR & RCC_CR_HSIRDY)) {}  /* Wait for HSI ready */
+
+    /* Reset RCC configuration to safe defaults */
+    RCC->CFGR = 0x00000000U;
+
+    /* Configure PLL: HSI (16 MHz) * (N=168) / (M=8) / P=2 = 168 MHz */
+    RCC->PLLCFGR = (8U  << RCC_PLLCFGR_PLLM_Pos) |  /* M = 8  */
+                   (168U << RCC_PLLCFGR_PLLN_Pos) |  /* N = 168 */
+                   (0U   << RCC_PLLCFGR_PLLP_Pos) |  /* P = 2 (0b00) */
+                   (7U   << RCC_PLLCFGR_PLLQ_Pos);   /* Q = 7 for USB */
+
+    /* Enable PLL and wait for lock */
+    RCC->CR |= RCC_CR_PLLON;
+    while (!(RCC->CR & RCC_CR_PLLRDY)) {}
+
+    /* Configure Flash: 5 wait states + instruction cache + prefetch */
+    FLASH->ACR = FLASH_ACR_LATENCY_5WS | FLASH_ACR_ICEN | FLASH_ACR_PRFTEN;
+
+    /* Switch system clock to PLL */
+    RCC->CFGR |= RCC_CFGR_SW_PLL;
+    while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL) {}
+
+    /* Update CMSIS global SystemCoreClock variable */
+    SystemCoreClock = 168000000U;
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 5 — BOOTLOADERS
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="bootloaders" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-upload me-2 text-teal"></i>Bootloaders &amp; Firmware Update Strategies</h2>
+
+                    <p>A bootloader is a small program that runs first after reset, validates the application firmware, and jumps to it. Understanding startup code and vector table relocation is prerequisite to writing a bootloader.</p>
+
+                    <pre><code class="language-c">/*
+ * Minimal 2nd-stage bootloader: validates application and jumps to it.
+ * Application starts at APP_START_ADDR (must match app linker script).
+ *
+ * STM32F4: Bootloader at 0x08000000, Application at 0x08010000 (64 KB offset)
+ */
+#define APP_START_ADDR  0x08010000U
+#define FLASH_END_ADDR  0x080FFFFFU
+
+/* Type for a function pointer with no arguments/return (reset handler type) */
+typedef void (*AppEntry_t)(void);
+
+/* Simple CRC32 validation — replace with SHA-256 for production */
+static bool validate_firmware(uint32_t start, uint32_t length) {
+    uint32_t stored_crc  = *(uint32_t *)(start + length - 4U);
+    uint32_t computed_crc = crc32_calculate((uint8_t *)start, length - 4U);
+    return (stored_crc == computed_crc);
+}
+
+void bootloader_jump_to_app(uint32_t app_address) {
+    /* Read app stack pointer (first word in vector table) */
+    uint32_t app_sp = *(uint32_t *)app_address;
+
+    /* Validate stack pointer is within SRAM range */
+    if (app_sp < 0x20000000U || app_sp > 0x20020000U) {
+        /* Invalid firmware — stay in bootloader or signal error */
+        Error_Handler();
+        return;
+    }
+
+    /* Read app reset vector (second word) — this is the entry point */
+    AppEntry_t app_reset = (AppEntry_t)(*(uint32_t *)(app_address + 4U));
+
+    /* Relocate vector table to application start */
+    __disable_irq();
+    SCB->VTOR = app_address;
+    __DSB();
+    __ISB();
+
+    /* Set stack pointer to application's initial SP */
+    __set_MSP(app_sp);
+
+    /* Enable interrupts and jump to application Reset_Handler */
+    __enable_irq();
+    app_reset();  /* Never returns */
+}
+
+int main(void) {
+    /* Check if bootloader entry is forced (e.g., button held or magic word) */
+    if (is_bootloader_entry_forced() || !validate_firmware(APP_START_ADDR, APP_SIZE)) {
+        /* Stay in bootloader — receive firmware via UART/USB/CAN */
+        firmware_update_receive();
+    } else {
+        bootloader_jump_to_app(APP_START_ADDR);
+    }
+    for (;;) {}  /* Should never reach here */
+}
+
+/*
+ * Application linker script must set origin offset:
+ * FLASH (rx) : ORIGIN = 0x08010000, LENGTH = 960K
+ * Application must also set VTOR in its SystemInit():
+ * SCB->VTOR = 0x08010000U;
+ */</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Dual-Bank Flash Strategy:</strong> For fail-safe OTA updates, use dual-bank flash (available on STM32H7, STM32U5, nRF52840). Write the new firmware to Bank B while Bank A runs. Only swap banks (update OPTCR) after verifying the new firmware's CRC/signature. If the new firmware fails to boot, the bootloader detects this on the next reset and reverts to Bank A.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 6 — EXERCISES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="exercises" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-dumbbell me-2 text-teal"></i>Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 1</span>
+                            <span class="badge bg-success text-white ms-2">Beginner</span>
+                        </div>
+                        <h4>Add a Custom .ccmram Section for STM32F4</h4>
+                        <p>Modify the provided linker script to add a <code>.ccmram</code> section that maps to the CCM RAM region (0x10000000, 64 KB on STM32F407). Add a corresponding <code>.ccmram</code> copy loop in the startup assembly (mirror the <code>.data</code> copy pattern). Then annotate a time-critical ISR function with <code>__attribute__((section(".ccmram")))</code> and verify in the .map file that it was placed correctly.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">Linker Script</span>
+                            <span class="bias-tag">CCM RAM</span>
+                            <span class="bias-tag">STM32F4</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 2</span>
+                            <span class="badge bg-warning text-dark ms-2">Intermediate</span>
+                        </div>
+                        <h4>Software Reset via SCB->AIRCR</h4>
+                        <p>Implement a <code>system_reset(void)</code> function that triggers a software reset using the <code>SCB->AIRCR</code> SYSRESETREQ bit. Write the correct VECTKEY value (0x05FA) in the high halfword before setting the request bit. Verify that the system resets cleanly and that your startup code re-runs correctly, including the .bss zero-fill (add a verification variable that should be 0 after reset).</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">SCB->AIRCR</span>
+                            <span class="bias-tag">Software Reset</span>
+                            <span class="bias-tag">VECTKEY</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 3</span>
+                            <span class="badge bg-danger text-white ms-2">Advanced</span>
+                        </div>
+                        <h4>Minimal 2nd-Stage Bootloader with Vector Table Relocation</h4>
+                        <p>Build a complete minimal bootloader for STM32F4: (1) Store a "firmware valid" magic word at a known flash address; (2) on reset, bootloader checks the magic word — if valid, relocates the vector table to APP_START_ADDR (0x08010000) and jumps to the application; (3) if invalid, blink an error LED. Build and flash the bootloader + application as separate binaries. Verify the application's global variables are correctly initialised (proving the application's own startup ran).</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">Bootloader</span>
+                            <span class="bias-tag">VTOR</span>
+                            <span class="bias-tag">Firmware Jump</span>
+                            <span class="bias-tag">Flash Layout</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 7 — DOCUMENT GENERATOR
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="linker-tool" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-file-alt me-2 text-teal"></i>Memory Layout Designer</h2>
+
+                    <p>Use this tool to document your project's memory layout configuration — flash regions, SRAM regions, stack/heap sizing, and custom sections. Download as Word, Excel, PDF, or PPTX for design review or project documentation.</p>
+
+                    <div class="canvas-form" id="cmsisLinkerForm">
+                        <h4 class="canvas-form-title"><i class="fas fa-memory me-2"></i>Memory Layout Designer</h4>
+                        <p class="form-help-text">Document your linker script memory configuration. Download as Word, Excel, PDF, or PPTX.</p>
+                        <div id="cmsisLinkerBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <p class="form-privacy-notice"><i class="fas fa-shield-alt"></i> All data stays in your browser. Nothing is sent to or stored on any server.</p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="linkerProject">Project Name *</label>
+                                <input type="text" id="linkerProject" placeholder="e.g., Industrial Gateway Firmware">
+                            </div>
+                            <div class="form-group">
+                                <label for="linkerMcu">Target MCU *</label>
+                                <input type="text" id="linkerMcu" placeholder="e.g., STM32F407VGT6">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="linkerFlashOrigin">Flash Origin Address</label>
+                                <input type="text" id="linkerFlashOrigin" placeholder="e.g., 0x08000000">
+                            </div>
+                            <div class="form-group">
+                                <label for="linkerFlashSize">Flash Size</label>
+                                <input type="text" id="linkerFlashSize" placeholder="e.g., 1024K, 512K">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="linkerSramOrigin">SRAM Origin Address</label>
+                                <input type="text" id="linkerSramOrigin" placeholder="e.g., 0x20000000">
+                            </div>
+                            <div class="form-group">
+                                <label for="linkerSramSize">SRAM Size</label>
+                                <input type="text" id="linkerSramSize" placeholder="e.g., 128K, 64K">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="linkerStackSize">Stack Size</label>
+                                <input type="text" id="linkerStackSize" placeholder="e.g., 0x800 (2 KB)">
+                            </div>
+                            <div class="form-group">
+                                <label for="linkerHeapSize">Heap Size</label>
+                                <input type="text" id="linkerHeapSize" placeholder="e.g., 0x400 (1 KB)">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="linkerBootOffset">Bootloader Offset (if applicable)</label>
+                                <input type="text" id="linkerBootOffset" placeholder="e.g., 0x10000 (64 KB for bootloader)">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label for="linkerCustomSections">Custom Sections (one per line: name, region, description)</label>
+                                <textarea id="linkerCustomSections" rows="5" placeholder="e.g.,&#10;.ccmram, CCMRAM (0x10000000 64KB), Time-critical ISR code&#10;.noinit, SRAM, Persistent variables across resets (skip zero-fill)&#10;.backup_sram, BKPSRAM, RTC backup registers"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="cmsisLinkerHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="cmsisLinkerHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="cmsisLinkerHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-generate" onclick="cmsisLinkerHandler.generatePPTX()"><i class="fas fa-file-powerpoint me-1"></i>PPTX</button>
+                            <button class="btn-reset" onclick="cmsisLinkerHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="cmsisLinkerSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="cmsisLinkerSuccessText"></span></div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 8 — CONCLUSION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="conclusion" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion &amp; Next Steps</h2>
+
+                    <p>In this article we have traced the complete journey from power-on reset to the first instruction of <code>main()</code>:</p>
+                    <ul>
+                        <li>The <strong>startup assembly</strong> is the bridge between raw hardware and the C runtime — it sets up the stack, copies initialised data from flash to SRAM, zero-fills BSS, configures clocks via <code>SystemInit()</code>, and calls <code>main()</code>.</li>
+                        <li>The <strong>vector table</strong> is a flat array of 32-bit handler addresses. Weak aliases allow application code to override any handler; the <code>__attribute__((section(".isr_vector")))</code> attribute places it at the correct flash address.</li>
+                        <li>The <strong>linker script</strong> exports the symbols (<code>__data_start__</code>, <code>__etext</code>, <code>__bss_start__</code>) that the startup code reads at runtime — startup and linker script must agree exactly on symbol names.</li>
+                        <li><strong>VTOR relocation</strong> via <code>SCB->VTOR</code> enables bootloaders to hand off to applications cleanly, and applications to patch individual interrupt vectors at runtime.</li>
+                        <li><strong>Dual-bank flash</strong> combined with firmware signature verification is the correct foundation for production OTA update systems.</li>
+                    </ul>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="cmsis-part04-rtos2-threads-mutexes.html"><strong>Part 4: CMSIS-RTOS2 — Threads, Mutexes &amp; Semaphores</strong></a>, we build on the bare-metal foundation and introduce the CMSIS-RTOS2 API: how to create threads with <code>osThreadNew()</code>, protect shared resources with mutexes (including priority inheritance), and signal between threads and ISRs with semaphores — all through a kernel-agnostic API that works with FreeRTOS, Keil RTX5, and Zephyr.</p>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 4: CMSIS-RTOS2 — Threads, Mutexes &amp; Semaphores</h5>
+                            <p>Master the CMSIS-RTOS2 API for thread management, synchronisation primitives, and scheduling with FreeRTOS or Keil RTX5.</p>
+                            <a href="cmsis-part04-rtos2-threads-mutexes.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 5: CMSIS-RTOS2 — Message Queues &amp; Event Flags</h5>
+                            <p>Inter-thread communication patterns, ISR-to-thread signaling, and real-time design patterns using CMSIS-RTOS2 primitives.</p>
+                            <a href="cmsis-part05-rtos2-queues-events.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 9: Debugging with CMSIS-DAP &amp; CoreSight</h5>
+                            <p>SWD/JTAG debugging, HardFault analysis, ITM trace output, and professional debugging workflows with VS Code and OpenOCD.</p>
+                            <a href="cmsis-part09-debugging-dap-coresight.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div><!-- end col-lg-8 -->
+            </div><!-- end row -->
+        </div><!-- end container -->
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> |
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> |
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? &#9749; <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Document Generation -->
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-cmsis.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- Memory Layout Designer Form Handler -->
+    <script>
+        var cmsisLinkerPersistence = new FormPersistence('cmsis-p03-linker-draft', {
+            'linkerProject':        'projectName',
+            'linkerMcu':            'mcu',
+            'linkerFlashOrigin':    'flashOrigin',
+            'linkerFlashSize':      'flashSize',
+            'linkerSramOrigin':     'sramOrigin',
+            'linkerSramSize':       'sramSize',
+            'linkerStackSize':      'stackSize',
+            'linkerHeapSize':       'heapSize',
+            'linkerCustomSections': 'customSections',
+            'linkerBootOffset':     'bootOffset'
+        }, 'cmsisLinkerBadge');
+
+        var cmsisLinkerHandler = new CanvasFormHandler({
+            formId:         'cmsisLinkerForm',
+            successId:      'cmsisLinkerSuccess',
+            successTextId:  'cmsisLinkerSuccessText',
+            persistence:    cmsisLinkerPersistence,
+            filenameField:  'projectName',
+            filenameSuffix: '-memory-layout',
+            requiredFields: ['linkerProject', 'linkerMcu'],
+            requiredMessage:'Please enter a Project Name and Target MCU.',
+            docType:        'CmsisCoreConfig'
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            cmsisLinkerPersistence.init();
+        });
+    </script>
+
+</body>
+</html>

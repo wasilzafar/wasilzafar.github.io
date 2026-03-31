@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Master embedded memory management — static vs dynamic allocation trade-offs, heap fragmentation analysis, RTOS memory pools, stack overflow detection, MPU-based memory protection, and deterministic allocation strategies. Part 12 of 20." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="CMSIS, ARM Cortex-M, memory management, heap fragmentation, RTOS memory pool, stack overflow, MPU, static allocation, embedded systems" />
+    <meta property="og:title" content="CMSIS Part 12: Memory Management in Embedded Systems — CMSIS Mastery Series" />
+    <meta property="og:description" content="Why malloc() is dangerous in embedded systems, how RTOS memory pools give you deterministic allocation, and how the MPU can catch stack overflows before they corrupt your system." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>CMSIS Part 12: Memory Management in Embedded Systems — CMSIS Mastery Series - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/cmsis/cmsis-part12-memory-management.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting (6 themes) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'ad_user_data': 'granted',
+            'ad_personalization': 'granted',
+            'analytics_storage': 'granted'
+        });
+
+        gtag('set', 'url_passthrough', true);
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+            var f = d.getElementsByTagName(s)[0],
+                j = d.createElement(s),
+                dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking &ldquo;Accept All&rdquo;, you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">CMSIS Part 12: Memory Management in Embedded Systems</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>March 31, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>28 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Why malloc() is dangerous in embedded systems, how RTOS memory pools give you deterministic allocation, and how the MPU can catch stack overflows and null-pointer dereferences before they corrupt your system.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#static-vs-dynamic" onclick="closeNav()">Static vs Dynamic Allocation</a>
+                <ul>
+                    <li><a href="#allocation-table" onclick="closeNav()">Allocation Strategy Comparison</a></li>
+                    <li><a href="#static-pool" onclick="closeNav()">Static Free-List Pool</a></li>
+                </ul>
+            </li>
+            <li><a href="#heap-fragmentation" onclick="closeNav()">Heap Fragmentation</a>
+                <ul>
+                    <li><a href="#fragmentation-patterns" onclick="closeNav()">Fragmentation Patterns</a></li>
+                    <li><a href="#heap4-static" onclick="closeNav()">FreeRTOS Heap4 vs Static</a></li>
+                </ul>
+            </li>
+            <li><a href="#memory-pools" onclick="closeNav()">RTOS Memory Pools</a>
+                <ul>
+                    <li><a href="#rtos2-pool-api" onclick="closeNav()">CMSIS-RTOS2 Pool API</a></li>
+                </ul>
+            </li>
+            <li><a href="#stack-overflow" onclick="closeNav()">Stack Overflow Detection</a>
+                <ul>
+                    <li><a href="#watermark" onclick="closeNav()">Stack Watermark Checking</a></li>
+                </ul>
+            </li>
+            <li><a href="#mpu-protection" onclick="closeNav()">MPU-Based Memory Protection</a>
+                <ul>
+                    <li><a href="#stack-guard" onclick="closeNav()">MPU Stack Guard Page</a></li>
+                </ul>
+            </li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#mem-tool" onclick="closeNav()">Memory Strategy Planner</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 1 — STATIC VS DYNAMIC (first section: no mt-5)
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="static-vs-dynamic" class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Series Context:</strong> This is Part 12 of the 20-part CMSIS Mastery Series (Bonus/Advanced section). Part 11 covered interrupt latency and concurrency; here we address the second major source of non-determinism in embedded firmware — dynamic memory management.
+                    </div>
+
+                    <!-- Series Navigation Path -->
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>CMSIS Mastery Series</h4>
+                            <div class="path-subtitle">Your 20-step learning path &bull; Currently on Step 12</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="cmsis-part01-overview-ecosystem.html" class="step-card">
+                                <div class="step-num completed">1</div>
+                                <div class="step-info"><h6>Overview &amp; ARM Cortex-M Ecosystem</h6><small>CMSIS layers, Cortex-M families, memory map, toolchains</small></div>
+                            </a>
+                            <a href="cmsis-part02-core-registers-nvic-systick.html" class="step-card">
+                                <div class="step-num completed">2</div>
+                                <div class="step-info"><h6>CMSIS-Core: Registers, NVIC &amp; SysTick</h6><small>core_cmX.h, register access, interrupt controller, SysTick timer</small></div>
+                            </a>
+                            <a href="cmsis-part03-startup-linker-vector-table.html" class="step-card">
+                                <div class="step-num completed">3</div>
+                                <div class="step-info"><h6>Startup Code, Linker Scripts &amp; Vector Table</h6><small>Reset handler, BSS init, scatter files, boot process</small></div>
+                            </a>
+                            <a href="cmsis-part04-rtos2-threads-mutexes.html" class="step-card">
+                                <div class="step-num completed">4</div>
+                                <div class="step-info"><h6>CMSIS-RTOS2: Threads, Mutexes &amp; Semaphores</h6><small>Thread management, synchronization primitives, scheduling</small></div>
+                            </a>
+                            <a href="cmsis-part05-rtos2-queues-events.html" class="step-card">
+                                <div class="step-num completed">5</div>
+                                <div class="step-info"><h6>CMSIS-RTOS2: Message Queues &amp; Event Flags</h6><small>Inter-thread comms, ISR-to-thread, real-time design patterns</small></div>
+                            </a>
+                            <a href="cmsis-part06-dsp-filters-fft.html" class="step-card">
+                                <div class="step-num completed">6</div>
+                                <div class="step-info"><h6>CMSIS-DSP: Filters, FFT &amp; Math Functions</h6><small>FIR/IIR filters, FFT, SIMD optimizations</small></div>
+                            </a>
+                            <a href="cmsis-part07-driver-uart-spi-i2c.html" class="step-card">
+                                <div class="step-num completed">7</div>
+                                <div class="step-info"><h6>CMSIS-Driver: UART, SPI &amp; I2C</h6><small>Driver abstraction layer, callbacks, DMA integration</small></div>
+                            </a>
+                            <a href="cmsis-part08-pack-software-components.html" class="step-card">
+                                <div class="step-num completed">8</div>
+                                <div class="step-info"><h6>CMSIS-Pack &amp; Software Components</h6><small>Pack files, device support, dependency management</small></div>
+                            </a>
+                            <a href="cmsis-part09-debugging-dap-coresight.html" class="step-card">
+                                <div class="step-num completed">9</div>
+                                <div class="step-info"><h6>Debugging with CMSIS-DAP &amp; CoreSight</h6><small>SWD/JTAG, HardFault analysis, ITM tracing</small></div>
+                            </a>
+                            <a href="cmsis-part10-portable-firmware.html" class="step-card">
+                                <div class="step-num completed">10</div>
+                                <div class="step-info"><h6>Portable Firmware: Multi-Vendor Projects</h6><small>HAL vs CMSIS, cross-platform BSPs, reusable libraries</small></div>
+                            </a>
+                            <a href="cmsis-part11-interrupts-concurrency.html" class="step-card">
+                                <div class="step-num completed">11</div>
+                                <div class="step-info"><h6>Interrupts, Concurrency &amp; Real-Time Constraints</h6><small>Interrupt latency, critical sections, lock-free programming</small></div>
+                            </a>
+                            <div class="step-card current">
+                                <div class="step-num active">12</div>
+                                <div class="step-info"><h6>Memory Management in Embedded Systems</h6><small>Static vs dynamic, heap fragmentation, memory pools</small></div>
+                                <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                            </div>
+                            <a href="cmsis-part13-low-power-optimization.html" class="step-card">
+                                <div class="step-num upcoming">13</div>
+                                <div class="step-info"><h6>Low Power &amp; Energy Optimization</h6><small>Sleep modes, clock gating, tickless RTOS, power profiling</small></div>
+                            </a>
+                            <a href="cmsis-part14-dma-data-handling.html" class="step-card">
+                                <div class="step-num upcoming">14</div>
+                                <div class="step-info"><h6>DMA &amp; High-Performance Data Handling</h6><small>DMA basics, peripheral transfers, zero-copy techniques</small></div>
+                            </a>
+                            <a href="cmsis-part15-security-trustzone.html" class="step-card">
+                                <div class="step-num upcoming">15</div>
+                                <div class="step-info"><h6>Security: ARMv8-M &amp; TrustZone</h6><small>Secure/non-secure worlds, secure boot, firmware protection</small></div>
+                            </a>
+                            <a href="cmsis-part16-bootloaders-firmware-updates.html" class="step-card">
+                                <div class="step-num upcoming">16</div>
+                                <div class="step-info"><h6>Bootloaders &amp; Firmware Updates</h6><small>OTA updates, dual-bank flash, fail-safe strategies</small></div>
+                            </a>
+                            <a href="cmsis-part17-testing-validation.html" class="step-card">
+                                <div class="step-num upcoming">17</div>
+                                <div class="step-info"><h6>Testing &amp; Validation</h6><small>Unity/Ceedling unit tests, HIL testing, integration testing</small></div>
+                            </a>
+                            <a href="cmsis-part18-performance-optimization.html" class="step-card">
+                                <div class="step-num upcoming">18</div>
+                                <div class="step-info"><h6>Performance Optimization</h6><small>Compiler flags, inline assembly, cache (M7/M33), profiling</small></div>
+                            </a>
+                            <a href="cmsis-part19-embedded-software-architecture.html" class="step-card">
+                                <div class="step-num upcoming">19</div>
+                                <div class="step-info"><h6>Embedded Software Architecture</h6><small>Layered design, event-driven, state machines, component-based</small></div>
+                            </a>
+                            <a href="cmsis-part20-tooling-workflow.html" class="step-card">
+                                <div class="step-num upcoming">20</div>
+                                <div class="step-info"><h6>Tooling &amp; Workflow (Professional Level)</h6><small>CI/CD for embedded, MISRA, static analysis, Doxygen</small></div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <h2><i class="fas fa-memory me-2 text-teal"></i>Static vs Dynamic Allocation</h2>
+
+                    <p>The embedded world's relationship with dynamic memory allocation is adversarial by necessity. <code>malloc()</code> and <code>free()</code> from the standard C library are designed for general-purpose operating systems — they assume a virtual memory manager, a large address space, and a GC or reference-counted runtime to reclaim memory. None of these assumptions hold on a Cortex-M3 with 64 KB of SRAM and no MMU.</p>
+
+                    <p>The fundamental problems with <code>malloc()</code> in embedded firmware are: (1) <strong>non-deterministic execution time</strong> — the allocator may traverse an arbitrarily long free-list searching for a suitable block; (2) <strong>fragmentation</strong> — repeated alloc/free cycles of varying sizes leave the heap Swiss-cheesed, eventually causing allocation failures even when total free memory is sufficient; (3) <strong>out-of-memory handling</strong> — most embedded projects have no meaningful way to recover from a NULL return from <code>malloc()</code>; (4) <strong>thread-safety</strong> — the newlib allocator is not thread-safe by default on Cortex-M without a custom <code>__malloc_lock()</code> implementation.</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>MISRA-C:2012 Rule 21.3:</strong> The memory allocation and deallocation functions of <code>&lt;stdlib.h&gt;</code> shall not be used. MISRA prohibits <code>malloc</code>, <code>calloc</code>, <code>realloc</code>, and <code>free</code> for exactly the reasons above. If your project requires MISRA compliance, static allocation and memory pools are the only permitted strategies.
+                    </div>
+
+                    <h3 id="allocation-table">Memory Allocation Strategy Comparison</h3>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Strategy</th>
+                                <th>Determinism</th>
+                                <th>Fragmentation</th>
+                                <th>Overhead</th>
+                                <th>Typical Use Cases</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Static (compile-time)</strong></td>
+                                <td>Fully deterministic</td>
+                                <td>None</td>
+                                <td>Zero runtime</td>
+                                <td>Safety-critical, MISRA, fixed-topology systems</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Stack (automatic)</strong></td>
+                                <td>Deterministic (push/pop)</td>
+                                <td>None</td>
+                                <td>1–2 instructions</td>
+                                <td>Function-local data, temporary buffers</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Fixed-size pool</strong></td>
+                                <td>O(1) — deterministic</td>
+                                <td>None (fixed block size)</td>
+                                <td>Low (free-list pointer)</td>
+                                <td>Message queues, packet buffers, RTOS objects</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Heap4 (FreeRTOS)</strong></td>
+                                <td>O(n) — non-deterministic</td>
+                                <td>Moderate (first-fit)</td>
+                                <td>8–16 bytes header per block</td>
+                                <td>Startup-only allocations, GUI frameworks</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Heap5 (FreeRTOS)</strong></td>
+                                <td>O(n) — non-deterministic</td>
+                                <td>Moderate</td>
+                                <td>8–16 bytes + region list</td>
+                                <td>Multi-region SRAM (CCM + main SRAM)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Custom slab allocator</strong></td>
+                                <td>O(1) per class size</td>
+                                <td>Low (per-class slabs)</td>
+                                <td>Medium (slab metadata)</td>
+                                <td>Networking stacks, file systems with mixed object sizes</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h3 id="static-pool">Static Free-List Memory Pool</h3>
+
+                    <p>A fixed-size memory pool pre-allocates a contiguous array of identically-sized blocks at compile time and manages them with a singly-linked free list. Allocation is O(1) — pop a block from the head. Deallocation is O(1) — push a block back to the head. No fragmentation is possible because all blocks are the same size.</p>
+
+                    <pre><code class="language-c">/**
+ * Static fixed-size memory pool — O(1) alloc/free, zero fragmentation.
+ * Block size and pool depth set at compile time.
+ *
+ * Pattern: overlay a "next" pointer on the first word of each free block
+ * to build an intrusive singly-linked free list.
+ */
+#include <stdint.h>
+#include <stddef.h>
+#include <string.h>
+
+#define POOL_BLOCK_SIZE   64U    /* bytes per block — must be >= sizeof(void*) */
+#define POOL_BLOCK_COUNT  32U    /* total blocks in pool                        */
+
+/* Alignment: SRAM access is fastest on 4-byte aligned addresses */
+typedef union {
+    uint8_t  data[POOL_BLOCK_SIZE];
+    void    *next;   /* used when block is on the free list */
+} PoolBlock_t;
+
+typedef struct {
+    PoolBlock_t  blocks[POOL_BLOCK_COUNT];
+    PoolBlock_t *free_head;
+    uint32_t     free_count;
+} MemPool_t;
+
+/* Initialise pool — called once at startup */
+void pool_init(MemPool_t *pool) {
+    pool->free_head = &pool->blocks[0];
+    pool->free_count = POOL_BLOCK_COUNT;
+
+    /* Link all blocks into the free list */
+    for (uint32_t i = 0U; i < POOL_BLOCK_COUNT - 1U; i++) {
+        pool->blocks[i].next = &pool->blocks[i + 1U];
+    }
+    pool->blocks[POOL_BLOCK_COUNT - 1U].next = NULL;
+}
+
+/**
+ * @brief Allocate one block — O(1).
+ * @return Pointer to block, or NULL if pool exhausted.
+ */
+void *pool_alloc(MemPool_t *pool) {
+    if (pool->free_head == NULL) {
+        return NULL;   /* Pool exhausted — handle at call site */
+    }
+    PoolBlock_t *block = pool->free_head;
+    pool->free_head    = (PoolBlock_t *)block->next;
+    pool->free_count--;
+    memset(block->data, 0, POOL_BLOCK_SIZE);  /* Zero on alloc — security */
+    return block->data;
+}
+
+/**
+ * @brief Free one block — O(1).
+ * @param ptr Must be a pointer previously returned by pool_alloc().
+ */
+void pool_free(MemPool_t *pool, void *ptr) {
+    if (ptr == NULL) { return; }
+    PoolBlock_t *block = (PoolBlock_t *)ptr;
+    block->next     = pool->free_head;
+    pool->free_head = block;
+    pool->free_count++;
+}
+
+/* Global pool instance — BSS segment, zero-initialised */
+static MemPool_t g_packet_pool;
+
+void app_init(void) {
+    pool_init(&g_packet_pool);
+}
+
+void process_packet(void) {
+    uint8_t *buf = (uint8_t *)pool_alloc(&g_packet_pool);
+    if (buf == NULL) {
+        /* Pool exhausted: log error, drop packet, do NOT malloc() */
+        return;
+    }
+    /* Use buffer... */
+    pool_free(&g_packet_pool, buf);
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 2 — HEAP FRAGMENTATION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="heap-fragmentation" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-puzzle-piece me-2 text-teal"></i>Heap Fragmentation</h2>
+
+                    <p>Heap fragmentation occurs when free memory exists as many small non-contiguous chunks rather than one large contiguous block. A heap containing 8 KB of free memory split into 512 individual 16-byte fragments cannot satisfy a 1 KB allocation even though 8 KB is available. In long-running embedded systems, fragmentation grows monotonically unless the allocation pattern is perfectly predictable — which it rarely is.</p>
+
+                    <h3 id="fragmentation-patterns">Recognising Fragmentation in Practice</h3>
+
+                    <p>The classic symptom is an allocation failure that appears only after hours of operation — the system runs fine in the lab, then fails in the field. FreeRTOS's <code>xPortGetFreeHeapSize()</code> returns total free bytes but cannot tell you whether a 2 KB contiguous block is available. Use <code>xPortGetMinimumEverFreeHeapSize()</code> during development to find the low-water mark, and monitor allocation failures by overriding <code>vApplicationMallocFailedHook()</code>.</p>
+
+                    <h3 id="heap4-static">FreeRTOS Heap4 vs Pure Static Allocation</h3>
+
+                    <pre><code class="language-c">/**
+ * FreeRTOS static allocation: eliminate heap entirely for RTOS objects.
+ * Set configSUPPORT_STATIC_ALLOCATION 1 in FreeRTOSConfig.h.
+ *
+ * Benefits:
+ *   - RTOS objects use zero heap space
+ *   - Sizes verified at compile time (linker reports overflow)
+ *   - No malloc failure path for RTOS internals
+ */
+#include "FreeRTOS.h"
+#include "task.h"
+#include "queue.h"
+#include "semphr.h"
+
+/* --- Static task creation --- */
+#define TASK_STACK_WORDS   256U   /* Stack size in 32-bit words = 1 KB */
+
+static StaticTask_t  g_sensor_task_tcb;
+static StackType_t   g_sensor_task_stack[TASK_STACK_WORDS];
+static TaskHandle_t  g_sensor_task_handle;
+
+/* --- Static queue creation --- */
+#define QUEUE_DEPTH   16U
+#define ITEM_SIZE     sizeof(uint32_t)
+
+static StaticQueue_t  g_data_queue_struct;
+static uint8_t        g_data_queue_storage[QUEUE_DEPTH * ITEM_SIZE];
+static QueueHandle_t  g_data_queue;
+
+/* --- Static mutex creation --- */
+static StaticSemaphore_t g_spi_mutex_struct;
+static SemaphoreHandle_t g_spi_mutex;
+
+void app_create_rtos_objects(void) {
+    /* Create task with static memory — returns NULL only on bad params */
+    g_sensor_task_handle = xTaskCreateStatic(
+        sensor_task_fn,           /* task function           */
+        "SensorTask",             /* debug name              */
+        TASK_STACK_WORDS,         /* stack depth in words    */
+        NULL,                     /* task parameter          */
+        3U,                       /* priority                */
+        g_sensor_task_stack,      /* stack buffer            */
+        &g_sensor_task_tcb        /* TCB storage             */
+    );
+    configASSERT(g_sensor_task_handle != NULL);
+
+    g_data_queue = xQueueCreateStatic(QUEUE_DEPTH, ITEM_SIZE,
+                                      g_data_queue_storage,
+                                      &g_data_queue_struct);
+    configASSERT(g_data_queue != NULL);
+
+    g_spi_mutex = xSemaphoreCreateMutexStatic(&g_spi_mutex_struct);
+    configASSERT(g_spi_mutex != NULL);
+}
+
+/* Required when configSUPPORT_STATIC_ALLOCATION=1 */
+void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer,
+                                   StackType_t  **ppxIdleTaskStackBuffer,
+                                   uint32_t      *pulIdleTaskStackSize) {
+    static StaticTask_t idle_tcb;
+    static StackType_t  idle_stack[configMINIMAL_STACK_SIZE];
+    *ppxIdleTaskTCBBuffer   = &idle_tcb;
+    *ppxIdleTaskStackBuffer = idle_stack;
+    *pulIdleTaskStackSize   = configMINIMAL_STACK_SIZE;
+}</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Best Practice:</strong> In production RTOS firmware, set <code>configSUPPORT_STATIC_ALLOCATION 1</code> and <code>configSUPPORT_DYNAMIC_ALLOCATION 0</code>. All RTOS objects (tasks, queues, semaphores, event groups) are created with static memory. This eliminates the heap entirely for RTOS internals and lets the linker verify at build time that your SRAM budget is not exceeded.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 3 — RTOS MEMORY POOLS
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="memory-pools" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-th me-2 text-teal"></i>RTOS Memory Pools</h2>
+
+                    <p>CMSIS-RTOS2 provides a standardised memory pool API that wraps the underlying RTOS pool implementation (FreeRTOS, Keil RTX5, Zephyr). The API offers deterministic O(1) allocation and deallocation with bounded latency — safe to call from tasks and, on some RTOS implementations, from ISRs.</p>
+
+                    <h3 id="rtos2-pool-api">CMSIS-RTOS2 Memory Pool API</h3>
+
+                    <pre><code class="language-c">/**
+ * CMSIS-RTOS2 memory pool: deterministic fixed-block allocation.
+ * osMemoryPoolNew / osMemoryPoolAlloc / osMemoryPoolFree
+ *
+ * The pool is backed by statically-allocated storage when using
+ * static attributes — no heap involved.
+ */
+#include "cmsis_os2.h"
+
+/* Define block type: 32-byte message descriptor */
+typedef struct {
+    uint32_t  timestamp_ms;
+    uint16_t  sensor_id;
+    uint16_t  flags;
+    float     value;
+    uint8_t   payload[16];
+} SensorMsg_t;
+
+#define MSG_POOL_CAPACITY   20U
+
+/* Static backing storage for the pool (optional — avoids heap) */
+static osMemoryPoolAttr_t pool_attr = {
+    .name      = "SensorMsgPool",
+    .attr_bits = 0U,
+    .cb_mem    = NULL,   /* let RTOS allocate control block */
+    .cb_size   = 0U,
+    .mp_mem    = NULL,   /* let RTOS allocate block storage */
+    .mp_size   = 0U
+};
+
+static osMemoryPoolId_t g_msg_pool;
+
+void pool_demo_init(void) {
+    g_msg_pool = osMemoryPoolNew(MSG_POOL_CAPACITY,
+                                  sizeof(SensorMsg_t),
+                                  &pool_attr);
+    if (g_msg_pool == NULL) {
+        /* Fatal: pool creation failed — check heap config */
+        while(1) {}
+    }
+}
+
+void sensor_task(void *arg) {
+    osMessageQueueId_t queue = (osMessageQueueId_t)arg;
+
+    for (;;) {
+        /* Allocate a message block — O(1), bounded latency */
+        SensorMsg_t *msg = (SensorMsg_t *)osMemoryPoolAlloc(g_msg_pool,
+                                                             osWaitForever);
+        if (msg == NULL) { continue; }  /* should not happen with osWaitForever */
+
+        /* Fill message */
+        msg->timestamp_ms = osKernelGetTickCount();
+        msg->sensor_id    = 1U;
+        msg->value        = read_adc_voltage();
+
+        /* Post to queue */
+        osStatus_t status = osMessageQueuePut(queue, &msg, 0U, 0U);
+        if (status != osOK) {
+            /* Queue full: return block to pool immediately */
+            osMemoryPoolFree(g_msg_pool, msg);
+        }
+    }
+}
+
+void comms_task(void *arg) {
+    osMessageQueueId_t queue = (osMessageQueueId_t)arg;
+    SensorMsg_t *msg;
+
+    for (;;) {
+        osStatus_t status = osMessageQueueGet(queue, &msg, NULL, osWaitForever);
+        if (status == osOK) {
+            transmit_over_uart((uint8_t *)msg, sizeof(SensorMsg_t));
+            /* Return block to pool after use — O(1) */
+            osMemoryPoolFree(g_msg_pool, msg);
+        }
+    }
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 4 — STACK OVERFLOW DETECTION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="stack-overflow" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-exclamation-circle me-2 text-teal"></i>Stack Overflow Detection</h2>
+
+                    <p>Stack overflows are the most common cause of silent corruption in embedded RTOS firmware. A task that overflows its stack writes into the adjacent RTOS TCB or the next task's stack — corrupting kernel state silently. By the time the bug manifests, the call stack is meaningless. Early detection is essential.</p>
+
+                    <h3 id="watermark">Stack Watermark Checking with 0xDEADBEEF Pattern</h3>
+
+                    <pre><code class="language-c">/**
+ * Stack watermark detection: fill stack with sentinel pattern at startup,
+ * scan from the base upward to find the high-water mark at runtime.
+ *
+ * FreeRTOS provides this automatically when configCHECK_FOR_STACK_OVERFLOW >= 1
+ * and uxTaskGetStackHighWaterMark() is called periodically.
+ *
+ * For bare-metal or custom RTOS, implement manually as shown below.
+ */
+#include <stdint.h>
+#include <stddef.h>
+
+#define STACK_SENTINEL   0xDEADBEEFUL
+#define TASK_STACK_SIZE  1024U    /* bytes */
+
+/* Statically allocated task stack */
+static uint32_t g_task_stack[TASK_STACK_SIZE / 4U];
+
+/**
+ * @brief Fill task stack with sentinel pattern.
+ *        Call before starting the scheduler.
+ */
+void stack_watermark_init(uint32_t *stack_base, size_t word_count) {
+    for (size_t i = 0U; i < word_count; i++) {
+        stack_base[i] = STACK_SENTINEL;
+    }
+}
+
+/**
+ * @brief Scan stack from base to find high-water mark.
+ * @return Number of words still containing the sentinel (unused stack words).
+ *         Zero means the stack has completely overflowed.
+ */
+size_t stack_watermark_check(const uint32_t *stack_base, size_t word_count) {
+    size_t unused = 0U;
+    for (size_t i = 0U; i < word_count; i++) {
+        if (stack_base[i] == STACK_SENTINEL) {
+            unused++;
+        } else {
+            break;  /* First modified word = bottom of used stack */
+        }
+    }
+    return unused;
+}
+
+void monitor_task(void *arg) {
+    for (;;) {
+        size_t unused = stack_watermark_check(g_task_stack,
+                                              sizeof(g_task_stack) / 4U);
+        size_t used   = (sizeof(g_task_stack) / 4U) - unused;
+
+        /* Log or assert: less than 64 words (256 bytes) remaining is danger */
+        if (unused < 64U) {
+            /* Log: "STACK LOW: task used %u/%u words", used, total */
+            configASSERT(0);  /* Halt in debug builds */
+        }
+
+        osDelay(1000U);  /* Check every second */
+    }
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 5 — MPU PROTECTION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="mpu-protection" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-shield-alt me-2 text-teal"></i>MPU-Based Memory Protection</h2>
+
+                    <p>The Memory Protection Unit (MPU) on Cortex-M3/M4/M7/M33 allows you to configure up to 8 or 16 memory regions with individual access permissions. The most powerful use case for embedded firmware is the <strong>stack guard page</strong>: configure a small no-access region immediately below each task stack. When a stack overflow occurs, the CPU attempts to write into the guard region, immediately triggers a MemFault exception with precise fault address information — caught at the point of overflow, not silently afterwards.</p>
+
+                    <h3 id="stack-guard">MPU Stack Guard Page Configuration</h3>
+
+                    <pre><code class="language-c">/**
+ * MPU stack guard: configure a no-access region one cache line (32 bytes)
+ * below the task stack. Stack overflow triggers MemFault immediately.
+ *
+ * Cortex-M4/M7: uses ARMv7-M MPU (8 regions, base+size format).
+ * Cortex-M33:   uses ARMv8-M MPU (16 regions, base+limit format).
+ *
+ * This example targets ARMv7-M (STM32F4).
+ */
+#include "core_cm4.h"
+
+/* Task stack: 4 KB aligned (MPU regions must be power-of-2 aligned) */
+__attribute__((aligned(4096)))
+static uint8_t g_task_stack_buf[4096];
+
+/**
+ * @brief Configure MPU region 7 as a no-access guard below the stack.
+ *
+ * ARMv7-M region encoding:
+ *   RASR AP[26:24] = 0b000 → no access (any access triggers MemFault)
+ *   RASR SIZE[5:1] = 0b00100 → 32 bytes region
+ *   RASR ENABLE[0] = 1
+ */
+void mpu_configure_stack_guard(void) {
+    /* Disable MPU before configuration */
+    MPU->CTRL = 0U;
+
+    /* Region 7: 32-byte no-access guard at stack base */
+    MPU->RNR  = 7U;
+    MPU->RBAR = (uint32_t)g_task_stack_buf | MPU_RBAR_VALID_Msk | 7U;
+    MPU->RASR = (0x00UL << MPU_RASR_AP_Pos)   |  /* No access       */
+                (0x04UL << MPU_RASR_SIZE_Pos)  |  /* 32 bytes        */
+                MPU_RASR_ENABLE_Msk;
+
+    /* Enable MPU with default memory map for privileged accesses,
+       and fault on NMI and hard fault handlers accessing guard region */
+    MPU->CTRL = MPU_CTRL_ENABLE_Msk
+              | MPU_CTRL_PRIVDEFENA_Msk;
+
+    __DSB();
+    __ISB();
+}
+
+/**
+ * @brief MemFault handler: examine SCB->MMFAR for fault address.
+ *        A MMFAR pointing to the guard region confirms stack overflow.
+ */
+void MemManage_Handler(void) {
+    uint32_t fault_addr = 0U;
+    if (SCB->CFSR & SCB_CFSR_MMARVALID_Msk) {
+        fault_addr = SCB->MMFAR;
+    }
+
+    /* Determine if fault address is in stack guard region */
+    if (fault_addr >= (uint32_t)g_task_stack_buf &&
+        fault_addr <  (uint32_t)g_task_stack_buf + 32U) {
+        /* Confirmed stack overflow — log and halt */
+        /* In production: trigger watchdog reset, preserve fault info in RTC backup */
+    }
+
+    while (1) { __NOP(); }
+}</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>MPU Region Alignment Requirement:</strong> ARMv7-M MPU regions must be naturally aligned — a 32-byte region must start at a 32-byte-aligned address, a 4 KB region at a 4 KB-aligned address. Use <code>__attribute__((aligned(N)))</code> on your stack buffers. Misaligned regions silently cover the wrong address range.
+                    </div>
+
+                    <h3>Common Embedded Memory Bugs</h3>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Bug</th>
+                                <th>Symptom</th>
+                                <th>Root Cause</th>
+                                <th>Detection Method</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Stack overflow</strong></td>
+                                <td>Random resets, corrupted locals, wrong return addresses</td>
+                                <td>Deep recursion, large local arrays, ISR nesting</td>
+                                <td>MPU guard page, FreeRTOS stack checking, watermark scan</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Heap fragmentation</strong></td>
+                                <td>NULL from malloc after hours of operation</td>
+                                <td>Mixed alloc/free sizes, long-lived allocations</td>
+                                <td>vApplicationMallocFailedHook, heap visualisation</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Double-free</strong></td>
+                                <td>Heap corruption, hard fault, wrong data</td>
+                                <td>Shared ownership without reference counting</td>
+                                <td>Heap4 debug build, valgrind-style wrappers</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Dangling pointer</strong></td>
+                                <td>Intermittent wrong values, silent data corruption</td>
+                                <td>Freeing memory while another component holds a pointer</td>
+                                <td>MPU read-guard on freed region, static analysis</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Null pointer dereference</strong></td>
+                                <td>HardFault at address 0x00000000 or low addresses</td>
+                                <td>Failed malloc/pool_alloc return value not checked</td>
+                                <td>MPU no-access region at 0x00000000 (null guard)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 6 — EXERCISES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="exercises" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-dumbbell me-2 text-teal"></i>Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 1</span>
+                            <span class="badge bg-success text-white ms-2">Beginner</span>
+                        </div>
+                        <h4>Instrument Firmware to Track Peak Heap Usage</h4>
+                        <p>Override FreeRTOS's <code>pvPortMalloc()</code> and <code>vPortFree()</code> wrappers (or newlib's <code>__malloc_lock()</code>) to track: (a) total bytes currently allocated, (b) peak bytes ever allocated simultaneously, (c) total number of allocation failures (NULL returns). Log these values over a 24-hour soak test. Produce a time-series chart of heap utilisation. Identify the top three allocation sites by frequency using <code>__builtin_return_address(0)</code>.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">Heap Instrumentation</span>
+                            <span class="bias-tag">Memory Profiling</span>
+                            <span class="bias-tag">FreeRTOS</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 2</span>
+                            <span class="badge bg-warning text-dark ms-2">Intermediate</span>
+                        </div>
+                        <h4>Replace Dynamic Allocations with Memory Pool Allocations</h4>
+                        <p>Take an RTOS task in your codebase that currently uses <code>pvPortMalloc()</code> to allocate message buffers dynamically. Replace all dynamic allocations with a CMSIS-RTOS2 <code>osMemoryPoolAlloc()</code> backed by a statically-allocated pool. Measure and document: (a) reduction in worst-case allocation time (cycles), (b) elimination of fragmentation risk, (c) new failure mode (pool exhaustion vs NULL malloc) and how you handle it. Verify the pool capacity is sufficient using <code>osMemoryPoolGetSpace()</code>.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">CMSIS-RTOS2</span>
+                            <span class="bias-tag">Memory Pool</span>
+                            <span class="bias-tag">Deterministic Allocation</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 3</span>
+                            <span class="badge bg-danger text-white ms-2">Advanced</span>
+                        </div>
+                        <h4>Configure MPU Stack Guard and Trigger a Controlled MemFault</h4>
+                        <p>Configure an MPU no-access guard region (32 bytes) immediately below a test task stack. Write a test function that intentionally overflows the stack by allocating a large array on the stack in a loop until the guard region is hit. Verify: (a) the MemFault handler fires with the correct MMFAR address pointing into the guard region, (b) <code>SCB->CFSR</code> shows <code>MMARVALID</code> and <code>DACCVIOL</code> bits set, (c) the system does not silently corrupt adjacent data before the fault fires. Document the full fault register dump.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">MPU</span>
+                            <span class="bias-tag">MemFault</span>
+                            <span class="bias-tag">Stack Guard</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 7 — MEMORY STRATEGY PLANNER TOOL
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="mem-tool" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-file-alt me-2 text-teal"></i>Memory Strategy Planner</h2>
+
+                    <p>Use this tool to document your project's memory management strategy — MCU, allocation approach, memory pool inventory, stack guard configuration, and MPU regions. Download as Word, Excel, PDF, or PPTX for architecture review documentation.</p>
+
+                    <div class="canvas-form" id="cmsisMemForm">
+                        <h4 class="canvas-form-title"><i class="fas fa-memory me-2"></i>Memory Management Strategy Generator</h4>
+                        <p class="form-help-text">Document your embedded memory strategy. Download as Word, Excel, PDF, or PPTX.</p>
+                        <div id="cmsisMemBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <p class="form-privacy-notice"><i class="fas fa-shield-alt"></i> All data stays in your browser. Nothing is sent to or stored on any server.</p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="memProject">Project Name *</label>
+                                <input type="text" id="memProject" placeholder="e.g., Industrial Gateway Firmware v2.4">
+                            </div>
+                            <div class="form-group">
+                                <label for="memMcu">Target MCU *</label>
+                                <input type="text" id="memMcu" placeholder="e.g., STM32H743, nRF5340, LPC55S69">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="memStrategy">Primary Allocation Strategy</label>
+                                <select id="memStrategy">
+                                    <option value="">Select strategy...</option>
+                                    <option value="Static only">Static only (no heap, no dynamic alloc)</option>
+                                    <option value="Pool">Memory pools (fixed-size, O(1) alloc)</option>
+                                    <option value="Heap4">FreeRTOS Heap4 (first-fit, startup alloc only)</option>
+                                    <option value="Heap5">FreeRTOS Heap5 (multi-region SRAM)</option>
+                                    <option value="Custom">Custom allocator (slab, buddy, etc.)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="memHeapSize">Heap Size (if applicable)</label>
+                                <input type="text" id="memHeapSize" placeholder="e.g., 32 KB (configTOTAL_HEAP_SIZE 32768)">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="memPoolSizes">Memory Pools (name, block size, count)</label>
+                                <textarea id="memPoolSizes" rows="5" placeholder="e.g.,&#10;SensorMsgPool, 64 bytes, 32 blocks = 2 KB&#10;PacketBufPool, 256 bytes, 16 blocks = 4 KB&#10;StringPool, 128 bytes, 8 blocks = 1 KB"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="memStackGuard">MPU Stack Guard Enabled</label>
+                                <select id="memStackGuard">
+                                    <option value="">Select...</option>
+                                    <option value="Yes">Yes — MPU guard page per task</option>
+                                    <option value="No">No — relying on FreeRTOS stack checking</option>
+                                    <option value="Partial">Partial — guard on critical tasks only</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="memMpuRegions">MPU Regions Configuration</label>
+                                <textarea id="memMpuRegions" rows="4" placeholder="e.g.,&#10;Region 0: Flash (0x08000000, 1MB, read-execute)&#10;Region 1: SRAM (0x20000000, 128KB, read-write)&#10;Region 7: Stack guard (task0 base, 32B, no-access)"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="memFragIssues">Known Fragmentation / Memory Issues</label>
+                                <textarea id="memFragIssues" rows="4" placeholder="e.g.,&#10;BLE stack allocates variable-length packets — use slab&#10;JSON parser allocates/frees frequently — profiling needed&#10;Network buffer pool undersized — increase to 24 blocks"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="cmsisMemHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="cmsisMemHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="cmsisMemHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-generate" onclick="cmsisMemHandler.generatePPTX()"><i class="fas fa-file-powerpoint me-1"></i>PPTX</button>
+                            <button class="btn-reset" onclick="cmsisMemHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="memSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="memSuccessText"></span></div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 8 — CONCLUSION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="conclusion" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion &amp; Next Steps</h2>
+
+                    <p>In this article we have built a complete embedded memory management toolkit:</p>
+                    <ul>
+                        <li><strong>Static allocation</strong> is the foundation — zero runtime overhead, verifiable at link time, MISRA-compliant. Use it wherever objects have fixed lifetime and known size.</li>
+                        <li><strong>Fixed-size memory pools</strong> give you O(1) deterministic allocation for variable-lifetime objects — the correct replacement for <code>malloc()</code> in real-time firmware.</li>
+                        <li><strong>CMSIS-RTOS2 osMemoryPool</strong> provides a standardised pool API that works across FreeRTOS, RTX5, and Zephyr — write once, run on any CMSIS-RTOS2 implementation.</li>
+                        <li><strong>FreeRTOS static allocation</strong> (<code>xTaskCreateStatic</code>, <code>xQueueCreateStatic</code>) eliminates the heap entirely for RTOS objects — strongly recommended for production firmware.</li>
+                        <li><strong>Stack watermark scanning</strong> with a sentinel pattern gives you high-water mark data during testing; <strong>MPU stack guard pages</strong> give you hard real-time overflow detection in production.</li>
+                        <li>The <strong>common memory bug table</strong> — stack overflow, fragmentation, double-free, dangling pointer, null dereference — gives you a diagnostic checklist for when memory-related faults appear.</li>
+                    </ul>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="cmsis-part13-low-power-optimization.html"><strong>Part 13: Low Power &amp; Energy Optimization</strong></a>, we shift focus from correctness to efficiency. We'll cover the full ARM Cortex-M low-power toolkit: WFI/WFE sleep modes, STOP and Standby states, clock gating for unused peripherals, FreeRTOS tickless idle with LPTIM, power-domain management, and how to profile your firmware's average current with a hardware current probe to meet battery-life targets.</p>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 13: Low Power &amp; Energy Optimization</h5>
+                            <p>Sleep modes, clock gating, tickless RTOS, and power profiling — the next step after getting memory management right in your IoT firmware.</p>
+                            <a href="cmsis-part13-low-power-optimization.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 4: CMSIS-RTOS2 — Threads, Mutexes &amp; Semaphores</h5>
+                            <p>The RTOS foundation that memory pools, static tasks, and queue management are built on — revisit thread creation and synchronisation with static objects.</p>
+                            <a href="cmsis-part04-rtos2-threads-mutexes.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 15: Security — ARMv8-M &amp; TrustZone</h5>
+                            <p>The MPU concepts from this article extend directly into TrustZone's Secure Attribution Unit — memory protection as a security mechanism.</p>
+                            <a href="cmsis-part15-security-trustzone.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div><!-- end col-lg-8 -->
+            </div><!-- end row -->
+        </div><!-- end container -->
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> |
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> |
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? &#9749; <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Document Generation -->
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-cmsis.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- Memory Strategy Planner Form Handler -->
+    <script>
+        var cmsisMemPersistence = new FormPersistence('cmsis-p12-mem-draft', {
+            'memProject':     'projectName',
+            'memMcu':         'mcu',
+            'memStrategy':    'strategy',
+            'memHeapSize':    'heapSize',
+            'memPoolSizes':   'poolSizes',
+            'memStackGuard':  'stackGuard',
+            'memMpuRegions':  'mpuRegions',
+            'memFragIssues':  'fragIssues'
+        }, 'cmsisMemBadge');
+
+        var cmsisMemHandler = new CanvasFormHandler({
+            formId:         'cmsisMemForm',
+            successId:      'memSuccess',
+            successTextId:  'memSuccessText',
+            persistence:    cmsisMemPersistence,
+            filenameField:  'projectName',
+            filenameSuffix: '-cmsis-memory-plan',
+            requiredFields: ['memProject', 'memMcu'],
+            requiredMessage:'Please enter a Project Name and Target MCU.',
+            docType:        'CmsisFirmwareDesign'
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            cmsisMemPersistence.init();
+        });
+    </script>
+
+</body>
+</html>
