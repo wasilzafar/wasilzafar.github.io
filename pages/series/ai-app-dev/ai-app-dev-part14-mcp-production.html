@@ -244,6 +244,7 @@
                     <li><a href="#implementation-patterns" onclick="closeNav()">Implementation Patterns</a></li>
                     <li><a href="#fastmcp-server" onclick="closeNav()">Complete FastMCP Server</a></li>
                     <li><a href="#testing-mcp" onclick="closeNav()">Testing MCP Servers</a></li>
+                    <li><a href="#fastmcp-production-patterns" onclick="closeNav()">FastMCP Patterns for Production</a></li>
                 </ul>
             </li>
             <li>
@@ -959,6 +960,105 @@ async def test_tool_error_format():
 
 
 # Run with: pytest test_mcp_server.py -v --asyncio-mode=auto</code></pre>
+
+                    <!-- FastMCP Patterns for Production -->
+                    <h3 id="fastmcp-production-patterns">1.5 FastMCP Patterns for Production</h3>
+
+                    <p>The following patterns demonstrate how to use the FastMCP SDK's three core decorators — <code>@mcp.tool()</code>, <code>@mcp.resource()</code>, and <code>@mcp.prompt()</code> — in production-grade scenarios. Each pattern addresses a specific production concern: structured validation, safe file access, error resilience, and lifecycle management.</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Pro Tip:</strong> The three decorators <code>@mcp.tool()</code>, <code>@mcp.resource()</code>, and <code>@mcp.prompt()</code> map directly to the three core MCP primitives. If you remember nothing else: <strong>tool = LLM calls it</strong>, <strong>resource = app reads it</strong>, <strong>prompt = user invokes it</strong>.
+                    </div>
+
+                    <h4>Pattern 1: Structured Input with Pydantic Models</h4>
+
+                    <p>For complex tools, use Pydantic models to define structured inputs with field-level descriptions and validation. FastMCP automatically converts these into rich JSON Schema that helps the LLM provide well-formed arguments:</p>
+
+                    <pre><code class="language-python">from pydantic import BaseModel, Field
+
+class QueryInput(BaseModel):
+    """Structured input for database queries."""
+    table: str = Field(description="Database table to query")
+    conditions: dict = Field(default={}, description="WHERE conditions")
+    limit: int = Field(default=10, description="Max rows to return")
+
+@mcp.tool()
+async def query_database(input: QueryInput) -> str:
+    """Execute a structured database query with safety checks."""
+    # Validate table name against allowlist
+    allowed_tables = {"users", "orders", "products"}
+    if input.table not in allowed_tables:
+        return f"Error: Table '{input.table}' not allowed"
+    # Build and execute query safely
+    ...</code></pre>
+
+                    <p>The Pydantic model's <code>Field(description=...)</code> values become parameter descriptions in the MCP schema, giving the LLM detailed guidance on what each field expects. Default values become optional parameters automatically.</p>
+
+                    <h4>Pattern 2: Resource with Safe File Access</h4>
+
+                    <p>Resources are ideal for exposing read-only data like log files. This pattern demonstrates safe file access with bounds on the returned content:</p>
+
+                    <pre><code class="language-python">@mcp.resource("logs://app/{date}")
+async def get_logs(date: str) -> str:
+    """Get application logs for a specific date (YYYY-MM-DD)."""
+    log_path = Path(f"/var/log/app/{date}.log")
+    if not log_path.exists():
+        return f"No logs found for {date}"
+    return log_path.read_text()[-5000:]  # Last 5000 chars</code></pre>
+
+                    <p>The URI template <code>logs://app/{date}</code> creates a dynamic resource — the application can request logs for any date by substituting the <code>{date}</code> parameter. Truncating output to the last 5000 characters prevents overwhelming the LLM's context window with massive log files.</p>
+
+                    <h4>Pattern 3: Error Handling in Tools</h4>
+
+                    <p>Production tools must handle failures gracefully. Rather than raising exceptions (which crash the MCP connection), return human-readable error messages that the LLM can reason about and communicate to the user:</p>
+
+                    <pre><code class="language-python">@mcp.tool()
+async def fetch_api_data(endpoint: str) -> str:
+    """Fetch data from an external API safely.
+
+    Args:
+        endpoint: API endpoint path (e.g., /users, /orders)
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://api.example.com{endpoint}",
+                headers={"Authorization": f"Bearer {os.getenv('API_TOKEN')}"},
+                timeout=10.0
+            )
+            response.raise_for_status()
+            return json.dumps(response.json(), indent=2)
+    except httpx.TimeoutException:
+        return "Error: API request timed out after 10 seconds"
+    except httpx.HTTPStatusError as e:
+        return f"Error: API returned {e.response.status_code}"</code></pre>
+
+                    <p>Notice the pattern: use <code>try/except</code> to catch specific exceptions and return descriptive error strings. The LLM can then tell the user "The API timed out" rather than the conversation ending with an opaque failure. Also note that secrets come from environment variables (<code>os.getenv('API_TOKEN')</code>), never hardcoded.</p>
+
+                    <h4>Pattern 4: Lifespan for Shared Resources</h4>
+
+                    <p>Production servers often need shared resources like database connection pools or HTTP clients that are created once at startup and cleaned up at shutdown. FastMCP's <code>lifespan</code> parameter handles this with an async context manager:</p>
+
+                    <pre><code class="language-python">from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def app_lifespan(server: FastMCP):
+    """Manage server lifecycle — setup and teardown."""
+    # Startup: initialize shared resources
+    db = await asyncpg.create_pool("postgresql://localhost/mydb")
+    server.state["db"] = db
+    print("Database pool initialized", file=sys.stderr)
+    try:
+        yield  # Server runs here
+    finally:
+        # Shutdown: clean up
+        await db.close()
+        print("Database pool closed", file=sys.stderr)
+
+mcp = FastMCP("production-server", lifespan=app_lifespan)</code></pre>
+
+                    <p>The lifespan context manager runs before the server starts accepting connections (<code>yield</code>) and after it stops. Resources stored in <code>server.state</code> are accessible from any tool or resource handler. This pattern prevents the common mistake of creating a new database connection on every tool call — instead, all calls share a single efficient connection pool.</p>
                 </div>
 
                 <!-- Section 2: MCP + Ecosystem Integrations -->

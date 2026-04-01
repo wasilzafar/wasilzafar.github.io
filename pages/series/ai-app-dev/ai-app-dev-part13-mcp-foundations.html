@@ -267,6 +267,16 @@
                 </ul>
             </li>
             <li>
+                <a href="#fastmcp-sdk" onclick="closeNav()">The FastMCP Python SDK</a>
+                <ul>
+                    <li><a href="#fastmcp-getting-started" onclick="closeNav()">Getting Started with FastMCP</a></li>
+                    <li><a href="#fastmcp-tools" onclick="closeNav()">@mcp.tool() — Exposing Functions</a></li>
+                    <li><a href="#fastmcp-resources" onclick="closeNav()">@mcp.resource() — Exposing Data</a></li>
+                    <li><a href="#fastmcp-prompts" onclick="closeNav()">@mcp.prompt() — Reusable Templates</a></li>
+                    <li><a href="#fastmcp-running" onclick="closeNav()">Running Your MCP Server</a></li>
+                </ul>
+            </li>
+            <li>
                 <a href="#protocol-flow" onclick="closeNav()">Protocol Flow & Lifecycle</a>
                 <ul>
                     <li><a href="#end-to-end-flow" onclick="closeNav()">End-to-End Flow</a></li>
@@ -1921,6 +1931,263 @@ def create_sse_app():
 
 # To run STDIO: asyncio.run(run_stdio())
 # To run HTTP/SSE: uvicorn.run(create_sse_app(), host="0.0.0.0", port=8000)</code></pre>
+                </div>
+
+                <!-- Section 3.5: The FastMCP Python SDK — Hands-On Guide -->
+                <div id="fastmcp-sdk" class="blog-content mt-5">
+                    <h2><i class="fas fa-code me-2 text-teal"></i>The FastMCP Python SDK — Hands-On Guide</h2>
+
+                    <p>Now that you understand the MCP architecture and its core primitives conceptually, let us write real code. The <strong>FastMCP SDK</strong> is the official high-level Python library that makes building MCP servers simple and intuitive. If the previous sections explained the <em>what</em> and <em>why</em> of MCP, this section covers the <em>how</em>.</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Analogy:</strong> FastMCP is to MCP what Flask is to HTTP — it handles the protocol plumbing (JSON-RPC messages, schema generation, transport negotiation) so you can focus entirely on your tools and data. You write normal Python functions; FastMCP converts them into fully compliant MCP capabilities automatically.
+                    </div>
+
+                    <!-- Getting Started with FastMCP -->
+                    <h3 id="fastmcp-getting-started">Getting Started with FastMCP</h3>
+
+                    <p>FastMCP lives in the <code>mcp</code> Python package. Install it with pip and create your first server in just three lines:</p>
+
+                    <pre><code class="language-python"># pip install "mcp[cli]" httpx
+from mcp.server.fastmcp import FastMCP
+
+# Create an MCP server instance — the name identifies your server to clients
+mcp = FastMCP("my-awesome-server")</code></pre>
+
+                    <p>That is it. The <code>FastMCP</code> constructor takes a server name (this appears in client UIs like Claude Desktop or Cursor) and returns a server instance. You then add capabilities to this instance using decorators.</p>
+
+                    <p>The <code>mcp[cli]</code> install extra includes the <code>mcp</code> command-line tool for testing and debugging your servers. The <code>httpx</code> library is commonly used for making async HTTP requests inside your tools.</p>
+
+                    <!-- @mcp.tool() — Exposing Functions to LLMs -->
+                    <h3 id="fastmcp-tools">@mcp.tool() — Exposing Functions to LLMs</h3>
+
+                    <p>The <code>@mcp.tool()</code> decorator is the most important concept in FastMCP. It takes a normal Python function and registers it as a tool that any connected LLM can call. The key insight is that <strong>you write a normal Python function with good docstrings and type hints, and FastMCP converts it into a fully-described, schema-validated MCP tool automatically</strong>.</p>
+
+                    <p>Here is a concrete example — a weather alerts tool from the Anthropic documentation:</p>
+
+                    <pre><code class="language-python">@mcp.tool()
+async def get_alerts(state: str) -> str:
+    """Get weather alerts for a US state.
+
+    Args:
+        state: Two-letter US state code (e.g. CA, NY)
+    """
+    url = f"{NWS_API_BASE}/alerts/active/area/{state}"
+    data = await make_nws_request(url)
+    if not data or "features" not in data:
+        return "Unable to fetch alerts or no alerts found."
+    alerts = [format_alert(f) for f in data["features"]]
+    return "\n---\n".join(alerts)</code></pre>
+
+                    <p>When an LLM sees this tool, it knows: name=<code>get_alerts</code>, takes a <code>state</code> string, returns weather alerts. The docstring tells the LLM <em>when</em> to use it, and the <code>Args</code> section tells it <em>how</em> to call it correctly.</p>
+
+                    <p>Here is exactly how FastMCP translates your Python code into the MCP protocol:</p>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Your Code</th>
+                                <th>MCP Schema</th>
+                                <th>Purpose</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Function name</td>
+                                <td><code>tool.name</code></td>
+                                <td>How the LLM identifies the tool</td>
+                            </tr>
+                            <tr>
+                                <td>Docstring</td>
+                                <td><code>tool.description</code></td>
+                                <td>How the LLM decides to use it</td>
+                            </tr>
+                            <tr>
+                                <td>Type hints</td>
+                                <td><code>inputSchema</code> (JSON Schema)</td>
+                                <td>Input validation</td>
+                            </tr>
+                            <tr>
+                                <td>Args docstring</td>
+                                <td>Parameter descriptions</td>
+                                <td>Helps LLM provide correct arguments</td>
+                            </tr>
+                            <tr>
+                                <td>Return type</td>
+                                <td>Output format</td>
+                                <td>What the LLM receives back</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p>This is the magic of FastMCP: <strong>good Python practices (type hints, docstrings) directly become good MCP tool descriptions</strong>. There is no separate schema file, no configuration YAML, no manual JSON Schema authoring.</p>
+
+                    <!-- @mcp.resource() — Exposing Data to LLMs -->
+                    <h3 id="fastmcp-resources">@mcp.resource() — Exposing Data to LLMs</h3>
+
+                    <p>The <code>@mcp.resource()</code> decorator exposes read-only data that the application can retrieve. Unlike tools (which the LLM decides to call), resources are <strong>application-controlled</strong> — the host application decides when to read them. Think of resources as files or API endpoints that provide context to the LLM.</p>
+
+                    <p>Resources use URI patterns — static URIs for fixed data and URI templates for dynamic data:</p>
+
+                    <pre><code class="language-python">@mcp.resource("config://app")
+def get_config() -> str:
+    """Get the current application configuration."""
+    return json.dumps({"theme": "dark", "language": "en", "version": "2.1.0"})
+
+@mcp.resource("users://{user_id}/profile")
+def get_user_profile(user_id: str) -> str:
+    """Get a user's profile by their ID."""
+    # In production, this would query a database
+    profiles = {"alice": "Alice Smith - Engineer", "bob": "Bob Jones - Designer"}
+    return profiles.get(user_id, f"User {user_id} not found")</code></pre>
+
+                    <p>The first resource uses a static URI (<code>config://app</code>) — there is exactly one configuration. The second uses a URI template (<code>users://{user_id}/profile</code>) — the <code>{user_id}</code> placeholder means the application can request any user's profile by substituting the ID.</p>
+
+                    <!-- @mcp.prompt() — Reusable Templates -->
+                    <h3 id="fastmcp-prompts">@mcp.prompt() — Reusable Templates</h3>
+
+                    <p>The <code>@mcp.prompt()</code> decorator creates reusable prompt templates that users can invoke. These are <strong>user-controlled</strong> — think of them like slash commands in Slack or Discord. Prompts let you package complex, well-crafted instructions into simple, parameterized templates.</p>
+
+                    <pre><code class="language-python">@mcp.prompt()
+def review_code(code: str, language: str = "python") -> str:
+    """Review code for bugs and improvements.
+
+    Args:
+        code: The source code to review
+        language: Programming language of the code
+    """
+    return f"""Please review this {language} code for:
+1. Bugs and potential errors
+2. Performance improvements
+3. Security vulnerabilities
+4. Code style and best practices
+
+Code to review:
+```{language}
+{code}
+```"""</code></pre>
+
+                    <p>When a user selects this prompt in their MCP client, they are asked to provide the <code>code</code> and optionally the <code>language</code>. The template then generates a well-structured review request for the LLM.</p>
+
+                    <!-- Running Your MCP Server -->
+                    <h3 id="fastmcp-running">Running Your MCP Server</h3>
+
+                    <p>With your tools, resources, and prompts defined, running your server is a single line. The <code>transport</code> parameter determines how clients connect:</p>
+
+                    <pre><code class="language-python"># Run with STDIO transport (for local clients like Claude Desktop, Cursor)
+mcp.run(transport="stdio")</code></pre>
+
+                    <p>Here is a complete, copy-paste-ready weather server that ties everything together:</p>
+
+                    <pre><code class="language-python"># weather_server.py — Complete MCP Weather Server
+# pip install "mcp[cli]" httpx
+
+import json
+import httpx
+from mcp.server.fastmcp import FastMCP
+
+# Create the MCP server
+mcp = FastMCP("weather-server")
+
+NWS_API_BASE = "https://api.weather.gov"
+USER_AGENT = "weather-app/1.0"
+
+async def make_nws_request(url: str) -> dict | None:
+    """Make a request to the NWS API with proper headers."""
+    headers = {"User-Agent": USER_AGENT, "Accept": "application/geo+json"}
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers, timeout=30.0)
+        response.raise_for_status()
+        return response.json()
+
+def format_alert(feature: dict) -> str:
+    """Format a single weather alert for display."""
+    props = feature["properties"]
+    return f"""
+Event: {props.get('event', 'Unknown')}
+Area: {props.get('areaDesc', 'Unknown')}
+Severity: {props.get('severity', 'Unknown')}
+Description: {props.get('description', 'No description')}
+Instructions: {props.get('instruction', 'No instructions')}
+"""
+
+@mcp.tool()
+async def get_alerts(state: str) -> str:
+    """Get weather alerts for a US state.
+
+    Args:
+        state: Two-letter US state code (e.g. CA, NY)
+    """
+    url = f"{NWS_API_BASE}/alerts/active/area/{state}"
+    data = await make_nws_request(url)
+    if not data or "features" not in data:
+        return "Unable to fetch alerts or no alerts found."
+    alerts = [format_alert(f) for f in data["features"]]
+    return "\n---\n".join(alerts) if alerts else "No active alerts for this state."
+
+@mcp.tool()
+async def get_forecast(latitude: float, longitude: float) -> str:
+    """Get the weather forecast for a location.
+
+    Args:
+        latitude: Latitude of the location
+        longitude: Longitude of the location
+    """
+    # First get the forecast grid endpoint
+    points_url = f"{NWS_API_BASE}/points/{latitude},{longitude}"
+    points_data = await make_nws_request(points_url)
+    if not points_data:
+        return "Unable to fetch forecast data for this location."
+    forecast_url = points_data["properties"]["forecast"]
+    forecast_data = await make_nws_request(forecast_url)
+    if not forecast_data:
+        return "Unable to fetch forecast."
+    periods = forecast_data["properties"]["periods"][:5]
+    forecasts = [f"{p['name']}: {p['detailedForecast']}" for p in periods]
+    return "\n---\n".join(forecasts)
+
+@mcp.resource("config://weather")
+def get_weather_config() -> str:
+    """Get the weather server configuration and supported regions."""
+    return json.dumps({
+        "api": "National Weather Service",
+        "coverage": "United States",
+        "update_frequency": "Every 15 minutes"
+    })
+
+@mcp.prompt()
+def weather_briefing(state: str) -> str:
+    """Generate a comprehensive weather briefing for a state.
+
+    Args:
+        state: Two-letter US state code (e.g. CA, NY)
+    """
+    return f"""Please provide a comprehensive weather briefing for {state}:
+1. Check current weather alerts
+2. Summarize any severe weather warnings
+3. Provide a general outlook
+Use the available weather tools to gather this information."""
+
+# Start the server
+if __name__ == "__main__":
+    mcp.run(transport="stdio")</code></pre>
+
+                    <p>To connect this server to Claude Desktop, add it to your Claude Desktop configuration file:</p>
+
+                    <pre><code class="language-json">{
+  "mcpServers": {
+    "weather": {
+      "command": "python",
+      "args": ["weather_server.py"]
+    }
+  }
+}</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Key Insight:</strong> The entire FastMCP SDK is designed around one principle — write normal Python functions with good docstrings and type hints, and FastMCP handles everything else: schema generation, validation, transport, and protocol compliance. The three decorators map directly to the three core MCP primitives: <code>@mcp.tool()</code> = LLM calls it, <code>@mcp.resource()</code> = app reads it, <code>@mcp.prompt()</code> = user invokes it.
+                    </div>
                 </div>
 
                 <!-- Section 4: Protocol Flow & Lifecycle -->
