@@ -1,0 +1,1607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Integrate TinyUSB with FreeRTOS — design the USB task, set correct priorities, handle DMA cache coherency on Cortex-M7, make CDC thread-safe, architect producer/consumer queues between USB and application tasks, and avoid the most common RTOS+USB pitfalls." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="TinyUSB FreeRTOS, RTOS USB integration, USB task priority, CDC thread-safe, DMA cache coherency STM32H7, producer consumer queue USB, FreeRTOS TinyUSB STM32" />
+    <meta property="og:title" content="RTOS + USB — USB Development Mastery Series Part 11" />
+    <meta property="og:description" content="Integrate TinyUSB with FreeRTOS — design the USB task, set correct priorities, handle DMA cache coherency on Cortex-M7, make CDC thread-safe, architect producer/consumer queues between USB and application tasks, and avoid the most common RTOS+USB pitfalls." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>RTOS + USB — USB Development Mastery Series Part 11 - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/usb-dev/usb-dev-part11-rtos-usb.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting (6 themes) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'ad_user_data': 'granted',
+            'ad_personalization': 'granted',
+            'analytics_storage': 'granted'
+        });
+
+        gtag('set', 'url_passthrough', true);
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+            var f = d.getElementsByTagName(s)[0],
+                j = d.createElement(s),
+                dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking &ldquo;Accept All&rdquo;, you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" onclick="cookieSettings.acceptAll()" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" onclick="cookieSettings.rejectAll()" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" onclick="cookieSettings.savePreferences()" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">USB Part 11: RTOS + USB Integration with FreeRTOS</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>March 31, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>30 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Running TinyUSB alongside FreeRTOS requires more than just calling tud_task() in a loop — you must design task priorities to prevent inversion, protect CDC with mutexes, build producer/consumer queues for safe data handoff, and handle D-cache coherency on Cortex-M7 before USB DMA corrupts your data silently.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#freertos-integration-overview" onclick="closeNav()">TinyUSB + FreeRTOS Integration Overview</a></li>
+            <li><a href="#usb-task-design" onclick="closeNav()">USB Task Design</a></li>
+            <li><a href="#task-priorities" onclick="closeNav()">FreeRTOS Task Priorities for USB</a></li>
+            <li><a href="#thread-safe-cdc" onclick="closeNav()">Thread-Safe CDC with FreeRTOS</a></li>
+            <li><a href="#producer-consumer-queue" onclick="closeNav()">Producer/Consumer Queue Pattern</a></li>
+            <li><a href="#dma-cache-coherency" onclick="closeNav()">DMA Cache Coherency on Cortex-M7</a></li>
+            <li><a href="#stm32h7-complete-example" onclick="closeNav()">STM32H7 USB + FreeRTOS Complete Example</a></li>
+            <li><a href="#tinyusb-rtos-hooks" onclick="closeNav()">TinyUSB RTOS Hooks</a></li>
+            <li><a href="#suspend-resume" onclick="closeNav()">USB Suspend/Resume with RTOS</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Practical Exercises</a></li>
+            <li><a href="#rtos-design-tool" onclick="closeNav()">USB RTOS Design Generator</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 1 — FREERTOS INTEGRATION OVERVIEW (no mt-5)
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="freertos-integration-overview" class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Series Context:</strong> This is Part 11 of the 17-part USB Development Mastery series. Parts 1–10 covered fundamentals through USB debugging. This part assumes you have a working bare-metal TinyUSB device from earlier parts. We now add FreeRTOS to that device and make USB work correctly in a multitasking environment.
+                    </div>
+
+                    <!-- Series Navigation Path -->
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-plug"></i></div>
+                            <h4>USB Development Mastery</h4>
+                            <div class="path-subtitle">Your 17-step learning path &bull; Currently on Step 11</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="usb-dev-part01-fundamentals.html" class="step-card">
+                                <div class="step-num completed">1</div>
+                                <div class="step-info"><h6>USB Fundamentals</h6><small>USB system architecture, transfer types, host/device model, protocol stack</small></div>
+                            </a>
+                            <a href="usb-dev-part02-electrical-hardware.html" class="step-card">
+                                <div class="step-num completed">2</div>
+                                <div class="step-info"><h6>Electrical &amp; Hardware</h6><small>D+/D- signalling, pull-ups, connectors, USB-C, STM32 USB peripherals</small></div>
+                            </a>
+                            <a href="usb-dev-part03-protocol-enumeration.html" class="step-card">
+                                <div class="step-num completed">3</div>
+                                <div class="step-info"><h6>Protocol &amp; Enumeration</h6><small>Enumeration sequence, USB packets, descriptors, endpoint concepts</small></div>
+                            </a>
+                            <a href="usb-dev-part04-device-classes.html" class="step-card">
+                                <div class="step-num completed">4</div>
+                                <div class="step-info"><h6>Device Classes</h6><small>HID, CDC, MSC, MIDI, Audio, composite devices, vendor class</small></div>
+                            </a>
+                            <a href="usb-dev-part05-tinyusb-deep-dive.html" class="step-card">
+                                <div class="step-num completed">5</div>
+                                <div class="step-info"><h6>TinyUSB Deep Dive</h6><small>Stack architecture, execution model, STM32 integration, descriptor callbacks</small></div>
+                            </a>
+                            <a href="usb-dev-part06-cdc-virtual-com.html" class="step-card">
+                                <div class="step-num completed">6</div>
+                                <div class="step-info"><h6>CDC Virtual COM Port</h6><small>CDC class, bulk transfers, printf over USB, baud rate handling</small></div>
+                            </a>
+                            <a href="usb-dev-part07-hid-keyboard-mouse.html" class="step-card">
+                                <div class="step-num completed">7</div>
+                                <div class="step-info"><h6>HID Devices</h6><small>HID descriptors, report format, keyboard/mouse/gamepad implementation</small></div>
+                            </a>
+                            <a href="usb-dev-part08-mass-storage.html" class="step-card">
+                                <div class="step-num completed">8</div>
+                                <div class="step-info"><h6>Mass Storage</h6><small>MSC class, SCSI commands, FATFS integration, RAM disk</small></div>
+                            </a>
+                            <a href="usb-dev-part09-composite-devices.html" class="step-card">
+                                <div class="step-num completed">9</div>
+                                <div class="step-info"><h6>Composite Devices</h6><small>Multiple classes, IAD descriptor, CDC+HID, CDC+MSC</small></div>
+                            </a>
+                            <a href="usb-dev-part10-debugging.html" class="step-card">
+                                <div class="step-num completed">10</div>
+                                <div class="step-info"><h6>USB Debugging</h6><small>Wireshark capture, protocol analyser, enumeration debugging, common failures</small></div>
+                            </a>
+                            <div class="step-card current">
+                                <div class="step-num active">11</div>
+                                <div class="step-info"><h6>RTOS + USB</h6><small>FreeRTOS + TinyUSB, task priorities, thread-safe communication</small></div>
+                                <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                            </div>
+                            <a href="usb-dev-part12-advanced-topics.html" class="step-card">
+                                <div class="step-num upcoming">12</div>
+                                <div class="step-info"><h6>Advanced Topics</h6><small>Host mode, OTG, isochronous, USB audio, USB video</small></div>
+                            </a>
+                            <a href="usb-dev-part13-performance.html" class="step-card">
+                                <div class="step-num upcoming">13</div>
+                                <div class="step-info"><h6>Performance Optimization</h6><small>DMA, zero-copy buffers, throughput maximisation, latency tuning</small></div>
+                            </a>
+                            <a href="usb-dev-part14-custom-class-drivers.html" class="step-card">
+                                <div class="step-num upcoming">14</div>
+                                <div class="step-info"><h6>Custom Class Drivers</h6><small>Vendor class, writing descriptors, OS driver interaction</small></div>
+                            </a>
+                            <a href="usb-dev-part15-bare-metal-usb.html" class="step-card">
+                                <div class="step-num upcoming">15</div>
+                                <div class="step-info"><h6>Bare-Metal USB</h6><small>Direct register programming, writing USB stack from scratch, PHY timing</small></div>
+                            </a>
+                            <a href="usb-dev-part16-security.html" class="step-card">
+                                <div class="step-num upcoming">16</div>
+                                <div class="step-info"><h6>USB Security</h6><small>BadUSB attacks, device authentication, secure firmware, USB firewall</small></div>
+                            </a>
+                            <a href="usb-dev-part17-hardware-design.html" class="step-card">
+                                <div class="step-num upcoming">17</div>
+                                <div class="step-info"><h6>Hardware Design</h6><small>PCB layout, differential pairs, impedance matching, EMI, USB-C PD</small></div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <h2><i class="fas fa-tasks me-2 text-teal"></i>TinyUSB + FreeRTOS Integration Overview</h2>
+
+                    <p>TinyUSB is designed to be RTOS-agnostic. It supports bare-metal (polling in main loop), FreeRTOS, Azure RTOS (ThreadX), Zephyr, and others through an abstraction layer defined in <code>osal/osal_freertos.h</code>. Selecting the correct RTOS is a compile-time choice made in <code>tusb_config.h</code>.</p>
+
+                    <p>The key configuration is:</p>
+
+                    <pre><code class="language-c">// In tusb_config.h — select FreeRTOS as the RTOS abstraction layer
+// Options: CFG_TUSB_OS_NONE (bare-metal polling)
+//          CFG_TUSB_OS_FREERTOS
+//          CFG_TUSB_OS_MYNEWT
+//          CFG_TUSB_OS_PICO (RP2040 SDK)
+//          CFG_TUSB_OS_RTTHREAD
+#define CFG_TUSB_OS   CFG_TUSB_OS_FREERTOS</code></pre>
+
+                    <p>When <code>CFG_TUSB_OS_FREERTOS</code> is selected, TinyUSB's OSAL (OS Abstraction Layer) maps its internal primitives to FreeRTOS equivalents:</p>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>TinyUSB OSAL Primitive</th>
+                                <th>FreeRTOS Equivalent</th>
+                                <th>Used For</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>osal_queue_t</code></td>
+                                <td><code>QueueHandle_t</code></td>
+                                <td>USB event queue between ISR and USB task</td>
+                            </tr>
+                            <tr>
+                                <td><code>osal_semaphore_t</code></td>
+                                <td><code>SemaphoreHandle_t</code></td>
+                                <td>Signalling USB task from USB ISR</td>
+                            </tr>
+                            <tr>
+                                <td><code>osal_mutex_t</code></td>
+                                <td><code>SemaphoreHandle_t (mutex)</code></td>
+                                <td>Protecting shared USB resources</td>
+                            </tr>
+                            <tr>
+                                <td><code>osal_task_delay(ms)</code></td>
+                                <td><code>vTaskDelay(ms / portTICK_PERIOD_MS)</code></td>
+                                <td>Yielding in USB task when no events pending</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Critical Rule:</strong> Never call TinyUSB API functions (<code>tud_cdc_write()</code>, <code>tud_hid_report()</code>, etc.) from within a FreeRTOS ISR context. All TinyUSB API calls must come from task context. TinyUSB's callbacks (<code>tud_cdc_rx_cb()</code>, etc.) are called from within <code>tud_task()</code>, which runs in the USB task — they are safe to use FreeRTOS ISR-safe APIs from, but not regular task APIs.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 2 — USB TASK DESIGN
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="usb-task-design" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-cogs me-2 text-teal"></i>USB Task Design</h2>
+
+                    <p>The fundamental rule of TinyUSB + FreeRTOS integration is: <strong><code>tud_task()</code> must run in a dedicated task</strong>. You cannot call <code>tud_task()</code> from multiple tasks, from the idle task, or from within an ISR. One task, one <code>tud_task()</code>, always.</p>
+
+                    <h3>Basic USB Task Structure</h3>
+
+                    <pre><code class="language-c">// usb_task.c — the dedicated USB device task
+#include "tusb.h"
+#include "FreeRTOS.h"
+#include "task.h"
+
+// Stack size: 512 words (2048 bytes) is the recommended minimum.
+// Increase to 1024 words if using complex class callbacks or debug output.
+#define USB_DEVICE_TASK_STACK_SIZE   512
+#define USB_DEVICE_TASK_PRIORITY     (configMAX_PRIORITIES - 1)
+
+// Forward declaration
+static void usb_device_task(void *param);
+
+void usb_task_init(void)
+{
+    // Initialize TinyUSB BEFORE creating the task
+    tusb_init();
+
+    // Create the USB device task
+    xTaskCreate(
+        usb_device_task,              // Task function
+        "usb_dev",                    // Task name (for debugging)
+        USB_DEVICE_TASK_STACK_SIZE,   // Stack depth in words
+        NULL,                         // Task parameter (unused)
+        USB_DEVICE_TASK_PRIORITY,     // Priority
+        NULL                          // Task handle (not needed here)
+    );
+}
+
+static void usb_device_task(void *param)
+{
+    (void)param;
+
+    // tud_task() processes USB events:
+    //   - Calls endpoint callbacks (tud_cdc_rx_cb, tud_hid_set_report_cb, etc.)
+    //   - Handles control requests (enumeration, class commands)
+    //   - Manages endpoint state machines
+    //
+    // With CFG_TUSB_OS_FREERTOS, tud_task() internally calls
+    // osal_queue_receive() which blocks on the USB event queue.
+    // The USB ISR posts events to this queue, unblocking the task.
+    // This means the USB task sleeps when idle — no CPU waste.
+
+    while (1) {
+        tud_task();
+        // No vTaskDelay needed here — tud_task() blocks internally
+        // via osal_queue_receive() with portMAX_DELAY when no events.
+        // Adding vTaskDelay(1) here would REDUCE responsiveness.
+    }
+}
+</code></pre>
+
+                    <h3>Stack Size Considerations</h3>
+
+                    <p>The 512-word (2048-byte) stack recommendation covers:</p>
+                    <ul>
+                        <li>TinyUSB internal control request processing: ~200 bytes</li>
+                        <li>Descriptor callbacks (your code): typically 100–300 bytes</li>
+                        <li>Class driver callbacks (CDC, HID, MSC): 100–400 bytes each</li>
+                        <li>Debug output via <code>tu_printf</code> if enabled: add 256 bytes for the format buffer</li>
+                    </ul>
+
+                    <p>If you see stack overflow crashes (detected via FreeRTOS stack watermark: <code>uxTaskGetStackHighWaterMark(NULL)</code>), increase to 1024 words. Enable <code>configCHECK_FOR_STACK_OVERFLOW 2</code> in <code>FreeRTOSConfig.h</code> to catch stack overflows at runtime.</p>
+
+                    <h3>portYIELD vs vTaskDelay</h3>
+
+                    <p>When using <code>CFG_TUSB_OS_FREERTOS</code>, never add <code>vTaskDelay(1)</code> after <code>tud_task()</code>. The FreeRTOS OSAL already handles task blocking via the queue receive — adding a delay would introduce up to 1 tick (1 ms by default) of additional latency for every USB event. This is acceptable in bare-metal mode (where you poll in a while loop), but not in RTOS mode where the event-driven blocking is already efficient.</p>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 3 — TASK PRIORITIES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="task-priorities" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-layer-group me-2 text-teal"></i>FreeRTOS Task Priorities for USB</h2>
+
+                    <p>Priority assignment is the most critical and most frequently wrong aspect of USB + RTOS integration. Getting it wrong causes intermittent disconnects, dropped data, and enumeration failures that are nearly impossible to debug without understanding the priority relationship.</p>
+
+                    <h3>The Priority Ladder</h3>
+
+                    <pre><code class="language-bash">Priority ladder (highest to lowest):
+══════════════════════════════════════════════════════════════
+Priority 7 (configMAX_PRIORITIES-1): USB device task (tud_task)
+             → Must respond to USB events within ~1 ms
+             → If delayed longer, host sees timeout → bus reset → re-enumeration
+
+Priority 6: Time-critical application tasks
+             → Tasks that produce/consume USB data at high rate
+
+Priority 5: CDC receive processing task
+             → Reads from USB receive queue and processes data
+
+Priority 4: General application tasks
+             → Non-time-critical application logic
+
+Priority 3: Logging / diagnostic tasks
+             → Low priority — can be delayed without affecting USB
+
+Priority 2: (reserved — avoid)
+
+Priority 1 (tskIDLE_PRIORITY+1): Lowest user task priority
+
+Priority 0 (tskIDLE_PRIORITY): FreeRTOS idle task (automatic)
+══════════════════════════════════════════════════════════════</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Why USB Must Be Highest:</strong> The USB host expects the device to respond to control requests within 50 ms (per USB spec), and to respond to IN tokens within 6.5 bit times at FS. If the USB task is blocked by a lower-priority task for more than a few milliseconds during active transfers, the host may see a timeout and reset the bus. This manifests as the device disconnecting and re-enumerating randomly — a notoriously difficult problem to diagnose.
+                    </div>
+
+                    <h3>Priority Inversion Scenario</h3>
+
+                    <p>Priority inversion occurs when a high-priority task (USB task) is blocked waiting for a resource held by a low-priority task (application task). FreeRTOS provides priority inheritance in mutexes to mitigate this — but only for <code>xSemaphoreCreateMutex()</code>, not <code>xSemaphoreCreateBinary()</code>. The scenario:</p>
+
+                    <pre><code class="language-bash">Priority Inversion in USB + FreeRTOS:
+────────────────────────────────────────────────────────
+Time 0ms: App task (priority 4) takes CDC write mutex
+Time 1ms: USB task (priority 7) needs CDC write mutex → BLOCKED
+Time 1ms: Medium-priority task (priority 5) preempts App task
+           → App task cannot release mutex
+           → USB task stays blocked
+           → Host sees USB device not responding → bus reset
+────────────────────────────────────────────────────────
+FreeRTOS priority inheritance fix:
+  When USB task (P7) blocks on mutex held by App task (P4),
+  FreeRTOS temporarily raises App task priority to P7.
+  This prevents medium-priority tasks from preempting App task.
+  App task completes, releases mutex, returns to P4.
+  USB task resumes at P7.
+────────────────────────────────────────────────────────
+Requirement: Use xSemaphoreCreateMutex() (not binary semaphore)
+             for any mutex that can be held by application tasks
+             and waited on by the USB task.</code></pre>
+
+                    <h3>Creating Tasks with Correct Priorities</h3>
+
+                    <pre><code class="language-c">// main.c — creating all tasks with correct priorities
+#include "FreeRTOS.h"
+#include "task.h"
+#include "usb_task.h"
+#include "app_task.h"
+
+// Task handle declarations
+TaskHandle_t usb_task_handle    = NULL;
+TaskHandle_t app_task_handle    = NULL;
+TaskHandle_t cdc_rx_task_handle = NULL;
+
+int main(void)
+{
+    // Hardware initialization (clock, GPIO, UART, etc.)
+    SystemClock_Config();
+    HAL_Init();
+
+    // Initialize USB task (calls tusb_init() internally)
+    // USB task runs at configMAX_PRIORITIES - 1
+    xTaskCreate(usb_device_task, "usb_dev", 512, NULL,
+                configMAX_PRIORITIES - 1, &amp;usb_task_handle);
+
+    // CDC receive processing: lower than USB, higher than app
+    xTaskCreate(cdc_rx_processing_task, "cdc_rx", 256, NULL,
+                configMAX_PRIORITIES - 3, &amp;cdc_rx_task_handle);
+
+    // Application task: lowest user priority
+    xTaskCreate(app_main_task, "app", 512, NULL,
+                tskIDLE_PRIORITY + 1, &amp;app_task_handle);
+
+    // Start scheduler — does not return
+    vTaskStartScheduler();
+
+    // Should never reach here
+    while (1) { __NOP(); }
+}
+</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 4 — THREAD-SAFE CDC
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="thread-safe-cdc" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-lock me-2 text-teal"></i>Thread-Safe CDC with FreeRTOS</h2>
+
+                    <p>The core problem with CDC in a multitasking system: <code>tud_cdc_write()</code> and <code>tud_cdc_write_flush()</code> access a shared transmit buffer. If two tasks both call <code>tud_cdc_write()</code> simultaneously, the data interleaves randomly — you get garbled output and potential buffer corruption.</p>
+
+                    <p>The solution is a mutex that serialises all CDC write operations:</p>
+
+                    <pre><code class="language-c">// cdc_thread_safe.h — thread-safe CDC write interface
+#ifndef CDC_THREAD_SAFE_H
+#define CDC_THREAD_SAFE_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdbool.h&gt;
+
+// Initialize the CDC mutex — call once before starting tasks
+void cdc_ts_init(void);
+
+// Thread-safe CDC write — blocks until mutex available
+// Returns number of bytes actually written (may be less than len if FIFO full)
+uint32_t cdc_ts_write(const void *buf, uint32_t len);
+
+// Thread-safe CDC printf — convenience wrapper
+int cdc_ts_printf(const char *fmt, ...);
+
+// Thread-safe CDC write for multi-port TinyUSB (port 0 = default)
+uint32_t cdc_ts_write_n(uint8_t itf, const void *buf, uint32_t len);
+
+#endif // CDC_THREAD_SAFE_H
+</code></pre>
+
+                    <pre><code class="language-c">// cdc_thread_safe.c — implementation
+#include "cdc_thread_safe.h"
+#include "tusb.h"
+#include "FreeRTOS.h"
+#include "semphr.h"
+#include &lt;stdarg.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+// Mutex handle — created at init, never deleted
+static SemaphoreHandle_t s_cdc_mutex = NULL;
+
+void cdc_ts_init(void)
+{
+    // Create a mutex with priority inheritance.
+    // xSemaphoreCreateMutex() enables FreeRTOS priority inheritance,
+    // which prevents priority inversion between USB task and app tasks.
+    s_cdc_mutex = xSemaphoreCreateMutex();
+    configASSERT(s_cdc_mutex != NULL);
+}
+
+uint32_t cdc_ts_write(const void *buf, uint32_t len)
+{
+    uint32_t written = 0;
+
+    // Take the mutex — wait forever (USB task at higher priority,
+    // so app task will be promoted via priority inheritance if needed)
+    if (xSemaphoreTake(s_cdc_mutex, portMAX_DELAY) == pdTRUE) {
+
+        // Check that CDC is connected and ready
+        if (tud_cdc_connected()) {
+            written = tud_cdc_write(buf, len);
+
+            // Flush immediately — without this, data sits in the
+            // TinyUSB transmit FIFO until the FIFO is full or the
+            // USB task triggers a flush automatically.
+            // For low-latency output, always flush after write.
+            tud_cdc_write_flush();
+        }
+
+        xSemaphoreGive(s_cdc_mutex);
+    }
+
+    return written;
+}
+
+int cdc_ts_printf(const char *fmt, ...)
+{
+    char buf[256];
+    va_list args;
+    va_start(args, fmt);
+    int len = vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+    if (len &gt; 0) {
+        cdc_ts_write(buf, (uint32_t)len);
+    }
+    return len;
+}
+
+uint32_t cdc_ts_write_n(uint8_t itf, const void *buf, uint32_t len)
+{
+    uint32_t written = 0;
+
+    if (xSemaphoreTake(s_cdc_mutex, portMAX_DELAY) == pdTRUE) {
+        if (tud_cdc_n_connected(itf)) {
+            written = tud_cdc_n_write(itf, buf, len);
+            tud_cdc_n_write_flush(itf);
+        }
+        xSemaphoreGive(s_cdc_mutex);
+    }
+
+    return written;
+}
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Timeout Note:</strong> Using <code>portMAX_DELAY</code> in application tasks means they will block indefinitely if the mutex is never released (e.g., if the USB task crashes while holding the mutex — which cannot happen with this design since only application tasks hold the write mutex). For real-time tasks that cannot afford to block indefinitely, use a finite timeout like <code>pdMS_TO_TICKS(10)</code> and handle the timeout case gracefully.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 5 — PRODUCER/CONSUMER QUEUE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="producer-consumer-queue" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-exchange-alt me-2 text-teal"></i>Producer/Consumer Queue Pattern</h2>
+
+                    <p>The cleanest architecture for CDC receive with FreeRTOS is a producer/consumer queue pattern: the USB callback (running inside the USB task) produces messages to a queue, and a separate application task consumes from the queue. This completely decouples USB timing from application processing speed.</p>
+
+                    <pre><code class="language-c">// cdc_rx_queue.h — CDC receive queue interface
+#ifndef CDC_RX_QUEUE_H
+#define CDC_RX_QUEUE_H
+
+#include &lt;stdint.h&gt;
+
+// Maximum bytes per received USB packet (CDC bulk EP max = 64 bytes at FS)
+#define CDC_RX_PACKET_MAX  64
+
+// Number of packets the queue can hold before dropping
+// Size calculation: CDC_RX_QUEUE_DEPTH × CDC_RX_PACKET_MAX bytes
+// = 8 × 64 = 512 bytes total queue memory
+#define CDC_RX_QUEUE_DEPTH  8
+
+// Structure for one CDC receive message
+typedef struct {
+    uint8_t  data[CDC_RX_PACKET_MAX];
+    uint32_t len;
+} cdc_rx_packet_t;
+
+// Initialize the receive queue — call once at startup
+void cdc_rx_queue_init(void);
+
+// Called from tud_cdc_rx_cb() — posts packet to queue
+// Returns pdTRUE if posted, pdFALSE if queue full (data dropped)
+// NOTE: called from USB task context, NOT from ISR
+BaseType_t cdc_rx_queue_post(const uint8_t *data, uint32_t len);
+
+// Called from application task — blocks until packet available
+BaseType_t cdc_rx_queue_receive(cdc_rx_packet_t *pkt,
+                                TickType_t timeout_ticks);
+
+#endif // CDC_RX_QUEUE_H
+</code></pre>
+
+                    <pre><code class="language-c">// cdc_rx_queue.c — implementation
+#include "cdc_rx_queue.h"
+#include "FreeRTOS.h"
+#include "queue.h"
+#include &lt;string.h&gt;
+
+static QueueHandle_t s_cdc_rx_queue = NULL;
+
+void cdc_rx_queue_init(void)
+{
+    // xQueueCreate(uxQueueLength, uxItemSize)
+    // Each item is a cdc_rx_packet_t struct (64 + 4 = 68 bytes)
+    s_cdc_rx_queue = xQueueCreate(CDC_RX_QUEUE_DEPTH,
+                                   sizeof(cdc_rx_packet_t));
+    configASSERT(s_cdc_rx_queue != NULL);
+}
+
+BaseType_t cdc_rx_queue_post(const uint8_t *data, uint32_t len)
+{
+    cdc_rx_packet_t pkt;
+
+    // Clamp to maximum packet size
+    if (len &gt; CDC_RX_PACKET_MAX) {
+        len = CDC_RX_PACKET_MAX;
+    }
+
+    memcpy(pkt.data, data, len);
+    pkt.len = len;
+
+    // xQueueSend with timeout 0 — do not block.
+    // This function is called from the USB task (inside tud_cdc_rx_cb).
+    // We must not block the USB task here — if the queue is full,
+    // drop the packet (application is too slow to consume).
+    return xQueueSend(s_cdc_rx_queue, &amp;pkt, 0);
+}
+
+BaseType_t cdc_rx_queue_receive(cdc_rx_packet_t *pkt,
+                                TickType_t timeout_ticks)
+{
+    return xQueueReceive(s_cdc_rx_queue, pkt, timeout_ticks);
+}
+</code></pre>
+
+                    <pre><code class="language-c">// tusb_callbacks.c — TinyUSB CDC receive callback
+#include "tusb.h"
+#include "cdc_rx_queue.h"
+
+// Called by tud_task() when data arrives on CDC bulk OUT endpoint
+void tud_cdc_rx_cb(uint8_t itf)
+{
+    (void)itf;
+
+    uint8_t buf[64];
+    uint32_t count;
+
+    // Read all available bytes from TinyUSB CDC FIFO
+    // tud_cdc_available() returns byte count, not packet count
+    while (tud_cdc_available()) {
+        count = tud_cdc_read(buf, sizeof(buf));
+        if (count &gt; 0) {
+            // Post to application queue — non-blocking from USB task
+            BaseType_t result = cdc_rx_queue_post(buf, count);
+            if (result != pdTRUE) {
+                // Queue full — increment drop counter for diagnostics
+                // Do not block — just drop this packet
+            }
+        }
+    }
+}
+
+// Application task — consumes CDC data from queue
+void cdc_rx_processing_task(void *param)
+{
+    (void)param;
+    cdc_rx_packet_t pkt;
+
+    while (1) {
+        // Block until a packet arrives (or 100ms timeout)
+        if (cdc_rx_queue_receive(&amp;pkt, pdMS_TO_TICKS(100)) == pdTRUE) {
+            // Process the received data
+            // Example: command parser
+            process_command(pkt.data, pkt.len);
+        }
+        // If timeout (100ms with no data): check connection, status, etc.
+    }
+}
+</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 6 — DMA CACHE COHERENCY
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="dma-cache-coherency" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-memory me-2 text-teal"></i>DMA Cache Coherency on Cortex-M7</h2>
+
+                    <p>DMA cache coherency is the most insidious USB problem on STM32H7 and STM32F7 devices. It causes data corruption that appears random, manifests only at certain buffer addresses, and disappears when you add debug print statements (because they flush the cache as a side effect). Understanding this is essential before deploying USB on any Cortex-M7 platform.</p>
+
+                    <h3>The Problem: D-Cache and DMA</h3>
+
+                    <p>The Cortex-M7 has a 32-byte data cache (D-cache). When your firmware reads memory, the CPU loads a 32-byte cache line from RAM and caches it. If the DMA controller later writes new data to the same RAM address, the CPU may still read the <em>old cached value</em> — it does not know the DMA has changed the memory. This is the cache coherency problem.</p>
+
+                    <pre><code class="language-bash">Without cache maintenance (BROKEN):
+──────────────────────────────────────────────────────────────
+Time 0: CPU reads USB RX buffer[0..31] → loads into D-cache
+Time 1: USB DMA receives new packet → writes new data to buffer[0..31]
+Time 2: CPU reads USB RX buffer[0..31] → returns STALE CACHED data!
+         → Your firmware processes old data, thinking it's new
+
+With SCB_InvalidateDCache_by_Addr() (CORRECT):
+──────────────────────────────────────────────────────────────
+Time 0: USB DMA receives new packet → writes to buffer[0..31]
+Time 1: DMA complete callback fires
+Time 2: Call SCB_InvalidateDCache_by_Addr(buffer, 32)
+         → CPU cache for buffer[0..31] is invalidated (marked stale)
+Time 3: CPU reads USB RX buffer[0..31]
+         → Cache miss → CPU loads fresh data from RAM → correct!
+
+With SCB_CleanDCache_by_Addr() (for TX direction):
+──────────────────────────────────────────────────────────────
+Time 0: CPU fills USB TX buffer[0..31] with new data
+         → data is in D-cache, MAY NOT be written to RAM yet
+Time 1: Call SCB_CleanDCache_by_Addr(buffer, 32)
+         → Forces cache to write pending data to RAM
+Time 2: DMA reads buffer from RAM → gets correct data
+Time 3: USB transmits correct data to host</code></pre>
+
+                    <h3>Cortex-M4 and M3 Are Not Affected</h3>
+
+                    <p>The STM32F4 (Cortex-M4) and STM32F1/F3 (Cortex-M3) series do not have a D-cache — all memory accesses go directly to RAM without caching. Cache coherency is exclusively a Cortex-M7 issue (STM32H7, STM32F7). If you are developing on an STM32F4 and then port to STM32H7, you will encounter this problem for the first time during the port.</p>
+
+                    <h3>Solution 1: Non-Cached SRAM Region</h3>
+
+                    <p>The cleanest solution is to place all USB DMA buffers in a memory region that is not covered by the D-cache. On STM32H7, SRAM4 (0x38000000, 64 KB) is the ideal candidate — it is accessible by the USB DMA and is in the AHB bus fabric. Configure the MPU (Memory Protection Unit) to mark this region as non-cacheable:</p>
+
+                    <pre><code class="language-c">// mpu_config.c — configure MPU for non-cached SRAM4 on STM32H7
+#include "stm32h7xx_hal.h"
+
+void MPU_Config(void)
+{
+    MPU_Region_InitTypeDef mpu_init = {0};
+
+    // Disable MPU before reconfiguring
+    HAL_MPU_Disable();
+
+    // Configure SRAM4 (0x38000000, 64 KB) as non-cacheable
+    // All USB DMA buffers will be placed in this region
+    mpu_init.Enable           = MPU_REGION_ENABLE;
+    mpu_init.BaseAddress      = 0x38000000;
+    mpu_init.Size             = MPU_REGION_SIZE_64KB;
+    mpu_init.AccessPermission = MPU_REGION_FULL_ACCESS;
+    mpu_init.IsBufferable     = MPU_ACCESS_BUFFERABLE;
+    mpu_init.IsCacheable      = MPU_ACCESS_NOT_CACHEABLE;  // KEY
+    mpu_init.IsShareable      = MPU_ACCESS_SHAREABLE;
+    mpu_init.Number           = MPU_REGION_NUMBER0;
+    mpu_init.TypeExtField     = MPU_TEX_LEVEL1;
+    mpu_init.SubRegionDisable = 0x00;
+    mpu_init.DisableExec      = MPU_INSTRUCTION_ACCESS_DISABLE;
+    HAL_MPU_ConfigRegion(&amp;mpu_init);
+
+    // Re-enable MPU with privileged default memory map
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+}
+</code></pre>
+
+                    <pre><code class="language-c">// Place USB DMA buffers in non-cached SRAM4
+// Use the CFG_TUSB_MEM_SECTION attribute in tusb_config.h
+
+// In tusb_config.h:
+#define CFG_TUSB_MEM_SECTION  __attribute__((section(".noinit")))
+#define CFG_TUSB_MEM_ALIGN    __attribute__((aligned(32)))
+
+// In your linker script (.ld file), add a section in SRAM4:
+// .noinit (NOLOAD) :
+// {
+//   *(.noinit)
+// } >SRAM4
+</code></pre>
+
+                    <h3>Solution 2: Manual Cache Maintenance</h3>
+
+                    <p>If placing buffers in SRAM4 is not possible (e.g., buffer is shared with other peripherals in cached SRAM1), add explicit cache maintenance calls around DMA operations:</p>
+
+                    <pre><code class="language-c">// Manual cache maintenance for USB DMA buffers
+// Buffer MUST be aligned to 32 bytes (D-cache line size on Cortex-M7)
+
+// USB DMA buffer — aligned to 32 bytes for cache line operations
+static uint8_t usb_rx_buf[64] __attribute__((aligned(32)));
+static uint8_t usb_tx_buf[64] __attribute__((aligned(32)));
+
+// Before starting a DMA receive (USB DMA will write to usb_rx_buf):
+// Invalidate the cache for the receive buffer so the CPU will
+// fetch fresh data from RAM after DMA completes
+void usb_prepare_dma_receive(void)
+{
+    // Size rounded up to 32-byte cache line boundary
+    SCB_InvalidateDCache_by_Addr((uint32_t*)usb_rx_buf,
+                                  sizeof(usb_rx_buf));
+}
+
+// After DMA receive complete — before CPU reads the buffer:
+// (Actually, invalidate BEFORE DMA starts — see note below)
+void usb_dma_receive_complete_cb(void)
+{
+    // Data is now in RAM. Cache was invalidated before DMA started,
+    // so CPU will load fresh data on next access.
+    // Process usb_rx_buf safely here.
+    process_received_data(usb_rx_buf, sizeof(usb_rx_buf));
+}
+
+// Before starting a DMA transmit (USB DMA will read from usb_tx_buf):
+// Clean the cache to flush pending writes from cache to RAM
+void usb_prepare_dma_transmit(const uint8_t *data, uint32_t len)
+{
+    memcpy(usb_tx_buf, data, len);
+    // Force cache write-back to RAM before DMA reads
+    SCB_CleanDCache_by_Addr((uint32_t*)usb_tx_buf, sizeof(usb_tx_buf));
+    // Now start DMA — it will read fresh data from RAM
+}
+</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 7 — STM32H7 COMPLETE EXAMPLE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="stm32h7-complete-example" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-microchip me-2 text-teal"></i>STM32H7 USB + FreeRTOS Complete Example</h2>
+
+                    <p>This section brings everything together: a complete STM32H7 project with FreeRTOS + TinyUSB CDC, mutex-protected writes, a producer/consumer queue for receives, non-cached SRAM4 buffers, and the correct USB clock configuration.</p>
+
+                    <h3>tusb_config.h for STM32H7</h3>
+
+                    <pre><code class="language-c">// tusb_config.h — STM32H7 with FreeRTOS
+#ifndef _TUSB_CONFIG_H_
+#define _TUSB_CONFIG_H_
+
+// STM32H743 OTG_HS in FS mode (internal PHY, 12 Mbit/s)
+// For external ULPI PHY (480 Mbit/s), change to OPT_MODE_HIGH_SPEED
+#define CFG_TUSB_MCU          OPT_MCU_STM32H7
+
+// FreeRTOS RTOS backend — enables event-driven blocking in tud_task()
+#define CFG_TUSB_OS           CFG_TUSB_OS_FREERTOS
+
+// Debug level: 0=off, 1=errors, 2=all transactions (set to 0 in production)
+#define CFG_TUSB_DEBUG        0
+
+// Memory placement: non-cached SRAM4 on STM32H7
+// Linker script must have .sram4_bss section pointing to SRAM4
+#define CFG_TUSB_MEM_SECTION  __attribute__((section(".sram4_bss")))
+#define CFG_TUSB_MEM_ALIGN    __attribute__((aligned(32)))
+
+// Enable CDC device class
+#define CFG_TUD_CDC           1
+#define CFG_TUD_CDC_RX_BUFSIZE 256
+#define CFG_TUD_CDC_TX_BUFSIZE 256
+
+// Disable unused classes
+#define CFG_TUD_HID           0
+#define CFG_TUD_MSC           0
+#define CFG_TUD_MIDI          0
+#define CFG_TUD_AUDIO         0
+#define CFG_TUD_VENDOR        0
+
+#endif // _TUSB_CONFIG_H_
+</code></pre>
+
+                    <h3>STM32H7 USB Clock Configuration</h3>
+
+                    <pre><code class="language-c">// clock_config.c — STM32H7 USB clock from HSI48
+// STM32H7 USB requires exactly 48 MHz for FS PHY.
+// Source options: HSI48 (internal 48 MHz RC) or PLL3Q (from external HSE).
+// HSI48 is the simpler option for most projects.
+
+void SystemClock_Config(void)
+{
+    RCC_OscInitTypeDef osc = {0};
+    RCC_ClkInitTypeDef clk = {0};
+    RCC_PeriphClkInitTypeDef periph = {0};
+
+    // Enable HSI48 for USB clock
+    osc.OscillatorType      = RCC_OSCILLATORTYPE_HSI48 | RCC_OSCILLATORTYPE_HSE;
+    osc.HSI48State          = RCC_HSI48_ON;
+    osc.HSEState            = RCC_HSE_ON;  // 25 MHz crystal for main clock
+    osc.PLL.PLLState        = RCC_PLL_ON;
+    osc.PLL.PLLSource       = RCC_PLLSOURCE_HSE;
+    osc.PLL.PLLM            = 5;    // 25 MHz / 5 = 5 MHz VCO input
+    osc.PLL.PLLN            = 160;  // × 160 = 800 MHz VCO output
+    osc.PLL.PLLP            = 2;    // / 2 = 400 MHz system clock
+    osc.PLL.PLLQ            = 4;    // / 4 = 200 MHz (not used for USB)
+    osc.PLL.PLLR            = 2;    // / 2 = 400 MHz
+    HAL_RCC_OscConfig(&amp;osc);
+
+    // Configure USB clock: use HSI48 directly → 48 MHz
+    periph.PeriphClockSelection = RCC_PERIPHCLK_USB;
+    periph.UsbClockSelection    = RCC_USBCLKSOURCE_HSI48;
+    HAL_RCCEx_PeriphCLKConfig(&amp;periph);
+
+    // USB_OTG_FS clock enable happens in tusb_init() via stm32_fsdev HAL
+}
+</code></pre>
+
+                    <h3>Main Application with FreeRTOS Tasks</h3>
+
+                    <pre><code class="language-c">// main.c — STM32H7 + FreeRTOS + TinyUSB CDC echo example
+#include "stm32h7xx_hal.h"
+#include "FreeRTOS.h"
+#include "task.h"
+#include "semphr.h"
+#include "tusb.h"
+#include "cdc_thread_safe.h"
+#include "cdc_rx_queue.h"
+
+// ── DMA-safe buffer in non-cached SRAM4 ──────────────────────────────────
+// TinyUSB places its internal USB buffers here via CFG_TUSB_MEM_SECTION.
+// Application buffers that directly interface with DMA should also go here.
+static uint8_t usb_echo_buf[64] __attribute__((section(".sram4_bss"),
+                                               aligned(32)));
+
+// ── Forward declarations ──────────────────────────────────────────────────
+static void usb_device_task(void *param);
+static void app_echo_task(void *param);
+
+// ── Main entry point ─────────────────────────────────────────────────────
+int main(void)
+{
+    HAL_Init();
+    SystemClock_Config();   // configures HSI48 for USB
+    MPU_Config();           // marks SRAM4 as non-cacheable
+
+    // Initialize CDC mutex and receive queue BEFORE creating tasks
+    cdc_ts_init();
+    cdc_rx_queue_init();
+
+    // Create USB task at highest user priority
+    xTaskCreate(usb_device_task, "usb",    512, NULL,
+                configMAX_PRIORITIES - 1, NULL);
+
+    // Create echo application task at lower priority
+    xTaskCreate(app_echo_task, "echo", 256, NULL,
+                tskIDLE_PRIORITY + 2, NULL);
+
+    // Start FreeRTOS scheduler — this function does not return
+    vTaskStartScheduler();
+    while (1) { __NOP(); }
+}
+
+// ── USB device task ───────────────────────────────────────────────────────
+static void usb_device_task(void *param)
+{
+    (void)param;
+    tusb_init();
+
+    while (1) {
+        // tud_task() blocks internally on the USB event queue (FreeRTOS mode).
+        // It wakes up when the USB ISR posts an event.
+        // No vTaskDelay needed — adding one reduces responsiveness.
+        tud_task();
+    }
+}
+
+// ── CDC echo application task ─────────────────────────────────────────────
+static void app_echo_task(void *param)
+{
+    (void)param;
+    cdc_rx_packet_t pkt;
+
+    while (1) {
+        // Block waiting for CDC data (500 ms timeout)
+        if (cdc_rx_queue_receive(&amp;pkt, pdMS_TO_TICKS(500)) == pdTRUE) {
+            // Echo received data back to host (thread-safe)
+            cdc_ts_write(pkt.data, pkt.len);
+
+        } else {
+            // Timeout — send a heartbeat to show we're alive
+            if (tud_cdc_connected()) {
+                cdc_ts_printf("[heartbeat]\r\n");
+            }
+        }
+    }
+}
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Common STM32H7 USB Gotcha:</strong> On STM32H7, the USB OTG_FS peripheral uses a separate USB voltage regulator (3.3 V). You must enable it with <code>HAL_PWREx_EnableUSBVoltageDetector()</code> after <code>HAL_Init()</code>. Without this, the USB PHY does not power up and the device is completely invisible to the host. This is a board bring-up gotcha specific to STM32H7 — not required on STM32F4.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 8 — TINYUSB RTOS HOOKS
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="tinyusb-rtos-hooks" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-plug me-2 text-teal"></i>TinyUSB RTOS Hooks</h2>
+
+                    <p>TinyUSB's RTOS abstraction layer defines a set of functions that TinyUSB calls internally for synchronisation and timing. Understanding these helps you diagnose problems and customise behaviour.</p>
+
+                    <h3>Key OSAL Functions (FreeRTOS Mapping)</h3>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>TinyUSB OSAL Function</th>
+                                <th>FreeRTOS Implementation</th>
+                                <th>Called When</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>osal_task_delay(ms)</code></td>
+                                <td><code>vTaskDelay(ms / portTICK_PERIOD_MS)</code></td>
+                                <td>TinyUSB needs to wait without blocking CPU</td>
+                            </tr>
+                            <tr>
+                                <td><code>osal_queue_create(depth, size)</code></td>
+                                <td><code>xQueueCreate(depth, size)</code></td>
+                                <td>TinyUSB initialises its internal event queue</td>
+                            </tr>
+                            <tr>
+                                <td><code>osal_queue_send(queue, data, in_isr)</code></td>
+                                <td><code>xQueueSendFromISR()</code> or <code>xQueueSend()</code></td>
+                                <td>USB ISR posts event to USB task queue</td>
+                            </tr>
+                            <tr>
+                                <td><code>osal_queue_receive(queue, data, ms)</code></td>
+                                <td><code>xQueueReceive(queue, data, pdMS_TO_TICKS(ms))</code></td>
+                                <td>USB task waits for next event (blocks here when idle)</td>
+                            </tr>
+                            <tr>
+                                <td><code>osal_semaphore_create()</code></td>
+                                <td><code>xSemaphoreCreateBinary()</code></td>
+                                <td>TinyUSB creates sync semaphores for endpoint transfers</td>
+                            </tr>
+                            <tr>
+                                <td><code>osal_semaphore_post(sem, in_isr)</code></td>
+                                <td><code>xSemaphoreGiveFromISR()</code> or <code>xSemaphoreGive()</code></td>
+                                <td>Transfer complete — signal waiting task</td>
+                            </tr>
+                            <tr>
+                                <td><code>osal_semaphore_wait(sem, ms)</code></td>
+                                <td><code>xSemaphoreTake(sem, pdMS_TO_TICKS(ms))</code></td>
+                                <td>Wait for endpoint transfer completion</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h3>What Happens Without CFG_TUSB_OS (Bare-Metal Mode in RTOS)</h3>
+
+                    <p>If you forget to set <code>CFG_TUSB_OS CFG_TUSB_OS_FREERTOS</code> and leave it at the default <code>CFG_TUSB_OS_NONE</code>, TinyUSB uses a busy-wait loop for all synchronisation. The <code>tud_task()</code> call never blocks — it polls continuously and returns immediately when no events are pending. In a FreeRTOS system, this means:</p>
+
+                    <ul>
+                        <li>The USB task runs at 100% CPU utilisation, starving every other task</li>
+                        <li>The FreeRTOS idle task never runs → FreeRTOS tickless idle does not work → no power saving</li>
+                        <li>Lower-priority tasks get almost no CPU time → application appears frozen</li>
+                        <li>Watchdog timeouts if you have a watchdog that requires the idle task to run</li>
+                    </ul>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Debugging Tip:</strong> If your FreeRTOS application appears to freeze after USB is connected, and you have no other explanation, check <code>CFG_TUSB_OS</code> first. Setting it to <code>CFG_TUSB_OS_NONE</code> while running FreeRTOS is the second most common TinyUSB + FreeRTOS mistake (after incorrect task priority).
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 9 — SUSPEND/RESUME
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="suspend-resume" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-bed me-2 text-teal"></i>Handling USB Suspend/Resume with RTOS</h2>
+
+                    <p>USB suspend happens when the host stops sending SOF (Start-of-Frame) packets for more than 3 ms — typically when the computer sleeps, the USB cable is not actively used, or the host driver suspends the device to save power. The USB specification requires bus-powered devices to draw no more than 2.5 mA during suspend.</p>
+
+                    <h3>TinyUSB Suspend and Resume Callbacks</h3>
+
+                    <pre><code class="language-c">// tusb_suspend_cb.c — suspend/resume with FreeRTOS task notifications
+#include "tusb.h"
+#include "FreeRTOS.h"
+#include "task.h"
+#include "event_groups.h"
+
+// Event group for USB state changes
+// Bit 0: USB suspended
+// Bit 1: USB resumed / connected
+static EventGroupHandle_t s_usb_events = NULL;
+#define USB_EVENT_SUSPENDED  (1 &lt;&lt; 0)
+#define USB_EVENT_RESUMED    (1 &lt;&lt; 1)
+
+void usb_events_init(void)
+{
+    s_usb_events = xEventGroupCreate();
+    configASSERT(s_usb_events != NULL);
+}
+
+// Called by TinyUSB when host stops sending SOF for &gt;3 ms
+void tud_suspend_cb(bool remote_wakeup_en)
+{
+    // remote_wakeup_en: true if host allowed device to request wakeup
+    (void)remote_wakeup_en;
+
+    // Signal all tasks that USB is suspended
+    xEventGroupSetBits(s_usb_events, USB_EVENT_SUSPENDED);
+    xEventGroupClearBits(s_usb_events, USB_EVENT_RESUMED);
+}
+
+// Called by TinyUSB when host resumes the bus (SOF packets restart)
+void tud_resume_cb(void)
+{
+    // Signal all tasks that USB has resumed
+    xEventGroupSetBits(s_usb_events, USB_EVENT_RESUMED);
+    xEventGroupClearBits(s_usb_events, USB_EVENT_SUSPENDED);
+}
+
+// Application task — respects USB suspend to save power
+static void app_echo_task_with_suspend(void *param)
+{
+    (void)param;
+    cdc_rx_packet_t pkt;
+
+    while (1) {
+        // Check if USB is suspended
+        EventBits_t bits = xEventGroupGetBits(s_usb_events);
+
+        if (bits &amp; USB_EVENT_SUSPENDED) {
+            // USB is suspended — pause this task to save CPU
+            // Wait until USB resumes (block with no timeout)
+            xEventGroupWaitBits(s_usb_events,
+                                USB_EVENT_RESUMED,
+                                pdFALSE,    // Don't clear on exit
+                                pdTRUE,     // Wait for all bits
+                                portMAX_DELAY);
+        }
+
+        // USB is active — process data
+        if (cdc_rx_queue_receive(&amp;pkt, pdMS_TO_TICKS(100)) == pdTRUE) {
+            cdc_ts_write(pkt.data, pkt.len);
+        }
+    }
+}
+</code></pre>
+
+                    <h3>STM32 Stop Mode During USB Suspend</h3>
+
+                    <p>For battery-powered applications, entering STM32 Stop mode while USB is suspended dramatically reduces current consumption. The challenge is ensuring the USB controller can wake the MCU when the host resumes:</p>
+
+                    <pre><code class="language-c">// Low-power suspend handling on STM32 with FreeRTOS
+// Enter Stop mode only when USB is suspended AND no application tasks
+// need CPU time. The USB wakeup interrupt will bring the MCU out of Stop.
+
+void tud_suspend_cb(bool remote_wakeup_en)
+{
+    (void)remote_wakeup_en;
+
+    // Enable USB wakeup interrupt so we can exit Stop mode
+    // This is STM32-specific; exact register depends on MCU family
+    __HAL_USB_OTG_FS_WAKEUP_EXTI_ENABLE_IT();
+
+    // Signal FreeRTOS tasks to pause (via event group)
+    xEventGroupSetBitsFromISR(s_usb_events, USB_EVENT_SUSPENDED, NULL);
+
+    // Note: actual entry to Stop mode should happen in a low-priority
+    // task or in configPRE_SLEEP_PROCESSING() hook — not directly here,
+    // as this callback runs in USB task context.
+}
+
+// FreeRTOS tickless idle hook — called by FreeRTOS idle task
+// when all tasks are blocked and the scheduler has nothing to do
+void vApplicationIdleHook(void)
+{
+    EventBits_t bits = xEventGroupGetBits(s_usb_events);
+
+    if (bits &amp; USB_EVENT_SUSPENDED) {
+        // All tasks are idle AND USB is suspended
+        // Safe to enter Stop mode
+        // HAL_PWR_EnterSTOPMode(PWR_MAINREGULATOR_ON, PWR_STOPENTRY_WFI);
+        // Note: this is a simplified illustration; actual Stop mode
+        // requires careful handling of peripheral clocks on wakeup.
+        __WFI();  // At minimum, use Wait-For-Interrupt
+    }
+}
+</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 10 — PRACTICAL EXERCISES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="exercises" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-dumbbell me-2 text-teal"></i>Practical Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 1</span>
+                            <span class="badge bg-success text-white ms-2">Beginner</span>
+                        </div>
+                        <h4>Priority Starvation Demonstration</h4>
+                        <p>Build a TinyUSB CDC device on an STM32F4 (no cache issues) with FreeRTOS. Create two scenarios and measure the difference: (a) USB task at priority 1, application task at priority 5 — run a CDC throughput test and measure KB/s; then observe what happens to CDC communication when the application task runs a busy loop. (b) USB task at priority 6 (highest), application task at priority 2. Repeat the throughput test. The difference in throughput and reliability demonstrates why USB priority must be highest. Document the exact priority configuration, measured throughputs, and any error counts observed in each scenario.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">Task Priority</span>
+                            <span class="bias-tag">FreeRTOS</span>
+                            <span class="bias-tag">CDC Throughput</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 2</span>
+                            <span class="badge bg-warning text-dark ms-2">Intermediate</span>
+                        </div>
+                        <h4>Thread-Safe CDC with Race Condition Detection</h4>
+                        <p>Build a FreeRTOS project with 3 tasks all writing to CDC simultaneously: Task A writes "AAAA...A\r\n" (64 A's), Task B writes "BBBB...B\r\n" (64 B's), Task C writes "CCCC...C\r\n" (64 C's). First run WITHOUT a mutex and capture the output — observe interleaving and corruption. Then add the mutex-protected CDC write wrapper and run again — verify that lines are now complete and never interleaved. Use a Python script on the host to count complete lines vs broken lines and calculate the error rate for each scenario. Log your findings with uxTaskGetStackHighWaterMark() for each task to verify stack depth.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">Thread Safety</span>
+                            <span class="bias-tag">Mutex</span>
+                            <span class="bias-tag">Race Condition</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 3</span>
+                            <span class="badge bg-danger text-white ms-2">Advanced</span>
+                        </div>
+                        <h4>DMA Cache Coherency on STM32H7</h4>
+                        <p>This exercise requires an STM32H7 Nucleo or Discovery board with USB OTG_FS. Build a CDC loopback device that echoes every received byte. First, place the USB receive buffer in normal cached SRAM (e.g., SRAM1 at 0x24000000) and observe data corruption: send 1 KB of sequential byte values (0x00, 0x01, 0x02...) and compare received vs echoed — you should see corruption at 32-byte boundaries. Then move the buffer to SRAM4 (0x38000000) with the MPU configured as non-cacheable and repeat — corruption should disappear. Finally, move back to SRAM1 but add SCB_InvalidateDCache_by_Addr() before each DMA receive — verify this also eliminates corruption. Document the exact corruption pattern, the memory addresses involved, and which fix you would use in a production design and why.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">STM32H7</span>
+                            <span class="bias-tag">DMA Cache</span>
+                            <span class="bias-tag">Cortex-M7</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 11 — CANVAS FORM
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="rtos-design-tool" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-file-alt me-2 text-teal"></i>USB RTOS Design Generator</h2>
+
+                    <p>Use this tool to document your USB + RTOS architecture — project, MCU, RTOS version, USB task priority and stack size, queue configuration, and design notes. Download as Word, Excel, PDF, or PPTX for project documentation or design review.</p>
+
+                    <div class="canvas-form" id="usbRtosForm">
+                        <h4 class="canvas-form-title"><i class="fas fa-tasks me-2"></i>USB RTOS Design Generator</h4>
+                        <p class="form-help-text">Document your USB + RTOS architecture. Download as Word, Excel, PDF, or PPTX.</p>
+                        <div id="usbRtosBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <p class="form-privacy-notice"><i class="fas fa-shield-alt"></i> All data stays in your browser. Nothing is sent to or stored on any server.</p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbRtosProjName">Project Name *</label>
+                                <input type="text" id="usbRtosProjName" placeholder="e.g., Sensor Gateway v3.0">
+                            </div>
+                            <div class="form-group">
+                                <label for="usbRtosMcu">MCU / Board *</label>
+                                <input type="text" id="usbRtosMcu" placeholder="e.g., STM32H743ZIT6, STM32F407VGT6">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbRtosVersion">RTOS Version</label>
+                                <select id="usbRtosVersion">
+                                    <option value="">Select RTOS...</option>
+                                    <option value="FreeRTOS v10">FreeRTOS v10</option>
+                                    <option value="FreeRTOS v11">FreeRTOS v11</option>
+                                    <option value="Azure RTOS">Azure RTOS</option>
+                                    <option value="Zephyr">Zephyr</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="usbRtosUsbTaskPrio">USB Task Priority</label>
+                                <input type="text" id="usbRtosUsbTaskPrio" placeholder="e.g., configMAX_PRIORITIES - 1 (= 6)">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbRtosUsbTaskStack">USB Task Stack Size (words)</label>
+                                <input type="text" id="usbRtosUsbTaskStack" placeholder="e.g., 512 words (2 KB)">
+                            </div>
+                            <div class="form-group">
+                                <label for="usbRtosQueueSize">CDC RX Queue Size (packets)</label>
+                                <input type="text" id="usbRtosQueueSize" placeholder="e.g., 8 packets (8 × 64 = 512 bytes)">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label for="usbRtosNotes">Architecture Notes &amp; Design Decisions</label>
+                                <textarea id="usbRtosNotes" rows="5" placeholder="e.g.,&#10;USB task at highest priority to prevent host timeout.&#10;CDC writes protected by xSemaphoreCreateMutex() (priority inheritance enabled).&#10;DMA buffers in SRAM4 (non-cached, 0x38000000) on STM32H7.&#10;Receive queue depth = 8 packets; consumer task runs at priority 3.&#10;USB suspend triggers FreeRTOS event group bit; all app tasks pause."></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="usbRtosHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="usbRtosHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="usbRtosHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-generate" onclick="usbRtosHandler.generatePPTX()"><i class="fas fa-file-powerpoint me-1"></i>PPTX</button>
+                            <button class="btn-reset" onclick="usbRtosHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="usbRtosSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="usbRtosSuccessText"></span></div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 12 — CONCLUSION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="conclusion" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion &amp; Next Steps</h2>
+
+                    <p>Integrating TinyUSB with FreeRTOS is straightforward when you follow the design rules correctly. The key points from this part:</p>
+
+                    <ul>
+                        <li><strong>Set <code>CFG_TUSB_OS CFG_TUSB_OS_FREERTOS</code>:</strong> Without this, TinyUSB busy-waits and starves every other FreeRTOS task. This single configuration change transforms TinyUSB from CPU-wasting poller to efficient event-driven task.</li>
+                        <li><strong>USB task at highest user priority:</strong> The USB task must be able to preempt all application tasks. A USB host that gets no response within its timeout window will reset the bus — causing the device to re-enumerate, which appears as random disconnects.</li>
+                        <li><strong>Use xSemaphoreCreateMutex() for CDC writes:</strong> Binary semaphores do not have priority inheritance. Only mutex-type semaphores protect against priority inversion between the high-priority USB task and low-priority application tasks that hold the write lock.</li>
+                        <li><strong>Producer/consumer queue for receives:</strong> Never block the USB task in a receive callback. Post to a FreeRTOS queue with timeout zero — if the queue is full, drop the packet gracefully. A separate consumer task processes received data at its own pace.</li>
+                        <li><strong>DMA cache coherency on Cortex-M7:</strong> Place USB DMA buffers in non-cached SRAM4 on STM32H7 (0x38000000). If you must use cached SRAM, call <code>SCB_InvalidateDCache_by_Addr()</code> before each DMA receive and <code>SCB_CleanDCache_by_Addr()</code> before each DMA transmit. Forgetting this causes silent data corruption that is extremely difficult to debug.</li>
+                        <li><strong>Handle suspend with event groups:</strong> Use <code>xEventGroupSetBits()</code> in <code>tud_suspend_cb()</code> to notify application tasks to pause. Use <code>tud_resume_cb()</code> to resume them. This enables proper power management and prevents application tasks from timing out while the host is asleep.</li>
+                    </ul>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="usb-dev-part12-advanced-topics.html"><strong>Part 12: Advanced USB Topics</strong></a>, we venture into USB host mode, OTG (On-The-Go) dual-role operation on STM32, isochronous transfers for USB audio, the UAC (USB Audio Class) descriptor hierarchy, and USB video class. These topics require solid understanding of everything covered in Parts 1–11 — the foundation you have built through this series.</p>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 10: USB Debugging</h5>
+                            <p>Master the full USB debugging toolkit — Wireshark captures, hardware protocol analyzers, TinyUSB UART logs, enumeration decision trees, and the 10 most common USB problems with fixes.</p>
+                            <a href="usb-dev-part10-debugging.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 12: Advanced USB Topics</h5>
+                            <p>USB host mode, OTG dual-role operation, isochronous transfers, USB Audio Class, and USB Video Class on STM32 with TinyUSB.</p>
+                            <a href="usb-dev-part12-advanced-topics.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 5: TinyUSB Deep Dive</h5>
+                            <p>TinyUSB architecture, execution model, STM32 integration steps, descriptor callback implementation, and your first working USB device — the foundation for RTOS integration.</p>
+                            <a href="usb-dev-part05-tinyusb-deep-dive.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div><!-- end col-lg-8 -->
+            </div><!-- end row -->
+        </div><!-- end container -->
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> |
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> |
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? &#9749; <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Document Generation -->
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-usb-dev.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- USB RTOS Design Form Handler -->
+    <script>
+        var usbRtosPersistence = new FormPersistence('usb-p11-rtos-draft', {
+            'usbRtosProjName':     'projectName',
+            'usbRtosMcu':          'mcu',
+            'usbRtosVersion':      'rtosVersion',
+            'usbRtosUsbTaskPrio':  'usbTaskPriority',
+            'usbRtosUsbTaskStack': 'usbTaskStack',
+            'usbRtosQueueSize':    'queueSize',
+            'usbRtosNotes':        'notes'
+        }, 'usbRtosBadge');
+
+        var usbRtosHandler = new CanvasFormHandler({
+            formId:         'usbRtosForm',
+            successId:      'usbRtosSuccess',
+            successTextId:  'usbRtosSuccessText',
+            persistence:    usbRtosPersistence,
+            filenameField:  'projectName',
+            filenameSuffix: '-usb-rtos-design',
+            requiredFields: ['usbRtosProjName', 'usbRtosMcu'],
+            requiredMessage:'Please enter Project Name and MCU.',
+            docType:        'UsbRtosDesign'
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            usbRtosPersistence.init();
+        });
+    </script>
+
+</body>
+</html>

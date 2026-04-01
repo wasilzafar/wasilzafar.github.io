@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Implement a USB CDC Virtual COM Port from scratch using TinyUSB — understand ACM control requests, bulk endpoint design, receive pipeline architecture, baud rate change callbacks, and how to bridge CDC to a hardware UART." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="USB CDC, Virtual COM Port, TinyUSB CDC, ACM control, tud_cdc_write, CDC UART bridge, USB serial, CDC class driver" />
+    <meta property="og:title" content="CDC Virtual COM Port — USB Development Mastery Series Part 6" />
+    <meta property="og:description" content="Implement a USB CDC Virtual COM Port from scratch using TinyUSB — ACM control requests, bulk endpoint design, receive pipeline, baud rate callbacks, and CDC-to-UART bridging." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <title>CDC Virtual COM Port — USB Development Mastery Series Part 6 - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/usb-dev/usb-dev-part06-cdc-virtual-com.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {'ad_storage':'denied','ad_user_data':'denied','ad_personalization':'denied','analytics_storage':'denied','region':['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']});
+        gtag('consent', 'default', {'ad_storage':'granted','ad_user_data':'granted','ad_personalization':'granted','analytics_storage':'granted'});
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20"><path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path></svg>
+                    <h4 style="margin:0;font-size:18px;color:var(--color-navy);font-weight:700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size:14px;line-height:1.6;color:var(--color-navy);margin-bottom:15px;">We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. By clicking &ldquo;Accept All&rdquo;, you consent to our use of cookies. See our <a href="/privacy-policy.html" style="color:var(--color-teal);border-bottom:1px dotted var(--color-teal);">Privacy Policy</a> for more information.</p>
+                <div id="cookieSettings" style="display:none;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14"><path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path></svg><span style="margin-left:5px;font-size:12px;font-weight:600;color:var(--color-navy);">Customize Settings</span></div>
+                <div id="cookieTypes" style="display:none;margin-top:15px;padding-top:15px;border-top:1px solid rgba(59,151,151,0.2);"><h5 style="font-size:12px;font-weight:700;color:var(--color-navy);margin-bottom:10px;text-transform:uppercase;">Cookie Preferences</h5><div style="margin-bottom:12px;"><label style="display:flex;align-items:start;cursor:pointer;"><input type="checkbox" checked disabled style="margin-top:2px;margin-right:8px;cursor:not-allowed;"><div><strong style="font-size:13px;color:var(--color-navy);display:block;margin-bottom:2px;">Essential Cookies (Required)</strong><span style="font-size:12px;color:#666;">Necessary for the website to function properly.</span></div></label></div><div style="margin-bottom:12px;"><label style="display:flex;align-items:start;cursor:pointer;"><input type="checkbox" id="analyticsCookies" checked style="margin-top:2px;margin-right:8px;"><div><strong style="font-size:13px;color:var(--color-navy);display:block;margin-bottom:2px;">Analytics Cookies</strong><span style="font-size:12px;color:#666;">Help us understand how you interact with the website.</span></div></label></div><div style="margin-bottom:12px;"><label style="display:flex;align-items:start;cursor:pointer;"><input type="checkbox" id="marketingCookies" style="margin-top:2px;margin-right:8px;"><div><strong style="font-size:13px;color:var(--color-navy);display:block;margin-bottom:2px;">Marketing Cookies</strong><span style="font-size:12px;color:#666;">Used to deliver relevant advertisements.</span></div></label></div></div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background:var(--color-teal);color:white;font-weight:600;">Accept All</button>
+                <button id="cookieReject" style="background:transparent;color:var(--color-navy);border:2px solid var(--color-teal);font-weight:600;">Reject All</button>
+                <button id="cookieSave" style="background:var(--color-blue);color:white;font-weight:600;display:none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero"><div class="container py-5"><div class="blog-header">
+        <a href="/pages/categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+        <h1 class="display-4 fw-bold mb-3">USB Part 6: CDC Virtual COM Port</h1>
+        <div class="blog-meta"><span><i class="fas fa-calendar me-2"></i>March 31, 2026</span><span><i class="fas fa-user me-2"></i>Wasil Zafar</span><span class="reading-time"><i class="fas fa-clock me-1"></i>20 min read</span><button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button></div>
+        <p class="lead">Implement a USB CDC Virtual COM Port from scratch using TinyUSB — ACM control requests, bulk endpoint design, receive pipeline architecture, baud rate change callbacks, and how to bridge CDC to a hardware UART.</p>
+    </div></div></section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header"><h3><i class="fas fa-list me-2"></i>Table of Contents</h3><button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button></div>
+        <ol>
+            <li><a href="#cdc-architecture" onclick="closeNav()">CDC Class Architecture</a></li>
+            <li><a href="#cdc-tinyusb-config" onclick="closeNav()">TinyUSB CDC Configuration</a></li>
+            <li><a href="#cdc-sending" onclick="closeNav()">Sending Data</a></li>
+            <li><a href="#cdc-receiving" onclick="closeNav()">Receiving Data</a></li>
+            <li><a href="#cdc-line-coding" onclick="closeNav()">Line Coding &amp; Control Signals</a></li>
+            <li><a href="#cdc-uart-bridge" onclick="closeNav()">CDC to UART Bridge</a></li>
+            <li><a href="#cdc-host-behavior" onclick="closeNav()">Host Behavior</a></li>
+            <li><a href="#cdc-flow-control" onclick="closeNav()">Flow Control</a></li>
+            <li><a href="#cdc-multi-port" onclick="closeNav()">Multi-Port CDC</a></li>
+            <li><a href="#cdc-exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#cdc-conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- SECTION 1: CDC Class Architecture (first section — no mt-5) -->
+                <div id="cdc-architecture" class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Series Context:</strong> This is Part 6 of the 17-part USB Development Mastery series. Part 5 covered the TinyUSB stack architecture and porting. Now we implement our first real USB device class: CDC ACM — the class behind every USB-to-serial converter you have ever plugged in.
+                    </div>
+
+                    <!-- Series Navigation Path -->
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-plug"></i></div>
+                            <h4>USB Development Mastery</h4>
+                            <div class="path-subtitle">Your 17-step learning path &bull; Currently on Step 6</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="usb-dev-part01-fundamentals.html" class="step-card">
+                                <div class="step-num completed">1</div>
+                                <div class="step-info"><h6>USB Fundamentals</h6><small>USB system architecture, transfer types, host/device model, protocol stack</small></div>
+                            </a>
+                            <a href="usb-dev-part02-electrical-hardware.html" class="step-card">
+                                <div class="step-num completed">2</div>
+                                <div class="step-info"><h6>Electrical &amp; Hardware Layer</h6><small>D+/D- signalling, pull-ups, connectors, USB-C, STM32 USB peripherals</small></div>
+                            </a>
+                            <a href="usb-dev-part03-protocol-enumeration.html" class="step-card">
+                                <div class="step-num completed">3</div>
+                                <div class="step-info"><h6>Protocol &amp; Enumeration</h6><small>Enumeration sequence, USB packets, descriptors, endpoint concepts</small></div>
+                            </a>
+                            <a href="usb-dev-part04-device-classes.html" class="step-card">
+                                <div class="step-num completed">4</div>
+                                <div class="step-info"><h6>USB Device Classes</h6><small>HID, CDC, MSC, MIDI, Audio, composite devices, vendor class</small></div>
+                            </a>
+                            <a href="usb-dev-part05-tinyusb-deep-dive.html" class="step-card">
+                                <div class="step-num completed">5</div>
+                                <div class="step-info"><h6>TinyUSB Deep Dive</h6><small>Stack architecture, execution model, STM32 integration, descriptor callbacks</small></div>
+                            </a>
+                            <div class="step-card current">
+                                <div class="step-num active">6</div>
+                                <div class="step-info"><h6>CDC Virtual COM Port</h6><small>CDC class, bulk transfers, printf over USB, baud rate handling</small></div>
+                                <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                            </div>
+                            <a href="usb-dev-part07-hid-devices.html" class="step-card">
+                                <div class="step-num upcoming">7</div>
+                                <div class="step-info"><h6>HID Devices</h6><small>HID descriptors, report format, keyboard/mouse/gamepad implementation</small></div>
+                            </a>
+                            <a href="usb-dev-part08-mass-storage.html" class="step-card">
+                                <div class="step-num upcoming">8</div>
+                                <div class="step-info"><h6>USB Mass Storage</h6><small>MSC class, SCSI commands, FATFS integration, RAM disk</small></div>
+                            </a>
+                            <a href="usb-dev-part09-composite-devices.html" class="step-card">
+                                <div class="step-num upcoming">9</div>
+                                <div class="step-info"><h6>Composite Devices</h6><small>Multiple classes, IAD descriptor, CDC+HID, CDC+MSC</small></div>
+                            </a>
+                            <a href="usb-dev-part10-debugging.html" class="step-card">
+                                <div class="step-num upcoming">10</div>
+                                <div class="step-info"><h6>Debugging USB</h6><small>Wireshark capture, protocol analyser, enumeration debugging, common failures</small></div>
+                            </a>
+                            <a href="usb-dev-part11-rtos-usb.html" class="step-card">
+                                <div class="step-num upcoming">11</div>
+                                <div class="step-info"><h6>RTOS + USB Integration</h6><small>FreeRTOS + TinyUSB, task priorities, thread-safe communication</small></div>
+                            </a>
+                            <a href="usb-dev-part12-advanced-topics.html" class="step-card">
+                                <div class="step-num upcoming">12</div>
+                                <div class="step-info"><h6>Advanced USB Topics</h6><small>Host mode, OTG, isochronous, USB audio, USB video</small></div>
+                            </a>
+                            <a href="usb-dev-part13-performance.html" class="step-card">
+                                <div class="step-num upcoming">13</div>
+                                <div class="step-info"><h6>Performance &amp; Optimisation</h6><small>DMA, zero-copy buffers, throughput maximisation, latency tuning</small></div>
+                            </a>
+                            <a href="usb-dev-part14-custom-class-drivers.html" class="step-card">
+                                <div class="step-num upcoming">14</div>
+                                <div class="step-info"><h6>Custom USB Class Drivers</h6><small>Vendor class, writing descriptors, OS driver interaction</small></div>
+                            </a>
+                            <a href="usb-dev-part15-bare-metal-usb.html" class="step-card">
+                                <div class="step-num upcoming">15</div>
+                                <div class="step-info"><h6>Bare-Metal USB</h6><small>Direct register programming, writing USB stack from scratch, PHY timing</small></div>
+                            </a>
+                            <a href="usb-dev-part16-security.html" class="step-card">
+                                <div class="step-num upcoming">16</div>
+                                <div class="step-info"><h6>Security in USB</h6><small>BadUSB attacks, device authentication, secure firmware, USB firewall</small></div>
+                            </a>
+                            <a href="usb-dev-part17-hardware-design.html" class="step-card">
+                                <div class="step-num upcoming">17</div>
+                                <div class="step-info"><h6>USB Hardware Design</h6><small>PCB layout, differential pairs, impedance matching, EMI, USB-C PD</small></div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <h2><i class="fas fa-sitemap me-2 text-teal"></i>CDC Class Architecture</h2>
+
+                    <p>The <strong>Communications Device Class (CDC)</strong> is one of the oldest USB device classes, defined in USB CDC specification 1.2. Within CDC, the <strong>Abstract Control Model (ACM)</strong> subclass is the one that emulates a traditional RS-232 serial port. When a host sees a CDC ACM device, it loads a built-in driver (no INF file, no manual installation) and presents the device as a COM port or tty device.</p>
+
+                    <h3>The Two-Interface Pairing</h3>
+
+                    <p>CDC ACM requires two separate USB interfaces that always appear together:</p>
+
+                    <ul>
+                        <li><strong>Communications Interface</strong> — carries the control path. Uses bInterfaceClass=0x02 (CDC Communications), bInterfaceSubClass=0x02 (ACM), bInterfaceProtocol=0x00 (No specific protocol). This interface owns the mandatory EP0 control pipe and an optional Interrupt IN notification endpoint (used to report serial state changes like DCD, DSR).</li>
+                        <li><strong>Data Interface</strong> — carries the actual data payload. Uses bInterfaceClass=0x0A (CDC Data), bInterfaceSubClass=0x00, bInterfaceProtocol=0x00. This interface owns one Bulk IN and one Bulk OUT endpoint for bidirectional data flow.</li>
+                    </ul>
+
+                    <p>This separation dates back to the original CDC spec's intent to support telephone modems: the control interface would manage line state and AT commands while the data interface would carry the voice/data payload. For a simple serial port, the notification endpoint is optional (most implementations omit it) and the data interface does all the heavy lifting.</p>
+
+                    <h3>IAD Requirement for Composite Devices</h3>
+
+                    <p>When your device is a composite (e.g., CDC + HID), the host needs to know that these two interfaces form a single logical function. That is the job of the <strong>Interface Association Descriptor (IAD)</strong>. The IAD must appear immediately before the Communications Interface in the configuration descriptor. Key fields: bFunctionClass=0x02 (CDC), bFunctionSubClass=0x02 (ACM), bFunctionProtocol=0x00, bFirstInterface=first interface number, bInterfaceCount=2.</p>
+
+                    <h3>CDC Functional Descriptors</h3>
+
+                    <p>Inside the Communications Interface, before the endpoint descriptor, you must include a series of <strong>class-specific (functional) descriptors</strong> that describe the CDC capabilities:</p>
+
+                    <pre><code class="language-c">/* ─── CDC Functional Descriptors ────────────────────────────────────────── */
+
+/* 1. Header Functional Descriptor (required — marks start of CDC func descs) */
+typedef struct {
+    uint8_t  bLength;           /* 5 */
+    uint8_t  bDescriptorType;   /* 0x24 = CS_INTERFACE */
+    uint8_t  bDescriptorSubtype;/* 0x00 = Header */
+    uint16_t bcdCDC;            /* 0x0120 = CDC spec 1.2 */
+} __attribute__((packed)) cdc_header_desc_t;
+
+/* 2. ACM Functional Descriptor — capabilities bitmap */
+typedef struct {
+    uint8_t bLength;            /* 4 */
+    uint8_t bDescriptorType;    /* 0x24 = CS_INTERFACE */
+    uint8_t bDescriptorSubtype; /* 0x02 = ACM */
+    uint8_t bmCapabilities;
+    /* bit 0: device supports SET/GET_COMM_FEATURE (we set 0 — not supported)
+       bit 1: device supports SET/GET/CLEAR_LINE_CODING, SET_CONTROL_LINE_STATE,
+              SERIAL_STATE notification — set this bit to 1
+       bit 2: device supports SEND_BREAK
+       bit 3: device supports network connection notification */
+} __attribute__((packed)) cdc_acm_desc_t;
+
+/* 3. Union Functional Descriptor — binds control and data interfaces together */
+typedef struct {
+    uint8_t bLength;              /* 5 */
+    uint8_t bDescriptorType;      /* 0x24 = CS_INTERFACE */
+    uint8_t bDescriptorSubtype;   /* 0x06 = Union */
+    uint8_t bMasterInterface;     /* Communications interface number */
+    uint8_t bSlaveInterface0;     /* Data interface number */
+} __attribute__((packed)) cdc_union_desc_t;
+
+/* 4. Call Management Functional Descriptor (mandatory for ACM) */
+typedef struct {
+    uint8_t bLength;              /* 5 */
+    uint8_t bDescriptorType;      /* 0x24 = CS_INTERFACE */
+    uint8_t bDescriptorSubtype;   /* 0x01 = Call Management */
+    uint8_t bmCapabilities;
+    /* bit 0: device handles call management itself (0 = host does it)
+       bit 1: device can send/receive call management data over data class
+              interface (set to 0 for a simple CDC ACM device) */
+    uint8_t bDataInterface;       /* Data interface number */
+} __attribute__((packed)) cdc_call_mgmt_desc_t;</code></pre>
+
+                    <p>Understanding these four functional descriptors is important because they tell the host exactly what control requests your firmware is prepared to handle. The <code>bmCapabilities</code> field in the ACM descriptor must have bit 1 set if you intend to handle <code>SET_LINE_CODING</code> and <code>SET_CONTROL_LINE_STATE</code> — which is almost always the case.</p>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr><th>Descriptor</th><th>bDescriptorSubtype</th><th>Role</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Header</td><td>0x00</td><td>Marks start of CDC functional descriptor block; declares CDC spec version</td></tr>
+                            <tr><td>Call Management</td><td>0x01</td><td>States whether device or host handles call management; references data interface</td></tr>
+                            <tr><td>ACM</td><td>0x02</td><td>Declares supported control requests (line coding, line state, break)</td></tr>
+                            <tr><td>Union</td><td>0x06</td><td>Associates communications interface with its companion data interface</td></tr>
+                        </tbody>
+                    </table>
+
+                </div>
+
+                <!-- SECTION 2: TinyUSB CDC Configuration -->
+                <div id="cdc-tinyusb-config" class="blog-content mt-5">
+                    <h2><i class="fas fa-cog me-2 text-teal"></i>TinyUSB CDC Configuration</h2>
+
+                    <p>Enabling CDC in TinyUSB requires exactly one configuration macro and a correctly built descriptor table. Let us walk through every piece in order.</p>
+
+                    <h3>tusb_config.h Settings</h3>
+
+                    <pre><code class="language-c">/* tusb_config.h — minimum CDC-only configuration */
+
+#ifndef _TUSB_CONFIG_H_
+#define _TUSB_CONFIG_H_
+
+/* ─── Board / MCU ─────────────────────────────────────────────────────────── */
+#define CFG_TUSB_MCU                OPT_MCU_STM32F4       /* or OPT_MCU_RP2040, etc. */
+#define CFG_TUSB_OS                 OPT_OS_NONE            /* bare-metal cooperative */
+#define CFG_TUSB_MEM_SECTION        __attribute__((section(".usb_buf")))
+#define CFG_TUSB_MEM_ALIGN          __attribute__((aligned(4)))
+
+/* ─── Debug ──────────────────────────────────────────────────────────────── */
+#define CFG_TUSB_DEBUG              0  /* 0=off, 1=error, 2=warning, 3=all */
+
+/* ─── Device stack ───────────────────────────────────────────────────────── */
+#define CFG_TUD_ENDPOINT0_SIZE      64
+
+/* ─── CDC class ──────────────────────────────────────────────────────────── */
+#define CFG_TUD_CDC                 1   /* number of CDC ports */
+
+/* RX buffer: bytes the stack buffers while waiting for tud_cdc_read().
+   Keep as a power of 2; 512 is comfortable for most applications.
+   If you are streaming large data, increase to 1024 or 2048. */
+#define CFG_TUD_CDC_RX_BUFSIZE      512
+
+/* TX buffer: bytes of outgoing data the stack can hold before blocking.
+   Must be >= the largest single write you ever attempt in one call.
+   Increase if you are using printf() with large format strings. */
+#define CFG_TUD_CDC_TX_BUFSIZE      512
+
+/* EP size: 64 for Full-Speed, 512 for High-Speed */
+#define CFG_TUD_CDC_EP_BUFSIZE      64
+
+#endif /* _TUSB_CONFIG_H_ */</code></pre>
+
+                    <h3>Complete Descriptor Arrays</h3>
+
+                    <pre><code class="language-c">/* usb_descriptors.c — CDC-only device, no composite, no IAD needed */
+
+#include "tusb.h"
+
+/* ─── Device Descriptor ──────────────────────────────────────────────────── */
+tusb_desc_device_t const desc_device = {
+    .bLength            = sizeof(tusb_desc_device_t),
+    .bDescriptorType    = TUSB_DESC_DEVICE,
+    .bcdUSB             = 0x0200,          /* USB 2.0 */
+
+    /* For a pure CDC-only device (no composite), set class codes here.
+       If composite (CDC+HID), set 0xEF/0x02/0x01 for IAD-based multi-function. */
+    .bDeviceClass       = TUSB_CLASS_CDC,  /* 0x02 */
+    .bDeviceSubClass    = 0x00,
+    .bDeviceProtocol    = 0x00,
+
+    .bMaxPacketSize0    = CFG_TUD_ENDPOINT0_SIZE,
+    .idVendor           = 0xCafe,          /* Replace with your VID */
+    .idProduct          = 0x4001,          /* Replace with your PID */
+    .bcdDevice          = 0x0100,          /* Device version 1.0 */
+    .iManufacturer      = 0x01,
+    .iProduct           = 0x02,
+    .iSerialNumber      = 0x03,
+    .bNumConfigurations = 0x01
+};
+
+uint8_t const * tud_descriptor_device_cb(void) {
+    return (uint8_t const *)&desc_device;
+}
+
+/* ─── Configuration Descriptor ───────────────────────────────────────────── */
+/* Total length: config(9) + IAD(8) + comm_iface(9) + header(5) +
+                 call_mgmt(5) + acm(4) + union(5) + notif_ep(7) +
+                 data_iface(9) + bulk_out(7) + bulk_in(7) = 75 bytes */
+#define CONFIG_TOTAL_LEN   TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN
+
+/* Endpoint numbers — choose numbers that don't conflict with other classes */
+#define EPNUM_CDC_NOTIF    0x81   /* EP1 IN  — notification (interrupt) */
+#define EPNUM_CDC_OUT      0x02   /* EP2 OUT — data bulk out */
+#define EPNUM_CDC_IN       0x82   /* EP2 IN  — data bulk in */
+
+uint8_t const desc_fs_configuration[] = {
+    /* Configuration Descriptor */
+    TUD_CONFIG_DESCRIPTOR(
+        1,                  /* bConfigurationValue */
+        2,                  /* bNumInterfaces */
+        0,                  /* iConfiguration string index */
+        CONFIG_TOTAL_LEN,
+        TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP,
+        100                 /* bMaxPower: 100 * 2mA = 200mA */
+    ),
+
+    /* CDC Descriptor block — macro expands to IAD + both interfaces + endpoints */
+    TUD_CDC_DESCRIPTOR(
+        0,                  /* Communications interface number */
+        4,                  /* string index for CDC interface */
+        EPNUM_CDC_NOTIF,    /* Notification EP (interrupt IN) */
+        8,                  /* Notification EP max packet size */
+        EPNUM_CDC_OUT,      /* Data bulk OUT EP */
+        EPNUM_CDC_IN,       /* Data bulk IN EP */
+        CFG_TUD_CDC_EP_BUFSIZE  /* Bulk EP max packet size (64 for FS) */
+    )
+};
+
+uint8_t const * tud_descriptor_configuration_cb(uint8_t index) {
+    (void)index;
+    return desc_fs_configuration;
+}
+
+/* ─── String Descriptors ─────────────────────────────────────────────────── */
+char const * string_desc_arr[] = {
+    (const char[]){ 0x09, 0x04 }, /* 0: Language ID — English (0x0409) */
+    "Wasil Zafar",                /* 1: Manufacturer */
+    "CDC Serial Demo",            /* 2: Product */
+    "CDC000001",                  /* 3: Serial Number */
+    "TinyUSB CDC ACM"             /* 4: CDC Interface string */
+};
+
+static uint16_t _desc_str[32];
+
+uint16_t const * tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
+    (void)langid;
+    uint8_t chr_count;
+
+    if (index == 0) {
+        memcpy(&_desc_str[1], string_desc_arr[0], 2);
+        chr_count = 1;
+    } else {
+        if (index >= sizeof(string_desc_arr) / sizeof(string_desc_arr[0])) return NULL;
+        const char *str = string_desc_arr[index];
+        chr_count = (uint8_t)strlen(str);
+        if (chr_count > 31) chr_count = 31;
+        for (uint8_t i = 0; i < chr_count; i++) {
+            _desc_str[1 + i] = str[i];  /* Convert ASCII to UTF-16LE */
+        }
+    }
+    _desc_str[0] = (uint16_t)((TUSB_DESC_STRING << 8) | (2 * chr_count + 2));
+    return _desc_str;
+}</code></pre>
+
+                </div>
+
+                <!-- SECTION 3: Sending Data via CDC -->
+                <div id="cdc-sending" class="blog-content mt-5">
+                    <h2><i class="fas fa-paper-plane me-2 text-teal"></i>Sending Data via CDC</h2>
+
+                    <p>TinyUSB's CDC TX API is a two-step process: write to the internal buffer, then flush. Understanding why the flush step exists is essential to avoiding a common bug where data sits in a buffer and never reaches the host.</p>
+
+                    <h3>Core TX API</h3>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr><th>Function</th><th>Returns</th><th>Purpose</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>tud_cdc_write(buf, bufsize)</code></td><td>uint32_t bytes_written</td><td>Copy data into the TX FIFO. May write fewer bytes than requested if the FIFO is full.</td></tr>
+                            <tr><td><code>tud_cdc_write_flush()</code></td><td>uint32_t bytes_flushed</td><td>Trigger actual USB transfer. <strong>You must call this</strong> after writing, or data stays buffered indefinitely.</td></tr>
+                            <tr><td><code>tud_cdc_write_available()</code></td><td>uint32_t bytes_free</td><td>Check how many bytes can currently be written without blocking.</td></tr>
+                            <tr><td><code>tud_cdc_write_clear()</code></td><td>void</td><td>Discard all pending TX data (useful on error recovery).</td></tr>
+                        </tbody>
+                    </table>
+
+                    <h3>Printf Retargeting via _write() Syscall</h3>
+
+                    <p>The most popular use of CDC is to retarget <code>printf()</code> from the standard output to USB. With GCC and newlib, you override the <code>_write()</code> syscall:</p>
+
+                    <pre><code class="language-c">/* syscalls.c — retarget printf to TinyUSB CDC */
+#include "tusb.h"
+#include &lt;string.h&gt;
+
+/* Called by newlib's printf/puts/fwrite when writing to stdout (fd=1) or
+   stderr (fd=2). We route both to CDC. */
+int _write(int fd, char *ptr, int len) {
+    (void)fd;
+    if (!tud_cdc_connected()) {
+        /* Host port not open — drop the data to avoid blocking */
+        return len;
+    }
+
+    int written = 0;
+    while (written &lt; len) {
+        /* Write as many bytes as the FIFO can accept right now */
+        uint32_t available = tud_cdc_write_available();
+        if (available == 0) {
+            /* FIFO is full — flush what we have and wait for space */
+            tud_cdc_write_flush();
+            /* Run the TinyUSB task so the transfer can complete */
+            tud_task();
+            continue;
+        }
+        uint32_t to_write = (uint32_t)(len - written);
+        if (to_write > available) to_write = available;
+        written += (int)tud_cdc_write(ptr + written, to_write);
+    }
+    tud_cdc_write_flush();
+    return len;
+}
+
+/* ─── Usage in main.c ──────────────────────────────────────────────────── */
+int main(void) {
+    board_init();
+    tusb_init();
+
+    while (1) {
+        tud_task();  /* must be called regularly */
+
+        /* Wait until host opens the port (DTR goes high) */
+        if (tud_cdc_connected()) {
+            static uint32_t counter = 0;
+            static uint32_t last_ms = 0;
+            uint32_t now = board_millis();
+            if (now - last_ms >= 1000) {
+                last_ms = now;
+                printf("Uptime: %lu seconds\r\n", counter++);
+            }
+        }
+    }
+}</code></pre>
+
+                    <h3>Non-Blocking Write Pattern</h3>
+
+                    <pre><code class="language-c">/* Non-blocking CDC write — returns bytes actually sent */
+uint32_t cdc_write_nonblocking(const uint8_t *data, uint32_t len) {
+    if (!tud_cdc_connected()) return 0;
+    uint32_t written = tud_cdc_write(data, len);
+    tud_cdc_write_flush();
+    return written;
+}
+
+/* Sending a formatted status line */
+void send_status_message(const char *module, int code, const char *msg) {
+    char buf[128];
+    int n = snprintf(buf, sizeof(buf), "[%s] code=%d msg=%s\r\n", module, code, msg);
+    if (n &gt; 0 && tud_cdc_connected()) {
+        tud_cdc_write(buf, (uint32_t)n);
+        tud_cdc_write_flush();
+    }
+}</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Critical Pitfall:</strong> Never call <code>tud_cdc_write_flush()</code> from within an interrupt handler. TinyUSB's buffers are managed in the task context. Calling flush from an ISR can corrupt the internal state. Always write data in the main task loop or in a thread-safe wrapper.
+                    </div>
+
+                </div>
+
+                <!-- SECTION 4: Receiving Data via CDC -->
+                <div id="cdc-receiving" class="blog-content mt-5">
+                    <h2><i class="fas fa-inbox me-2 text-teal"></i>Receiving Data via CDC</h2>
+
+                    <p>TinyUSB delivers incoming CDC data through a receive FIFO. You can either poll the FIFO in your main loop or use the <code>tud_cdc_rx_cb()</code> callback for event-driven processing.</p>
+
+                    <h3>RX API</h3>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr><th>Function</th><th>Returns</th><th>Purpose</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>tud_cdc_available()</code></td><td>uint32_t</td><td>Number of bytes waiting in the RX FIFO</td></tr>
+                            <tr><td><code>tud_cdc_read(buf, bufsize)</code></td><td>uint32_t bytes_read</td><td>Remove bytes from the RX FIFO into your buffer</td></tr>
+                            <tr><td><code>tud_cdc_read_char()</code></td><td>int32_t (char or -1)</td><td>Read exactly one byte; returns -1 if FIFO empty</td></tr>
+                            <tr><td><code>tud_cdc_read_flush()</code></td><td>void</td><td>Discard all bytes currently in the RX FIFO</td></tr>
+                            <tr><td><code>tud_cdc_peek(ui8_p)</code></td><td>bool</td><td>Read the next byte without consuming it</td></tr>
+                        </tbody>
+                    </table>
+
+                    <h3>Callback-Driven Reception</h3>
+
+                    <pre><code class="language-c">/* tud_cdc_rx_cb() is a weak function declared in TinyUSB — override it
+   in your application code. It is called from within tud_task() when
+   new bytes arrive from the host. */
+void tud_cdc_rx_cb(uint8_t itf) {
+    (void)itf;  /* interface number — 0 for first CDC port */
+
+    /* Read all available bytes in one shot */
+    uint8_t buf[CFG_TUD_CDC_RX_BUFSIZE];
+    uint32_t count = tud_cdc_read(buf, sizeof(buf));
+    if (count == 0) return;
+
+    /* Route to your processing function */
+    cli_process_input(buf, count);
+}</code></pre>
+
+                    <h3>Complete Command Line Parser</h3>
+
+                    <p>A common pattern is to accumulate characters until a newline arrives, then parse the complete command. The following implementation handles backspace, echoes characters back to the terminal, and dispatches commands:</p>
+
+                    <pre><code class="language-c">/* cli.c — USB CDC command line interface */
+#include "tusb.h"
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+#define CLI_MAX_LINE    128
+#define CLI_MAX_ARGS    8
+
+static char  s_line_buf[CLI_MAX_LINE];
+static int   s_line_len = 0;
+static bool  s_dtr_was_set = false;
+
+/* Forward declarations */
+static void cli_execute(char *line);
+static void cdc_print(const char *str);
+
+/* Called from tud_cdc_rx_cb() or polled from main loop */
+void cli_process_input(const uint8_t *data, uint32_t len) {
+    for (uint32_t i = 0; i &lt; len; i++) {
+        char c = (char)data[i];
+
+        if (c == '\r' || c == '\n') {
+            /* End of line — echo newline, null-terminate, execute */
+            cdc_print("\r\n");
+            s_line_buf[s_line_len] = '\0';
+            if (s_line_len &gt; 0) {
+                cli_execute(s_line_buf);
+            }
+            s_line_len = 0;
+            cdc_print("$ ");  /* prompt */
+
+        } else if (c == 0x7F || c == '\b') {
+            /* Backspace */
+            if (s_line_len &gt; 0) {
+                s_line_len--;
+                cdc_print("\b \b");  /* erase character on terminal */
+            }
+
+        } else if (c &gt;= 0x20 &amp;&amp; c &lt; 0x7F) {
+            /* Printable ASCII — echo and buffer */
+            if (s_line_len &lt; CLI_MAX_LINE - 1) {
+                char echo[2] = {c, 0};
+                cdc_print(echo);
+                s_line_buf[s_line_len++] = c;
+            }
+        }
+    }
+}
+
+/* Simple tokenizer and command dispatcher */
+static void cli_execute(char *line) {
+    /* Tokenise: split on spaces */
+    char *argv[CLI_MAX_ARGS];
+    int   argc = 0;
+    char *tok = strtok(line, " \t");
+    while (tok && argc &lt; CLI_MAX_ARGS) {
+        argv[argc++] = tok;
+        tok = strtok(NULL, " \t");
+    }
+    if (argc == 0) return;
+
+    if (strcmp(argv[0], "help") == 0) {
+        cdc_print("Commands: help, status, reset, led &lt;on|off&gt;, echo &lt;text&gt;\r\n");
+    } else if (strcmp(argv[0], "status") == 0) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "Uptime: %lu ms\r\n", board_millis());
+        cdc_print(buf);
+    } else if (strcmp(argv[0], "reset") == 0) {
+        cdc_print("Resetting...\r\n");
+        tud_cdc_write_flush();
+        board_reset();
+    } else if (strcmp(argv[0], "led") == 0 &amp;&amp; argc == 2) {
+        if (strcmp(argv[1], "on") == 0)       board_led_write(true);
+        else if (strcmp(argv[1], "off") == 0) board_led_write(false);
+        else cdc_print("Usage: led &lt;on|off&gt;\r\n");
+    } else if (strcmp(argv[0], "echo") == 0 &amp;&amp; argc &gt;= 2) {
+        cdc_print(argv[1]);
+        cdc_print("\r\n");
+    } else {
+        cdc_print("Unknown command. Type 'help'.\r\n");
+    }
+}
+
+static void cdc_print(const char *str) {
+    tud_cdc_write(str, strlen(str));
+    tud_cdc_write_flush();
+}
+
+/* tud_cdc_line_state_cb — detect when host opens the port */
+void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts) {
+    (void)itf; (void)rts;
+    if (dtr &amp;&amp; !s_dtr_was_set) {
+        /* Host just opened the port — send welcome banner */
+        cdc_print("\r\n=== USB CDC CLI ready ===\r\n$ ");
+    }
+    s_dtr_was_set = dtr;
+}</code></pre>
+
+                </div>
+
+                <!-- SECTION 5: Line Coding & Control Signals -->
+                <div id="cdc-line-coding" class="blog-content mt-5">
+                    <h2><i class="fas fa-sliders-h me-2 text-teal"></i>Line Coding &amp; Control Signals</h2>
+
+                    <p>CDC ACM carries two important control mechanisms that mirror classical RS-232: line coding (baud rate, data bits, stop bits, parity) and control line state (DTR, RTS). Understanding these is critical both for implementing a UART bridge and for simply knowing when a host application has opened the port.</p>
+
+                    <h3>Line Coding Callback</h3>
+
+                    <pre><code class="language-c">/* Called when the host sends SET_LINE_CODING (usually when you change baud
+   rate in a terminal program or call serial.open() in Python). */
+void tud_cdc_line_coding_cb(uint8_t itf, cdc_line_coding_t const *p_line_coding) {
+    (void)itf;
+
+    uint32_t baud     = p_line_coding-&gt;bit_rate;
+    uint8_t  stop     = p_line_coding-&gt;stop_bits; /* 0=1, 1=1.5, 2=2 stop bits */
+    uint8_t  parity   = p_line_coding-&gt;parity;    /* 0=None,1=Odd,2=Even,3=Mark,4=Space */
+    uint8_t  databits = p_line_coding-&gt;data_bits;  /* 5, 6, 7, 8, or 16 */
+
+    /* For a pure USB device: baud rate doesn't affect USB transfer speed.
+       USB always sends at 12Mbps (Full-Speed) or 480Mbps (High-Speed).
+       However, for a CDC-to-UART bridge, you must reconfigure the UART. */
+
+    /* Log the change (for debugging) */
+    char buf[80];
+    snprintf(buf, sizeof(buf),
+        "Line coding: baud=%lu stop=%u parity=%u data=%u\r\n",
+        baud, stop, parity, databits);
+    /* Note: do NOT call tud_cdc_write() here — you are inside a callback.
+       Store the values and process them in the main task loop instead. */
+    (void)buf;  /* suppress unused warning in this example */
+}
+
+/* cdc_line_coding_t fields summary */
+/*
+  typedef struct TU_ATTR_PACKED {
+      uint32_t bit_rate;    // 9600, 115200, 921600, etc. (irrelevant for USB speed)
+      uint8_t  stop_bits;   // 0=1 stop bit, 1=1.5 stop bits, 2=2 stop bits
+      uint8_t  parity;      // 0=None, 1=Odd, 2=Even, 3=Mark, 4=Space
+      uint8_t  data_bits;   // 5, 6, 7, 8, or 16
+  } cdc_line_coding_t;
+*/</code></pre>
+
+                    <h3>Control Line State Callback</h3>
+
+                    <pre><code class="language-c">/* DTR (Data Terminal Ready): set to true when host application opens the port.
+   This is the most reliable way to detect that someone is actually listening.
+   RTS (Request To Send): set by host to indicate it is ready to receive data.
+
+   Both bits are in the bmRequestType of SET_CONTROL_LINE_STATE.
+   TinyUSB parses this and calls this weak callback for you. */
+
+static bool s_host_port_open = false;
+
+void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts) {
+    (void)itf;
+    (void)rts;  /* For most applications, only DTR matters */
+
+    if (dtr) {
+        /* Host opened the port — safe to start sending data */
+        s_host_port_open = true;
+    } else {
+        /* Host closed the port — stop sending to avoid buffer overflow */
+        s_host_port_open = false;
+        /* Optionally flush/discard any pending TX data */
+        tud_cdc_write_clear();
+    }
+}
+
+bool cdc_host_connected(void) {
+    return tud_cdc_connected() &amp;&amp; s_host_port_open;
+}</code></pre>
+
+                    <h3>Why Baud Rate Doesn't Affect USB Speed</h3>
+
+                    <p>When you set 9600 baud in PuTTY connected to a USB CDC device, PuTTY sends a <code>SET_LINE_CODING</code> request over EP0 with <code>bit_rate=9600</code>. The USB data endpoint, however, still transfers at Full-Speed (12Mbps) — the baud rate field is purely informational for the device. It matters only if you are building a CDC-to-UART bridge and need to reconfigure the downstream UART's clock divider to match what the terminal application expects.</p>
+
+                </div>
+
+                <!-- SECTION 6: CDC to UART Bridge Full Implementation -->
+                <div id="cdc-uart-bridge" class="blog-content mt-5">
+                    <h2><i class="fas fa-exchange-alt me-2 text-teal"></i>CDC ↔ UART Bridge Full Implementation</h2>
+
+                    <p>The most common real-world application of CDC is bridging USB to a hardware UART — replacing a dedicated FTDI/CP2102 chip with firmware running on your main MCU. The key design challenges are: handling different data rates, managing backpressure in both directions, and using DMA on the UART side to avoid CPU load.</p>
+
+                    <pre><code class="language-c">/* cdc_uart_bridge.c — Bidirectional USB CDC ↔ UART bridge with DMA RX
+   Target: STM32F4 with HAL, TinyUSB, USART2
+   Uses HAL_UARTEx_ReceiveToIdle_DMA() for efficient UART RX            */
+
+#include "tusb.h"
+#include "stm32f4xx_hal.h"
+#include &lt;string.h&gt;
+
+extern UART_HandleTypeDef huart2;
+extern DMA_HandleTypeDef  hdma_usart2_rx;
+
+/* ─── Double-buffer for UART DMA RX ──────────────────────────────────────── */
+#define UART_RX_DMA_BUF_SIZE  256
+static uint8_t uart_rx_buf_a[UART_RX_DMA_BUF_SIZE];
+static uint8_t uart_rx_buf_b[UART_RX_DMA_BUF_SIZE];
+static uint8_t *uart_rx_active  = uart_rx_buf_a;
+static uint8_t *uart_rx_pending = NULL;
+static uint32_t uart_rx_pending_len = 0;
+
+/* ─── Circular buffer for CDC RX (data from USB waiting for UART TX) ──────── */
+#define CDC_TO_UART_BUF_SIZE  512
+static uint8_t  cdc_to_uart_buf[CDC_TO_UART_BUF_SIZE];
+static uint32_t ctu_head = 0;   /* write index */
+static uint32_t ctu_tail = 0;   /* read index */
+
+static bool s_bridge_active = false;  /* true when DTR is asserted */
+
+/* ─── Circular buffer helpers ────────────────────────────────────────────── */
+static inline uint32_t ctu_count(void) {
+    return (ctu_head - ctu_tail + CDC_TO_UART_BUF_SIZE) % CDC_TO_UART_BUF_SIZE;
+}
+static inline uint32_t ctu_free(void) {
+    return CDC_TO_UART_BUF_SIZE - 1 - ctu_count();
+}
+static bool ctu_push(const uint8_t *data, uint32_t len) {
+    if (len &gt; ctu_free()) return false;   /* overflow — drop packet */
+    for (uint32_t i = 0; i &lt; len; i++) {
+        cdc_to_uart_buf[ctu_head] = data[i];
+        ctu_head = (ctu_head + 1) % CDC_TO_UART_BUF_SIZE;
+    }
+    return true;
+}
+static uint32_t ctu_pop(uint8_t *dest, uint32_t max_len) {
+    uint32_t count = ctu_count();
+    if (count &gt; max_len) count = max_len;
+    for (uint32_t i = 0; i &lt; count; i++) {
+        dest[i] = cdc_to_uart_buf[ctu_tail];
+        ctu_tail = (ctu_tail + 1) % CDC_TO_UART_BUF_SIZE;
+    }
+    return count;
+}
+
+/* ─── Bridge initialisation ──────────────────────────────────────────────── */
+void bridge_init(void) {
+    /* Start first DMA RX — will fill uart_rx_buf_a */
+    HAL_UARTEx_ReceiveToIdle_DMA(&amp;huart2, uart_rx_active, UART_RX_DMA_BUF_SIZE);
+    /* Disable the DMA half-transfer interrupt — we use idle-line only */
+    __HAL_DMA_DISABLE_IT(&amp;hdma_usart2_rx, DMA_IT_HT);
+}
+
+/* ─── UART RX complete (called from HAL_UARTEx_RxEventCallback) ──────────── */
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
+    if (huart-&gt;Instance != USART2) return;
+
+    /* The DMA has captured 'Size' bytes into the active buffer */
+    uart_rx_pending     = uart_rx_active;
+    uart_rx_pending_len = Size;
+
+    /* Swap buffers so DMA writes into the other one while we process */
+    if (uart_rx_active == uart_rx_buf_a) {
+        uart_rx_active = uart_rx_buf_b;
+    } else {
+        uart_rx_active = uart_rx_buf_a;
+    }
+
+    /* Restart DMA on the new buffer immediately to avoid dropping bytes */
+    HAL_UARTEx_ReceiveToIdle_DMA(&amp;huart2, uart_rx_active, UART_RX_DMA_BUF_SIZE);
+    __HAL_DMA_DISABLE_IT(&amp;hdma_usart2_rx, DMA_IT_HT);
+}
+
+/* ─── CDC RX callback — data arrived from USB host ───────────────────────── */
+void tud_cdc_rx_cb(uint8_t itf) {
+    (void)itf;
+    if (!s_bridge_active) {
+        tud_cdc_read_flush();  /* discard if no UART connection established */
+        return;
+    }
+    uint8_t buf[64];
+    uint32_t count = tud_cdc_read(buf, sizeof(buf));
+    if (count &gt; 0) {
+        /* Buffer for UART TX — main task drains this to HAL_UART_Transmit */
+        ctu_push(buf, count);
+    }
+}
+
+/* ─── Line state callback — DTR controls bridge activation ──────────────── */
+void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts) {
+    (void)itf; (void)rts;
+    s_bridge_active = dtr;
+    if (!dtr) {
+        /* Host closed port — flush both directions */
+        ctu_head = ctu_tail = 0;
+        tud_cdc_write_clear();
+    }
+}
+
+/* ─── Line coding callback — reconfigure UART to match host baud rate ────── */
+void tud_cdc_line_coding_cb(uint8_t itf, cdc_line_coding_t const *p) {
+    (void)itf;
+    /* Map CDC parity to UART_PARITY_* values */
+    static const uint32_t parity_map[] = {
+        UART_PARITY_NONE,   /* 0: None */
+        UART_PARITY_ODD,    /* 1: Odd */
+        UART_PARITY_EVEN,   /* 2: Even */
+        UART_PARITY_NONE,   /* 3: Mark — not supported, fall back to none */
+        UART_PARITY_NONE    /* 4: Space — not supported, fall back to none */
+    };
+    huart2.Init.BaudRate   = p-&gt;bit_rate;
+    huart2.Init.WordLength = (p-&gt;data_bits == 9) ? UART_WORDLENGTH_9B : UART_WORDLENGTH_8B;
+    huart2.Init.StopBits   = (p-&gt;stop_bits == 2) ? UART_STOPBITS_2 : UART_STOPBITS_1;
+    huart2.Init.Parity     = (p-&gt;parity &lt; 5) ? parity_map[p-&gt;parity] : UART_PARITY_NONE;
+    HAL_UART_DeInit(&amp;huart2);
+    HAL_UART_Init(&amp;huart2);
+    /* Restart DMA RX after re-init */
+    HAL_UARTEx_ReceiveToIdle_DMA(&amp;huart2, uart_rx_active, UART_RX_DMA_BUF_SIZE);
+    __HAL_DMA_DISABLE_IT(&amp;hdma_usart2_rx, DMA_IT_HT);
+}
+
+/* ─── Main bridge task — call from your main loop ────────────────────────── */
+void bridge_task(void) {
+    /* 1. Forward pending UART RX data to CDC TX */
+    if (uart_rx_pending_len &gt; 0 &amp;&amp; tud_cdc_connected()) {
+        uint32_t written = tud_cdc_write(uart_rx_pending, uart_rx_pending_len);
+        tud_cdc_write_flush();
+        /* If we couldn't write all bytes, some are lost here — add a
+           secondary ring buffer for production-grade implementations */
+        (void)written;
+        uart_rx_pending_len = 0;
+        uart_rx_pending     = NULL;
+    }
+
+    /* 2. Forward CDC RX data (from circular buffer) to UART TX */
+    if (ctu_count() &gt; 0) {
+        uint8_t tx_buf[64];
+        uint32_t n = ctu_pop(tx_buf, sizeof(tx_buf));
+        if (n &gt; 0) {
+            HAL_UART_Transmit(&amp;huart2, tx_buf, (uint16_t)n, 10);
+        }
+    }
+}</code></pre>
+
+                </div>
+
+                <!-- SECTION 7: Windows/Linux/Mac Host Behavior -->
+                <div id="cdc-host-behavior" class="blog-content mt-5">
+                    <h2><i class="fas fa-desktop me-2 text-teal"></i>Windows / Linux / Mac Host Behavior</h2>
+
+                    <p>Understanding how each OS interacts with your CDC device saves hours of debugging mysterious connection issues.</p>
+
+                    <h3>Windows</h3>
+                    <p>Windows 10 and later include the <code>usbser.sys</code> class driver for CDC ACM — no INF file required. The device appears as <code>COMx</code> (e.g., COM3, COM7) in Device Manager under "Ports (COM &amp; LPT)". The port number is assigned at first connection and remembered by the USB hardware ID.</p>
+
+                    <p>A notorious Windows quirk is the <strong>latency timer</strong>: Windows polls the CDC device for new data at a 1ms interval. This is usually fine, but if you are sending very small packets rapidly, you may see "bursty" delivery rather than smooth streaming. You cannot change this timer from the device side.</p>
+
+                    <h3>Linux</h3>
+                    <p>Linux loads the <code>cdc_acm</code> kernel module automatically and creates <code>/dev/ttyACM0</code> (or ACM1, ACM2, etc.). Non-root users cannot access this device by default. Add a udev rule to grant access:</p>
+
+                    <pre><code class="language-bash"># /etc/udev/rules.d/99-usb-serial.rules
+# Replace idVendor and idProduct with your values (use lsusb to find them)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="cafe", ATTRS{idProduct}=="4001", \
+    MODE="0666", GROUP="dialout", SYMLINK+="cdc_demo"
+
+# Reload udev rules (no reboot needed)
+sudo udevadm control --reload-rules &amp;&amp; sudo udevadm trigger</code></pre>
+
+                    <h3>macOS</h3>
+                    <p>macOS creates <code>/dev/tty.usbmodemXXXX</code> and a companion <code>/dev/cu.usbmodemXXXX</code>. Use the <code>cu.*</code> device for outgoing connections (it does not wait for carrier detect). macOS includes <code>IOUSBHostHIDDevice</code> and a CDC driver that loads automatically.</p>
+
+                    <h3>Python pyserial Example</h3>
+
+                    <pre><code class="language-bash">pip install pyserial</code></pre>
+
+                    <pre><code class="language-c">/* Python code — saved as cdc_test.py */
+/*
+import serial
+import time
+
+# Open the CDC port — baud rate value is sent to device as SET_LINE_CODING
+# but does NOT affect USB transfer speed
+port = serial.Serial(
+    port='/dev/ttyACM0',   # or 'COM7' on Windows, '/dev/cu.usbmodem...' on Mac
+    baudrate=115200,        # irrelevant for USB speed, but required by pyserial
+    timeout=1.0
+)
+
+print(f"Opened: {port.name}")
+
+# Send a command and read back the response
+port.write(b"status\r\n")
+time.sleep(0.05)
+response = port.read_all()
+print("Response:", response.decode('utf-8', errors='replace'))
+
+# Continuous read loop
+port.write(b"help\r\n")
+while True:
+    line = port.readline()
+    if line:
+        print(line.decode('utf-8', errors='replace'), end='')
+    else:
+        break
+
+port.close()
+*/</code></pre>
+
+                </div>
+
+                <!-- SECTION 8: Flow Control -->
+                <div id="cdc-flow-control" class="blog-content mt-5">
+                    <h2><i class="fas fa-traffic-light me-2 text-teal"></i>Flow Control</h2>
+
+                    <p>USB CDC has no built-in hardware flow control signal like RS-232's CTS/RTS — those signals exist in the CDC spec as notifications, but most implementations ignore them. Instead, flow control in CDC relies on the stack's buffering behavior.</p>
+
+                    <h3>What Happens When the Host Stops Reading</h3>
+
+                    <p>If your firmware writes data faster than the host reads it, the following chain of events occurs:</p>
+                    <ol>
+                        <li>The TinyUSB TX FIFO fills up (CFG_TUD_CDC_TX_BUFSIZE bytes)</li>
+                        <li><code>tud_cdc_write()</code> begins returning fewer bytes than requested (partial writes)</li>
+                        <li>Eventually <code>tud_cdc_write()</code> returns 0 — no data was accepted</li>
+                        <li>If you loop retrying, your application task starves the USB task loop</li>
+                    </ol>
+
+                    <h3>Overflow Detection and Recovery</h3>
+
+                    <pre><code class="language-c">/* Overflow-safe CDC write with overflow counter */
+static uint32_t s_overflow_count = 0;
+
+bool cdc_write_safe(const uint8_t *data, uint32_t len) {
+    if (!tud_cdc_connected()) return false;
+
+    uint32_t available = tud_cdc_write_available();
+    if (available &lt; len) {
+        /* Not enough space — either partial write or drop */
+        if (available == 0) {
+            s_overflow_count++;
+            return false;  /* Drop this packet — caller handles retry */
+        }
+        /* Partial write: accept what fits, drop the rest */
+        len = available;
+    }
+    uint32_t written = tud_cdc_write(data, len);
+    tud_cdc_write_flush();
+    return (written == len);
+}
+
+/* XON/XOFF software flow control — embed control characters in data stream */
+#define XON_CHAR  0x11  /* Ctrl+Q */
+#define XOFF_CHAR 0x13  /* Ctrl+S */
+
+static bool s_xoff_active = false;
+
+void cdc_rx_check_flow(const uint8_t *data, uint32_t len) {
+    for (uint32_t i = 0; i &lt; len; i++) {
+        if (data[i] == XOFF_CHAR) {
+            s_xoff_active = true;   /* host says: pause sending */
+        } else if (data[i] == XON_CHAR) {
+            s_xoff_active = false;  /* host says: resume sending */
+        }
+    }
+}
+
+bool cdc_tx_allowed(void) {
+    return !s_xoff_active &amp;&amp; tud_cdc_connected();
+}</code></pre>
+
+                </div>
+
+                <!-- SECTION 9: Two-Port CDC (Multi-CDC) -->
+                <div id="cdc-multi-port" class="blog-content mt-5">
+                    <h2><i class="fas fa-clone me-2 text-teal"></i>Two-Port CDC (Multi-CDC)</h2>
+
+                    <p>TinyUSB supports multiple CDC ports by increasing <code>CFG_TUD_CDC</code> to 2 (or more). Each port appears as a separate COM/ttyACM device on the host. A common use case is one port for application data and a second port for debug logs — the developer can open only the debug port without disturbing the data connection.</p>
+
+                    <h3>Configuration for Two Ports</h3>
+
+                    <pre><code class="language-c">/* tusb_config.h additions for two CDC ports */
+#define CFG_TUD_CDC  2   /* Two independent CDC ACM ports */
+
+/* Each port has its own buffers */
+#define CFG_TUD_CDC_RX_BUFSIZE  512
+#define CFG_TUD_CDC_TX_BUFSIZE  512</code></pre>
+
+                    <h3>Descriptor for Two CDC Ports</h3>
+
+                    <pre><code class="language-c">/* Two IADs, two Communications interfaces, two Data interfaces = 4 interfaces total */
+#define CONFIG_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN + TUD_CDC_DESC_LEN)
+
+#define EPNUM_CDC0_NOTIF  0x81
+#define EPNUM_CDC0_OUT    0x02
+#define EPNUM_CDC0_IN     0x82
+#define EPNUM_CDC1_NOTIF  0x83
+#define EPNUM_CDC1_OUT    0x04
+#define EPNUM_CDC1_IN     0x84
+
+uint8_t const desc_fs_configuration[] = {
+    TUD_CONFIG_DESCRIPTOR(1, 4, 0, CONFIG_TOTAL_LEN,
+        TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 100),
+
+    /* CDC Port 0: interfaces 0 and 1 */
+    TUD_CDC_DESCRIPTOR(0, 4, EPNUM_CDC0_NOTIF, 8,
+        EPNUM_CDC0_OUT, EPNUM_CDC0_IN, 64),
+
+    /* CDC Port 1: interfaces 2 and 3 */
+    TUD_CDC_DESCRIPTOR(2, 5, EPNUM_CDC1_NOTIF, 8,
+        EPNUM_CDC1_OUT, EPNUM_CDC1_IN, 64)
+};</code></pre>
+
+                    <h3>Port-Specific API</h3>
+
+                    <pre><code class="language-c">/* Use tud_cdc_n_*() variants to target a specific port by index */
+
+/* Port 0: application data */
+void app_send_data(const uint8_t *buf, uint32_t len) {
+    if (tud_cdc_n_connected(0)) {
+        tud_cdc_n_write(0, buf, len);
+        tud_cdc_n_write_flush(0);
+    }
+}
+
+/* Port 1: debug log — lower priority, drop if buffer full */
+void debug_log(const char *msg) {
+    if (tud_cdc_n_connected(1)) {
+        uint32_t avail = tud_cdc_n_write_available(1);
+        uint32_t len   = strlen(msg);
+        if (avail &gt;= len) {
+            tud_cdc_n_write(1, msg, len);
+            tud_cdc_n_write_flush(1);
+        }
+    }
+}
+
+/* RX callbacks use the interface number to distinguish ports */
+void tud_cdc_rx_cb(uint8_t itf) {
+    uint8_t buf[64];
+    uint32_t count = tud_cdc_n_read(itf, buf, sizeof(buf));
+    if (itf == 0) {
+        app_process_rx(buf, count);
+    } else if (itf == 1) {
+        debug_process_command(buf, count);
+    }
+}</code></pre>
+
+                </div>
+
+                <!-- SECTION 10: Practical Exercises -->
+                <div id="cdc-exercises" class="blog-content mt-5">
+                    <h2><i class="fas fa-dumbbell me-2 text-teal"></i>Practical Exercises</h2>
+
+                    <p>Theory becomes skill only through implementation. Work through these exercises in order — each one builds on the previous.</p>
+
+                    <h3>Beginner: USB CDC Echo Device</h3>
+                    <p>Implement a CDC device that echoes every received byte back to the sender. Requirements: echo must be byte-for-byte identical; the device must handle partial writes gracefully; verify with both a terminal emulator and Python's <code>pyserial</code>.</p>
+                    <pre><code class="language-c">/* echo_main.c — simplest possible CDC application */
+void tud_cdc_rx_cb(uint8_t itf) {
+    (void)itf;
+    uint8_t buf[64];
+    uint32_t count = tud_cdc_read(buf, sizeof(buf));
+    if (count &gt; 0 &amp;&amp; tud_cdc_connected()) {
+        /* Echo: write may be partial if TX FIFO is full */
+        uint32_t sent = 0;
+        while (sent &lt; count) {
+            sent += tud_cdc_write(buf + sent, count - sent);
+            tud_task();  /* allow stack to drain if FIFO was full */
+        }
+        tud_cdc_write_flush();
+    }
+}</code></pre>
+
+                    <h3>Intermediate: USB-to-UART Bridge with DMA</h3>
+                    <p>Using the bridge implementation from Section 6 as a starting point, add these features: (a) forward line coding changes to the downstream UART using <code>HAL_UART_Init()</code>; (b) add an LED that blinks when data flows in either direction; (c) implement a 100ms timeout that resets the bridge state if the host disconnects and reconnects without toggling DTR.</p>
+
+                    <h3>Advanced: CDC Command Line Interface with Flash Config Storage</h3>
+                    <p>Build a full USB CDC CLI that supports at least these 5 commands:</p>
+                    <ul>
+                        <li><code>help</code> — list all commands with brief descriptions</li>
+                        <li><code>status</code> — print firmware version, uptime, and free heap</li>
+                        <li><code>config get &lt;key&gt;</code> — read a named value from internal flash</li>
+                        <li><code>config set &lt;key&gt; &lt;value&gt;</code> — write a named value to flash (persist across resets)</li>
+                        <li><code>reset</code> — perform a software reset after flushing CDC TX</li>
+                    </ul>
+                    <p>Use STM32 EEPROM emulation or RP2040 flash storage for persistence. The config storage should survive power cycling. Bonus: implement command history (up-arrow key, sending ESC[A sequence).</p>
+
+                </div>
+
+                <!-- SECTION 11: Canvas Form — UsbCdcDesign -->
+                <div class="blog-content mt-5">
+                    <h2><i class="fas fa-file-alt me-2 text-teal"></i>Generate Your CDC Design Document</h2>
+                    <p>Fill in the details of your CDC Virtual COM Port project below and export a complete design document in your preferred format. The document includes your configuration parameters, buffer sizing rationale, and design notes.</p>
+
+                    <div class="canvas-form" id="usbCdcForm">
+                        <h3><i class="fas fa-file-alt me-2"></i>USB CDC Design Document Generator</h3>
+                        <p>Capture your CDC configuration, UART bridge settings, and design decisions in a shareable document.</p>
+                        <div id="usbCdcBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <p class="form-privacy-notice"><i class="fas fa-shield-alt"></i> All data stays in your browser. Nothing is sent to or stored on any server.</p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbCdcProjName">Project Name *</label>
+                                <input type="text" id="usbCdcProjName" placeholder="e.g. USB Debug Probe v1.0">
+                            </div>
+                            <div class="form-group">
+                                <label for="usbCdcMcu">Target MCU *</label>
+                                <input type="text" id="usbCdcMcu" placeholder="e.g. STM32F411CEU6, RP2040">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbCdcBaudRate">Reference Baud Rate</label>
+                                <select id="usbCdcBaudRate">
+                                    <option value="9600">9600</option>
+                                    <option value="115200" selected>115200</option>
+                                    <option value="230400">230400</option>
+                                    <option value="460800">460800</option>
+                                    <option value="921600">921600</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="usbCdcBridgeUart">Bridge to UART</label>
+                                <select id="usbCdcBridgeUart">
+                                    <option value="None">None (standalone CDC)</option>
+                                    <option value="USART1">USART1</option>
+                                    <option value="USART2">USART2</option>
+                                    <option value="USART3">USART3</option>
+                                    <option value="LPUART1">LPUART1</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbCdcRxBufSize">RX Buffer Size (bytes)</label>
+                                <input type="text" id="usbCdcRxBufSize" placeholder="e.g. 512">
+                            </div>
+                            <div class="form-group">
+                                <label for="usbCdcTxBufSize">TX Buffer Size (bytes)</label>
+                                <input type="text" id="usbCdcTxBufSize" placeholder="e.g. 512">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbCdcFlowControl">Flow Control</label>
+                                <select id="usbCdcFlowControl">
+                                    <option value="None">None</option>
+                                    <option value="RTS-CTS">RTS-CTS (via line_state callbacks)</option>
+                                    <option value="XON-XOFF">XON/XOFF (in-band software)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="usbCdcNotes">Design Notes</label>
+                                <textarea id="usbCdcNotes" rows="4" placeholder="Describe your application, special requirements, or integration notes..."></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="usbCdcHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="usbCdcHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="usbCdcHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-generate" onclick="usbCdcHandler.generatePPTX()"><i class="fas fa-file-powerpoint me-1"></i>PPTX</button>
+                            <button class="btn-reset" onclick="usbCdcHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="usbCdcSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="usbCdcSuccessText"></span></div>
+                    </div>
+                </div>
+
+                <!-- SECTION 12: Conclusion -->
+                <div id="cdc-conclusion" class="blog-content mt-5">
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion &amp; Next Steps</h2>
+
+                    <p>CDC ACM is the right choice any time you need a simple, driver-free serial connection between your embedded device and a host computer. Here is what we covered in this article:</p>
+
+                    <ul>
+                        <li><strong>Architecture:</strong> CDC requires two interfaces (Communications + Data) held together by an IAD in composite devices. Four functional descriptors declare ACM capabilities to the host.</li>
+                        <li><strong>TinyUSB setup:</strong> <code>CFG_TUD_CDC 1</code> enables the class; <code>TUD_CDC_DESCRIPTOR</code> macro builds the descriptor block; buffer sizes are tuned via <code>CFG_TUD_CDC_RX/TX_BUFSIZE</code>.</li>
+                        <li><strong>Sending data:</strong> Always pair <code>tud_cdc_write()</code> with <code>tud_cdc_write_flush()</code>. Retarget <code>printf()</code> via <code>_write()</code> override for zero-effort debug output.</li>
+                        <li><strong>Receiving data:</strong> Use <code>tud_cdc_rx_cb()</code> for event-driven processing. Accumulate characters until <code>\n</code> for command-line interfaces.</li>
+                        <li><strong>Line coding:</strong> DTR is your reliable "port is open" signal. Baud rate changes only matter for UART bridges — USB speed is always fixed at Full-Speed.</li>
+                        <li><strong>UART bridge:</strong> Use DMA with idle-line interrupt on the UART side, double buffering, and a circular buffer to handle CDC backpressure without dropping data.</li>
+                        <li><strong>Host behavior:</strong> Windows shows COMx, Linux shows /dev/ttyACM0, macOS shows /dev/cu.usbmodem*. Add udev rules on Linux for non-root access.</li>
+                    </ul>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-arrow-right me-2"></i>
+                        <strong>Next Article:</strong> <a href="usb-dev-part07-hid-devices.html">Part 7 — USB HID Devices</a>. We dive into the HID class: authoring report descriptors byte by byte, implementing keyboards, mice, gamepads, and custom sensor HID devices, and understanding boot protocol vs report protocol.
+                    </div>
+
+                    <div class="related-posts mt-4">
+                        <h4>Other Articles in This Series</h4>
+                        <div class="related-post-item">
+                            <h5>Part 5: TinyUSB Deep Dive</h5>
+                            <p>Architecture, configuration macros, initialization sequence, callback model, and a complete porting checklist for new MCU targets.</p>
+                            <a href="usb-dev-part05-tinyusb-deep-dive.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 7: HID Devices</h5>
+                            <p>Report descriptor authoring, keyboard and mouse implementation, custom sensor HID, and boot protocol vs report protocol.</p>
+                            <a href="usb-dev-part07-hid-devices.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 9: Composite Devices</h5>
+                            <p>Combining CDC + HID + MSC in one device, IAD descriptor assembly, and interface association rules.</p>
+                            <a href="usb-dev-part09-composite-devices.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+
+                </div><!-- end col-lg-8 -->
+            </div><!-- end row -->
+        </div><!-- end container -->
+    </section>
+
+    <footer id="social-media" class="bg-dark text-light py-5"><div class="container py-5"><div class="row mb-4"><div class="col-lg-6 mb-4 mb-lg-0"><h5 class="fw-bold mb-3">Let's Connect</h5><p class="text-light">I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.</p></div><div class="col-lg-6"><h5 class="fw-bold mb-3">Follow Me</h5><div class="social-links d-flex gap-2 flex-wrap"><a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a><a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a><a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a><a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a><a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a><a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a><a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a></div></div></div><hr class="bg-secondary"><div class="row mt-4"><div class="col-md-6"><p class="small"><i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a></p><p class="small mt-3"><a href="/" class="text-light text-decoration-none">Home</a> | <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> | <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a></p></div><div class="col-md-6 text-md-end"><p class="small">Enjoying this content? &#9749; <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!</p></div></div></div></footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator" title="Current Section"><i class="fas fa-tag"></i><span id="categoryText">Technology</span></div>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-usb-dev.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <script>
+        var usbCdcPersistence = new FormPersistence('usb-p06-cdc-draft', {
+            'usbCdcProjName':    'projectName',
+            'usbCdcMcu':         'mcu',
+            'usbCdcBaudRate':    'baudRate',
+            'usbCdcBridgeUart':  'bridgeUart',
+            'usbCdcRxBufSize':   'rxBufSize',
+            'usbCdcTxBufSize':   'txBufSize',
+            'usbCdcFlowControl': 'flowControl',
+            'usbCdcNotes':       'designNotes'
+        }, 'usbCdcBadge');
+
+        var usbCdcHandler = new CanvasFormHandler({
+            formId:         'usbCdcForm',
+            successId:      'usbCdcSuccess',
+            successTextId:  'usbCdcSuccessText',
+            persistence:    usbCdcPersistence,
+            filenameField:  'projectName',
+            filenameSuffix: '-usb-cdc-design',
+            requiredFields: ['usbCdcProjName', 'usbCdcMcu'],
+            requiredMessage:'Please enter a Project Name and Target MCU.',
+            docType:        'UsbCdcDesign'
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            usbCdcPersistence.init();
+        });
+    </script>
+
+</body>
+</html>

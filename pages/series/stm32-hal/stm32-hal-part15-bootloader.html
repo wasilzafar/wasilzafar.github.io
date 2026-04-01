@@ -1,0 +1,1424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Build a custom STM32 IAP bootloader — design flash memory layout, implement UART/USB firmware update, jump to application, and add fail-safe dual-bank capability. Part 15 of 18." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="STM32, bootloader, IAP, USB DFU, UART firmware update, flash programming, CRC32, dual-bank, HAL_FLASH, jump-to-application" />
+    <meta property="og:title" content="STM32 Bootloader Development — STM32 Unleashed Series Part 15" />
+    <meta property="og:description" content="Design a fail-safe flash memory layout, implement UART and USB DFU firmware update, validate images with CRC32, and build the jump-to-application mechanism that makes it all work." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>STM32 Part 15: Bootloader Development — STM32 Unleashed Series - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/stm32-hal/stm32-hal-part15-bootloader.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting (6 themes) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'ad_user_data': 'granted',
+            'ad_personalization': 'granted',
+            'analytics_storage': 'granted'
+        });
+
+        gtag('set', 'url_passthrough', true);
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+            var f = d.getElementsByTagName(s)[0],
+                j = d.createElement(s),
+                dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking &ldquo;Accept All&rdquo;, you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">STM32 Part 15: Bootloader Development</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>March 31, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>30 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Every production STM32 product needs a bootloader — design a fail-safe flash memory layout, implement UART and USB DFU firmware update, validate images with CRC, and build the jump-to-application mechanism that makes it all work.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#bootloader-fundamentals" onclick="closeNav()">Bootloader Fundamentals</a>
+                <ul>
+                    <li><a href="#why-custom-bootloader" onclick="closeNav()">Why a Custom Bootloader</a></li>
+                    <li><a href="#boot-decision" onclick="closeNav()">Boot Decision Logic</a></li>
+                    <li><a href="#flash-layout" onclick="closeNav()">Flash Memory Layout</a></li>
+                </ul>
+            </li>
+            <li><a href="#flash-programming" onclick="closeNav()">Flash Programming</a>
+                <ul>
+                    <li><a href="#unlock-erase" onclick="closeNav()">Unlock, Erase, Write</a></li>
+                    <li><a href="#error-handling-flash" onclick="closeNav()">Flash Error Handling</a></li>
+                </ul>
+            </li>
+            <li><a href="#jump-to-app" onclick="closeNav()">Jump to Application</a></li>
+            <li><a href="#uart-update" onclick="closeNav()">UART Firmware Update Protocol</a></li>
+            <li><a href="#usb-dfu" onclick="closeNav()">USB DFU</a></li>
+            <li><a href="#crc-validation" onclick="closeNav()">CRC Image Validation</a></li>
+            <li><a href="#dual-bank" onclick="closeNav()">Dual-Bank &amp; Fail-Safe Updates</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#bootloader-design-tool" onclick="closeNav()">Bootloader Design Tool</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 1 — BOOTLOADER FUNDAMENTALS (no mt-5)
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="bootloader-fundamentals" class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Series Overview:</strong> This is Part 15 of our 18-part STM32 Unleashed series. With FreeRTOS mastered in Part 14, we now tackle the bootloader — the critical firmware layer that enables field updates, fail-safe recovery, and factory programming in every production device.
+                    </div>
+
+                    <!-- Series Navigation Path -->
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>STM32 Unleashed: HAL Driver Development</h4>
+                            <div class="path-subtitle">Your 18-step learning path &bull; Currently on Step 15</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="stm32-hal-part01-architecture-cubemx.html" class="step-card completed">
+                                <div class="step-num completed">1</div>
+                                <div class="step-info"><h6>Architecture &amp; CubeMX Setup</h6><small>STM32 family, clock tree, HAL vs LL, CubeMX workflow, first project</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part02-gpio-debounce.html" class="step-card completed">
+                                <div class="step-num completed">2</div>
+                                <div class="step-info"><h6>GPIO &amp; Button Debounce</h6><small>GPIO modes, pull-up/down, EXTI, software debounce, HAL_GPIO_ReadPin</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part03-uart-communication.html" class="step-card completed">
+                                <div class="step-num completed">3</div>
+                                <div class="step-info"><h6>UART Communication</h6><small>Polling, interrupt, DMA modes, printf retargeting, ring buffers</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part04-timers-pwm.html" class="step-card completed">
+                                <div class="step-num completed">4</div>
+                                <div class="step-info"><h6>Timers, PWM &amp; Input Capture</h6><small>TIM basics, PWM generation, input capture, encoder mode</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part05-adc-dac.html" class="step-card completed">
+                                <div class="step-num completed">5</div>
+                                <div class="step-info"><h6>ADC &amp; DAC</h6><small>Single/continuous conversion, DMA, injected channels, DAC waveforms</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part06-spi-protocol.html" class="step-card completed">
+                                <div class="step-num completed">6</div>
+                                <div class="step-info"><h6>SPI Protocol</h6><small>SPI master/slave, full-duplex, DMA transfers, sensor drivers</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part07-i2c-protocol.html" class="step-card completed">
+                                <div class="step-num completed">7</div>
+                                <div class="step-info"><h6>I2C Protocol</h6><small>I2C master, 7/10-bit addressing, DMA, multi-master, error handling</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part08-dma-memory.html" class="step-card completed">
+                                <div class="step-num completed">8</div>
+                                <div class="step-info"><h6>DMA &amp; Memory Efficiency</h6><small>DMA streams, circular mode, memory-to-memory, zero-copy patterns</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part09-interrupts-nvic.html" class="step-card completed">
+                                <div class="step-num completed">9</div>
+                                <div class="step-info"><h6>Interrupt Management &amp; NVIC</h6><small>Priority grouping, preemption, ISR design, HAL callbacks, latency</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part10-low-power.html" class="step-card completed">
+                                <div class="step-num completed">10</div>
+                                <div class="step-info"><h6>Low-Power Modes</h6><small>Sleep, Stop, Standby modes, RTC wakeup, LP UART, power profiling</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part11-rtc-calendar.html" class="step-card completed">
+                                <div class="step-num completed">11</div>
+                                <div class="step-info"><h6>RTC &amp; Calendar</h6><small>RTC configuration, alarms, backup registers, calendar subseconds</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part12-can-bus.html" class="step-card completed">
+                                <div class="step-num completed">12</div>
+                                <div class="step-info"><h6>CAN Bus</h6><small>FDCAN/bxCAN, filters, message frames, error handling, automotive use</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part13-usb-cdc.html" class="step-card completed">
+                                <div class="step-num completed">13</div>
+                                <div class="step-info"><h6>USB CDC Virtual COM Port</h6><small>USB FS/HS, CDC class, virtual serial, control transfers, descriptors</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part14-freertos.html" class="step-card completed">
+                                <div class="step-num completed">14</div>
+                                <div class="step-info"><h6>FreeRTOS Integration</h6><small>Tasks, queues, semaphores, mutexes, CMSIS-RTOS2 wrapper, stack sizing</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <div class="step-card current">
+                                <div class="step-num active">15</div>
+                                <div class="step-info"><h6>Bootloader Development</h6><small>Custom IAP bootloader, UART/USB DFU, flash programming, jump-to-app</small></div>
+                                <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                            </div>
+                            <a href="stm32-hal-part16-external-storage.html" class="step-card">
+                                <div class="step-num upcoming">16</div>
+                                <div class="step-info"><h6>External Storage: SD &amp; QSPI Flash</h6><small>FATFS on SD card, QSPI NOR flash, memory-mapped execution, wear levelling</small></div>
+                            </a>
+                            <a href="stm32-hal-part17-ethernet-tcpip.html" class="step-card">
+                                <div class="step-num upcoming">17</div>
+                                <div class="step-info"><h6>Ethernet &amp; TCP/IP Stack</h6><small>LwIP integration, DHCP, TCP server, HTTP, MQTT, Ethernet DMA descriptors</small></div>
+                            </a>
+                            <a href="stm32-hal-part18-production-readiness.html" class="step-card">
+                                <div class="step-num upcoming">18</div>
+                                <div class="step-info"><h6>Production Readiness</h6><small>Watchdog, HardFault handler, flash option bytes, code signing, CI/CD</small></div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <h2 id="why-custom-bootloader"><i class="fas fa-download me-2 text-teal"></i>Bootloader Fundamentals</h2>
+
+                    <p>A bootloader is the first code that runs after reset. It decides whether to launch the application, enter a firmware update mode, or perform fail-safe recovery. Without a bootloader, updating firmware in a deployed product requires physical access and a debug probe — unacceptable for any product shipped in volume.</p>
+
+                    <p><strong>Why a custom bootloader rather than ST's internal one?</strong> The ST internal bootloader lives in protected system memory (accessed by pulling BOOT0 high) and supports UART, SPI, I2C, USB DFU, and CAN. But it offers no customisation: no proprietary update protocol, no authentication, no version checking, no dual-bank rollback. A custom IAP (In-Application Programming) bootloader runs from flash sector 0, owns the update logic, and gives you complete control.</p>
+
+                    <p id="boot-decision"><strong>Boot decision logic:</strong> The bootloader checks one or more conditions at startup to decide whether to enter update mode or jump to the application:</p>
+                    <ul>
+                        <li><strong>Magic word in backup register:</strong> the application writes a known value (e.g. <code>0xDEADBEEF</code>) to <code>RTC->BKP0R</code> before resetting. The bootloader checks this register; if the magic value is present, it clears it and enters update mode. This allows OTA-triggered updates.</li>
+                        <li><strong>GPIO pin:</strong> a dedicated BOOT button held during reset forces update mode. Simpler but requires physical access.</li>
+                        <li><strong>CRC failure:</strong> if the stored CRC doesn't match the computed CRC of the application image, the bootloader cannot safely jump — it enters update mode automatically.</li>
+                    </ul>
+
+                    <p id="flash-layout"><strong>Linker script changes for the application:</strong> the application must be compiled to start at <code>APPLICATION_ADDRESS</code>, not <code>0x08000000</code>. Modify the <code>FLASH</code> region origin in the application's linker script. On startup, the application must also set the VTOR (Vector Table Offset Register) to point to its own vector table at <code>APPLICATION_ADDRESS</code>.</p>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Sector</th>
+                                <th>Address Range</th>
+                                <th>Size</th>
+                                <th>Content</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Sector 0</strong></td>
+                                <td>0x0800_0000 – 0x0800_3FFF</td>
+                                <td>16 KB</td>
+                                <td>Bootloader code</td>
+                                <td>Write-protected in production</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Sector 1</strong></td>
+                                <td>0x0800_4000 – 0x0800_7FFF</td>
+                                <td>16 KB</td>
+                                <td>Bootloader data / config</td>
+                                <td>Version info, device UUID</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Sector 2</strong></td>
+                                <td>0x0800_8000 – 0x0800_BFFF</td>
+                                <td>16 KB</td>
+                                <td>Bootloader data (spare)</td>
+                                <td>Reserved for future use</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Sector 3</strong></td>
+                                <td>0x0800_C000 – 0x0800_FFFF</td>
+                                <td>16 KB</td>
+                                <td>Bootloader data (spare)</td>
+                                <td>Reserved</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Sector 4</strong></td>
+                                <td>0x0801_0000 – 0x0801_FFFF</td>
+                                <td>64 KB</td>
+                                <td><em>APPLICATION_ADDRESS</em></td>
+                                <td>Application start</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Sectors 5–11</strong></td>
+                                <td>0x0802_0000 – 0x080F_FFFF</td>
+                                <td>7 × 128 KB</td>
+                                <td>Application code &amp; data</td>
+                                <td>Total ~960 KB for application</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <pre><code class="language-c">/* ---------------------------------------------------------------
+ * Bootloader main() — check boot condition, jump or update.
+ * Boot mode triggered by:
+ *   1. Magic word 0xDEADBEEF in RTC backup register BKP0R
+ *   2. BOOT button (USER_BUTTON_PIN) held at reset
+ *   3. Application CRC failure (checked by verify_application())
+ * --------------------------------------------------------------- */
+#include "main.h"
+#include "stm32f4xx_hal.h"
+
+#define APPLICATION_ADDRESS  0x08010000UL
+#define BOOT_MAGIC_WORD      0xDEADBEEFUL
+
+/* Forward declarations */
+static bool should_enter_update_mode(void);
+static bool verify_application(void);
+static void jump_to_application(void);
+static void bootloader_uart_update(void);
+
+int main(void)
+{
+    HAL_Init();
+    SystemClock_Config();
+    MX_GPIO_Init();
+    MX_USART1_UART_Init();    /* bootloader update UART */
+    MX_RTC_Init();             /* access backup registers */
+
+    /* Step 1: determine boot path */
+    bool update_forced = should_enter_update_mode();
+    bool app_valid     = verify_application();
+
+    if (update_forced || !app_valid)
+    {
+        /* Signal update mode: blink LED rapidly */
+        for (int i = 0; i < 6; i++) {
+            HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+            HAL_Delay(100);
+        }
+        bootloader_uart_update();  /* blocks until update complete */
+    }
+
+    /* Step 2: app is valid and no update requested — jump */
+    jump_to_application();
+
+    /* Should never reach here */
+    while (1) {}
+}
+
+static bool should_enter_update_mode(void)
+{
+    /* Check RTC backup register for magic word */
+    HAL_PWR_EnableBkUpAccess();
+    uint32_t magic = HAL_RTCEx_BKUPRead(NULL, RTC_BKP_DR0);
+    if (magic == BOOT_MAGIC_WORD)
+    {
+        HAL_RTCEx_BKUPWrite(NULL, RTC_BKP_DR0, 0x00000000UL); /* clear it */
+        return true;
+    }
+    /* Check boot button (active low with internal pull-up) */
+    if (HAL_GPIO_ReadPin(USER_BUTTON_GPIO_Port, USER_BUTTON_Pin) == GPIO_PIN_RESET)
+        return true;
+
+    return false;
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 2 — FLASH PROGRAMMING
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="flash-programming" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-memory me-2 text-teal"></i>Flash Programming</h2>
+
+                    <p>Flash memory on STM32 must be erased before it can be written — you cannot change a bit from 0 to 1 without erasing the entire sector first (erase sets all bits to 1; programming clears selected bits to 0). The HAL provides a complete API for this, but you must follow the unlock/lock sequence strictly to avoid accidental writes.</p>
+
+                    <p id="unlock-erase"><strong>HAL_FLASH_Unlock()</strong> writes the two required keys to FLASH_KEYR (0x45670123, then 0xCDEF89AB), removing the hardware write protection. <strong>HAL_FLASH_Lock()</strong> re-enables it. Always lock after programming — a hardware fault while FLASH is unlocked could corrupt your firmware.</p>
+
+                    <p>For STM32F4, erase is sector-based: <code>HAL_FLASHEx_Erase()</code> with <code>FLASH_TYPEERASE_SECTORS</code>, specifying the sector number and voltage range. The voltage range determines the programming parallelism (×8, ×16, ×32 or ×64 bits), which affects sector erase time. For STM32G0, L4, F0 and similar, erase is page-based with much smaller (1–2 KB) pages.</p>
+
+                    <p id="error-handling-flash"><strong>Error handling:</strong> After any HAL_FLASH operation, call <code>HAL_FLASH_GetError()</code>. Common errors include <code>HAL_FLASH_ERROR_PGS</code> (programming sequence error — did you forget to call erase first?), <code>HAL_FLASH_ERROR_WRP</code> (write protection violation), and <code>HAL_FLASH_ERROR_PGA</code> (parallelism error). Always clear errors with <code>__HAL_FLASH_CLEAR_FLAG()</code> before the next operation.</p>
+
+                    <pre><code class="language-c">/* ---------------------------------------------------------------
+ * Flash programming API: erase sectors, write words, verify.
+ * Targets STM32F4 sector-based flash.
+ * --------------------------------------------------------------- */
+#include "stm32f4xx_hal.h"
+
+#define APP_FIRST_SECTOR    4u      /* Sector 4 = 0x08010000 on F4  */
+#define APP_SECTOR_COUNT    8u      /* Sectors 4–11 = ~960 KB        */
+
+/* Erase all sectors assigned to the application */
+HAL_StatusTypeDef flash_erase_app_sectors(void)
+{
+    FLASH_EraseInitTypeDef eraseInit;
+    uint32_t sectorError = 0;
+
+    eraseInit.TypeErase    = FLASH_TYPEERASE_SECTORS;
+    eraseInit.VoltageRange = FLASH_VOLTAGE_RANGE_3;   /* 2.7–3.6 V: ×32 bit */
+    eraseInit.Sector       = APP_FIRST_SECTOR;
+    eraseInit.NbSectors    = APP_SECTOR_COUNT;
+
+    HAL_FLASH_Unlock();
+    HAL_StatusTypeDef status = HAL_FLASHEx_Erase(&eraseInit, &sectorError);
+    HAL_FLASH_Lock();
+
+    if (status != HAL_OK || sectorError != 0xFFFFFFFFU)
+        return HAL_ERROR;
+
+    return HAL_OK;
+}
+
+/* Write one 32-bit word to flash at the given address.
+ * Caller must ensure address is 4-byte aligned and sector is erased. */
+HAL_StatusTypeDef flash_write_word(uint32_t address, uint32_t data)
+{
+    HAL_FLASH_Unlock();
+
+    HAL_StatusTypeDef status =
+        HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, address, (uint64_t)data);
+
+    if (status != HAL_OK)
+    {
+        uint32_t err = HAL_FLASH_GetError();
+        (void)err;   /* log err in production */
+        __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |
+                               FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR |
+                               FLASH_FLAG_PGSERR);
+    }
+
+    HAL_FLASH_Lock();
+    return status;
+}
+
+/* Write a buffer of bytes to flash (word-aligned write loop) */
+HAL_StatusTypeDef flash_write_buffer(uint32_t address,
+                                      const uint8_t *data,
+                                      uint32_t length)
+{
+    if ((address & 0x03U) || ((uint32_t)data & 0x03U))
+        return HAL_ERROR;   /* alignment check */
+
+    HAL_FLASH_Unlock();
+    HAL_StatusTypeDef status = HAL_OK;
+
+    for (uint32_t i = 0; i < length; i += 4)
+    {
+        uint32_t word;
+        memcpy(&word, &data[i], 4);
+        status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, address + i,
+                                   (uint64_t)word);
+        if (status != HAL_OK) break;
+    }
+
+    HAL_FLASH_Lock();
+    return status;
+}
+
+/* Verify written data by reading back and comparing */
+bool flash_verify(uint32_t address, const uint8_t *expected, uint32_t length)
+{
+    return (memcmp((const void *)address, expected, length) == 0);
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 3 — JUMP TO APPLICATION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="jump-to-app" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-rocket me-2 text-teal"></i>Jump to Application</h2>
+
+                    <p>The jump-to-application is the most safety-critical step in the bootloader. Done incorrectly, the CPU will fault immediately or run garbage. Done correctly, it is invisible — the application starts exactly as if it had been the first code to run after reset.</p>
+
+                    <p><strong>Validation before jumping:</strong> check two things. First, the initial stack pointer (stored at <code>APPLICATION_ADDRESS + 0</code>) must point into valid SRAM — on STM32F4, SRAM1 is at 0x20000000, so a valid MSP is in the range 0x20000000–0x2001FFFF. Second, the reset handler address (stored at <code>APPLICATION_ADDRESS + 4</code>) must point into the flash region allocated to the application. If either check fails, do not jump.</p>
+
+                    <p><strong>Pre-jump cleanup:</strong> disable all interrupts (<code>__disable_irq()</code>), disable and de-initialise all peripherals the bootloader used (UART, DMA, timers), reset SysTick to prevent a tick interrupt from firing immediately after the jump, and disable all NVIC peripheral interrupts. The application will re-initialise everything from scratch.</p>
+
+                    <p><strong>VTOR relocation:</strong> the Cortex-M Vector Table Offset Register defaults to 0 (pointing to the vector table at 0x08000000 — the bootloader's vector table). The application must update <code>SCB-&gt;VTOR</code> to point to its own vector table at <code>APPLICATION_ADDRESS</code>. This is best done at the very start of <code>SystemInit()</code> in the application's startup code.</p>
+
+                    <pre><code class="language-c">/* ---------------------------------------------------------------
+ * jump_to_application(): validate, de-init, set MSP, call ResetHandler.
+ * --------------------------------------------------------------- */
+#include "stm32f4xx_hal.h"
+#include "core_cm4.h"
+
+#define APPLICATION_ADDRESS   0x08010000UL
+#define SRAM1_BASE_ADDR       0x20000000UL
+#define SRAM1_END_ADDR        0x2001FFFFUL
+#define FLASH_APP_END_ADDR    0x080FFFFFUL
+
+typedef void (*AppResetHandler_t)(void);
+
+static bool is_app_valid(void)
+{
+    uint32_t sp  = *(volatile uint32_t *)(APPLICATION_ADDRESS);
+    uint32_t pc  = *(volatile uint32_t *)(APPLICATION_ADDRESS + 4U);
+
+    /* Stack pointer must be in SRAM */
+    if (sp < SRAM1_BASE_ADDR || sp > SRAM1_END_ADDR)
+        return false;
+
+    /* Reset vector must be in application flash region (thumb bit set) */
+    uint32_t reset_addr = pc & ~1U;
+    if (reset_addr < APPLICATION_ADDRESS || reset_addr > FLASH_APP_END_ADDR)
+        return false;
+
+    return true;
+}
+
+void jump_to_application(void)
+{
+    if (!is_app_valid())
+    {
+        /* Log error and stay in bootloader */
+        HAL_UART_Transmit(&huart1, (uint8_t *)"APP INVALID\r\n", 13, 100);
+        return;
+    }
+
+    /* 1. Disable all interrupts */
+    __disable_irq();
+
+    /* 2. De-initialise all HAL peripherals used by the bootloader */
+    HAL_UART_DeInit(&huart1);
+    HAL_RTC_DeInit(&hrtc);
+    HAL_RCC_DeInit();        /* restores default clock config */
+
+    /* 3. Reset SysTick — prevent early tick interrupts in app */
+    SysTick->CTRL = 0;
+    SysTick->LOAD = 0;
+    SysTick->VAL  = 0;
+
+    /* 4. Disable all NVIC peripheral interrupts */
+    for (int i = 0; i < 8; i++)
+        NVIC->ICER[i] = 0xFFFFFFFFU;
+
+    /* 5. Clear all pending NVIC interrupts */
+    for (int i = 0; i < 8; i++)
+        NVIC->ICPR[i] = 0xFFFFFFFFU;
+
+    /* 6. Set Main Stack Pointer from application's vector table */
+    uint32_t app_sp = *(volatile uint32_t *)(APPLICATION_ADDRESS);
+    __set_MSP(app_sp);
+
+    /* 7. VTOR will be set by the application's SystemInit().
+     *    Set it here too for safety. */
+    SCB->VTOR = APPLICATION_ADDRESS;
+
+    /* 8. Call the application's reset handler */
+    uint32_t app_reset = *(volatile uint32_t *)(APPLICATION_ADDRESS + 4U);
+    AppResetHandler_t resetHandler = (AppResetHandler_t)(app_reset);
+
+    __enable_irq();
+    resetHandler();   /* never returns */
+}</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        <strong>Application-side: set VTOR in SystemInit().</strong> In the application's <code>system_stm32f4xx.c</code>, add <code>SCB-&gt;VTOR = APPLICATION_ADDRESS;</code> as the very first line of <code>SystemInit()</code>. If the application uses a CMSIS-provided <code>SystemInit()</code>, add it in the <code>/* USER CODE */</code> section. Without this, all interrupts will vector to the bootloader's handlers once the NVIC is re-enabled.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 4 — UART FIRMWARE UPDATE PROTOCOL
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="uart-update" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-exchange-alt me-2 text-teal"></i>UART Firmware Update Protocol</h2>
+
+                    <p>A simple binary frame protocol over UART is the most reliable update mechanism for manufacturing and field service. It does not require USB drivers, works at any baud rate, and can be scripted from any host platform.</p>
+
+                    <p><strong>Protocol frame structure:</strong></p>
+                    <ul>
+                        <li><code>SYNC</code> frame: host sends <code>0x7F</code> byte; bootloader responds <code>0x79</code> (ACK) or <code>0x1F</code> (NAK).</li>
+                        <li><code>ERASE</code> command: erase all application sectors. Bootloader responds ACK when done (may take seconds for large flash).</li>
+                        <li><code>DATA</code> frame: 128-byte payload + 2-byte CRC16/CCITT-FALSE. Bootloader verifies CRC, writes to flash, responds ACK or NAK.</li>
+                        <li><code>VERIFY</code> command: host sends expected CRC32 of entire image; bootloader verifies and responds ACK or NAK.</li>
+                        <li><code>BOOT</code> command: jump to new application.</li>
+                    </ul>
+
+                    <p><strong>CRC16/CCITT-FALSE</strong> (polynomial 0x1021, init 0xFFFF, no reflect) provides sufficient integrity for detecting transmission errors on noisy UART links. The PC-side tool (Python, C#, or any scripting language) computes the same CRC per frame and the bootloader verifies it.</p>
+
+                    <p><strong>Timeout handling:</strong> the bootloader waits up to 5 seconds for the first SYNC byte. Within a transfer, each DATA frame must arrive within 2 seconds. On timeout, the bootloader sends NAK and the host retries up to 3 times before aborting.</p>
+
+                    <pre><code class="language-c">/* ---------------------------------------------------------------
+ * UART update state machine: SYNC → ERASE → RX_DATA → VERIFY → BOOT
+ * Each DATA frame: 128 bytes payload + 2-byte CRC16.
+ * --------------------------------------------------------------- */
+#include "stm32f4xx_hal.h"
+#include <stdbool.h>
+#include <stdint.h>
+
+#define FRAME_SIZE        128U
+#define CMD_SYNC          0x7FU
+#define CMD_ERASE         0xEEU
+#define CMD_DATA          0xDAU
+#define CMD_VERIFY        0xCCU
+#define CMD_BOOT          0xBBU
+#define ACK               0x79U
+#define NAK               0x1FU
+#define RX_TIMEOUT_MS     2000U
+
+extern UART_HandleTypeDef huart1;
+
+static uint16_t crc16_ccitt(const uint8_t *data, uint16_t len)
+{
+    uint16_t crc = 0xFFFFU;
+    for (uint16_t i = 0; i < len; i++) {
+        crc ^= (uint16_t)data[i] << 8;
+        for (int b = 0; b < 8; b++)
+            crc = (crc & 0x8000U) ? (crc << 1) ^ 0x1021U : crc << 1;
+    }
+    return crc;
+}
+
+static bool uart_recv_byte(uint8_t *b, uint32_t timeout_ms)
+{
+    return HAL_UART_Receive(&huart1, b, 1, timeout_ms) == HAL_OK;
+}
+
+static void uart_send_byte(uint8_t b)
+{
+    HAL_UART_Transmit(&huart1, &b, 1, 100);
+}
+
+void bootloader_uart_update(void)
+{
+    uint8_t cmd;
+    uint8_t frame[FRAME_SIZE + 2];   /* payload + 2-byte CRC */
+    uint32_t write_addr  = APPLICATION_ADDRESS;
+    uint32_t total_bytes = 0;
+
+    /* STATE: SYNC — wait for host */
+    while (true)
+    {
+        if (!uart_recv_byte(&cmd, 5000)) { uart_send_byte(NAK); continue; }
+        if (cmd == CMD_SYNC) { uart_send_byte(ACK); break; }
+        uart_send_byte(NAK);
+    }
+
+    /* STATE: ERASE */
+    if (!uart_recv_byte(&cmd, RX_TIMEOUT_MS) || cmd != CMD_ERASE)
+        { uart_send_byte(NAK); return; }
+
+    if (flash_erase_app_sectors() != HAL_OK)
+        { uart_send_byte(NAK); return; }
+
+    uart_send_byte(ACK);
+
+    /* STATE: RX_DATA — receive frames until CMD_VERIFY */
+    while (true)
+    {
+        if (!uart_recv_byte(&cmd, RX_TIMEOUT_MS)) { uart_send_byte(NAK); return; }
+
+        if (cmd == CMD_VERIFY) break;   /* move to verify state */
+
+        if (cmd != CMD_DATA) { uart_send_byte(NAK); continue; }
+
+        /* Receive 128 bytes + 2-byte CRC */
+        if (HAL_UART_Receive(&huart1, frame, FRAME_SIZE + 2, RX_TIMEOUT_MS) != HAL_OK)
+            { uart_send_byte(NAK); continue; }
+
+        uint16_t rx_crc  = ((uint16_t)frame[FRAME_SIZE] << 8) | frame[FRAME_SIZE + 1];
+        uint16_t cmp_crc = crc16_ccitt(frame, FRAME_SIZE);
+
+        if (rx_crc != cmp_crc) { uart_send_byte(NAK); continue; }
+
+        if (flash_write_buffer(write_addr, frame, FRAME_SIZE) != HAL_OK)
+            { uart_send_byte(NAK); return; }
+
+        write_addr  += FRAME_SIZE;
+        total_bytes += FRAME_SIZE;
+        uart_send_byte(ACK);
+    }
+
+    /* STATE: VERIFY — receive expected CRC32 (4 bytes) */
+    uint8_t crc_buf[4];
+    if (HAL_UART_Receive(&huart1, crc_buf, 4, RX_TIMEOUT_MS) != HAL_OK)
+        { uart_send_byte(NAK); return; }
+
+    uint32_t expected_crc = ((uint32_t)crc_buf[0] << 24) |
+                            ((uint32_t)crc_buf[1] << 16) |
+                            ((uint32_t)crc_buf[2] <<  8) |
+                             (uint32_t)crc_buf[3];
+
+    /* Full CRC32 verification handled in verify_application() */
+    (void)expected_crc;
+    uart_send_byte(ACK);
+
+    /* STATE: BOOT */
+    if (!uart_recv_byte(&cmd, RX_TIMEOUT_MS) || cmd != CMD_BOOT)
+        { uart_send_byte(NAK); return; }
+
+    uart_send_byte(ACK);
+    HAL_Delay(10);   /* allow ACK to transmit */
+    jump_to_application();
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 5 — USB DFU
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="usb-dfu" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-usb me-2 text-teal"></i>USB DFU (Device Firmware Upgrade)</h2>
+
+                    <p>USB DFU is a standardised firmware update protocol defined in USB Device Class Specification for Device Firmware Upgrade, revision 1.1. Every modern operating system has a built-in DFU driver, and <code>dfu-util</code> is a free, cross-platform command-line tool that handles DFU transfers without installing proprietary software.</p>
+
+                    <p><strong>ST DFU implementation:</strong> STM32Cube includes the DFU USB Device class under <code>Middlewares/ST/STM32_USB_Device_Library/Class/DFU/</code>. CubeMX can generate the scaffolding: enable USB_OTG_FS, select Device Only mode, add the DFU class. The key parameters are:</p>
+                    <ul>
+                        <li><code>USBD_DFU_APP_DEFAULT_ADD</code> — the start address of the application region (must match <code>APPLICATION_ADDRESS</code>).</li>
+                        <li><code>USBD_DFU_XFER_SIZE</code> — the DFU transfer block size (typically 2048 bytes for STM32F4).</li>
+                        <li>The DFU descriptor's <em>@Internal Flash</em> string lists the accessible flash regions in the format expected by dfu-util.</li>
+                    </ul>
+
+                    <p><strong>dfu-util command line:</strong> once the device is in DFU mode, flash the firmware with:<br>
+                    <code>dfu-util -a 0 -s 0x08010000:leave -D application.bin</code><br>
+                    The <code>:leave</code> suffix tells dfu-util to send the DFU_DETACH request after programming, causing the device to jump to the application automatically.</p>
+
+                    <pre><code class="language-c">/* ---------------------------------------------------------------
+ * DFU bootloader entry — USB FS init + DFU polling loop.
+ * Called when bootloader decides firmware update is needed via USB.
+ * --------------------------------------------------------------- */
+#include "usbd_core.h"
+#include "usbd_dfu.h"
+#include "usbd_dfu_if.h"    /* generated by CubeMX: flash read/write/erase */
+
+extern USBD_HandleTypeDef hUsbDeviceFS;
+
+/* DFU media interface (generated by CubeMX in usbd_dfu_if.c) */
+extern USBD_DFU_MediaTypeDef USBD_DFU_fops_FS;
+
+void bootloader_usb_dfu_enter(void)
+{
+    /* Initialise USB core */
+    USBD_Init(&hUsbDeviceFS, &FS_Desc, DEVICE_FS);
+
+    /* Register DFU class */
+    USBD_RegisterClass(&hUsbDeviceFS, USBD_DFU_CLASS);
+
+    /* Register DFU flash operations (read/write/erase callbacks) */
+    USBD_DFU_RegisterMedia(&hUsbDeviceFS, &USBD_DFU_fops_FS);
+
+    /* Connect to USB host */
+    USBD_Start(&hUsbDeviceFS);
+
+    /* Signal DFU mode: fast double-blink LED pattern */
+    uint32_t start = HAL_GetTick();
+
+    while (1)
+    {
+        /* Blink LED at 5 Hz to indicate DFU mode */
+        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+        HAL_Delay(100);
+
+        /* DFU timeout: 30 seconds of inactivity → jump to app */
+        if ((HAL_GetTick() - start) > 30000UL)
+        {
+            USBD_Stop(&hUsbDeviceFS);
+            USBD_DeInit(&hUsbDeviceFS);
+            jump_to_application();
+            break;
+        }
+
+        /* Check if DFU transfer completed (USBD_DFU sets a flag) */
+        /* In production: check hUsbDeviceFS.dev_state for CONFIGURED */
+    }
+}
+
+/* CubeMX-generated usbd_dfu_if.c must implement these callbacks:
+ *   DFU_Init()        — enable flash access
+ *   DFU_DeInit()      — release flash, set ready for jump
+ *   DFU_Erase(addr)   — erase sector containing addr
+ *   DFU_Write(src,dst,len) — write len bytes from src to flash at dst
+ *   DFU_Read(src,dst,len)  — read len bytes from flash at src
+ *   DFU_GetStatus()   — return status/polling timeout
+ * USBD_DFU_APP_DEFAULT_ADD must match APPLICATION_ADDRESS.         */</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Write-protect sector 0 in production.</strong> Set the write protection option byte for Sector 0 using STM32CubeProgrammer or <code>HAL_FLASHEx_OBProgram()</code>. This prevents accidental or malicious overwrite of the bootloader via the DFU interface — the DFU flash map should only include sectors 4 and above.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 6 — CRC IMAGE VALIDATION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="crc-validation" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-check-double me-2 text-teal"></i>CRC Image Validation</h2>
+
+                    <p>Before jumping to an application, the bootloader should verify that the image is intact. An erased flash region (all 0xFF bytes) is not a valid application — jumping to it produces a HardFault immediately. A truncated or corrupted image causes unpredictable behaviour. CRC32 validation catches all of these cases reliably.</p>
+
+                    <p><strong>Compile-time CRC embedding:</strong> after the linker produces the <code>.bin</code> file, a post-build script (Python or the STM32CubeIDE post-build step) computes CRC32 of the binary and appends it as the last 4 bytes, or stores it at a known fixed offset (e.g. the last word of the application's flash region). The bootloader reads the stored CRC, computes the CRC32 of the image (excluding the stored value itself), and compares.</p>
+
+                    <p><strong>Hardware CRC unit:</strong> STM32 devices include a dedicated CRC calculation unit (<code>CRC</code> peripheral) with configurable polynomial. The default polynomial (0x04C11DB7) matches standard CRC32/MPEG-2. Enable it with <code>__HAL_RCC_CRC_CLK_ENABLE()</code>. Call <code>HAL_CRC_Calculate()</code> with the data buffer — the hardware computes in parallel with the CPU, taking one cycle per word.</p>
+
+                    <p><strong>Preventing jumps to erased flash:</strong> a quick sanity check: the first word of the application region (<code>*(uint32_t*)APPLICATION_ADDRESS</code>) must not be 0xFFFFFFFF (erased) — this would be an invalid stack pointer. This check takes one cycle and filters 99% of "no firmware programmed" cases before the full CRC computation.</p>
+
+                    <pre><code class="language-c">/* ---------------------------------------------------------------
+ * verify_application(): hardware CRC32 of application flash region.
+ * CRC32 is stored at APPLICATION_ADDRESS + APP_SIZE - 4.
+ * Returns true if image is valid and safe to jump to.
+ * --------------------------------------------------------------- */
+#include "stm32f4xx_hal.h"
+
+#define APPLICATION_ADDRESS   0x08010000UL
+#define APP_FLASH_SIZE        0x000F0000UL   /* 960 KB */
+#define APP_CRC_OFFSET        (APP_FLASH_SIZE - 4U)
+
+extern CRC_HandleTypeDef hcrc;
+
+bool verify_application(void)
+{
+    volatile uint32_t *app_start = (volatile uint32_t *)APPLICATION_ADDRESS;
+
+    /* Quick check: first word must be a valid stack pointer */
+    if (*app_start == 0xFFFFFFFFUL || *app_start == 0x00000000UL)
+        return false;
+
+    /* Read the CRC32 stored by the build tool at the end of the image */
+    uint32_t stored_crc = *(volatile uint32_t *)(APPLICATION_ADDRESS +
+                                                  APP_CRC_OFFSET);
+
+    /* Compute CRC32 over the application image (excluding stored CRC word) */
+    __HAL_RCC_CRC_CLK_ENABLE();
+
+    /* Reset CRC peripheral (clears accumulator to initial value) */
+    __HAL_CRC_DR_RESET(&hcrc);
+
+    uint32_t computed_crc = HAL_CRC_Calculate(
+        &hcrc,
+        (uint32_t *)APPLICATION_ADDRESS,
+        (APP_FLASH_SIZE - 4U) / 4U   /* length in 32-bit words */
+    );
+
+    __HAL_RCC_CRC_CLK_DISABLE();
+
+    if (computed_crc != stored_crc)
+    {
+        /* Log mismatch: stored vs computed */
+        char msg[64];
+        int len = snprintf(msg, sizeof(msg),
+                           "CRC FAIL: stored=%08lX computed=%08lX\r\n",
+                           (unsigned long)stored_crc,
+                           (unsigned long)computed_crc);
+        HAL_UART_Transmit(&huart1, (uint8_t *)msg, len, 100);
+        return false;
+    }
+
+    return true;
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 7 — DUAL-BANK & FAIL-SAFE UPDATES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="dual-bank" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-shield-alt me-2 text-teal"></i>Dual-Bank &amp; Fail-Safe Updates</h2>
+
+                    <p>Single-bank updates have an inherent vulnerability: the window between erasing the old application and successfully programming the new one. A power failure during this window leaves the device with no valid firmware — it must be recovered with a debug probe, which is unacceptable in deployed hardware.</p>
+
+                    <p><strong>Dual-bank flash</strong> (available on STM32H7, L5, U5, and some G0 variants) solves this by providing two independent flash banks of equal size. The device boots from Bank 1 by default (or whichever bank is designated "active" by the BFB2 option bit). While Bank 1 runs the current application, the bootloader programs the new firmware into Bank 2 without interrupting operation. Only after full programming and CRC verification does the bootloader swap the active bank — an atomic operation triggered by setting the BFB2 option bit.</p>
+
+                    <p><strong>Bank swap mechanism:</strong> <code>HAL_FLASHEx_OBProgram()</code> with <code>OPTIONBYTE_BFB2</code> toggles the active bank. After the next reset, the CPU boots from Bank 2. The entire programming and swap procedure is fail-safe: if power is lost before the swap, Bank 1 still contains the last valid firmware and the device boots normally.</p>
+
+                    <p><strong>Version downgrade protection:</strong> the bootloader should refuse to program a firmware image with a lower version number than what is currently installed, unless a manufacturer override is explicitly authorised. Store the running version in a backup register or a dedicated flash region. This prevents accidental rollback and blocks certain downgrade attacks.</p>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Strategy</th>
+                                <th>Devices</th>
+                                <th>Power-fail safe?</th>
+                                <th>Recovery mechanism</th>
+                                <th>Complexity</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Single-bank IAP</td>
+                                <td>All STM32</td>
+                                <td>No — vulnerable during erase</td>
+                                <td>Debug probe / BOOT0 pin</td>
+                                <td>Low</td>
+                            </tr>
+                            <tr>
+                                <td>Single-bank + backup slot</td>
+                                <td>All STM32 with enough flash</td>
+                                <td>Partial — backup can restore</td>
+                                <td>Copy backup to main slot</td>
+                                <td>Medium</td>
+                            </tr>
+                            <tr>
+                                <td>Dual-bank swap (H7/L5/U5)</td>
+                                <td>STM32H7, L5, U5</td>
+                                <td>Yes — atomic bank swap</td>
+                                <td>Automatic: inactive bank untouched</td>
+                                <td>Medium-High</td>
+                            </tr>
+                            <tr>
+                                <td>External flash staging</td>
+                                <td>Any with QSPI/SD</td>
+                                <td>Yes — internal flash unchanged until verified</td>
+                                <td>Re-download from external flash</td>
+                                <td>High</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <pre><code class="language-c">/* ---------------------------------------------------------------
+ * Dual-bank update flow for STM32H7:
+ * Detect active bank, program inactive bank, verify, swap, reset.
+ * --------------------------------------------------------------- */
+#include "stm32h7xx_hal.h"
+
+#define BANK1_BASE    0x08000000UL
+#define BANK2_BASE    0x08100000UL   /* H7: Bank 2 starts at +1 MB */
+
+static uint32_t get_inactive_bank_base(void)
+{
+    /* Read OPTSR: BFB2 bit indicates current active bank */
+    FLASH_OBProgramInitTypeDef ob;
+    HAL_FLASHEx_OBGetConfig(&ob);
+
+    /* If BFB2 = 0, Bank 1 is active → program Bank 2 and vice versa */
+    if ((ob.USERConfig & OB_BFB2_ENABLE) == OB_BFB2_ENABLE)
+        return BANK1_BASE;  /* Bank 2 active → write to Bank 1 */
+    else
+        return BANK2_BASE;  /* Bank 1 active → write to Bank 2 */
+}
+
+HAL_StatusTypeDef dual_bank_update(const uint8_t *new_fw, uint32_t fw_size)
+{
+    uint32_t inactive_base = get_inactive_bank_base();
+
+    /* 1. Erase inactive bank */
+    FLASH_EraseInitTypeDef erase;
+    erase.TypeErase = FLASH_TYPEERASE_MASSERASE;
+    erase.Banks     = (inactive_base == BANK1_BASE) ? FLASH_BANK_1 : FLASH_BANK_2;
+    uint32_t err    = 0;
+
+    HAL_FLASH_Unlock();
+    if (HAL_FLASHEx_Erase(&erase, &err) != HAL_OK)
+    { HAL_FLASH_Lock(); return HAL_ERROR; }
+
+    /* 2. Program new firmware to inactive bank */
+    for (uint32_t i = 0; i < fw_size; i += 4)
+    {
+        uint32_t word;
+        memcpy(&word, &new_fw[i], 4);
+        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_FLASHWORD,
+                              inactive_base + i, (uint32_t)new_fw + i) != HAL_OK)
+        { HAL_FLASH_Lock(); return HAL_ERROR; }
+    }
+    HAL_FLASH_Lock();
+
+    /* 3. Verify CRC32 of newly programmed bank */
+    if (!crc32_verify_region(inactive_base, fw_size))
+        return HAL_ERROR;   /* stay on current bank, do not swap */
+
+    /* 4. Swap active bank (option byte write — triggers reset) */
+    HAL_FLASH_OB_Unlock();
+    FLASH_OBProgramInitTypeDef ob_prog;
+    ob_prog.OptionType = OPTIONBYTE_USER;
+    ob_prog.USERType   = OB_USER_BFB2;
+    ob_prog.USERConfig = OB_BFB2_ENABLE;  /* toggle BFB2 to swap banks */
+    HAL_FLASHEx_OBProgram(&ob_prog);
+    HAL_FLASH_OB_Launch();  /* applies option bytes and resets device */
+
+    /* Device resets here — new firmware boots from previously inactive bank */
+    return HAL_OK;
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 8 — EXERCISES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="exercises" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flask me-2 text-teal"></i>Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 1</span>
+                            <span class="badge bg-success text-white ms-2">Beginner</span>
+                        </div>
+                        <h4>Button-Triggered UART Bootloader</h4>
+                        <p>Write a bootloader that checks if the USER button is pressed at startup. If pressed, enter a simple UART update loop (polling, no CRC, 64-byte frames). If not pressed, verify the application stack pointer and jump to it. Test by flashing a "Blink v1" application (500 ms blink), then use a Python script to update to "Blink v2" (250 ms blink) via the UART bootloader. Confirm the LED blink rate changes after reset without connecting the debug probe.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">IAP Bootloader</span>
+                            <span class="bias-tag">UART Update</span>
+                            <span class="bias-tag">jump_to_application</span>
+                            <span class="bias-tag">Python Host Tool</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 2</span>
+                            <span class="badge bg-warning text-dark ms-2">Intermediate</span>
+                        </div>
+                        <h4>UART Protocol with CRC16 Frame Verification</h4>
+                        <p>Extend the Exercise 1 bootloader to use the full 128-byte frame protocol with CRC16/CCITT-FALSE verification. The PC-side Python tool computes CRC per frame and waits for ACK before sending the next. The bootloader verifies each frame and sends NAK on mismatch; the host retries up to 3 times. To test error handling: manually inject a deliberate bit error in one frame in the Python script (flip one byte). Verify the bootloader sends NAK, the host retries, and the correct data is eventually accepted. After the full transfer, verify the CRC32 of the complete image.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">CRC16</span>
+                            <span class="bias-tag">Frame Protocol</span>
+                            <span class="bias-tag">Error Injection</span>
+                            <span class="bias-tag">NAK/Retry</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 3</span>
+                            <span class="badge bg-danger text-white ms-2">Advanced</span>
+                        </div>
+                        <h4>Production STM32H7 Dual-Bank USB DFU Bootloader</h4>
+                        <p>Build a production-grade bootloader for STM32H7 using dual-bank flash. The bootloader lives in Bank 1, Sectors 0–1 (total 128 KB). The application occupies Bank 1 Sectors 2+ (minimum 384 KB for current app) and all of Bank 2 (1 MB for new firmware staging). Implement USB DFU for update transfers using the ST DFU middleware. After a full DFU transfer to the inactive bank: (1) verify CRC32 using the hardware CRC unit; (2) if valid, set BFB2 option bit and reset; (3) on power-up, if the new application signature word is invalid, automatically revert by clearing BFB2 and resetting. Measure the total update time from dfu-util invocation to first blink of new firmware for a 512 KB binary.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">STM32H7</span>
+                            <span class="bias-tag">Dual-Bank</span>
+                            <span class="bias-tag">USB DFU</span>
+                            <span class="bias-tag">CRC32</span>
+                            <span class="bias-tag">Option Bytes</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 9 — BOOTLOADER DESIGN TOOL
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="bootloader-design-tool" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-file-alt me-2 text-teal"></i>Bootloader Design Tool</h2>
+
+                    <p>Document your STM32 bootloader design — target MCU, flash layout, update interface, image validation strategy, and fail-safe approach. Download as Word, Excel, PDF, or PPTX for design reviews or production handoff.</p>
+
+                    <div class="canvas-form" id="stm32BootForm">
+                        <h4 class="canvas-form-title"><i class="fas fa-download me-2"></i>STM32 Bootloader Design Generator</h4>
+                        <p class="form-help-text">Document your IAP bootloader — flash layout, update protocol, image validation, fail-safe strategy. Download as Word, Excel, PDF, or PPTX.</p>
+                        <div id="stm32BootBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <p class="form-privacy-notice"><i class="fas fa-shield-alt"></i> All data stays in your browser. Nothing is sent to or stored on any server.</p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32BootProjName">Project Name *</label>
+                                <input type="text" id="stm32BootProjName" placeholder="e.g., ProductX IAP Bootloader v2.1">
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32BootTarget">Target MCU *</label>
+                                <input type="text" id="stm32BootTarget" placeholder="Target MCU, e.g. STM32F407VGT6">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32BootSize">Bootloader Flash Size (KB)</label>
+                                <input type="text" id="stm32BootSize" placeholder="e.g., 64 KB (Sectors 0–3)">
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32BootAppAddress">Application Start Address (hex)</label>
+                                <input type="text" id="stm32BootAppAddress" placeholder="e.g. 0x08010000">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32BootInterface">Update Interface</label>
+                                <select id="stm32BootInterface">
+                                    <option value="">Select interface...</option>
+                                    <option value="UART">UART</option>
+                                    <option value="USB DFU">USB DFU</option>
+                                    <option value="SPI">SPI</option>
+                                    <option value="I2C">I2C</option>
+                                    <option value="CAN">CAN</option>
+                                    <option value="UART+USB">UART + USB DFU</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32BootValidation">Image Validation</label>
+                                <select id="stm32BootValidation">
+                                    <option value="">Select validation...</option>
+                                    <option value="None">None (stack pointer check only)</option>
+                                    <option value="Stack pointer check">Stack pointer + reset vector check</option>
+                                    <option value="CRC32">CRC32 (hardware CRC unit)</option>
+                                    <option value="SHA256+RSA">SHA256 + RSA signature</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32BootFlashLayout">Flash Layout</label>
+                                <textarea id="stm32BootFlashLayout" rows="5" placeholder="Flash layout — sector, address range, content, size&#10;e.g., Sector 0: 0x08000000-0x08003FFF, 16 KB, Bootloader&#10;Sector 4: 0x08010000-0x0801FFFF, 64 KB, Application start"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32BootFailsafe">Fail-Safe Strategy</label>
+                                <select id="stm32BootFailsafe">
+                                    <option value="">Select strategy...</option>
+                                    <option value="Stay in bootloader">Stay in bootloader (wait for new update)</option>
+                                    <option value="Revert to backup">Revert to backup image in secondary slot</option>
+                                    <option value="GPIO trigger">GPIO trigger / physical intervention</option>
+                                    <option value="Dual-bank swap">Dual-bank swap (H7/L5/U5)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label for="stm32BootNotes">Design Notes</label>
+                                <textarea id="stm32BootNotes" rows="3" placeholder="Any additional design notes, constraints, or assumptions..."></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="stm32BootHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="stm32BootHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="stm32BootHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-generate" onclick="stm32BootHandler.generatePPTX()"><i class="fas fa-file-powerpoint me-1"></i>PPTX</button>
+                            <button class="btn-reset" onclick="stm32BootHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="stm32BootSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="stm32BootSuccessText"></span></div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 10 — CONCLUSION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="conclusion" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion &amp; Next Steps</h2>
+
+                    <p>In this article we have built a complete bootloader toolkit for STM32:</p>
+                    <ul>
+                        <li>The <strong>boot decision</strong> uses a magic word in the RTC backup register (for OTA-triggered updates), a GPIO pin (for manufacturing), or automatic CRC failure detection — combining all three covers every update scenario.</li>
+                        <li><strong>Flash programming</strong> requires the strict unlock → erase → write → lock sequence. Always verify the written data before declaring success.</li>
+                        <li>The <strong>jump-to-application</strong> must validate the stack pointer and reset vector, disable all interrupts, de-initialise all peripherals, reset SysTick, and update MSP before calling the application's reset handler. The application must set SCB-&gt;VTOR to its own base address in SystemInit().</li>
+                        <li>A <strong>UART frame protocol</strong> with CRC16 per frame gives robust, portable update capability with no USB driver requirement.</li>
+                        <li><strong>USB DFU</strong> is the cleanest end-user experience — standard OS driver, <code>dfu-util</code> on all platforms, no custom host software needed.</li>
+                        <li><strong>CRC32 image validation</strong> using the hardware CRC unit prevents jumps to erased or corrupted firmware. Embed the CRC at build time using a post-build Python script.</li>
+                        <li><strong>Dual-bank updates</strong> on STM32H7/L5/U5 provide atomic, power-fail-safe firmware replacement — the gold standard for field-deployed systems.</li>
+                    </ul>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="stm32-hal-part16-external-storage.html"><strong>Part 16: External Storage — SD &amp; QSPI Flash</strong></a>, we mount FATFS on an SD card over SPI or SDMMC, read and write QSPI NOR flash at full quad-SPI speeds, enable memory-mapped execution directly from QSPI flash, and implement basic wear-levelling awareness when using NOR flash for configuration storage.</p>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 16: External Storage — SD &amp; QSPI Flash</h5>
+                            <p>FATFS on SD card, QSPI NOR flash driver, memory-mapped execution, wear-levelling strategies for NOR flash configuration storage.</p>
+                            <a href="stm32-hal-part16-external-storage.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 13: USB CDC Virtual COM Port</h5>
+                            <p>USB FS/HS stack, CDC class driver, virtual serial port, control transfers, and USB descriptor configuration — foundation for USB DFU.</p>
+                            <a href="stm32-hal-part13-usb-cdc.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 18: Production Readiness</h5>
+                            <p>Watchdog timers, HardFault handler implementation, flash option bytes write-protection, code signing, and CI/CD pipeline for STM32 firmware.</p>
+                            <a href="stm32-hal-part18-production-readiness.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div><!-- end col-lg-8 -->
+            </div><!-- end row -->
+        </div><!-- end container -->
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> |
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> |
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? &#9749; <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Document Generation -->
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-stm32-hal.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- STM32 Bootloader Design Form Handler -->
+    <script>
+        var stm32BootPersistence = new FormPersistence('stm32-p15-boot-draft', {
+            'stm32BootProjName':   'projectName',
+            'stm32BootTarget':     'targetMcu',
+            'stm32BootSize':       'bootloaderSize',
+            'stm32BootAppAddress': 'appStartAddress',
+            'stm32BootInterface':  'updateInterface',
+            'stm32BootValidation': 'imageValidation',
+            'stm32BootFlashLayout':'flashLayout',
+            'stm32BootFailsafe':   'failsafeStrategy',
+            'stm32BootNotes':      'notes'
+        }, 'stm32BootBadge');
+
+        var stm32BootHandler = new CanvasFormHandler({
+            formId:         'stm32BootForm',
+            successId:      'stm32BootSuccess',
+            successTextId:  'stm32BootSuccessText',
+            persistence:    stm32BootPersistence,
+            filenameField:  'projectName',
+            filenameSuffix: '-stm32-bootloader-design',
+            requiredFields: ['stm32BootProjName', 'stm32BootTarget'],
+            requiredMessage:'Please enter a Project Name and Target MCU.',
+            docType:        'Stm32BootloaderDesign'
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            stm32BootPersistence.init();
+        });
+    </script>
+
+</body>
+</html>

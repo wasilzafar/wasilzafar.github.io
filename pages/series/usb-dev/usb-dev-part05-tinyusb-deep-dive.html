@@ -1,0 +1,1701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Master the TinyUSB stack — understand its architecture, board support layer, configuration options, initialization sequence, task loop design, all callback types, memory management, and how to port TinyUSB to a new MCU." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="TinyUSB, TinyUSB deep dive, TinyUSB architecture, tusb_config.h, tud_task, USB callbacks, TinyUSB STM32, TinyUSB RP2040, USB stack embedded" />
+    <meta property="og:title" content="TinyUSB Deep Dive — USB Development Mastery Series Part 5" />
+    <meta property="og:description" content="Master the TinyUSB stack — architecture, configuration, initialization sequence, task loop, all callback types, memory management, and porting to a new MCU." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>TinyUSB Deep Dive — USB Development Mastery Series Part 5 - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/usb-dev/usb-dev-part05-tinyusb-deep-dive.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting (6 themes) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'ad_user_data': 'granted',
+            'ad_personalization': 'granted',
+            'analytics_storage': 'granted'
+        });
+
+        gtag('set', 'url_passthrough', true);
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+            var f = d.getElementsByTagName(s)[0],
+                j = d.createElement(s),
+                dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking &ldquo;Accept All&rdquo;, you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/"><span class="gradient-text">Wasil Zafar</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Technology</a>
+                <h1 class="display-4 fw-bold mb-3">USB Part 5: TinyUSB Deep Dive</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>March 31, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>22 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Master the TinyUSB stack — understand its architecture, board support layer, configuration options, initialization sequence, task loop design, all callback types, memory management, and how to port TinyUSB to a new MCU.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#tinyusb-architecture" onclick="closeNav()">TinyUSB Architecture</a></li>
+            <li><a href="#board-support-porting" onclick="closeNav()">Board Support &amp; Porting</a></li>
+            <li><a href="#initialization-sequence" onclick="closeNav()">Initialization Sequence</a></li>
+            <li><a href="#task-loop" onclick="closeNav()">The Task Loop</a></li>
+            <li><a href="#device-callbacks" onclick="closeNav()">Device Callbacks</a></li>
+            <li><a href="#cdc-callbacks" onclick="closeNav()">CDC Callbacks</a></li>
+            <li><a href="#hid-callbacks" onclick="closeNav()">HID Callbacks</a></li>
+            <li><a href="#memory-management" onclick="closeNav()">Memory Management</a></li>
+            <li><a href="#debugging-tinyusb" onclick="closeNav()">Debugging TinyUSB</a></li>
+            <li><a href="#porting-checklist" onclick="closeNav()">Porting Checklist</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Practical Exercises</a></li>
+            <li><a href="#usb-tiny-tool" onclick="closeNav()">TinyUSB Porting Plan Tool</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 1 — TINYUSB ARCHITECTURE (first: no mt-5)
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="tinyusb-architecture" class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Series Context:</strong> This is Part 5 of our 17-part USB Development Mastery series. Part 4 surveyed every USB device class and how to choose the right one. Now we go deep into the TinyUSB stack itself — the code-level implementation detail you need to write production USB firmware.
+                    </div>
+
+                    <!-- Series Navigation Path -->
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-plug"></i></div>
+                            <h4>USB Development Mastery</h4>
+                            <div class="path-subtitle">Your 17-step learning path &bull; Currently on Step 5</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="usb-dev-part01-fundamentals.html" class="step-card">
+                                <div class="step-num completed">1</div>
+                                <div class="step-info"><h6>USB Fundamentals</h6><small>USB system architecture, transfer types, host/device model, protocol stack</small></div>
+                            </a>
+                            <a href="usb-dev-part02-electrical-hardware.html" class="step-card">
+                                <div class="step-num completed">2</div>
+                                <div class="step-info"><h6>Electrical &amp; Hardware Layer</h6><small>D+/D- signalling, pull-ups, connectors, USB-C, STM32 USB peripherals</small></div>
+                            </a>
+                            <a href="usb-dev-part03-protocol-enumeration.html" class="step-card">
+                                <div class="step-num completed">3</div>
+                                <div class="step-info"><h6>Protocol &amp; Enumeration</h6><small>Enumeration sequence, USB packets, descriptors, endpoint concepts</small></div>
+                            </a>
+                            <a href="usb-dev-part04-device-classes.html" class="step-card">
+                                <div class="step-num completed">4</div>
+                                <div class="step-info"><h6>Device Classes Overview</h6><small>CDC, HID, MSC, Audio, DFU, vendor class, IAD, class code tables</small></div>
+                            </a>
+                            <div class="step-card current">
+                                <div class="step-num active">5</div>
+                                <div class="step-info"><h6>TinyUSB Deep Dive</h6><small>Architecture, configuration, init sequence, callbacks, memory management, porting</small></div>
+                                <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                            </div>
+                            <a href="usb-dev-part06-cdc-virtual-com.html" class="step-card">
+                                <div class="step-num upcoming">6</div>
+                                <div class="step-info"><h6>CDC Virtual COM Port</h6><small>CDC class, bulk transfers, printf over USB, baud rate handling</small></div>
+                            </a>
+                            <a href="usb-dev-part07-hid-keyboard-mouse.html" class="step-card">
+                                <div class="step-num upcoming">7</div>
+                                <div class="step-info"><h6>HID Keyboard &amp; Mouse</h6><small>HID descriptors, report format, keyboard/mouse/gamepad implementation</small></div>
+                            </a>
+                            <a href="usb-dev-part08-mass-storage.html" class="step-card">
+                                <div class="step-num upcoming">8</div>
+                                <div class="step-info"><h6>USB Mass Storage</h6><small>MSC class, SCSI commands, FATFS integration, RAM disk</small></div>
+                            </a>
+                            <a href="usb-dev-part09-composite-devices.html" class="step-card">
+                                <div class="step-num upcoming">9</div>
+                                <div class="step-info"><h6>Composite Devices</h6><small>Multiple classes, IAD descriptor, CDC+HID, CDC+MSC</small></div>
+                            </a>
+                            <a href="usb-dev-part10-debugging.html" class="step-card">
+                                <div class="step-num upcoming">10</div>
+                                <div class="step-info"><h6>Debugging USB</h6><small>Wireshark capture, protocol analyser, enumeration debugging, common failures</small></div>
+                            </a>
+                            <a href="usb-dev-part11-rtos-integration.html" class="step-card">
+                                <div class="step-num upcoming">11</div>
+                                <div class="step-info"><h6>RTOS + USB Integration</h6><small>FreeRTOS + TinyUSB, task priorities, thread-safe communication</small></div>
+                            </a>
+                            <a href="usb-dev-part12-advanced-topics.html" class="step-card">
+                                <div class="step-num upcoming">12</div>
+                                <div class="step-info"><h6>Advanced USB Topics</h6><small>Host mode, OTG, isochronous, USB audio, USB video</small></div>
+                            </a>
+                            <a href="usb-dev-part13-performance.html" class="step-card">
+                                <div class="step-num upcoming">13</div>
+                                <div class="step-info"><h6>Performance &amp; Optimisation</h6><small>DMA, zero-copy buffers, throughput maximisation, latency tuning</small></div>
+                            </a>
+                            <a href="usb-dev-part14-custom-class-drivers.html" class="step-card">
+                                <div class="step-num upcoming">14</div>
+                                <div class="step-info"><h6>Custom USB Class Drivers</h6><small>Vendor class, writing descriptors, OS driver interaction</small></div>
+                            </a>
+                            <a href="usb-dev-part15-bare-metal-usb.html" class="step-card">
+                                <div class="step-num upcoming">15</div>
+                                <div class="step-info"><h6>Bare-Metal USB</h6><small>Direct register programming, writing USB stack from scratch, PHY timing</small></div>
+                            </a>
+                            <a href="usb-dev-part16-security.html" class="step-card">
+                                <div class="step-num upcoming">16</div>
+                                <div class="step-info"><h6>Security in USB</h6><small>BadUSB attacks, device authentication, secure firmware, USB firewall</small></div>
+                            </a>
+                            <a href="usb-dev-part17-hardware-design.html" class="step-card">
+                                <div class="step-num upcoming">17</div>
+                                <div class="step-info"><h6>USB Hardware Design</h6><small>PCB layout, differential pairs, impedance matching, EMI, USB-C PD</small></div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <h2><i class="fas fa-layer-group me-2 text-teal"></i>TinyUSB Architecture</h2>
+
+                    <p>TinyUSB (<a href="https://github.com/hathach/tinyusb" target="_blank">github.com/hathach/tinyusb</a>) is a fully open-source, MIT-licensed USB stack designed specifically for microcontrollers. It was created by Ha Thach and is now one of the most widely used USB stacks in embedded development — used by the RP2040 SDK, Adafruit libraries, and countless production firmware projects. Its design philosophy is clear and uncompromising: <strong>no dynamic memory allocation, C99 compliance, cooperative execution model, and hardware abstraction through a minimal porting interface.</strong></p>
+
+                    <h3>The Layered Architecture</h3>
+
+                    <p>TinyUSB is organised into four distinct layers. Each layer communicates only with the layer immediately above and below it, making the stack highly testable and portable:</p>
+
+                    <pre><code class="language-bash">┌─────────────────────────────────────────────────────────────────┐
+│  APPLICATION LAYER                                              │
+│  Your firmware: app callbacks, data processing, business logic  │
+│  tud_cdc_rx_cb(), tud_hid_get_report_cb(), etc.                 │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │ Application callbacks (weak symbols)
+┌─────────────────────────▼───────────────────────────────────────┐
+│  CLASS DRIVER LAYER   (src/class/)                              │
+│  cdc/  hid/  msc/  audio/  video/  dfu/  vendor/               │
+│  Each class driver manages: endpoints, state machines, buffers  │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │ usbd_* APIs
+┌─────────────────────────▼───────────────────────────────────────┐
+│  CORE USB LAYER       (src/device/)                             │
+│  usbd.c: enumeration, control transfers, class dispatch         │
+│  tusb.c: init, task scheduler                                   │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │ dcd_* functions (Device Controller Driver)
+┌─────────────────────────▼───────────────────────────────────────┐
+│  HARDWARE ABSTRACTION (src/portable/)                           │
+│  synopsys/  nxp/  microchip/  st/  raspberrypi/  ...           │
+│  dcd_stm32_fsdev.c, dcd_dwc2.c, dcd_rp2040.c, etc.             │
+└─────────────────────────────────────────────────────────────────┘</code></pre>
+
+                    <h3>Key Source Directories</h3>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr><th>Directory</th><th>Contents</th><th>You Modify?</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>src/tusb.h</code></td><td>Main include file — include this and only this in application code</td><td>No</td></tr>
+                            <tr><td><code>src/device/usbd.c</code></td><td>Core USB device stack — enumeration, EP0 handling, class dispatch</td><td>No</td></tr>
+                            <tr><td><code>src/device/usbd_pvt.h</code></td><td>Private device API for class drivers</td><td>No</td></tr>
+                            <tr><td><code>src/class/cdc/</code></td><td>CDC class driver (cdc_device.c, cdc_device.h)</td><td>No (configure via tusb_config.h)</td></tr>
+                            <tr><td><code>src/class/hid/</code></td><td>HID class driver (hid_device.c)</td><td>No</td></tr>
+                            <tr><td><code>src/class/msc/</code></td><td>MSC class driver (msc_device.c) + SCSI command parsing</td><td>No</td></tr>
+                            <tr><td><code>src/portable/</code></td><td>Hardware DCD (Device Controller Driver) implementations per MCU</td><td>Only when porting a new MCU</td></tr>
+                            <tr><td><code>hw/bsp/</code></td><td>Board Support Packages for known boards</td><td>Add your board here when porting</td></tr>
+                            <tr><td><code>tusb_config.h</code></td><td>Your configuration file — this is where all customisation lives</td><td>Yes — this is your primary config file</td></tr>
+                            <tr><td><code>usb_descriptors.c</code></td><td>Your descriptor definitions (Device, Config, HID Report, etc.)</td><td>Yes — write your descriptors here</td></tr>
+                        </tbody>
+                    </table>
+
+                    <h3>Design Principles That Shape Everything</h3>
+
+                    <p>Understanding TinyUSB's design principles prevents hours of confusion when you encounter unexpected behaviour:</p>
+                    <ul>
+                        <li><strong>No dynamic memory:</strong> TinyUSB never calls <code>malloc()</code> or <code>free()</code>. All buffers are statically allocated at compile time, sized by macros in <code>tusb_config.h</code>. This makes stack usage deterministic — critical for safety-critical applications and MISRA compliance.</li>
+                        <li><strong>Cooperative execution:</strong> TinyUSB is not interrupt-driven in the traditional sense. The USB interrupt handler (DCD layer) enqueues events into a ring buffer. <code>tud_task()</code> dequeues and processes those events. Your application calls <code>tud_task()</code> repeatedly — either in a super-loop or in a dedicated RTOS task.</li>
+                        <li><strong>Weak symbol callbacks:</strong> All application callbacks (<code>tud_cdc_rx_cb</code>, <code>tud_hid_get_report_cb</code>, etc.) are declared as weak symbols. If you don't implement them, the linker uses the default empty implementations. This allows incremental development — add callbacks only for the functionality you need.</li>
+                        <li><strong>C99 only:</strong> No C++ features, no compiler extensions beyond those universally supported on ARM GCC. This ensures portability across LLVM/Clang, IAR, and ARMCC as well.</li>
+                    </ul>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 2 — BOARD SUPPORT & PORTING
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="board-support-porting" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-microchip me-2 text-teal"></i>Board Support &amp; Porting</h2>
+
+                    <p>Every TinyUSB project must have a <code>tusb_config.h</code> file. TinyUSB locates this file by expecting it in a directory listed in your compiler's include path. This file is the single place where you configure the entire stack — which MCU, which OS, which classes, how many instances of each class, and buffer sizes.</p>
+
+                    <h3>tusb_config.h — Complete Configuration Reference</h3>
+
+                    <pre><code class="language-c">/* tusb_config.h — complete configuration example for STM32F4 + FreeRTOS CDC+HID */
+
+#ifndef _TUSB_CONFIG_H_
+#define _TUSB_CONFIG_H_
+
+/* ─────────────────────────────────────────────────────────────────────────
+   1. MCU Selection — tells TinyUSB which portable DCD driver to compile in
+   ───────────────────────────────────────────────────────────────────────── */
+#define CFG_TUSB_MCU   OPT_MCU_STM32F4
+
+/* Other common values:
+   OPT_MCU_RP2040        — Raspberry Pi RP2040
+   OPT_MCU_STM32F0       — STM32F0 (Cortex-M0, FSDEV peripheral)
+   OPT_MCU_STM32F1       — STM32F1 (FSDEV peripheral)
+   OPT_MCU_STM32F2       — STM32F2 (Synopsys OTG_FS)
+   OPT_MCU_STM32F7       — STM32F7 (OTG_FS or OTG_HS)
+   OPT_MCU_STM32H7       — STM32H7 (OTG_FS or OTG_HS)
+   OPT_MCU_NRF5X         — Nordic nRF52840
+   OPT_MCU_SAMD51        — Microchip SAMD51
+   OPT_MCU_ESP32S2       — Espressif ESP32-S2
+   OPT_MCU_GD32VF103     — GigaDevice GD32VF103 (RISC-V)
+*/
+
+/* ─────────────────────────────────────────────────────────────────────────
+   2. OS Selection — cooperative bare-metal or RTOS
+   ───────────────────────────────────────────────────────────────────────── */
+#define CFG_TUSB_OS    OPT_OS_FREERTOS
+
+/* OPT_OS_NONE      — bare-metal cooperative (tud_task() in super-loop)
+   OPT_OS_FREERTOS  — FreeRTOS (tud_task() in a dedicated task)
+   OPT_OS_MYNEWT    — Apache Mynewt
+   OPT_OS_PICO      — Raspberry Pi Pico SDK (uses pico SDK scheduler)
+*/
+
+/* ─────────────────────────────────────────────────────────────────────────
+   3. Debug Level
+   ───────────────────────────────────────────────────────────────────────── */
+#define CFG_TUSB_DEBUG  0  /* 0=off, 1=error/warning, 2=verbose (all traffic) */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   4. Memory Placement — DMA-capable SRAM section and alignment
+   ───────────────────────────────────────────────────────────────────────── */
+/* For STM32F4: AHB SRAM (0x20000000) is DMA-capable; DTCMRAM is NOT */
+#define CFG_TUSB_MEM_SECTION  __attribute__((section(".usb_buf")))
+#define CFG_TUSB_MEM_ALIGN    __attribute__((aligned(4)))
+
+/* ─────────────────────────────────────────────────────────────────────────
+   5. Device Class Configuration
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Enable CDC — set to number of CDC interfaces (usually 1 or 2) */
+#define CFG_TUD_CDC              1
+
+/* CDC TX/RX buffer sizes (bytes) — must be power of 2, ≥ 64 */
+#define CFG_TUD_CDC_RX_BUFSIZE   512
+#define CFG_TUD_CDC_TX_BUFSIZE   512
+
+/* Enable HID — set to number of HID interfaces */
+#define CFG_TUD_HID              1
+
+/* HID EP buffer size (bytes) — must match wMaxPacketSize in descriptor */
+#define CFG_TUD_HID_EP_BUFSIZE   64
+
+/* Enable MSC — 0 or 1 */
+#define CFG_TUD_MSC              0
+
+/* MSC block count and size (only if CFG_TUD_MSC > 0) */
+/* #define CFG_TUD_MSC_EP_BUFSIZE   512 */
+
+/* Enable MIDI — 0 or number of instances */
+#define CFG_TUD_MIDI             0
+
+/* Enable DFU Runtime — 0 or 1 */
+#define CFG_TUD_DFU_RUNTIME      0
+
+/* Enable Vendor class — 0 or 1 */
+#define CFG_TUD_VENDOR           0
+
+/* Vendor EP buffer sizes */
+/* #define CFG_TUD_VENDOR_RX_BUFSIZE 64  */
+/* #define CFG_TUD_VENDOR_TX_BUFSIZE 64  */
+
+#endif /* _TUSB_CONFIG_H_ */</code></pre>
+
+                    <h3>The DCD Porting Interface</h3>
+
+                    <p>If you are using a supported MCU, you never need to touch the DCD layer. TinyUSB selects the correct <code>dcd_*.c</code> file automatically based on <code>CFG_TUSB_MCU</code>. However, understanding the DCD interface is essential if you are porting TinyUSB to an unsupported MCU. The DCD interface consists of these functions that you must implement:</p>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr><th>Function</th><th>Purpose</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>dcd_init()</code></td><td>Configure USB peripheral clocks, GPIO, enable USB interrupt</td></tr>
+                            <tr><td><code>dcd_int_enable()</code></td><td>Enable USB peripheral interrupt in NVIC</td></tr>
+                            <tr><td><code>dcd_int_disable()</code></td><td>Disable USB peripheral interrupt</td></tr>
+                            <tr><td><code>dcd_set_address()</code></td><td>Set USB device address after SET_ADDRESS request</td></tr>
+                            <tr><td><code>dcd_remote_wakeup()</code></td><td>Drive remote wakeup signalling</td></tr>
+                            <tr><td><code>dcd_connect()</code></td><td>Connect USB D+ pull-up (if software-controlled)</td></tr>
+                            <tr><td><code>dcd_disconnect()</code></td><td>Disconnect USB D+ pull-up</td></tr>
+                            <tr><td><code>dcd_edpt_open()</code></td><td>Configure and open an endpoint (set type, direction, max packet size)</td></tr>
+                            <tr><td><code>dcd_edpt_close_all()</code></td><td>Close all endpoints (called on bus reset)</td></tr>
+                            <tr><td><code>dcd_edpt_xfer()</code></td><td>Start a data transfer on an endpoint</td></tr>
+                            <tr><td><code>dcd_edpt_stall()</code></td><td>Stall an endpoint</td></tr>
+                            <tr><td><code>dcd_edpt_clear_stall()</code></td><td>Clear endpoint stall</td></tr>
+                        </tbody>
+                    </table>
+
+                    <p>The DCD implementation calls <code>dcd_event_*()</code> functions to notify the core layer of hardware events — bus reset, SETUP packet received, transfer complete, SOF (Start of Frame). These events are enqueued into TinyUSB's internal event FIFO and processed by <code>tud_task()</code>.</p>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 3 — INITIALIZATION SEQUENCE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="initialization-sequence" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-play me-2 text-teal"></i>Initialization Sequence</h2>
+
+                    <p>The initialization sequence for TinyUSB is simple in structure but has a non-obvious ordering requirement: <strong>USB clocks must be configured before <code>tusb_init()</code> is called.</strong> On STM32F4 this means enabling the USB OTG_FS clock via RCC and setting up the HSE/PLL to produce the 48 MHz USB clock reference. Calling <code>tusb_init()</code> before the USB clock is ready produces silent failures — the DCD init code reads undefined hardware state and the peripheral may appear to start but never generates valid USB signalling.</p>
+
+                    <h3>Complete main() for STM32F4 CDC Device</h3>
+
+                    <pre><code class="language-c">/* main.c — complete TinyUSB CDC device on STM32F407 */
+
+#include "stm32f4xx_hal.h"
+#include "tusb.h"
+
+/* ─── Clock Configuration ─────────────────────────────────────────────── */
+static void SystemClock_Config(void)
+{
+    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+    /* Enable HSE (8 MHz crystal on most Nucleo/Discovery boards) */
+    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+    RCC_OscInitStruct.HSEState       = RCC_HSE_ON;
+    RCC_OscInitStruct.PLL.PLLState   = RCC_PLL_ON;
+    RCC_OscInitStruct.PLL.PLLSource  = RCC_PLLSOURCE_HSE;
+
+    /* PLL config: SYSCLK = (HSE * PLLN) / (PLLM * PLLP)
+       USB clock = (HSE * PLLN) / (PLLM * PLLQ) — must equal 48 MHz
+       With 8 MHz HSE: PLLM=8, PLLN=336, PLLP=2 → SYSCLK=168 MHz
+                       PLLQ=7 → USB=48 MHz */
+    RCC_OscInitStruct.PLL.PLLM = 8;
+    RCC_OscInitStruct.PLL.PLLN = 336;
+    RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+    RCC_OscInitStruct.PLL.PLLQ = 7;
+
+    HAL_RCC_OscConfig(&RCC_OscInitStruct);
+
+    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK
+                                | RCC_CLOCKTYPE_PCLK1  | RCC_CLOCKTYPE_PCLK2;
+    RCC_ClkInitStruct.SYSCLKSource   = RCC_SYSCLKSOURCE_PLLCLK;
+    RCC_ClkInitStruct.AHBCLKDivider  = RCC_SYSCLK_DIV1;   /* HCLK  = 168 MHz */
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;     /* PCLK1 =  42 MHz */
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;     /* PCLK2 =  84 MHz */
+
+    HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5);
+
+    /* Enable USB OTG_FS clock — MUST be done before tusb_init() */
+    __HAL_RCC_USB_OTG_FS_CLK_ENABLE();
+}
+
+/* ─── GPIO for USB (PA11 = D-, PA12 = D+) ────────────────────────────── */
+static void USB_GPIO_Init(void)
+{
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+
+    GPIO_InitTypeDef gpio = {0};
+    gpio.Pin       = GPIO_PIN_11 | GPIO_PIN_12;
+    gpio.Mode      = GPIO_MODE_AF_PP;
+    gpio.Pull      = GPIO_NOPULL;
+    gpio.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+    gpio.Alternate = GPIO_AF10_OTG_FS;
+    HAL_GPIO_Init(GPIOA, &gpio);
+}
+
+int main(void)
+{
+    /* 1. HAL init — must be first */
+    HAL_Init();
+
+    /* 2. System clock configuration — must happen before tusb_init() */
+    SystemClock_Config();
+
+    /* 3. USB GPIO configuration */
+    USB_GPIO_Init();
+
+    /* 4. board_init() equivalent — configure status LED, debug UART, etc. */
+    /* (your board-specific init here) */
+
+    /* 5. Initialise TinyUSB — this calls dcd_init() internally */
+    tusb_init();
+
+    /* 6. Super-loop */
+    while (1)
+    {
+        /* TinyUSB device task — must be called repeatedly */
+        tud_task();
+
+        /* Your application logic */
+        cdc_task();
+    }
+}
+
+/* ─── Application CDC task — called from super-loop ─────────────────── */
+void cdc_task(void)
+{
+    /* Echo any received bytes back to host */
+    if (tud_cdc_available())
+    {
+        uint8_t buf[64];
+        uint32_t count = tud_cdc_read(buf, sizeof(buf));
+
+        /* Echo back */
+        tud_cdc_write(buf, count);
+        tud_cdc_write_flush();
+    }
+}</code></pre>
+
+                    <h3>tusb_init() Internals</h3>
+
+                    <p>When <code>tusb_init()</code> is called, it performs the following sequence internally:</p>
+                    <ol>
+                        <li>Calls <code>dcd_init()</code> — hardware USB peripheral initialisation, enables the USB clock within the peripheral, configures endpoint 0 buffer</li>
+                        <li>Calls <code>dcd_connect()</code> — asserts the D+ pull-up resistor, signalling device presence to the host</li>
+                        <li>Initialises the event queue (FIFO) for DCD→core event passing</li>
+                        <li>Initialises all enabled class drivers (CDC, HID, MSC) — each class driver sets up its static state variables and endpoint buffers</li>
+                        <li>Sets device state to <code>TUSB_DEVICE_STATE_UNATTACHED</code></li>
+                    </ol>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Common Mistake:</strong> Calling <code>tusb_init()</code> before enabling the USB peripheral clock in RCC. On STM32F4 this requires <code>__HAL_RCC_USB_OTG_FS_CLK_ENABLE()</code> before the TinyUSB call. The symptom is that the device never appears on the host — no enumeration starts. The DCD code silently initialises into a non-functional state when the peripheral clock is gated off.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 4 — THE TASK LOOP
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="task-loop" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-sync-alt me-2 text-teal"></i>The Task Loop</h2>
+
+                    <p><code>tud_task()</code> is the heart of TinyUSB. It is the function you must call repeatedly for USB communication to work. Understanding exactly what happens inside <code>tud_task()</code> — and what latency requirements it imposes — is essential for correct application design.</p>
+
+                    <h3>What tud_task() Does</h3>
+
+                    <p>Every time <code>tud_task()</code> is called, it:</p>
+                    <ol>
+                        <li>Dequeues the next event from the DCD event FIFO (populated by the USB interrupt handler)</li>
+                        <li>Dispatches the event to the appropriate handler:
+                            <ul>
+                                <li><code>DCD_EVENT_BUS_RESET</code> → resets all class drivers, sets address to 0, fires <code>tud_umount_cb()</code></li>
+                                <li><code>DCD_EVENT_SETUP_RECEIVED</code> → passes SETUP packet to <code>usbd.c</code> for standard request handling or class dispatch</li>
+                                <li><code>DCD_EVENT_XFER_COMPLETE</code> → notifies the class driver that an IN or OUT transfer completed; class driver fires the application callback</li>
+                                <li><code>DCD_EVENT_SOF</code> → fires the SOF callback (rarely used in device applications)</li>
+                            </ul>
+                        </li>
+                        <li>Returns after processing one event (or returns immediately if the queue is empty)</li>
+                    </ol>
+
+                    <p>Critically, <code>tud_task()</code> processes <strong>one event per call</strong>. If events are queued faster than you call <code>tud_task()</code>, the event FIFO fills up and events are dropped. The FIFO depth is set by <code>CFG_TUSB_RHPORT_EVENT_QUEUE_SIZE</code> (default 16 in recent TinyUSB versions). For high-throughput applications, call <code>tud_task()</code> in a tight loop.</p>
+
+                    <h3>Bare-Metal Super-Loop Pattern</h3>
+
+                    <pre><code class="language-c">/* Bare-metal super-loop pattern — correct TinyUSB usage */
+int main(void)
+{
+    board_init();
+    tusb_init();
+
+    while (1)
+    {
+        /* Call tud_task() as often as possible.
+           Each call processes at most one USB event from the queue.
+           For bulk data transfers, multiple calls per ms may be needed. */
+        tud_task();
+
+        /* Application-level tasks — keep these non-blocking */
+        sensor_update();
+        led_update();
+        /* Do NOT sleep here or add delays — this starves tud_task() */
+    }
+}</code></pre>
+
+                    <h3>FreeRTOS Task Pattern</h3>
+
+                    <p>When using FreeRTOS with <code>CFG_TUSB_OS = OPT_OS_FREERTOS</code>, TinyUSB replaces its cooperative yield with FreeRTOS task notifications. The USB interrupt handler sends a task notification to the USB task instead of just pushing to a queue. This means the USB task can block (yield) when there is no USB activity, rather than spinning and consuming CPU.</p>
+
+                    <pre><code class="language-c">/* FreeRTOS USB task — TinyUSB with OPT_OS_FREERTOS */
+
+#include "FreeRTOS.h"
+#include "task.h"
+#include "tusb.h"
+
+/* USB device task — dedicated high-priority task */
+void usb_device_task(void *param)
+{
+    (void) param;
+
+    /* Initialise TinyUSB — must be called from the USB task context
+       when using FreeRTOS, so that tusb_init() registers this task
+       as the task to notify on USB events */
+    tusb_init();
+
+    while (1)
+    {
+        /* tud_task() blocks (via FreeRTOS task notification) when idle.
+           It unblocks immediately when the USB interrupt fires.
+           This is far more CPU-efficient than a bare-metal super-loop. */
+        tud_task();
+    }
+    /* Never reached */
+}
+
+/* CDC application task — separate task, lower priority */
+void cdc_app_task(void *param)
+{
+    (void) param;
+
+    while (1)
+    {
+        /* Check for received CDC data — non-blocking check */
+        if (tud_cdc_available())
+        {
+            uint8_t buf[256];
+            uint32_t count = tud_cdc_read(buf, sizeof(buf));
+            /* Process received data */
+            process_command(buf, count);
+        }
+        /* Yield every 10 ms if nothing to do */
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+int main(void)
+{
+    SystemClock_Config();
+    board_init();
+
+    /* USB task: highest priority among application tasks — priority 5 */
+    xTaskCreate(usb_device_task, "usbd", 3072, NULL, 5, NULL);
+
+    /* CDC application task: lower priority — priority 2 */
+    xTaskCreate(cdc_app_task,    "cdc",  1024, NULL, 2, NULL);
+
+    vTaskStartScheduler();
+    /* Never reached */
+    return 0;
+}</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Priority Rule:</strong> The USB task must be the highest-priority task in your system (or at least higher than any task that may call USB APIs). If a lower-priority task holds a mutex while a higher-priority task tries to transmit USB data, the USB task may be starved. TinyUSB's FreeRTOS integration uses a critical section (task notification) that only works correctly when the USB task has the highest effective priority. If USB enumeration fails only when other tasks are running, incorrect task priority is the first thing to check.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 5 — DEVICE CALLBACKS
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="device-callbacks" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-bell me-2 text-teal"></i>Device Callbacks</h2>
+
+                    <p>TinyUSB notifies your application of USB lifecycle events through device-level callbacks. These are declared as weak symbols in TinyUSB — you implement only the ones you need. Each callback is called from within <code>tud_task()</code>, not from the interrupt handler directly.</p>
+
+                    <h3>Lifecycle Callbacks</h3>
+
+                    <pre><code class="language-c">/* usb_callbacks.c — implement device-level TinyUSB callbacks */
+
+#include "tusb.h"
+#include "led.h"   /* hypothetical LED status driver */
+
+/* ─── tud_mount_cb ──────────────────────────────────────────────────────
+   Called when the device has successfully enumerated and the host has
+   set a configuration. At this point the device is fully operational:
+   all endpoints are configured, class drivers are ready.
+   ─────────────────────────────────────────────────────────────────────── */
+void tud_mount_cb(void)
+{
+    led_set_status(LED_USB_CONNECTED);
+
+    /* Safe to start sending data now */
+    /* Do NOT attempt tud_cdc_write() before tud_mount_cb() fires */
+}
+
+/* ─── tud_umount_cb ─────────────────────────────────────────────────────
+   Called when the device has been unmounted (cable unplugged, host USB
+   reset, or host driver unloaded the device). All endpoint transfers
+   that were in progress have been cancelled.
+   ─────────────────────────────────────────────────────────────────────── */
+void tud_umount_cb(void)
+{
+    led_set_status(LED_USB_DISCONNECTED);
+
+    /* Stop any ongoing data transmission — the endpoints are closed */
+    /* Pending tud_cdc_write() data is discarded */
+}
+
+/* ─── tud_suspend_cb ────────────────────────────────────────────────────
+   Called when the USB bus has been idle for > 3 ms — the host has
+   stopped generating SOF tokens, indicating USB Suspend state.
+   The device must reduce its bus current draw to ≤ 2.5 mA within 7 ms.
+   'remote_wakeup_en' is true if the host has enabled remote wakeup.
+   ─────────────────────────────────────────────────────────────────────── */
+void tud_suspend_cb(bool remote_wakeup_en)
+{
+    (void) remote_wakeup_en;
+
+    /* Enter low-power mode — reduce system clock, gate peripherals */
+    led_set_status(LED_USB_SUSPENDED);
+
+    /* If remote_wakeup_en, you can wake the host by calling
+       tud_remote_wakeup() when the user presses a button */
+}
+
+/* ─── tud_resume_cb ─────────────────────────────────────────────────────
+   Called when the USB bus resumes from Suspend state — the host has
+   started generating SOF tokens again.
+   ─────────────────────────────────────────────────────────────────────── */
+void tud_resume_cb(void)
+{
+    /* Restore normal operating frequency and peripheral state */
+    led_set_status(LED_USB_CONNECTED);
+}
+
+/* ─── tud_vendor_control_xfer_cb ────────────────────────────────────────
+   Called when a vendor-specific control request arrives on EP0.
+   bmRequestType has Vendor type set (bits [6:5] = 0b10).
+   Must return true if the request was handled, false to STALL EP0.
+   ─────────────────────────────────────────────────────────────────────── */
+bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
+                                 tusb_control_request_t const *request)
+{
+    if (stage != CONTROL_STAGE_SETUP) return true; /* ACK setup only */
+
+    switch (request->bRequest)
+    {
+        case 0x01:  /* Custom command: set LED colour */
+            if (request->bmRequestType_bit.direction == TUSB_DIR_OUT)
+            {
+                /* For OUT requests, data arrives in DATA stage — return true
+                   to accept; TinyUSB calls this callback again with
+                   stage == CONTROL_STAGE_DATA when data is ready */
+                return tud_control_xfer(rhport, request, NULL, 0);
+            }
+            return false;
+
+        case 0x02:  /* Custom command: get firmware version */
+        {
+            static const uint8_t fw_ver[4] = {0x01, 0x02, 0x00, 0x00};
+            return tud_control_xfer(rhport, request,
+                                    (void*)fw_ver, sizeof(fw_ver));
+        }
+
+        default:
+            return false;  /* Stall unknown vendor requests */
+    }
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 6 — CDC CALLBACKS
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="cdc-callbacks" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-terminal me-2 text-teal"></i>CDC Callbacks in TinyUSB</h2>
+
+                    <p>CDC callbacks are the interface between TinyUSB's CDC class driver and your application. The CDC driver handles all the USB-level framing — CBW/CSW for control, bulk transfers for data. Your callbacks deal only with the data bytes and line-state events.</p>
+
+                    <h3>Complete CDC Echo with Flow Control</h3>
+
+                    <pre><code class="language-c">/* cdc_device_callbacks.c — production-quality CDC echo with flow control */
+
+#include "tusb.h"
+#include &lt;string.h&gt;
+
+/* ─── tud_cdc_rx_cb ─────────────────────────────────────────────────────
+   Called when the CDC driver has received data from the host and stored
+   it in the RX ring buffer. 'itf' is the CDC interface index (0 for the
+   first CDC interface).
+   ─────────────────────────────────────────────────────────────────────── */
+void tud_cdc_rx_cb(uint8_t itf)
+{
+    (void) itf;
+
+    /* Read all available bytes — tud_cdc_available() returns the byte count */
+    while (tud_cdc_available())
+    {
+        uint8_t buf[64];
+        uint32_t count = tud_cdc_read(buf, sizeof(buf));
+
+        /* Echo bytes back — tud_cdc_write() copies into TX ring buffer */
+        uint32_t written = tud_cdc_write(buf, count);
+
+        if (written < count)
+        {
+            /* TX buffer full — in production: implement backpressure or
+               drop data depending on your protocol requirements */
+        }
+    }
+
+    /* Flush: initiate the IN transfer to the host.
+       Without this call, data sits in the TX buffer until the buffer fills
+       or a timeout triggers an automatic flush (implementation-defined).
+       Always call tud_cdc_write_flush() after writing to guarantee
+       the data reaches the host promptly. */
+    tud_cdc_write_flush();
+}
+
+/* ─── tud_cdc_tx_complete_cb ────────────────────────────────────────────
+   Called when a CDC IN transfer has completed — the host has received
+   the data that was in the TX buffer. Use this to start the next write
+   in a ping-pong or streaming scenario.
+   ─────────────────────────────────────────────────────────────────────── */
+void tud_cdc_tx_complete_cb(uint8_t itf)
+{
+    (void) itf;
+    /* Signal application layer that TX buffer space is available */
+    /* In a streaming scenario: enqueue the next chunk of data here */
+}
+
+/* ─── tud_cdc_line_coding_cb ────────────────────────────────────────────
+   Called when the host sends a SET_LINE_CODING request — the host is
+   configuring the virtual serial port baud rate, stop bits, parity.
+   For a pure USB CDC device, you can ignore these settings entirely — the
+   USB transfers at USB speed regardless of the reported baud rate.
+   Only relevant if your CDC device bridges to a physical UART.
+   ─────────────────────────────────────────────────────────────────────── */
+void tud_cdc_line_coding_cb(uint8_t itf,
+                             cdc_line_coding_t const *p_line_coding)
+{
+    (void) itf;
+
+    /* p_line_coding->bit_rate  — baud rate (e.g., 115200) */
+    /* p_line_coding->stop_bits — 0=1bit, 1=1.5bit, 2=2bit */
+    /* p_line_coding->parity    — 0=none, 1=odd, 2=even, 3=mark, 4=space */
+    /* p_line_coding->data_bits — 5, 6, 7, 8, or 16 */
+
+    /* Example: bridge to UART — reconfigure UART with new settings */
+    if (p_line_coding->bit_rate != 0)
+    {
+        UART_Reconfigure(p_line_coding->bit_rate,
+                         p_line_coding->stop_bits,
+                         p_line_coding->parity,
+                         p_line_coding->data_bits);
+    }
+}
+
+/* ─── tud_cdc_line_state_cb ─────────────────────────────────────────────
+   Called when the host sends SET_CONTROL_LINE_STATE — RTS and DTR signals.
+   DTR (dtr=true) means the host serial application has opened the COM port.
+   RTS controls flow (if hardware flow control is in use).
+   ─────────────────────────────────────────────────────────────────────── */
+void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts)
+{
+    (void) itf;
+    (void) rts;
+
+    /* DTR transition is the most commonly used signal:
+       dtr=true  — host has opened the serial port (terminal connected)
+       dtr=false — host has closed the serial port */
+    if (dtr)
+    {
+        /* Terminal opened — send welcome message */
+        const char *msg = "\r\nUSB CDC Device Ready\r\n> ";
+        tud_cdc_write_str(msg);
+        tud_cdc_write_flush();
+    }
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 7 — HID CALLBACKS
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="hid-callbacks" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-keyboard me-2 text-teal"></i>HID Callbacks in TinyUSB</h2>
+
+                    <p>HID callbacks in TinyUSB are slightly different from CDC callbacks in that they are <em>request-driven</em> rather than data-driven. The HID GET_REPORT request (and the periodic IN transfer that TinyUSB manages automatically) ask your firmware to provide the current HID report. You provide it by returning data from the callback or by calling <code>tud_hid_report()</code> from your task loop.</p>
+
+                    <h3>HID Report Descriptor Macros</h3>
+
+                    <p>TinyUSB provides a comprehensive set of macros in <code>class/hid/hid.h</code> for building HID Report Descriptors. These macros correspond directly to the HID items described in Part 4:</p>
+
+                    <pre><code class="language-c">/* usb_descriptors.c — HID Report Descriptor using TinyUSB macros */
+
+#include "tusb.h"
+
+/* Keyboard Report Descriptor using TinyUSB macros */
+uint8_t const desc_hid_report[] =
+{
+    TUD_HID_REPORT_DESC_KEYBOARD(HID_REPORT_ID(REPORT_ID_KEYBOARD))
+};
+
+/* Mouse Report Descriptor — provided by TinyUSB as a complete macro */
+/* uint8_t const desc_hid_report[] = {
+    TUD_HID_REPORT_DESC_MOUSE(HID_REPORT_ID(REPORT_ID_MOUSE))
+}; */
+
+/* Custom 64-byte generic HID report descriptor */
+/* uint8_t const desc_hid_report[] = {
+    HID_USAGE_PAGE (HID_USAGE_PAGE_VENDOR),
+    HID_USAGE      (0x01),
+    HID_COLLECTION (HID_COLLECTION_APPLICATION),
+        HID_REPORT_ID (REPORT_ID_CUSTOM),
+        HID_USAGE      (0x02),
+        HID_LOGICAL_MIN  (0),
+        HID_LOGICAL_MAX  (255),
+        HID_REPORT_SIZE  (8),
+        HID_REPORT_COUNT (63),
+        HID_INPUT  (HID_DATA | HID_VARIABLE | HID_ABSOLUTE),
+        HID_USAGE      (0x03),
+        HID_REPORT_COUNT (63),
+        HID_OUTPUT (HID_DATA | HID_VARIABLE | HID_ABSOLUTE),
+    HID_COLLECTION_END
+}; */</code></pre>
+
+                    <h3>HID Callbacks Implementation</h3>
+
+                    <pre><code class="language-c">/* hid_callbacks.c — TinyUSB HID device callbacks */
+
+#include "tusb.h"
+#include &lt;string.h&gt;
+
+/* Report IDs — must match the Report Descriptor */
+enum {
+    REPORT_ID_KEYBOARD = 1,
+    REPORT_ID_MOUSE    = 2,
+};
+
+/* ─── tud_hid_get_report_cb ─────────────────────────────────────────────
+   Called when the host sends a HID GET_REPORT control request.
+   This happens at enumeration (to verify the device) and occasionally
+   at runtime. Return the report data via the provided buffer.
+   'report_type' is HID_REPORT_TYPE_INPUT, _OUTPUT, or _FEATURE.
+   Return 0 to STALL (report not available); return report length on success.
+   ─────────────────────────────────────────────────────────────────────── */
+uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id,
+                                hid_report_type_t report_type,
+                                uint8_t *buffer, uint16_t reqlen)
+{
+    (void) itf;
+    (void) reqlen;
+
+    if (report_id == REPORT_ID_KEYBOARD &&
+        report_type == HID_REPORT_TYPE_INPUT)
+    {
+        /* Return current keyboard state — 8 bytes:
+           [modifier][reserved][keycode0..keycode5] */
+        hid_keyboard_report_t report = {0};
+        /* Populate from your keyboard matrix scan here */
+        memcpy(buffer, &report, sizeof(report));
+        return sizeof(report);
+    }
+
+    return 0;  /* Stall unknown report types */
+}
+
+/* ─── tud_hid_set_report_cb ─────────────────────────────────────────────
+   Called when the host sends a HID SET_REPORT control request or
+   writes to the HID OUT endpoint. Used for LED output reports
+   (keyboard Num/Caps/Scroll Lock), haptic feedback, actuator control.
+   ─────────────────────────────────────────────────────────────────────── */
+void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id,
+                            hid_report_type_t report_type,
+                            uint8_t const *buffer, uint16_t bufsize)
+{
+    (void) itf;
+    (void) bufsize;
+
+    if (report_id == REPORT_ID_KEYBOARD &&
+        report_type == HID_REPORT_TYPE_OUTPUT)
+    {
+        /* Keyboard LED output report — first byte contains LED bits:
+           Bit 0: Num Lock LED
+           Bit 1: Caps Lock LED
+           Bit 2: Scroll Lock LED */
+        uint8_t kbd_leds = buffer[0];
+        LED_SetNumLock   ((kbd_leds >> 0) & 1);
+        LED_SetCapsLock  ((kbd_leds >> 1) & 1);
+        LED_SetScrollLock((kbd_leds >> 2) & 1);
+    }
+}
+
+/* ─── Sending reports from the task loop ────────────────────────────────
+   In addition to the request-driven callbacks above, you can send HID
+   reports proactively from your application task using tud_hid_report()
+   or the class-specific helpers.
+   ─────────────────────────────────────────────────────────────────────── */
+void keyboard_task(void)
+{
+    /* Only send if device is mounted and previous report was sent */
+    if (!tud_hid_ready()) return;
+
+    /* Example: send 'A' key press */
+    static bool key_pressed = false;
+
+    if (!key_pressed)
+    {
+        /* Press 'A' — keycode 0x04 */
+        tud_hid_keyboard_report(REPORT_ID_KEYBOARD,
+                                 0,          /* modifier: none */
+                                 (uint8_t[]){0x04, 0, 0, 0, 0, 0});
+        key_pressed = true;
+    }
+    else
+    {
+        /* Release all keys — send empty report */
+        tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, NULL);
+        key_pressed = false;
+    }
+}
+
+void mouse_task(void)
+{
+    if (!tud_hid_ready()) return;
+
+    /* Move mouse +5 pixels in X, 0 in Y, no buttons, no scroll */
+    tud_hid_mouse_report(REPORT_ID_MOUSE,
+                          0,     /* buttons: none */
+                          5,     /* x delta: +5 pixels */
+                          0,     /* y delta */
+                          0,     /* vertical scroll */
+                          0);    /* horizontal scroll */
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 8 — MEMORY MANAGEMENT
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="memory-management" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-memory me-2 text-teal"></i>Memory Management</h2>
+
+                    <p>Memory management is where TinyUSB projects on STM32 most commonly fail silently. The root cause is always the same: USB endpoint buffers placed in SRAM that the USB DMA engine cannot access. Understanding the SRAM topology of your specific STM32 is not optional — it is a prerequisite for correct USB operation.</p>
+
+                    <h3>The STM32 DTCMRAM Problem</h3>
+
+                    <p>STM32F7 and STM32H7 devices have <strong>DTCM (Data Tightly Coupled Memory)</strong> — a very fast zero-wait-state SRAM intended for performance-critical data. However, DTCMRAM is connected directly to the Cortex-M7 core, <em>not</em> to the AHB bus matrix. This means the USB DMA controller cannot access DTCMRAM. If TinyUSB's endpoint buffers land in DTCMRAM, USB transfers silently fail — the DMA writes to the buffer but the CPU reads zeros, or vice versa.</p>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr><th>STM32 Family</th><th>USB-Capable SRAM</th><th>DMA-Incapable SRAM</th><th>Default Stack Location</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>STM32F4</td><td>AHB SRAM (0x20000000)</td><td>CCM SRAM (0x10000000) — no DMA</td><td>Usually AHB SRAM (safe)</td></tr>
+                            <tr><td>STM32F7</td><td>AXI SRAM (0x20000000)</td><td>DTCMRAM (0x20000000 on some variants) — no DMA</td><td>Depends on linker script</td></tr>
+                            <tr><td>STM32H7</td><td>AXI SRAM D1 (0x24000000)</td><td>DTCMRAM (0x20000000) — no DMA</td><td>Often DTCMRAM — UNSAFE for USB</td></tr>
+                            <tr><td>RP2040</td><td>All SRAM is DMA-capable</td><td>N/A</td><td>Safe</td></tr>
+                            <tr><td>nRF52840</td><td>All RAM (0x20000000)</td><td>N/A</td><td>Safe</td></tr>
+                        </tbody>
+                    </table>
+
+                    <h3>CFG_TUSB_MEM_SECTION and CFG_TUSB_MEM_ALIGN</h3>
+
+                    <p>TinyUSB applies <code>CFG_TUSB_MEM_SECTION</code> and <code>CFG_TUSB_MEM_ALIGN</code> to all internal endpoint buffers. You must set these macros to place buffers in the correct SRAM region:</p>
+
+                    <pre><code class="language-c">/* tusb_config.h — memory placement for STM32H7 */
+
+/* On STM32H7, AXI SRAM D1 at 0x24000000 is USB DMA-capable.
+   DTCMRAM at 0x20000000 is NOT USB DMA-capable.
+   The default linker script may place .bss in DTCMRAM on H7.
+   We must force USB buffers into AXI SRAM. */
+
+#define CFG_TUSB_MEM_SECTION  __attribute__((section(".usb_buf")))
+#define CFG_TUSB_MEM_ALIGN    __attribute__((aligned(4)))
+
+/*
+   In your linker script (STM32H7xx_FLASH.ld), add a section for USB buffers
+   that maps to AXI SRAM:
+
+   MEMORY {
+     AXISRAM   (xrw)  : ORIGIN = 0x24000000, LENGTH = 512K
+     DTCMRAM   (xrw)  : ORIGIN = 0x20000000, LENGTH = 128K
+     ...
+   }
+
+   SECTIONS {
+     .usb_buf (NOLOAD) : {
+       . = ALIGN(4);
+       *(.usb_buf)
+       *(.usb_buf*)
+       . = ALIGN(4);
+     } >AXISRAM
+
+     .bss : {
+       ...
+     } >DTCMRAM
+   }
+*/</code></pre>
+
+                    <h3>Endpoint Buffer Placement Example</h3>
+
+                    <pre><code class="language-c">/* For your own application buffers that exchange data with TinyUSB,
+   apply the same section attribute to ensure DMA-safe placement */
+
+CFG_TUSB_MEM_SECTION CFG_TUSB_MEM_ALIGN
+static uint8_t usb_rx_buf[512];  /* DMA-safe RX scratch buffer */
+
+CFG_TUSB_MEM_SECTION CFG_TUSB_MEM_ALIGN
+static uint8_t usb_tx_buf[512];  /* DMA-safe TX scratch buffer */
+
+/* Without these attributes on STM32H7, if the linker places these
+   buffers in DTCMRAM, tud_cdc_read() will silently return garbage
+   and tud_cdc_write() will appear to succeed but the host receives
+   no data — one of the most confusing USB bugs to diagnose. */</code></pre>
+
+                    <h3>Alignment Requirements</h3>
+
+                    <p>USB endpoint buffers typically require 4-byte alignment for the DMA engine. The Synopsys OTG IP (used in STM32F2/F4/F7/H7) requires endpoint descriptors and data buffers to be 4-byte aligned. Some MCUs (RP2040 native USB) have no alignment requirement but TinyUSB applies 4-byte alignment universally for safety. The <code>CFG_TUSB_MEM_ALIGN</code> macro handles this — do not remove or reduce it.</p>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 9 — DEBUGGING TINYUSB
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="debugging-tinyusb" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-bug me-2 text-teal"></i>Debugging TinyUSB</h2>
+
+                    <p>TinyUSB's built-in debug output is invaluable for diagnosing enumeration failures and unexpected behaviour. Enabled by setting <code>CFG_TUSB_DEBUG</code> to 1 or 2, it outputs structured log messages over a UART or ITM SWO channel.</p>
+
+                    <h3>Debug Levels</h3>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr><th>CFG_TUSB_DEBUG</th><th>Output</th><th>Use When</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>0</td>
+                                <td>No output</td>
+                                <td>Production firmware — zero overhead</td>
+                            </tr>
+                            <tr>
+                                <td>1</td>
+                                <td>Errors and warnings only. Reports assert failures, stalled endpoints, and class driver errors.</td>
+                                <td>Development — low noise, catches real problems</td>
+                            </tr>
+                            <tr>
+                                <td>2</td>
+                                <td>Full verbose trace. Logs every USB event, every control request, every endpoint transfer start and completion. Produces enormous output — typically thousands of lines per second during active USB traffic.</td>
+                                <td>Debugging enumeration failures, investigating unexpected behaviour</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h3>Configuring Debug Output</h3>
+
+                    <p>TinyUSB debug output uses <code>tu_printf</code> which maps to <code>printf</code>. You must implement a UART-backed <code>printf</code> using the retarget mechanism:</p>
+
+                    <pre><code class="language-c">/* uart_retarget.c — redirect printf to UART1 for TinyUSB debug output */
+
+#include "stm32f4xx_hal.h"
+#include &lt;stdio.h&gt;
+
+extern UART_HandleTypeDef huart1;  /* configured for 115200 8N1 */
+
+/* Retarget _write() for GCC newlib — printf calls this */
+int _write(int fd, char *ptr, int len)
+{
+    (void) fd;
+    HAL_UART_Transmit(&huart1, (uint8_t*)ptr, (uint16_t)len, HAL_MAX_DELAY);
+    return len;
+}
+
+/*
+   tusb_config.h additions for debug:
+
+   #define CFG_TUSB_DEBUG  2
+
+   With level 2, expect output like:
+   [100] USBD init
+   [105] DCD init rhport=0
+   [200] BUS RESET
+   [250] Speed = Full Speed
+   [300] SETUP bmRequestType=0x80 bRequest=0x06 wValue=0x0100 wIndex=0x0000 wLength=18
+   [310] Get Device Descriptor
+   [350] SETUP complete status=0
+   [400] SET_ADDRESS = 5
+   ...
+   [800] Mount callback
+*/</code></pre>
+
+                    <h3>Key Status Query Functions</h3>
+
+                    <p>Before sending data or trusting callbacks, use TinyUSB's state query functions:</p>
+
+                    <pre><code class="language-c">/* State query functions — use these to gate USB operations */
+
+/* tud_connected(): true if VBUS is present and device is not in suspend.
+   Returns true from the moment the cable is plugged in. */
+if (!tud_connected()) {
+    /* Do not attempt any USB operations — bus is not powered */
+    return;
+}
+
+/* tud_mounted(): true only after enumeration is complete AND the host
+   has sent SET_CONFIGURATION. This is the state where class drivers
+   are active and tud_mount_cb() has been called. */
+if (!tud_mounted()) {
+    /* Device is connected but not yet configured — enumeration in progress */
+    return;
+}
+
+/* tud_suspended(): true when the bus is suspended (no SOF for > 3 ms) */
+if (tud_suspended()) {
+    /* Consider calling tud_remote_wakeup() if user action requires it */
+}
+
+/* tud_cdc_connected(): CDC-specific — true when DTR is asserted by host
+   i.e., a terminal application has opened the COM port */
+if (!tud_cdc_connected()) {
+    /* CDC data interface is ready but no host application is listening */
+    /* Writing to CDC at this point will buffer data or be silently dropped */
+}
+
+/* tud_hid_ready(): HID-specific — true when the previous HID IN report
+   has been sent and the endpoint is ready for the next report */
+if (!tud_hid_ready()) {
+    /* Wait before sending next HID report to avoid overwriting in-flight data */
+}</code></pre>
+
+                    <h3>Common Assert Failures and Their Causes</h3>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr><th>Assert / Symptom</th><th>Root Cause</th><th>Fix</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Device never enumerates (no OS recognition)</td><td>USB clock not enabled before tusb_init()</td><td>Add __HAL_RCC_USB_OTG_FS_CLK_ENABLE() before tusb_init()</td></tr>
+                            <tr><td>Enumeration starts then fails at SET_CONFIGURATION</td><td>Configuration descriptor wTotalLength incorrect (too small or too large)</td><td>Recount all descriptor bytes; use sizeof() on the full array</td></tr>
+                            <tr><td>CDC appears but no data received on host</td><td>tud_cdc_write_flush() not called after tud_cdc_write()</td><td>Always call tud_cdc_write_flush() after writing</td></tr>
+                            <tr><td>HID device enumerates but no reports received</td><td>tud_hid_ready() not checked before tud_hid_report()</td><td>Check tud_hid_ready() and only send when true</td></tr>
+                            <tr><td>USB works on RP2040 but not STM32H7</td><td>Endpoint buffers in DTCMRAM (DMA-inaccessible)</td><td>Add CFG_TUSB_MEM_SECTION pointing to AXI SRAM</td></tr>
+                            <tr><td>Sporadic corruption of received bulk data</td><td>Buffer not 4-byte aligned</td><td>Apply CFG_TUSB_MEM_ALIGN to all USB-facing buffers</td></tr>
+                        </tbody>
+                    </table>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 10 — PORTING CHECKLIST
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="porting-checklist" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-clipboard-list me-2 text-teal"></i>Porting Checklist for New STM32 Targets</h2>
+
+                    <p>When bringing up TinyUSB on a new STM32 target (or any new MCU), work through this checklist sequentially. Each step verifies the foundation for the next. Skipping steps leads to symptoms that masquerade as stack bugs but are actually hardware configuration issues.</p>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Step</th>
+                                <th>Action</th>
+                                <th>Verification</th>
+                                <th>Files to Modify</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1</td>
+                                <td>Enable HSE and configure PLL to produce correct SYSCLK and 48 MHz USB clock</td>
+                                <td>Verify with oscilloscope on MCO pin; measure SYSCLK with SysTick timer</td>
+                                <td><code>SystemClock_Config()</code></td>
+                            </tr>
+                            <tr>
+                                <td>2</td>
+                                <td>Enable USB peripheral clock in RCC (<code>__HAL_RCC_USB_OTG_FS_CLK_ENABLE()</code>)</td>
+                                <td>Read back RCC register to verify bit is set</td>
+                                <td><code>main.c</code> or <code>board.c</code></td>
+                            </tr>
+                            <tr>
+                                <td>3</td>
+                                <td>Configure USB GPIO pins (D+/D- alternate function, no pull-up/pull-down)</td>
+                                <td>Measure 3.3 V on VBUS via voltmeter; confirm D+ pull-up is not asserted before tusb_init()</td>
+                                <td><code>USB_GPIO_Init()</code></td>
+                            </tr>
+                            <tr>
+                                <td>4</td>
+                                <td>Set <code>CFG_TUSB_MCU</code> in <code>tusb_config.h</code> to the correct MCU OPT value</td>
+                                <td>Compile succeeds; correct <code>dcd_*.c</code> file is included in build</td>
+                                <td><code>tusb_config.h</code></td>
+                            </tr>
+                            <tr>
+                                <td>5</td>
+                                <td>Set <code>CFG_TUSB_MEM_SECTION</code> and <code>CFG_TUSB_MEM_ALIGN</code> for DMA-safe SRAM</td>
+                                <td>Inspect .map file; verify USB buffer symbols are in correct SRAM region</td>
+                                <td><code>tusb_config.h</code>, linker script</td>
+                            </tr>
+                            <tr>
+                                <td>6</td>
+                                <td>Call <code>tusb_init()</code> after clock and GPIO init</td>
+                                <td>USB device appears as "Unknown Device" in Device Manager — enumeration has started</td>
+                                <td><code>main.c</code></td>
+                            </tr>
+                            <tr>
+                                <td>7</td>
+                                <td>Write minimal descriptor set (Device + Config + Interface + Endpoint) in <code>usb_descriptors.c</code></td>
+                                <td>Device enumerates without errors; Windows shows device class correctly</td>
+                                <td><code>usb_descriptors.c</code></td>
+                            </tr>
+                            <tr>
+                                <td>8</td>
+                                <td>Implement <code>tud_mount_cb()</code> and verify it is called</td>
+                                <td>LED or UART message confirms mount callback fires after enumeration</td>
+                                <td><code>usb_callbacks.c</code></td>
+                            </tr>
+                            <tr>
+                                <td>9</td>
+                                <td>Enable first class (CDC or HID) and verify basic data transfer</td>
+                                <td>For CDC: receive echo in terminal. For HID: see keystrokes in Notepad.</td>
+                                <td><code>tusb_config.h</code>, class callbacks</td>
+                            </tr>
+                            <tr>
+                                <td>10</td>
+                                <td>Enable <code>CFG_TUSB_DEBUG 2</code> and capture full enumeration trace on UART</td>
+                                <td>All descriptors returned correctly; no STALL responses on EP0</td>
+                                <td><code>tusb_config.h</code>, UART retarget</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 11 — PRACTICAL EXERCISES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="exercises" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-dumbbell me-2 text-teal"></i>Practical Exercises</h2>
+
+                    <p>These exercises are designed to build proficiency in TinyUSB incrementally. Complete them in order — each exercise validates the understanding required for the next.</p>
+
+                    <h3>Tier 1 — Conceptual (No Hardware Required)</h3>
+                    <ol>
+                        <li><strong>Architecture Mapping:</strong> Download the TinyUSB repository and locate the following files: <code>src/device/usbd.c</code>, <code>src/class/cdc/cdc_device.c</code>, <code>src/portable/synopsys/dwc2/dcd_dwc2.c</code>. For each file, identify: (a) which architecture layer it belongs to, (b) the key function it exports to the layer above, and (c) the key function it calls in the layer below.</li>
+                        <li><strong>Configuration Analysis:</strong> Given a project requiring: CDC-ACM with 1 KB TX/RX buffers, one HID interface with 64-byte reports at 1 ms polling on an STM32F411 running FreeRTOS — write the complete <code>tusb_config.h</code> from memory, then verify against the reference in this article.</li>
+                        <li><strong>Memory Section Exercise:</strong> Using the STM32H743 reference manual, identify: (a) which SRAM regions are accessible to the USB DMA, (b) the default linker script region for .bss, (c) what changes are required in the linker script to place a section named <code>.usb_buf</code> in AXI SRAM D1.</li>
+                    </ol>
+
+                    <h3>Tier 2 — Firmware (Hardware Required)</h3>
+                    <ol>
+                        <li><strong>STM32 USB Bring-Up:</strong> Starting from a blank STM32F4 project (no CubeMX USB middleware), integrate TinyUSB manually: add the source files to your build system, create <code>tusb_config.h</code> for CDC, write <code>usb_descriptors.c</code>, and achieve successful enumeration verified by <code>lsusb</code> on Linux or Device Manager on Windows. The device must appear as a CDC-ACM serial port without any driver installation.</li>
+                        <li><strong>CDC Echo with Line State:</strong> Extend the CDC bring-up with proper <code>tud_cdc_line_state_cb()</code> implementation. When the host opens the COM port (DTR asserts), the device sends a welcome banner. Implement full duplex echo with <code>tud_cdc_rx_cb()</code>. Test with PuTTY, screen, and pyserial to verify correct behaviour with each tool's DTR handling.</li>
+                        <li><strong>HID Keyboard:</strong> Add an HID keyboard interface alongside the CDC interface (composite device). When PA0 button is pressed, send a keyboard report with keycode 0x04 ('A'). When released, send an empty report. Verify that pressing the button types 'A' in a text editor while the CDC serial port remains operational simultaneously.</li>
+                    </ol>
+
+                    <h3>Tier 3 — Advanced</h3>
+                    <ol>
+                        <li><strong>FreeRTOS Thread-Safe CDC:</strong> Implement a TinyUSB CDC device with FreeRTOS where three separate tasks write to the CDC interface concurrently: a sensor task (25 Hz), a command processor task (event-driven), and a heartbeat task (1 Hz). Add a FreeRTOS mutex to protect <code>tud_cdc_write()</code> / <code>tud_cdc_write_flush()</code> calls. Demonstrate that output from all three tasks is correctly interleaved and no data is corrupted.</li>
+                        <li><strong>Custom DCD Port:</strong> Take an unsupported STM32 variant (e.g., STM32G0 which uses the FSDEV peripheral but may not have a TinyUSB BSP). Create a new BSP entry in <code>hw/bsp/</code> with a <code>board.h</code> that defines clock and GPIO configuration for your board. Add the board to the TinyUSB build system. Achieve CDC enumeration on this previously unsupported target.</li>
+                    </ol>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 12 — DOCUMENT GENERATOR
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="usb-tiny-tool" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-file-alt me-2 text-teal"></i>TinyUSB Porting Plan Tool</h2>
+
+                    <p>Document your TinyUSB porting plan — target MCU, OS selection, enabled classes, memory section configuration, debug level, and implementation notes. Download as Word, Excel, PDF, or PPTX for team review or project documentation.</p>
+
+                    <div class="canvas-form" id="usbTinyForm">
+                        <h4 class="canvas-form-title"><i class="fas fa-microchip me-2"></i>TinyUSB Porting Plan Generator</h4>
+                        <p class="form-help-text">Document your TinyUSB integration plan. Download as Word, Excel, PDF, or PPTX.</p>
+                        <div id="usbTinyBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <p class="form-privacy-notice"><i class="fas fa-shield-alt"></i> All data stays in your browser. Nothing is sent to or stored on any server.</p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbTinyProjName">Project Name *</label>
+                                <input type="text" id="usbTinyProjName" placeholder="e.g., Industrial Sensor Gateway v3">
+                            </div>
+                            <div class="form-group">
+                                <label for="usbTinyMcu">Target MCU *</label>
+                                <input type="text" id="usbTinyMcu" placeholder="e.g., STM32H743VIT6, RP2040, nRF52840">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbTinyOs">Operating System / Scheduler</label>
+                                <select id="usbTinyOs">
+                                    <option value="">Select OS...</option>
+                                    <option value="Bare Metal (OPT_OS_NONE)">Bare Metal (OPT_OS_NONE)</option>
+                                    <option value="FreeRTOS (OPT_OS_FREERTOS)">FreeRTOS (OPT_OS_FREERTOS)</option>
+                                    <option value="Zephyr (OPT_OS_ZEPHYR)">Zephyr (OPT_OS_ZEPHYR)</option>
+                                    <option value="Other / Custom RTOS">Other / Custom RTOS</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="usbTinyDebugLevel">CFG_TUSB_DEBUG Level</label>
+                                <select id="usbTinyDebugLevel">
+                                    <option value="">Select debug level...</option>
+                                    <option value="0 — No debug output (production)">0 — No debug output (production)</option>
+                                    <option value="1 — Errors and warnings only">1 — Errors and warnings only</option>
+                                    <option value="2 — Full verbose trace (development)">2 — Full verbose trace (development)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label for="usbTinyClasses">Enabled Classes and Configuration</label>
+                                <textarea id="usbTinyClasses" rows="5" placeholder="List each class and its configuration. e.g.,&#10;CDC: CFG_TUD_CDC=1, RX_BUFSIZE=512, TX_BUFSIZE=512&#10;HID: CFG_TUD_HID=1, EP_BUFSIZE=64, polling 1ms&#10;MSC: disabled (CFG_TUD_MSC=0)&#10;DFU: CFG_TUD_DFU_RUNTIME=1 (for field updates)&#10;Total endpoint budget: EP0(ctrl)+EP1(CDC notif)+EP2(CDC data)+EP3(HID) = 4 EPs"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbTinyMemSection">CFG_TUSB_MEM_SECTION Value</label>
+                                <input type="text" id="usbTinyMemSection" placeholder="e.g., __attribute__((section('.usb_buf'))) or leave blank if N/A">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label for="usbTinyNotes">Porting Notes and Known Issues</label>
+                                <textarea id="usbTinyNotes" rows="5" placeholder="Record porting challenges, HAL version issues, linker script changes, etc. e.g.,&#10;STM32H7 requires AXI SRAM section for USB buffers — linker script modified.&#10;DTCMRAM confirmed to be default .bss location on this board, causing silent DMA failures.&#10;PLL configured: PLLM=4 PLLN=216 PLLP=2 PLLQ=9 → USB=48MHz, SYSCLK=216MHz.&#10;FreeRTOS USB task priority=5 (highest in system) — verified no priority inversion."></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="usbTinyHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="usbTinyHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="usbTinyHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-generate" onclick="usbTinyHandler.generatePPTX()"><i class="fas fa-file-powerpoint me-1"></i>PPTX</button>
+                            <button class="btn-reset" onclick="usbTinyHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="usbTinySuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="usbTinySuccessText"></span></div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 13 — CONCLUSION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="conclusion" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion &amp; Next Steps</h2>
+
+                    <p>You now have a complete working knowledge of the TinyUSB stack — from source tree layout to production-grade memory management. The key lessons from this deep dive:</p>
+
+                    <ul>
+                        <li><strong>TinyUSB's layered architecture</strong> means you interact with it at exactly one level — the application callback layer — while the class drivers, core USB layer, and DCD handle everything below. Resist the urge to modify class driver source; configure through <code>tusb_config.h</code> instead.</li>
+                        <li><strong><code>tusb_config.h</code> is your single configuration point.</strong> <code>CFG_TUSB_MCU</code>, <code>CFG_TUSB_OS</code>, <code>CFG_TUD_CDC</code>, <code>CFG_TUD_HID</code>, and the memory macros are the levers that shape the entire stack's behaviour and resource usage.</li>
+                        <li><strong>Clock setup must precede <code>tusb_init()</code>.</strong> This non-obvious ordering requirement causes the most common bring-up failure. Always enable the USB peripheral clock before calling <code>tusb_init()</code>.</li>
+                        <li><strong><code>tud_task()</code> must be called continuously.</strong> In a bare-metal super-loop, this means it is the dominant activity. In FreeRTOS with <code>OPT_OS_FREERTOS</code>, the USB task blocks efficiently when idle — but must be the highest-priority task to prevent enumeration failures under load.</li>
+                        <li><strong>Memory section placement is non-optional on STM32F7/H7.</strong> USB buffers in DTCMRAM produce silent DMA failures. Configure <code>CFG_TUSB_MEM_SECTION</code> and update your linker script to target AXI SRAM or SRAM1/D2 depending on your specific device.</li>
+                        <li><strong><code>CFG_TUSB_DEBUG 2</code> is your primary debugging tool.</strong> Enable it at the first sign of enumeration trouble. The verbose trace makes descriptor errors immediately visible.</li>
+                    </ul>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="usb-dev-part06-cdc-virtual-com.html"><strong>Part 6: CDC Virtual COM Port</strong></a>, we put TinyUSB's CDC driver to practical use: implementing a full virtual serial port with proper baud rate bridging to a physical UART, printf redirection over USB, flow control using DTR/RTS signals, multi-packet streaming for high-throughput ADC data, and a complete command-line interface received over CDC with command parsing and response generation — the foundation of nearly every embedded USB debug interface.</p>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 4: USB Device Classes Overview</h5>
+                            <p>Class codes, subclass codes, protocol codes for CDC, HID, MSC, Audio, DFU, and vendor-specific — with the Interface Association Descriptor and a class selection decision framework.</p>
+                            <a href="usb-dev-part04-device-classes.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 6: CDC Virtual COM Port</h5>
+                            <p>Full CDC-ACM implementation with TinyUSB — baud rate bridging, printf over USB, flow control, multi-packet streaming, and a command-line interface.</p>
+                            <a href="usb-dev-part06-cdc-virtual-com.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 11: RTOS + USB Integration</h5>
+                            <p>FreeRTOS and TinyUSB together — correct task priorities, mutex-protected CDC writes, thread-safe HID reports, and avoiding priority inversion in USB-heavy systems.</p>
+                            <a href="usb-dev-part11-rtos-integration.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div><!-- end col-lg-8 -->
+            </div><!-- end row -->
+        </div><!-- end container -->
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> |
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> |
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? &#9749; <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Document Generation -->
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-usb-dev.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- TinyUSB Porting Plan Form Handler -->
+    <script>
+        var usbTinyPersistence = new FormPersistence('usb-p05-tiny-draft', {
+            'usbTinyProjName':   'projectName',
+            'usbTinyMcu':        'mcu',
+            'usbTinyOs':         'operatingSystem',
+            'usbTinyClasses':    'enabledClasses',
+            'usbTinyMemSection': 'memSection',
+            'usbTinyDebugLevel': 'debugLevel',
+            'usbTinyNotes':      'portingNotes'
+        }, 'usbTinyBadge');
+
+        var usbTinyHandler = new CanvasFormHandler({
+            formId:         'usbTinyForm',
+            successId:      'usbTinySuccess',
+            successTextId:  'usbTinySuccessText',
+            persistence:    usbTinyPersistence,
+            filenameField:  'projectName',
+            filenameSuffix: '-tinyusb-porting-plan',
+            requiredFields: ['usbTinyProjName', 'usbTinyMcu'],
+            requiredMessage:'Please enter Project Name and MCU.',
+            docType:        'TinyUsbPortingPlan'
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            usbTinyPersistence.init();
+        });
+    </script>
+
+</body>
+</html>

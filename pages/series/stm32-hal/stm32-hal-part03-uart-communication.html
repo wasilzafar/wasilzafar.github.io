@@ -1,0 +1,1339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Master STM32 UART in polling, interrupt, and DMA modes — retarget printf to serial, build a ring buffer, and implement a command-line interface. Part 3 of 18." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="STM32, UART, USART, DMA, HAL_UART, printf retarget, ring buffer, CLI, embedded systems, STM32F4" />
+    <meta property="og:title" content="STM32 Part 3: UART Communication — STM32 Unleashed Series Part 3" />
+    <meta property="og:description" content="From polling to interrupt to DMA — master every STM32 UART mode, retarget printf to serial, implement a zero-copy ring buffer, and build a command-line interface over UART." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>STM32 Part 3: UART Communication — STM32 Unleashed Series Part 3 - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/stm32-hal/stm32-hal-part03-uart-communication.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting (6 themes) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'ad_user_data': 'granted',
+            'ad_personalization': 'granted',
+            'analytics_storage': 'granted'
+        });
+
+        gtag('set', 'url_passthrough', true);
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+            var f = d.getElementsByTagName(s)[0],
+                j = d.createElement(s),
+                dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking &ldquo;Accept All&rdquo;, you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">STM32 Part 3: UART Communication</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>March 31, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>26 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">From polling to interrupt to DMA — master every STM32 UART mode, retarget printf to serial, implement a zero-copy ring buffer, and build a command-line interface over UART.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#uart-on-stm32" onclick="closeNav()">UART on STM32</a>
+                <ul>
+                    <li><a href="#usart-variants" onclick="closeNav()">USART vs UART vs LPUART</a></li>
+                    <li><a href="#clock-domains" onclick="closeNav()">Clock Domains &amp; APB Buses</a></li>
+                    <li><a href="#baud-rate-calc" onclick="closeNav()">Baud Rate Calculation</a></li>
+                    <li><a href="#oversampling" onclick="closeNav()">Oversampling Modes</a></li>
+                    <li><a href="#hw-flow-control" onclick="closeNav()">Hardware Flow Control</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#polling-mode" onclick="closeNav()">Polling Mode</a>
+            </li>
+            <li>
+                <a href="#interrupt-mode" onclick="closeNav()">Interrupt Mode</a>
+                <ul>
+                    <li><a href="#it-transmit" onclick="closeNav()">Transmit IT</a></li>
+                    <li><a href="#it-receive" onclick="closeNav()">Receive IT &amp; Re-arming</a></li>
+                    <li><a href="#error-callback" onclick="closeNav()">Error Handling</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#dma-mode" onclick="closeNav()">DMA Mode</a>
+                <ul>
+                    <li><a href="#dma-transmit" onclick="closeNav()">DMA Transmit</a></li>
+                    <li><a href="#dma-receive-idle" onclick="closeNav()">Circular DMA + Idle-Line</a></li>
+                    <li><a href="#cache-coherency" onclick="closeNav()">Cache Coherency</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#printf-retarget" onclick="closeNav()">Printf Retargeting</a>
+                <ul>
+                    <li><a href="#gcc-retarget" onclick="closeNav()">GCC _write() Override</a></li>
+                    <li><a href="#keil-iar" onclick="closeNav()">Keil &amp; IAR Methods</a></li>
+                    <li><a href="#itm-swo" onclick="closeNav()">ITM/SWO Alternative</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#ring-buffer" onclick="closeNav()">Ring Buffer Implementation</a>
+            </li>
+            <li>
+                <a href="#uart-cli" onclick="closeNav()">UART Command-Line Interface</a>
+            </li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#uart-design-tool" onclick="closeNav()">UART Design Tool</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 1 — UART ON STM32 (no mt-5)
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="uart-on-stm32" class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Series Overview:</strong> This is Part 3 of our 18-part STM32 Unleashed series. Having mastered GPIO in Part 2, we now tackle UART — the most universally useful peripheral for embedded debug output, host communication, and sensor interfacing. We cover all three transfer modes and build production-quality supporting infrastructure.
+                    </div>
+
+                    <!-- Series Navigation Path -->
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>STM32 Unleashed: HAL Driver Development</h4>
+                            <div class="path-subtitle">Your 18-step learning path &bull; Currently on Step 3</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="stm32-hal-part01-architecture-cubemx.html" class="step-card completed">
+                                <div class="step-num completed">1</div>
+                                <div class="step-info"><h6>Architecture &amp; CubeMX Setup</h6><small>STM32 family, clock tree, HAL vs LL, CubeMX workflow, first project</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part02-gpio-debounce.html" class="step-card completed">
+                                <div class="step-num completed">2</div>
+                                <div class="step-info"><h6>GPIO &amp; Button Debounce</h6><small>GPIO modes, pull-up/down, EXTI, software debounce, HAL_GPIO_ReadPin</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <div class="step-card current">
+                                <div class="step-num active">3</div>
+                                <div class="step-info"><h6>UART Communication</h6><small>Polling, interrupt, DMA modes, printf retargeting, ring buffers</small></div>
+                                <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                            </div>
+                            <a href="stm32-hal-part04-timers-pwm.html" class="step-card">
+                                <div class="step-num upcoming">4</div>
+                                <div class="step-info"><h6>Timers, PWM &amp; Input Capture</h6><small>TIM basics, PWM generation, input capture, encoder mode</small></div>
+                            </a>
+                            <a href="stm32-hal-part05-adc-dac.html" class="step-card">
+                                <div class="step-num upcoming">5</div>
+                                <div class="step-info"><h6>ADC &amp; DAC</h6><small>Single/continuous conversion, DMA, injected channels, DAC waveforms</small></div>
+                            </a>
+                            <a href="stm32-hal-part06-spi-protocol.html" class="step-card">
+                                <div class="step-num upcoming">6</div>
+                                <div class="step-info"><h6>SPI Protocol</h6><small>SPI master/slave, full-duplex, DMA transfers, sensor drivers</small></div>
+                            </a>
+                            <a href="stm32-hal-part07-i2c-protocol.html" class="step-card">
+                                <div class="step-num upcoming">7</div>
+                                <div class="step-info"><h6>I2C Protocol</h6><small>I2C master, 7/10-bit addressing, DMA, multi-master, error handling</small></div>
+                            </a>
+                            <a href="stm32-hal-part08-dma-memory.html" class="step-card">
+                                <div class="step-num upcoming">8</div>
+                                <div class="step-info"><h6>DMA &amp; Memory Efficiency</h6><small>DMA streams, circular mode, memory-to-memory, zero-copy patterns</small></div>
+                            </a>
+                            <a href="stm32-hal-part09-interrupts-nvic.html" class="step-card">
+                                <div class="step-num upcoming">9</div>
+                                <div class="step-info"><h6>Interrupt Management &amp; NVIC</h6><small>Priority grouping, preemption, ISR design, HAL callbacks, latency</small></div>
+                            </a>
+                            <a href="stm32-hal-part10-low-power.html" class="step-card">
+                                <div class="step-num upcoming">10</div>
+                                <div class="step-info"><h6>Low-Power Modes</h6><small>Sleep, Stop, Standby modes, RTC wakeup, LP UART, power profiling</small></div>
+                            </a>
+                            <a href="stm32-hal-part11-rtc-calendar.html" class="step-card">
+                                <div class="step-num upcoming">11</div>
+                                <div class="step-info"><h6>RTC &amp; Calendar</h6><small>RTC configuration, alarms, backup registers, calendar subseconds</small></div>
+                            </a>
+                            <a href="stm32-hal-part12-can-bus.html" class="step-card">
+                                <div class="step-num upcoming">12</div>
+                                <div class="step-info"><h6>CAN Bus</h6><small>FDCAN/bxCAN, filters, message frames, error handling, automotive use</small></div>
+                            </a>
+                            <a href="stm32-hal-part13-usb-cdc.html" class="step-card">
+                                <div class="step-num upcoming">13</div>
+                                <div class="step-info"><h6>USB CDC Virtual COM Port</h6><small>USB FS/HS, CDC class, virtual serial, control transfers, descriptors</small></div>
+                            </a>
+                            <a href="stm32-hal-part14-freertos.html" class="step-card">
+                                <div class="step-num upcoming">14</div>
+                                <div class="step-info"><h6>FreeRTOS Integration</h6><small>Tasks, queues, semaphores, mutexes, CMSIS-RTOS2 wrapper, stack sizing</small></div>
+                            </a>
+                            <a href="stm32-hal-part15-bootloader.html" class="step-card">
+                                <div class="step-num upcoming">15</div>
+                                <div class="step-info"><h6>Bootloader Development</h6><small>Custom IAP bootloader, UART/USB DFU, flash programming, jump-to-app</small></div>
+                            </a>
+                            <a href="stm32-hal-part16-external-storage.html" class="step-card">
+                                <div class="step-num upcoming">16</div>
+                                <div class="step-info"><h6>External Storage: SD &amp; QSPI Flash</h6><small>FATFS on SD card, QSPI NOR flash, memory-mapped execution, wear levelling</small></div>
+                            </a>
+                            <a href="stm32-hal-part17-ethernet-tcpip.html" class="step-card">
+                                <div class="step-num upcoming">17</div>
+                                <div class="step-info"><h6>Ethernet &amp; TCP/IP Stack</h6><small>LwIP integration, DHCP, TCP server, HTTP, MQTT, Ethernet DMA descriptors</small></div>
+                            </a>
+                            <a href="stm32-hal-part18-production-readiness.html" class="step-card">
+                                <div class="step-num upcoming">18</div>
+                                <div class="step-info"><h6>Production Readiness</h6><small>Watchdog, HardFault handler, flash option bytes, code signing, CI/CD</small></div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <h2><i class="fas fa-exchange-alt me-2 text-teal"></i>UART on STM32</h2>
+
+                    <p>Serial communication via UART (Universal Asynchronous Receiver/Transmitter) remains the backbone of embedded system debugging and host communication decades after its invention. On STM32, the UART peripheral exists in three variants with progressively greater capability. Understanding the clock domain, baud rate calculation, and oversampling options before writing a single line of HAL code prevents the most common UART configuration bugs.</p>
+
+                    <h3 id="usart-variants">USART vs UART vs LPUART</h3>
+
+                    <p><strong>USART (Universal Synchronous/Asynchronous Receiver/Transmitter)</strong> supports both synchronous mode (with a CK clock output pin) and standard asynchronous UART operation. It also optionally supports IrDA (infrared encoding), LIN (automotive local interconnect), and SmartCard (ISO 7816) protocols. Most STM32 UART peripherals are labelled USART in the reference manual, though they are used in asynchronous mode for standard serial communication.</p>
+
+                    <p><strong>UART</strong> (labelled UART4, UART5 on STM32F4) is asynchronous-only — no CK pin, no SmartCard. Lower pin count, but identical to USART for all standard serial use cases.</p>
+
+                    <p><strong>LPUART (Low-Power UART)</strong> is available on STM32L4, G0, G4, H7, and U5 families. It can operate from the LSE (32.768 kHz) clock in Stop mode, enabling the MCU to receive UART data while the core is sleeping — crucial for battery-powered applications that must wake on a command byte.</p>
+
+                    <h3 id="clock-domains">Clock Domains and APB Bus Assignment</h3>
+
+                    <p>UART peripheral clock speed determines the maximum achievable baud rate. On STM32F4:</p>
+                    <ul>
+                        <li><strong>USART1</strong> and <strong>USART6</strong> are clocked from APB2 — up to 84 MHz when SYSCLK = 168 MHz</li>
+                        <li><strong>USART2, USART3, UART4, UART5</strong> are clocked from APB1 — up to 42 MHz when SYSCLK = 168 MHz</li>
+                    </ul>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>USART Instance</th>
+                                <th>APB Bus</th>
+                                <th>Max Clock (F401 @ 84 MHz)</th>
+                                <th>Max Baud (OVER8=0)</th>
+                                <th>Nucleo-F401RE Default Use</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>USART1</td>
+                                <td>APB2</td>
+                                <td>84 MHz</td>
+                                <td>5.25 Mbaud</td>
+                                <td>—</td>
+                            </tr>
+                            <tr>
+                                <td><strong>USART2</strong></td>
+                                <td>APB1</td>
+                                <td>42 MHz</td>
+                                <td>2.625 Mbaud</td>
+                                <td><strong>ST-Link VCP (PA2/PA3)</strong></td>
+                            </tr>
+                            <tr>
+                                <td>USART3</td>
+                                <td>APB1</td>
+                                <td>42 MHz</td>
+                                <td>2.625 Mbaud</td>
+                                <td>—</td>
+                            </tr>
+                            <tr>
+                                <td>UART4</td>
+                                <td>APB1</td>
+                                <td>42 MHz</td>
+                                <td>2.625 Mbaud</td>
+                                <td>—</td>
+                            </tr>
+                            <tr>
+                                <td>UART5</td>
+                                <td>APB1</td>
+                                <td>42 MHz</td>
+                                <td>2.625 Mbaud</td>
+                                <td>—</td>
+                            </tr>
+                            <tr>
+                                <td>USART6</td>
+                                <td>APB2</td>
+                                <td>84 MHz</td>
+                                <td>5.25 Mbaud</td>
+                                <td>—</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h3 id="baud-rate-calc">Baud Rate Calculation</h3>
+
+                    <p>The UART baud rate is determined by the BRR (Baud Rate Register) value:</p>
+                    <p><code>BRR = f_PCLK / (8 × (2 − OVER8) × BaudRate)</code></p>
+
+                    <p>With OVER8 = 0 (oversampling by 16, the default): <code>BRR = f_PCLK / (16 × BaudRate)</code></p>
+
+                    <p>For USART2 at 115200 baud with APB1 = 42 MHz: BRR = 42,000,000 / (16 × 115,200) = 22.786 ≈ 22.79. The fractional part is stored in BRR[3:0] as DIV_Fraction × 16 = 0.786 × 16 ≈ 12.6 → 13 = 0xD. Integer part BRR[15:4] = 22 = 0x16. So BRR = 0x016D. The actual baud rate = 42,000,000 / (16 × (22 + 13/16)) = 115,108 baud — a 0.08% error, well within the ±2% tolerance of standard UART.</p>
+
+                    <h3 id="oversampling">Oversampling by 16 vs 8</h3>
+
+                    <p>With OVER8 = 1 (oversampling by 8), the maximum achievable baud rate doubles (BRR denominator halves). However, the fractional part uses only 3 bits instead of 4, reducing baud rate precision. More importantly, noise immunity decreases: oversampling by 16 uses 3 samples per bit and can tolerate more noise on the line. Use OVER8 = 0 (16x) unless you need baud rates above f_PCLK/16 — typically only relevant for USART1/6 at very high baud rates above 5 Mbaud.</p>
+
+                    <h3 id="hw-flow-control">Hardware Flow Control: RTS/CTS</h3>
+
+                    <p>CTS (Clear To Send) and RTS (Request To Send) pins provide hardware handshaking. When the receiver's buffer is near-full, it deasserts RTS; the sender sees CTS deasserted and pauses transmission until the receiver is ready. This eliminates software flow control (XON/XOFF) and prevents overrun errors at high baud rates. On STM32, enable flow control by setting <code>huart.Init.HwFlowCtl = UART_HWCONTROL_RTS_CTS</code>. Requires four pins (TX, RX, RTS, CTS) but eliminates the risk of UART overrun at any baud rate.</p>
+
+<pre><code class="language-c">/* ---------------------------------------------------------------
+ * UART_HandleTypeDef initialisation for USART2 at 115200 baud
+ * Target: STM32F401RE, APB1 clock = 42 MHz
+ * --------------------------------------------------------------- */
+#include "main.h"
+
+UART_HandleTypeDef huart2;
+
+HAL_StatusTypeDef USART2_Init(void)
+{
+    huart2.Instance          = USART2;
+    huart2.Init.BaudRate     = 115200;
+    huart2.Init.WordLength   = UART_WORDLENGTH_8B;
+    huart2.Init.StopBits     = UART_STOPBITS_1;
+    huart2.Init.Parity       = UART_PARITY_NONE;
+    huart2.Init.Mode         = UART_MODE_TX_RX;
+    huart2.Init.HwFlowCtl    = UART_HWCONTROL_NONE;
+    huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+
+    if (HAL_UART_Init(&huart2) != HAL_OK) {
+        /* HAL_UART_Init calls HAL_UART_MspInit internally,
+         * which must enable GPIOA clock, configure PA2/PA3 as AF7,
+         * enable USART2 clock, and optionally configure NVIC/DMA. */
+        return HAL_ERROR;
+    }
+    return HAL_OK;
+}
+</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 2 — POLLING MODE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="polling-mode" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-hourglass-half me-2 text-teal"></i>Polling Mode</h2>
+
+                    <p>Polling mode is the simplest UART transfer method. The CPU waits inside the HAL function until the transfer completes or a timeout expires. There is no interrupt, no DMA, and no callback — the CPU is fully occupied during the transfer. This blocking behaviour makes polling unsuitable for use inside ISRs or RTOS tasks with tight deadlines, but it is perfectly appropriate for startup banners, configuration reads, and simple debug logging where blocking a few milliseconds is acceptable.</p>
+
+                    <p><strong>HAL_UART_Transmit(handle, buf, size, timeout):</strong> Transmits <code>size</code> bytes from <code>buf</code> over the UART. Blocks until all bytes are shifted out of the TX shift register or <code>timeout</code> milliseconds elapse. Returns <code>HAL_OK</code>, <code>HAL_TIMEOUT</code>, or <code>HAL_ERROR</code>.</p>
+
+                    <p><strong>HAL_UART_Receive(handle, buf, size, timeout):</strong> Waits for <code>size</code> bytes to arrive in the RX buffer. Blocks until the last byte is received or <code>timeout</code> expires. If the remote side does not send data, this function blocks forever with <code>HAL_MAX_DELAY</code>. Never use <code>HAL_MAX_DELAY</code> for receive in systems where the remote may be silent — it will deadlock your firmware. Calculate a realistic timeout based on baud rate and expected data size: timeout_ms = (size × 10 × 1000) / baud_rate, then add 10% margin.</p>
+
+<pre><code class="language-c">/* ---------------------------------------------------------------
+ * Polling mode UART: transmit "Hello\r\n", receive 1 byte, echo
+ * Timeout calculation: 1 byte at 115200 = ~87 µs → use 10 ms
+ * --------------------------------------------------------------- */
+#include "main.h"
+#include &lt;string.h&gt;
+
+extern UART_HandleTypeDef huart2;
+
+void UART_Polling_Demo(void)
+{
+    HAL_StatusTypeDef status;
+    uint8_t tx_buf[] = "Hello from STM32!\r\n";
+    uint8_t rx_byte  = 0;
+
+    /* Transmit startup message — blocking, should complete in ~1.5 ms */
+    status = HAL_UART_Transmit(&huart2,
+                                tx_buf,
+                                (uint16_t)strlen((char*)tx_buf),
+                                50);   /* 50 ms timeout              */
+    if (status != HAL_OK) {
+        /* Handle transmit error — line stuck low, baud mismatch, etc. */
+        Error_Handler();
+    }
+
+    /* Receive a single byte — wait up to 5 seconds for user input */
+    status = HAL_UART_Receive(&huart2, &rx_byte, 1, 5000);
+    if (status == HAL_OK) {
+        /* Echo the received byte back */
+        HAL_UART_Transmit(&huart2, &rx_byte, 1, 10);
+    } else if (status == HAL_TIMEOUT) {
+        const uint8_t timeout_msg[] = "Timeout — no input received.\r\n";
+        HAL_UART_Transmit(&huart2, timeout_msg,
+                           (uint16_t)strlen((char*)timeout_msg), 100);
+    }
+}
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>HAL_MAX_DELAY Pitfall:</strong> <code>HAL_MAX_DELAY</code> expands to <code>0xFFFFFFFFU</code>. Inside HAL's polling loop, the timeout check is <code>(HAL_GetTick() - tickstart) &gt; Timeout</code>, which wraps correctly for most timeouts but means HAL_MAX_DELAY will never truly time out — the function will block indefinitely if data never arrives. This is acceptable in a dedicated receive task but dangerous in a main loop or interrupt context.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 3 — INTERRUPT MODE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="interrupt-mode" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-bell me-2 text-teal"></i>Interrupt Mode</h2>
+
+                    <p>In interrupt mode, the HAL function initiates the transfer and returns immediately. The UART peripheral generates an interrupt when each byte is transferred (or the entire buffer completes), and HAL's ISR handles the data movement. Your application code is notified via a callback when the transfer finishes. This non-blocking approach is appropriate for most application-level UART use — the CPU is free to do other work while bytes are being shifted out.</p>
+
+                    <h3 id="it-transmit">Transmit IT</h3>
+
+                    <p><code>HAL_UART_Transmit_IT(handle, buf, size)</code> enables the TXE (TX Empty) interrupt and returns <code>HAL_OK</code> immediately. HAL's ISR feeds bytes one at a time from <code>buf</code> into the TDR register as each byte is consumed. When the last byte is loaded, HAL disables the TXE interrupt, enables TC (Transmission Complete), and calls <code>HAL_UART_TxCpltCallback</code> from the TC interrupt.</p>
+
+                    <p>Important: the <code>buf</code> pointer must remain valid until <code>TxCpltCallback</code> fires. Do not pass a local stack buffer to <code>Transmit_IT</code> and then return from the function — the HAL ISR will read stale stack memory. Use a static or heap-allocated transmit buffer.</p>
+
+                    <h3 id="it-receive">Receive IT and Re-arming</h3>
+
+                    <p><code>HAL_UART_Receive_IT(handle, buf, size)</code> receives exactly <code>size</code> bytes into <code>buf</code> before firing <code>HAL_UART_RxCpltCallback</code>. After the callback fires, receive interrupts are disabled. To continue receiving, you must call <code>HAL_UART_Receive_IT</code> again inside the callback — the "re-arm" pattern. The single-byte ping-pong technique (receive size = 1, re-arm in callback, push byte to ring buffer) is the most flexible approach for variable-length message protocols.</p>
+
+                    <h3 id="error-callback">Error Handling</h3>
+
+                    <p><code>HAL_UART_ErrorCallback</code> is called when a receive error is detected. Check <code>huart->ErrorCode</code> for the specific fault:</p>
+                    <ul>
+                        <li><code>HAL_UART_ERROR_PE</code> — parity error: received bit pattern does not match expected parity</li>
+                        <li><code>HAL_UART_ERROR_FE</code> — framing error: stop bit was not detected at the expected time; likely baud rate mismatch</li>
+                        <li><code>HAL_UART_ERROR_ORE</code> — overrun error: a new byte arrived before the previous one was read from RDR; receive interrupt latency too high or baud rate too fast for interrupt mode</li>
+                        <li><code>HAL_UART_ERROR_NE</code> — noise error: sampling detected noise on the bit cell boundary</li>
+                    </ul>
+
+<pre><code class="language-c">/* ---------------------------------------------------------------
+ * Interrupt-mode receive: single-byte ping-pong into ring buffer
+ * Re-arms after every byte; ring buffer is defined in Section 6
+ * --------------------------------------------------------------- */
+#include "main.h"
+
+extern UART_HandleTypeDef huart2;
+extern RingBuf_t          g_rx_ringbuf;  /* see Section 6          */
+
+static uint8_t s_rx_byte = 0;   /* single-byte receive staging      */
+
+/* Call once during initialisation to start the receive chain */
+void UART_IT_StartReceive(void)
+{
+    HAL_UART_Receive_IT(&huart2, &s_rx_byte, 1);
+}
+
+/* HAL calls this weak function from USART2_IRQHandler via HAL_UART_IRQHandler */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART2) {
+        /* Push received byte into the ring buffer */
+        RingBuf_Push(&g_rx_ringbuf, s_rx_byte);
+
+        /* Re-arm: start the next single-byte receive immediately */
+        HAL_UART_Receive_IT(&huart2, &s_rx_byte, 1);
+    }
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART2) {
+        /* Transmit buffer is now free — signal main loop if needed */
+        /* e.g., set a semaphore or clear a "busy" flag             */
+    }
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART2) {
+        uint32_t err = huart->ErrorCode;
+        if (err &amp; HAL_UART_ERROR_ORE) {
+            /* Overrun: increment counter, clear flag, re-arm       */
+        }
+        /* Always re-arm after error to avoid receive deadlock      */
+        HAL_UART_Receive_IT(&huart2, &s_rx_byte, 1);
+    }
+}
+</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 4 — DMA MODE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="dma-mode" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-database me-2 text-teal"></i>DMA Mode</h2>
+
+                    <p>DMA (Direct Memory Access) mode offloads data movement from the CPU entirely. Once initiated, the DMA controller streams bytes between the UART data register and your buffer in hardware, without CPU intervention. The CPU is free to execute application code until the DMA fires a completion interrupt. For high-throughput or high-baud applications (921600 baud and above), DMA mode is not optional — interrupt mode at these speeds can consume over 90% of CPU bandwidth on byte-by-byte receive interrupts.</p>
+
+                    <h3 id="dma-transmit">DMA Transmit</h3>
+
+                    <p><code>HAL_UART_Transmit_DMA(handle, buf, size)</code> programs a DMA stream to read from <code>buf</code> and write to USART2->DR (or TDR on newer devices) on each TXE trigger. The UART peripheral requests a DMA transfer whenever its transmit register is empty. <code>HAL_UART_TxCpltCallback</code> fires when the DMA completes the last transfer.</p>
+
+                    <h3 id="dma-receive-idle">Circular DMA Receive with Idle-Line Detection</h3>
+
+                    <p>The most powerful STM32 UART receive mechanism is <code>HAL_UARTEx_ReceiveToIdle_DMA</code>. This function configures DMA in circular (non-stopping) mode and additionally enables the IDLE line interrupt. When the UART line goes idle (no new bytes for one character period), HAL fires <code>HAL_UARTEx_RxEventCallback</code> with <code>RxEventType = HAL_UART_RXEVENT_IDLE</code>, telling you exactly how many bytes arrived. This perfectly handles variable-length messages without knowing the message length in advance.</p>
+
+                    <p>In circular DMA mode, the DMA controller wraps around the buffer without stopping. You receive both a half-complete callback (<code>HAL_UART_RXEVENT_HT</code>) when the first half of the buffer fills and a full-complete callback (<code>HAL_UART_RXEVENT_TC</code>) when the buffer wraps. Processing both callbacks enables true zero-copy streaming at sustained high throughput.</p>
+
+                    <h3 id="cache-coherency">Cache Coherency</h3>
+
+                    <p>On Cortex-M4 (STM32F4, G4, L4): no L1 data cache exists. DMA buffers do not require cache maintenance — the DMA controller reads/writes main SRAM directly, and the CPU sees the same physical memory. Simply declare your DMA buffer as a global array and it works.</p>
+
+                    <p>On Cortex-M7 (STM32F7, H7): a 32 KB L1 data cache exists. DMA writes bypass the cache, so the CPU may read stale cached data. Before the CPU reads a DMA receive buffer, call <code>SCB_InvalidateDCache_by_Addr(buf, size)</code>. Before DMA reads a CPU-written transmit buffer, call <code>SCB_CleanDCache_by_Addr(buf, size)</code>. Alternatively, place DMA buffers in non-cacheable SRAM regions using the MPU or linker section attributes.</p>
+
+<pre><code class="language-c">/* ---------------------------------------------------------------
+ * Circular DMA receive with IDLE-line detection
+ * HAL_UARTEx_ReceiveToIdle_DMA — handles variable-length frames
+ * Buffer: 256 bytes circular; process data in RxEventCallback
+ * --------------------------------------------------------------- */
+#include "main.h"
+#include &lt;string.h&gt;
+
+extern UART_HandleTypeDef huart2;
+extern DMA_HandleTypeDef  hdma_usart2_rx;
+
+#define RX_DMA_BUF_SIZE  256U
+
+/* DMA buffer — must be accessible by DMA (not CCM on F4 with DMA1) */
+static uint8_t  s_rx_dma_buf[RX_DMA_BUF_SIZE];
+static uint16_t s_rx_prev_pos = 0;   /* tracks last processed index */
+
+/* Call once to start the DMA receive loop */
+void UART_DMA_StartReceive(void)
+{
+    s_rx_prev_pos = 0;
+    HAL_UARTEx_ReceiveToIdle_DMA(&huart2, s_rx_dma_buf, RX_DMA_BUF_SIZE);
+    /* Disable the half-complete DMA interrupt if you only want IDLE events:
+     * __HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT);
+     * For streaming double-buffer processing, leave HT enabled.    */
+}
+
+/* HAL calls this for IDLE, HT (half-transfer), and TC (full transfer) events */
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
+{
+    if (huart->Instance == USART2) {
+        /* 'Size' is the total number of bytes received since DMA started
+         * (or since last wrap), NOT the incremental count since last callback */
+        uint16_t new_pos = Size;
+        uint16_t num_bytes;
+
+        if (new_pos >= s_rx_prev_pos) {
+            num_bytes = new_pos - s_rx_prev_pos;
+            /* Process s_rx_dma_buf[s_rx_prev_pos .. new_pos-1] */
+            UART_ProcessBytes(&s_rx_dma_buf[s_rx_prev_pos], num_bytes);
+        } else {
+            /* Buffer wrapped around */
+            num_bytes = RX_DMA_BUF_SIZE - s_rx_prev_pos;
+            UART_ProcessBytes(&s_rx_dma_buf[s_rx_prev_pos], num_bytes);
+            if (new_pos > 0) {
+                UART_ProcessBytes(&s_rx_dma_buf[0], new_pos);
+            }
+        }
+        s_rx_prev_pos = new_pos % RX_DMA_BUF_SIZE;
+    }
+}
+
+/* Stub — replace with ring buffer push or frame decoder */
+void UART_ProcessBytes(const uint8_t *data, uint16_t len)
+{
+    (void)data; (void)len;
+    /* e.g., RingBuf_PushN(&g_rx_ringbuf, data, len); */
+}
+</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 5 — PRINTF RETARGETING
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="printf-retarget" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-terminal me-2 text-teal"></i>Printf Retargeting</h2>
+
+                    <p>The C standard library <code>printf</code> function ultimately calls a low-level output function that depends on your toolchain. Retargeting means overriding this low-level hook so that <code>printf</code> output flows to your UART instead of nowhere (the default in bare-metal firmware). Once retargeted, you gain formatted output — <code>printf("ADC = %d mV\r\n", value)</code> — with zero additional code changes.</p>
+
+                    <h3 id="gcc-retarget">GCC: Override _write()</h3>
+
+                    <p>The GCC newlib C runtime calls <code>_write(int fd, char *buf, int len)</code> for all stdout/stderr output. CubeIDE generates a stub in <code>syscalls.c</code>. Override it (or add a separate <code>retarget.c</code>) with your UART transmit call:</p>
+
+<pre><code class="language-c">/* ---------------------------------------------------------------
+ * retarget.c — GCC newlib printf retarget for STM32
+ * Place this file in your project's Src/ directory.
+ * Disable buffering with setvbuf() in main() after HAL_Init().
+ * --------------------------------------------------------------- */
+#include &lt;sys/stat.h&gt;
+#include &lt;errno.h&gt;
+#include "main.h"
+
+extern UART_HandleTypeDef huart2;
+
+/* Override newlib's low-level write syscall.
+ * fd 1 = stdout, fd 2 = stderr; we send both to UART.           */
+int _write(int fd, char *buf, int len)
+{
+    (void)fd;
+    /* Use polling transmit to avoid re-entrancy issues in printf.
+     * Timeout: 100 ms is generous even at 9600 baud.             */
+    if (HAL_UART_Transmit(&huart2,
+                           (uint8_t*)buf,
+                           (uint16_t)len,
+                           100) == HAL_OK) {
+        return len;
+    }
+    return -1;  /* errno = EIO */
+}
+
+/* In main(), immediately after HAL_Init():
+ *   setvbuf(stdout, NULL, _IONBF, 0);   // disable stdout buffering
+ *   setvbuf(stderr, NULL, _IONBF, 0);   // disable stderr buffering
+ * Without this, printf output may be held in a 1 KB stdio buffer
+ * and never flushed unless you print a newline or call fflush(). */
+</code></pre>
+
+                    <h3 id="keil-iar">Keil MDK and IAR EWARM Methods</h3>
+
+                    <p><strong>Keil MDK (MicroLib or standard library):</strong> Override <code>int fputc(int ch, FILE *f)</code> in any .c file. MicroLib has no stdio buffering and calls <code>fputc</code> directly for each character. With the standard Keil library, buffering is enabled by default; add <code>setvbuf(stdout, NULL, _IONBF, 0)</code> in main.</p>
+
+                    <p><strong>IAR EWARM:</strong> Override <code>size_t __write(int handle, const unsigned char *buf, size_t bufSize)</code>. Located in <code>write.c</code> in the DLIB library support directory. Same setvbuf requirement applies.</p>
+
+                    <h3 id="itm-swo">ITM/SWO Alternative</h3>
+
+                    <p>The Cortex-M3/4/7 Instrumentation Trace Macrocell (ITM) allows <code>printf</code> output via the Serial Wire Output (SWO) debug pin without using any UART. In CubeIDE, enable ITM trace in the debug configuration and override <code>_write</code> to call <code>ITM_SendChar</code>. Advantage: UART pins remain free; SWO output appears in the CubeIDE SWV console. Disadvantage: requires a debug probe and does not work on production hardware without SWO access.</p>
+
+<pre><code class="language-c">/* ---------------------------------------------------------------
+ * ITM/SWO retarget — printf via SWO debug pin (no UART required)
+ * Enable SWO in CubeIDE: Run → Debug Configurations →
+ *   Debugger → Serial Wire Viewer → Enable, set core clock
+ * --------------------------------------------------------------- */
+#include "core_cm4.h"
+
+/* Override _write to send to ITM channel 0 */
+int _write(int fd, char *buf, int len)
+{
+    (void)fd;
+    for (int i = 0; i &lt; len; i++) {
+        ITM_SendChar((uint32_t)buf[i]);
+    }
+    return len;
+}
+
+/* ITM_SendChar from CMSIS core_cm4.h:
+ * Checks ITM->TER (Trace Enable Register) and ITM->PORT[n].u8
+ * Polls until the port FIFO is empty, then writes the character.
+ * At 2 MHz SWO clock, this can sustain ~200 kbaud effective output. */
+</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 6 — RING BUFFER
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="ring-buffer" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-redo me-2 text-teal"></i>Ring Buffer Implementation</h2>
+
+                    <p>A ring buffer (circular buffer) is the standard data structure for bridging the UART receive interrupt (producer) and the main loop (consumer). The interrupt pushes bytes as fast as they arrive; the main loop pops and processes them at its own pace. The key property of a lock-free ring buffer is that <em>no mutex is required for single-producer / single-consumer</em>: the head index is written only by the producer and the tail index is written only by the consumer, and on Cortex-M the index reads/writes are atomic for naturally-aligned 16-bit or 32-bit values.</p>
+
+                    <p>Two implementation rules ensure correctness:</p>
+                    <ul>
+                        <li><strong>Power-of-2 buffer size</strong> — replace modulo division with bitwise AND: <code>idx &amp; (SIZE - 1)</code>. This is both faster and avoids the branch in modulo operations when size is not 2<sup>n</sup>.</li>
+                        <li><strong>Overflow policy</strong> — when the buffer is full, either drop the newest byte (producer backs off — simplest), drop the oldest byte (consumer appears to advance — useful for streaming), or assert/signal an error. Choose based on whether losing the newest or oldest data is more acceptable for your protocol.</li>
+                    </ul>
+
+<pre><code class="language-c">/* ---------------------------------------------------------------
+ * Lock-free single-producer / single-consumer ring buffer
+ * Size MUST be a power of 2 (64, 128, 256, 512...)
+ * head: written by producer (ISR); read by consumer (main)
+ * tail: written by consumer (main); read by producer (ISR)
+ * --------------------------------------------------------------- */
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+#define RINGBUF_SIZE  256U    /* must be power of 2                  */
+#define RINGBUF_MASK  (RINGBUF_SIZE - 1U)
+
+typedef struct {
+    volatile uint16_t head;         /* next write index (ISR writes) */
+    volatile uint16_t tail;         /* next read  index (main writes)*/
+    uint8_t           buf[RINGBUF_SIZE];
+} RingBuf_t;
+
+/* Declare in a shared header; define in uart_ringbuf.c             */
+RingBuf_t g_rx_ringbuf = { 0, 0, {0} };
+
+/* Push one byte — called from ISR (UART RxCpltCallback or DMA)    */
+/* Returns 1 on success, 0 if buffer full (byte dropped)           */
+uint8_t RingBuf_Push(RingBuf_t *rb, uint8_t byte)
+{
+    uint16_t next_head = (rb->head + 1U) &amp; RINGBUF_MASK;
+    if (next_head == rb->tail) {
+        return 0;   /* full — drop newest byte (or increment ORE counter) */
+    }
+    rb->buf[rb->head] = byte;
+    rb->head = next_head;   /* publish after writing data            */
+    return 1;
+}
+
+/* Pop one byte — called from main loop                             */
+/* Returns 1 on success, 0 if buffer empty                         */
+uint8_t RingBuf_Pop(RingBuf_t *rb, uint8_t *byte)
+{
+    if (rb->tail == rb->head) {
+        return 0;   /* empty                                          */
+    }
+    *byte    = rb->buf[rb->tail];
+    rb->tail = (rb->tail + 1U) &amp; RINGBUF_MASK;   /* advance after read */
+    return 1;
+}
+
+/* Returns number of bytes available to read */
+uint16_t RingBuf_Available(const RingBuf_t *rb)
+{
+    return (uint16_t)((rb->head - rb->tail) &amp; RINGBUF_MASK);
+}
+
+/* Peek at next byte without consuming it */
+uint8_t RingBuf_Peek(const RingBuf_t *rb, uint8_t *byte)
+{
+    if (rb->tail == rb->head) return 0;
+    *byte = rb->buf[rb->tail];
+    return 1;
+}
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Volatile Ordering:</strong> The <code>volatile</code> qualifier on head and tail prevents the compiler from caching them in registers, ensuring the ISR's write to <code>head</code> is visible to the main loop on the next read. On Cortex-M4 (which has a weakly-ordered write buffer), the implicit data memory barrier from the function call boundary is sufficient. For Cortex-M7 with out-of-order capabilities, add a <code>__DMB()</code> barrier before publishing the updated head index for guaranteed ordering.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 7 — UART CLI
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="uart-cli" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-keyboard me-2 text-teal"></i>UART Command-Line Interface</h2>
+
+                    <p>A UART CLI transforms a debug serial port into a powerful interactive console. The architecture is: the ring buffer fills from the UART interrupt; the main loop pops bytes and builds a line buffer; when a newline arrives, the line is tokenised by spaces; the first token is looked up in a command table; the matched handler function is called with the remaining tokens as arguments.</p>
+
+                    <p>A well-designed CLI command table is a static array of structs — no dynamic allocation, predictable memory layout, easy to extend at compile time. Each entry holds the command name string, a function pointer, and a help text string. The dispatcher iterates the table with a simple <code>strcmp</code> loop — at 20 commands this costs microseconds, not milliseconds.</p>
+
+<pre><code class="language-c">/* ---------------------------------------------------------------
+ * UART CLI — command table with 4 built-in commands
+ * Supports: backspace editing, echo, line accumulation from ring buf
+ * --------------------------------------------------------------- */
+#include "main.h"
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+extern RingBuf_t g_rx_ringbuf;
+extern UART_HandleTypeDef huart2;
+
+#define CLI_MAX_LINE   80U
+#define CLI_MAX_ARGS    8U
+
+/* ---- Command handler declarations ----------------------------- */
+static void cmd_help(int argc, char *argv[]);
+static void cmd_led(int argc, char *argv[]);
+static void cmd_reset(int argc, char *argv[]);
+static void cmd_version(int argc, char *argv[]);
+
+/* ---- Command table -------------------------------------------- */
+typedef struct {
+    const char *name;
+    void (*handler)(int argc, char *argv[]);
+    const char *help;
+} CliCmd_t;
+
+static const CliCmd_t s_cli_table[] = {
+    { "help",    cmd_help,    "List all commands"              },
+    { "led",     cmd_led,     "led [on|off|toggle]"            },
+    { "reset",   cmd_reset,   "Perform a system software reset"},
+    { "version", cmd_version, "Print firmware version string"  },
+};
+#define CLI_NUM_CMDS  (sizeof(s_cli_table) / sizeof(s_cli_table[0]))
+
+/* ---- Line accumulator state ----------------------------------- */
+static char     s_line[CLI_MAX_LINE + 1];
+static uint16_t s_line_len = 0;
+
+/* ---- CLI output helper ---------------------------------------- */
+static void cli_print(const char *str)
+{
+    HAL_UART_Transmit(&huart2, (uint8_t*)str, (uint16_t)strlen(str), 200);
+}
+
+/* ---- Dispatcher ----------------------------------------------- */
+static void CLI_Dispatch(char *line)
+{
+    char *argv[CLI_MAX_ARGS];
+    int   argc = 0;
+    char *tok  = strtok(line, " \t");
+    while (tok &amp;&amp; argc &lt; CLI_MAX_ARGS) {
+        argv[argc++] = tok;
+        tok = strtok(NULL, " \t");
+    }
+    if (argc == 0) return;
+
+    for (size_t i = 0; i &lt; CLI_NUM_CMDS; i++) {
+        if (strcmp(argv[0], s_cli_table[i].name) == 0) {
+            s_cli_table[i].handler(argc, argv);
+            return;
+        }
+    }
+    cli_print("Unknown command. Type 'help'.\r\n");
+}
+
+/* ---- Main loop CLI tick — call every iteration ---------------- */
+void CLI_Process(void)
+{
+    uint8_t byte;
+    while (RingBuf_Pop(&g_rx_ringbuf, &byte)) {
+        if (byte == '\r' || byte == '\n') {
+            if (s_line_len > 0) {
+                cli_print("\r\n");
+                s_line[s_line_len] = '\0';
+                CLI_Dispatch(s_line);
+                s_line_len = 0;
+            }
+            cli_print("> ");   /* prompt */
+        } else if (byte == 0x7F || byte == '\b') {
+            /* Backspace: remove last character with destructive erase */
+            if (s_line_len > 0) {
+                s_line_len--;
+                cli_print("\b \b");
+            }
+        } else if (s_line_len &lt; CLI_MAX_LINE) {
+            s_line[s_line_len++] = (char)byte;
+            HAL_UART_Transmit(&huart2, &byte, 1, 10);  /* local echo */
+        }
+    }
+}
+
+/* ---- Command implementations ---------------------------------- */
+static void cmd_help(int argc, char *argv[])
+{
+    (void)argc; (void)argv;
+    for (size_t i = 0; i &lt; CLI_NUM_CMDS; i++) {
+        char line[60];
+        snprintf(line, sizeof(line), "  %-12s %s\r\n",
+                 s_cli_table[i].name, s_cli_table[i].help);
+        cli_print(line);
+    }
+}
+
+static void cmd_led(int argc, char *argv[])
+{
+    if (argc &lt; 2) { cli_print("Usage: led [on|off|toggle]\r\n"); return; }
+    if      (strcmp(argv[1], "on")     == 0) HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+    else if (strcmp(argv[1], "off")    == 0) HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+    else if (strcmp(argv[1], "toggle") == 0) HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+    else cli_print("Unknown LED argument\r\n");
+}
+
+static void cmd_reset(int argc, char *argv[])
+{
+    (void)argc; (void)argv;
+    cli_print("Resetting...\r\n");
+    HAL_Delay(50);
+    NVIC_SystemReset();
+}
+
+static void cmd_version(int argc, char *argv[])
+{
+    (void)argc; (void)argv;
+    cli_print("Firmware: v1.0.0 built " __DATE__ " " __TIME__ "\r\n");
+}
+</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 8 — EXERCISES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="exercises" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-dumbbell me-2 text-teal"></i>Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 1</span>
+                            <span class="badge bg-success text-white ms-2">Beginner</span>
+                        </div>
+                        <h4>Polling UART with Printf Retarget</h4>
+                        <p>Configure USART2 at 115200 baud via CubeMX on a Nucleo-F401RE. Add a <code>retarget.c</code> file with the <code>_write()</code> override shown in Section 5. Call <code>setvbuf(stdout, NULL, _IONBF, 0)</code> immediately after <code>HAL_Init()</code> in main. Send a startup message using <code>printf</code> and confirm it appears in PuTTY or minicom. Then implement an echo loop: receive one byte with <code>HAL_UART_Receive</code> (5-second timeout), print the received character and its ASCII value using <code>printf("Received: '%c' (0x%02X)\r\n", ch, ch)</code>, and loop. Test with both printable characters and control characters (Tab, Escape).</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">UART</span>
+                            <span class="bias-tag">Printf</span>
+                            <span class="bias-tag">CubeMX</span>
+                            <span class="bias-tag">Polling</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 2</span>
+                            <span class="badge bg-warning text-dark ms-2">Intermediate</span>
+                        </div>
+                        <h4>Interrupt-Driven UART with Ring Buffer Stress Test</h4>
+                        <p>Implement the interrupt-driven single-byte receive with re-arming (Section 3) and the ring buffer from Section 6. Configure USART2 at 921600 baud. Write a Python script that sends exactly 1,000 bytes (0x00–0xFF repeated) over the serial port as fast as possible. The STM32 should receive all bytes via interrupt into the ring buffer and echo every byte back. Verify on the Python side that all 1,000 echoed bytes match the sent sequence with no drops. Monitor the USART2 SR register ORE (Overrun Error) flag by reading <code>USART2-&gt;SR &amp; USART_SR_ORE</code> after the test — it must be zero for a passing result. Increase baud to 1,843,200 and document the maximum reliable rate for your processor speed.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">UART IT</span>
+                            <span class="bias-tag">Ring Buffer</span>
+                            <span class="bias-tag">Python</span>
+                            <span class="bias-tag">Overrun</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 3</span>
+                            <span class="badge bg-danger text-white ms-2">Advanced</span>
+                        </div>
+                        <h4>CLI with DMA ADC Streaming</h4>
+                        <p>Integrate the CLI from Section 7 with DMA circular UART receive (Section 4). Add a <code>log</code> command: <code>log start</code> begins streaming ADC1 Channel 0 readings over UART at 1 kHz using a TIM2-triggered ADC in DMA mode; <code>log stop</code> terminates the stream. Format each sample as a 16-bit hex value followed by CRLF, e.g. <code>0A3F\r\n</code>. Run the log for 10 seconds and check the USART SR ORE flag counter after stopping. Confirm it remains zero. Optionally, pipe the UART output to a Python script that plots the ADC waveform in real time using matplotlib to verify the 1 kHz sample rate.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">CLI</span>
+                            <span class="bias-tag">DMA</span>
+                            <span class="bias-tag">ADC</span>
+                            <span class="bias-tag">Streaming</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 9 — CANVAS FORM: UART DESIGN
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="uart-design-tool" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-file-alt me-2 text-teal"></i>UART Design Tool</h2>
+
+                    <p>Use this tool to document your STM32 UART configuration — peripheral instance, baud rate, transfer mode, buffer sizes, and protocol design. Download as Word, Excel, PDF, or PPTX for design review or project documentation.</p>
+
+                    <div class="canvas-form" id="stm32UartForm">
+                        <h4 class="canvas-form-title"><i class="fas fa-exchange-alt me-2"></i>STM32 UART Design Generator</h4>
+                        <p class="form-help-text">Document your UART configuration, transfer mode, buffer sizes, and communication protocol. Download as Word, Excel, PDF, or PPTX.</p>
+                        <div id="stm32UartBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <p class="form-privacy-notice"><i class="fas fa-shield-alt"></i> All data stays in your browser. Nothing is sent to or stored on any server.</p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32UartProjName">Project Name *</label>
+                                <input type="text" id="stm32UartProjName" placeholder="e.g., Sensor Hub UART Driver">
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32UartInstance">UART Instance *</label>
+                                <select id="stm32UartInstance">
+                                    <option value="">Select instance...</option>
+                                    <option value="USART1 (APB2, up to 5.25 Mbaud on F4)">USART1 (APB2, up to 5.25 Mbaud on F4)</option>
+                                    <option value="USART2 (APB1, Nucleo VCP default)">USART2 (APB1, Nucleo VCP default)</option>
+                                    <option value="USART3 (APB1)">USART3 (APB1)</option>
+                                    <option value="UART4 (APB1, async only)">UART4 (APB1, async only)</option>
+                                    <option value="UART5 (APB1, async only)">UART5 (APB1, async only)</option>
+                                    <option value="USART6 (APB2)">USART6 (APB2)</option>
+                                    <option value="LPUART1 (works in Stop mode)">LPUART1 (works in Stop mode)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32UartBaud">Baud Rate</label>
+                                <select id="stm32UartBaud">
+                                    <option value="">Select baud rate...</option>
+                                    <option value="9600">9600</option>
+                                    <option value="19200">19200</option>
+                                    <option value="38400">38400</option>
+                                    <option value="57600">57600</option>
+                                    <option value="115200">115200</option>
+                                    <option value="230400">230400</option>
+                                    <option value="460800">460800</option>
+                                    <option value="921600">921600</option>
+                                    <option value="Custom (specify in notes)">Custom (specify in notes)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32UartMode">Transfer Mode</label>
+                                <select id="stm32UartMode">
+                                    <option value="">Select mode...</option>
+                                    <option value="Polling (HAL_UART_Transmit / Receive, blocking)">Polling (blocking)</option>
+                                    <option value="Interrupt (HAL_UART_Transmit_IT / Receive_IT, non-blocking)">Interrupt (non-blocking)</option>
+                                    <option value="DMA Normal (HAL_UART_Transmit_DMA / Receive_DMA)">DMA Normal</option>
+                                    <option value="DMA Circular (continuous receive, half/full callbacks)">DMA Circular</option>
+                                    <option value="IDLE-line DMA (HAL_UARTEx_ReceiveToIdle_DMA)">IDLE-line DMA</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32RxBufSize">RX Buffer Size</label>
+                                <input type="text" id="stm32RxBufSize" placeholder="e.g., 256 bytes (power of 2 for ring buffer)">
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32TxBufSize">TX Buffer Size</label>
+                                <input type="text" id="stm32TxBufSize" placeholder="e.g., 128 bytes static transmit buffer">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32UartProtocol">Command Protocol / Frame Format</label>
+                                <textarea id="stm32UartProtocol" rows="4" placeholder="e.g.,&#10;Frame: [STX 0x02][LEN 1B][CMD 1B][PAYLOAD N B][CRC16 2B][ETX 0x03]&#10;Commands: 0x01 = LED on/off, 0x02 = ADC read, 0x10 = reset&#10;Max frame size: 64 bytes&#10;Response timeout: 200 ms"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32UartNotes">Design Notes</label>
+                                <textarea id="stm32UartNotes" rows="4" placeholder="e.g.,&#10;USART2 connected to ST-Link VCP on Nucleo&#10;Printf retargeted via _write() in retarget.c&#10;DMA stream: DMA1 Stream 5 (RX), Stream 6 (TX)&#10;Ring buffer: 256 bytes, lock-free SPSC design"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="stm32UartHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="stm32UartHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="stm32UartHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-generate" onclick="stm32UartHandler.generatePPTX()"><i class="fas fa-file-powerpoint me-1"></i>PPTX</button>
+                            <button class="btn-reset" onclick="stm32UartHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="stm32UartSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="stm32UartSuccessText"></span></div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 10 — CONCLUSION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="conclusion" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion &amp; Next Steps</h2>
+
+                    <p>In this article we have built a complete UART toolkit covering every layer from peripheral fundamentals to application-level infrastructure:</p>
+                    <ul>
+                        <li><strong>USART vs UART vs LPUART</strong> — knowing which instance is on which APB bus and calculating the actual baud rate error from the BRR register prevents clock-domain misconfigurations that silently corrupt data.</li>
+                        <li><strong>Polling mode</strong> is the right choice for startup banners and simple debug output but must never be used in ISR context or with <code>HAL_MAX_DELAY</code> when the remote may not respond.</li>
+                        <li><strong>Interrupt mode</strong> with the single-byte ping-pong receive pattern and a ring buffer handles the vast majority of embedded UART use cases efficiently without DMA complexity.</li>
+                        <li><strong>Circular DMA with idle-line detection</strong> via <code>HAL_UARTEx_ReceiveToIdle_DMA</code> is the professional solution for high-baud or streaming receive — zero CPU load between frames.</li>
+                        <li><strong>Printf retargeting</strong> via <code>_write()</code> unlocks the full power of formatted output with no additional library overhead.</li>
+                        <li>The <strong>lock-free ring buffer</strong> is a production-quality data structure that bridges ISR producers and main-loop consumers without any mutex overhead.</li>
+                        <li>A <strong>command-line interface</strong> built on the ring buffer and a static command table is the most practical embedded debug tool available — interactive, extensible, and zero-cost to maintain.</li>
+                    </ul>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="stm32-hal-part04-timers-pwm.html"><strong>Part 4: Timers, PWM &amp; Input Capture</strong></a>, we'll deep-dive into the STM32 timer architecture — TIM peripherals, prescaler and ARR configuration, PWM generation for motor and LED control, input capture for frequency and pulse-width measurement, and encoder interface mode for quadrature signal decoding.</p>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 4: Timers, PWM &amp; Input Capture</h5>
+                            <p>Timer fundamentals, PWM signal generation for motor control and LED dimming, input capture for frequency measurement, encoder interface mode.</p>
+                            <a href="stm32-hal-part04-timers-pwm.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 5: ADC &amp; DAC</h5>
+                            <p>Single and continuous ADC conversion, DMA-driven acquisition, injected channels, and DAC waveform generation.</p>
+                            <a href="stm32-hal-part05-adc-dac.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 8: DMA &amp; Memory Efficiency</h5>
+                            <p>DMA streams and channels, circular and memory-to-memory modes, zero-copy data pipelines, and DMA arbitration.</p>
+                            <a href="stm32-hal-part08-dma-memory.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div><!-- end col-lg-8 -->
+            </div><!-- end row -->
+        </div><!-- end container -->
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> |
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> |
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? &#9749; <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Document Generation -->
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-stm32-hal.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- STM32 UART Design Form Handler -->
+    <script>
+        var stm32UartPersistence = new FormPersistence('stm32-p03-uart-draft', {
+            'stm32UartProjName': 'projectName',
+            'stm32UartInstance': 'uartInstance',
+            'stm32UartBaud':     'baudRate',
+            'stm32UartMode':     'transferMode',
+            'stm32RxBufSize':    'rxBufferSize',
+            'stm32TxBufSize':    'txBufferSize',
+            'stm32UartProtocol': 'protocol',
+            'stm32UartNotes':    'notes'
+        }, 'stm32UartBadge');
+
+        var stm32UartHandler = new CanvasFormHandler({
+            formId:         'stm32UartForm',
+            successId:      'stm32UartSuccess',
+            successTextId:  'stm32UartSuccessText',
+            persistence:    stm32UartPersistence,
+            filenameField:  'projectName',
+            filenameSuffix: '-stm32-uart-design',
+            requiredFields: ['stm32UartProjName', 'stm32UartInstance'],
+            requiredMessage:'Please enter a Project Name and UART Instance.',
+            docType:        'Stm32UartDesign'
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            stm32UartPersistence.init();
+        });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,1537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Write a USB device driver from scratch without TinyUSB — understand the STM32 USB FSDEV hardware registers, endpoint FIFO management, interrupt-driven enumeration, control endpoint state machine, and what TinyUSB abstracts away from you." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="bare metal USB, STM32 FSDEV, USB registers, PMA packet memory, USB interrupt handler, EP0 state machine, USB enumeration bare metal, STM32 USB peripheral, USB without TinyUSB" />
+    <meta property="og:title" content="Bare-Metal USB — USB Development Mastery Series Part 15" />
+    <meta property="og:description" content="Write a USB device driver from scratch without TinyUSB — understand the STM32 USB FSDEV hardware registers, endpoint FIFO management, interrupt-driven enumeration, control endpoint state machine, and what TinyUSB abstracts away from you." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>Bare-Metal USB — USB Development Mastery Series Part 15 - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/usb-dev/usb-dev-part15-bare-metal-usb.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting (6 themes) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'ad_user_data': 'granted',
+            'ad_personalization': 'granted',
+            'analytics_storage': 'granted'
+        });
+
+        gtag('set', 'url_passthrough', true);
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+            var f = d.getElementsByTagName(s)[0],
+                j = d.createElement(s),
+                dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking &ldquo;Accept All&rdquo;, you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" onclick="cookieSettings.acceptAll()" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" onclick="cookieSettings.rejectAll()" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" onclick="cookieSettings.savePreferences()" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">USB Part 15: Bare-Metal USB</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>March 31, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>~18 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Write a USB device driver from scratch without TinyUSB — understand the STM32 USB FSDEV hardware registers, endpoint FIFO management, interrupt-driven enumeration, control endpoint state machine, and what TinyUSB abstracts away from you.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#why-bare-metal" onclick="closeNav()">Why Write Bare-Metal USB?</a></li>
+            <li><a href="#fsdev-overview" onclick="closeNav()">STM32 FSDEV Hardware Overview</a></li>
+            <li><a href="#pma-management" onclick="closeNav()">Packet Memory (PMA) Management</a></li>
+            <li><a href="#usb-interrupts" onclick="closeNav()">USB Interrupts on STM32</a></li>
+            <li><a href="#ep0-state-machine" onclick="closeNav()">Control Endpoint 0 State Machine</a></li>
+            <li><a href="#get-descriptor" onclick="closeNav()">Implementing GetDescriptor</a></li>
+            <li><a href="#set-address" onclick="closeNav()">SetAddress Procedure</a></li>
+            <li><a href="#bulk-endpoint" onclick="closeNav()">Bulk Endpoint Implementation</a></li>
+            <li><a href="#tinyusb-comparison" onclick="closeNav()">What TinyUSB Gives You</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Practical Exercises</a></li>
+            <li><a href="#usb-bare-metal-tool" onclick="closeNav()">Bare-Metal USB Design Generator</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 1 — WHY BARE METAL (no mt-5)
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="why-bare-metal" class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Series Context:</strong> This is Part 15 of 17. You should have completed Parts 1–14, with solid TinyUSB experience including custom vendor class drivers (Part 14). This article deliberately removes the TinyUSB safety net — the goal is understanding, not production firmware. For production work, continue using TinyUSB.
+                    </div>
+
+                    <!-- Series Navigation Path -->
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-plug"></i></div>
+                            <h4>USB Development Mastery</h4>
+                            <div class="path-subtitle">Your 17-step learning path &bull; Currently on Step 15</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="usb-dev-part01-fundamentals.html" class="step-card">
+                                <div class="step-num completed">1</div>
+                                <div class="step-info"><h6>USB Fundamentals</h6><small>USB system architecture, transfer types, host/device model, protocol stack</small></div>
+                            </a>
+                            <a href="usb-dev-part02-electrical-hardware.html" class="step-card">
+                                <div class="step-num completed">2</div>
+                                <div class="step-info"><h6>Electrical &amp; Hardware Layer</h6><small>D+/D- signalling, pull-ups, connectors, USB-C, STM32 USB peripherals</small></div>
+                            </a>
+                            <a href="usb-dev-part03-protocol-enumeration.html" class="step-card">
+                                <div class="step-num completed">3</div>
+                                <div class="step-info"><h6>Protocol &amp; Enumeration</h6><small>Enumeration sequence, USB packets, descriptors, endpoint concepts</small></div>
+                            </a>
+                            <a href="usb-dev-part04-device-classes.html" class="step-card">
+                                <div class="step-num completed">4</div>
+                                <div class="step-info"><h6>USB Device Classes</h6><small>HID, CDC, MSC, MIDI, Audio, composite devices, vendor class</small></div>
+                            </a>
+                            <a href="usb-dev-part05-tinyusb-deep-dive.html" class="step-card">
+                                <div class="step-num completed">5</div>
+                                <div class="step-info"><h6>TinyUSB Deep Dive</h6><small>Stack architecture, execution model, STM32 integration, descriptor callbacks</small></div>
+                            </a>
+                            <a href="usb-dev-part06-cdc-virtual-com.html" class="step-card">
+                                <div class="step-num completed">6</div>
+                                <div class="step-info"><h6>CDC Virtual COM Port</h6><small>CDC class, bulk transfers, printf over USB, baud rate handling</small></div>
+                            </a>
+                            <a href="usb-dev-part07-hid-keyboard-mouse.html" class="step-card">
+                                <div class="step-num completed">7</div>
+                                <div class="step-info"><h6>HID Keyboard &amp; Mouse</h6><small>HID descriptors, report format, keyboard/mouse/gamepad implementation</small></div>
+                            </a>
+                            <a href="usb-dev-part08-mass-storage.html" class="step-card">
+                                <div class="step-num completed">8</div>
+                                <div class="step-info"><h6>USB Mass Storage</h6><small>MSC class, SCSI commands, FATFS integration, RAM disk</small></div>
+                            </a>
+                            <a href="usb-dev-part09-composite-devices.html" class="step-card">
+                                <div class="step-num completed">9</div>
+                                <div class="step-info"><h6>Composite Devices</h6><small>Multiple classes, IAD descriptor, CDC+HID, CDC+MSC</small></div>
+                            </a>
+                            <a href="usb-dev-part10-debugging.html" class="step-card">
+                                <div class="step-num completed">10</div>
+                                <div class="step-info"><h6>Debugging USB</h6><small>Wireshark capture, protocol analyser, enumeration debugging, common failures</small></div>
+                            </a>
+                            <a href="usb-dev-part11-rtos-integration.html" class="step-card">
+                                <div class="step-num completed">11</div>
+                                <div class="step-info"><h6>RTOS + USB Integration</h6><small>FreeRTOS + TinyUSB, task priorities, thread-safe communication</small></div>
+                            </a>
+                            <a href="usb-dev-part12-advanced-topics.html" class="step-card">
+                                <div class="step-num completed">12</div>
+                                <div class="step-info"><h6>Advanced USB Topics</h6><small>Host mode, OTG, isochronous, USB audio, USB video</small></div>
+                            </a>
+                            <a href="usb-dev-part13-performance.html" class="step-card">
+                                <div class="step-num completed">13</div>
+                                <div class="step-info"><h6>Performance &amp; Optimisation</h6><small>DMA, zero-copy buffers, throughput maximisation, latency tuning</small></div>
+                            </a>
+                            <a href="usb-dev-part14-custom-class-drivers.html" class="step-card">
+                                <div class="step-num completed">14</div>
+                                <div class="step-info"><h6>Custom USB Class Drivers</h6><small>Vendor class, WinUSB, binary protocol, Python libusb host, reusable driver</small></div>
+                            </a>
+                            <div class="step-card current">
+                                <div class="step-num active">15</div>
+                                <div class="step-info"><h6>Bare-Metal USB</h6><small>STM32 FSDEV registers, PMA, EP0 state machine, USB interrupts from scratch</small></div>
+                                <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                            </div>
+                            <a href="usb-dev-part16-security.html" class="step-card">
+                                <div class="step-num upcoming">16</div>
+                                <div class="step-info"><h6>Security in USB</h6><small>BadUSB attacks, device authentication, secure firmware, USB firewall</small></div>
+                            </a>
+                            <a href="usb-dev-part17-hardware-design.html" class="step-card">
+                                <div class="step-num upcoming">17</div>
+                                <div class="step-info"><h6>USB Hardware Design</h6><small>PCB layout, differential pairs, impedance matching, EMI, USB-C PD</small></div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <h2><i class="fas fa-hammer me-2 text-teal"></i>Why Write Bare-Metal USB?</h2>
+
+                    <p>If TinyUSB handles USB correctly on dozens of MCU families with a clean, well-tested API, why would you ever write USB firmware from scratch? There are four legitimate reasons — and "to prove you can" is not one of them:</p>
+
+                    <ul>
+                        <li><strong>Educational value:</strong> Reading TinyUSB source code is one thing. Writing a working EP0 state machine yourself is another. The permanent understanding of what actually happens when your STM32 receives a SETUP packet is worth hours of study.</li>
+                        <li><strong>Extreme resource constraints:</strong> TinyUSB requires a minimum of roughly 8–12 KB of flash. On an STM32F030F4 with 16 KB of flash and an existing application, there may be no room. A minimal bare-metal USB HID driver can enumerate in under 3 KB.</li>
+                        <li><strong>Custom timing requirements:</strong> Some applications need to service USB interrupts with precise, guaranteed latency that a full USB stack cannot provide because the stack has its own internal state machine overhead.</li>
+                        <li><strong>Debugging TinyUSB:</strong> When TinyUSB fails to enumerate on a custom board and you suspect a hardware issue, being able to reduce the problem to a 100-line bare-metal test that directly controls USB_EPnR registers isolates firmware issues from hardware issues instantly.</li>
+                    </ul>
+
+                    <h3>Comparison: Bare-Metal vs USB Stacks</h3>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Aspect</th>
+                                <th>Bare-Metal (This Article)</th>
+                                <th>TinyUSB</th>
+                                <th>STM32 HAL USB Middleware</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Flash footprint</td>
+                                <td>2–5 KB (minimal HID)</td>
+                                <td>8–15 KB</td>
+                                <td>20–50 KB</td>
+                            </tr>
+                            <tr>
+                                <td>Code flexibility</td>
+                                <td>Total — you control everything</td>
+                                <td>High — via callbacks and class drivers</td>
+                                <td>Medium — CubeMX-generated skeleton</td>
+                            </tr>
+                            <tr>
+                                <td>Development time</td>
+                                <td>Days to weeks for a working device</td>
+                                <td>Hours for standard class</td>
+                                <td>Hours with CubeMX</td>
+                            </tr>
+                            <tr>
+                                <td>Correctness risk</td>
+                                <td>Very high — every byte is your responsibility</td>
+                                <td>Low — well-tested</td>
+                                <td>Medium — known bugs in some ST versions</td>
+                            </tr>
+                            <tr>
+                                <td>Multi-MCU portability</td>
+                                <td>None — completely MCU-specific</td>
+                                <td>Excellent — 30+ MCU families</td>
+                                <td>STM32 only</td>
+                            </tr>
+                            <tr>
+                                <td>Best for</td>
+                                <td>Learning, size-critical, custom timing</td>
+                                <td>All new projects</td>
+                                <td>CubeMX-based existing projects</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Warning:</strong> The code in this article targets the STM32 FSDEV peripheral (STM32F0, STM32F1, STM32F3, STM32L0, STM32G0 families). It does not apply to the STM32 OTG_FS or OTG_HS peripherals (STM32F4, F7, H7, etc.) which have a completely different register architecture. Check your datasheet before applying any register-level code.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 2 — STM32 FSDEV HARDWARE OVERVIEW
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="fsdev-overview" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-microchip me-2 text-teal"></i>STM32 FSDEV Hardware Overview</h2>
+
+                    <p>The STM32 USB Full Speed Device (FSDEV) peripheral is not the same as the OTG_FS peripheral. FSDEV is a simpler, dedicated device-only USB controller found in the cost-optimised STM32 families. Key hardware facts:</p>
+
+                    <ul>
+                        <li><strong>Device-only:</strong> No host mode, no OTG. This is a peripheral device — it appears as a USB device when connected to a host. It cannot act as a USB host.</li>
+                        <li><strong>Full Speed only:</strong> 12 Mbit/s. No High Speed support.</li>
+                        <li><strong>Dedicated packet memory (PMA):</strong> 512 bytes on most F0/F1/L0 devices, 1024 bytes on some variants. This SRAM is shared between the CPU and the USB hardware and must be carefully partitioned.</li>
+                        <li><strong>8 configurable endpoints:</strong> EP0 through EP7. Each can be configured as Control, Bulk, Interrupt, or Isochronous.</li>
+                        <li><strong>No DMA engine:</strong> Unlike OTG_FS, FSDEV has no DMA. All data moves between PMA and system SRAM via CPU-executed copy loops.</li>
+                    </ul>
+
+                    <h3>Register Map Overview</h3>
+
+<pre><code class="language-c">/* STM32 FSDEV register map (base address varies by family) */
+/* STM32F103: USB base = 0x40005C00 */
+/* STM32F042: USB base = 0x40005C00 */
+/* STM32G0:   USB base = 0x40005C00 */
+/* PMA base:  0x40006000 (fixed for all FSDEV devices) */
+
+/* --- Per-endpoint registers: USB_EPnR (n = 0..7) --- */
+/* Each EPnR is 16-bit wide, at address USB_BASE + n*4   */
+#define USB_EP0R   (*(volatile uint16_t *)(USB_BASE + 0x00))
+#define USB_EP1R   (*(volatile uint16_t *)(USB_BASE + 0x04))
+#define USB_EP2R   (*(volatile uint16_t *)(USB_BASE + 0x08))
+#define USB_EP3R   (*(volatile uint16_t *)(USB_BASE + 0x0C))
+/* ... EP4R through EP7R follow at +0x10, +0x14, +0x18, +0x1C */
+
+/* --- Global control registers --- */
+#define USB_CNTR   (*(volatile uint16_t *)(USB_BASE + 0x40))  /* Control register */
+#define USB_ISTR   (*(volatile uint16_t *)(USB_BASE + 0x44))  /* Interrupt status register */
+#define USB_FNR    (*(volatile uint16_t *)(USB_BASE + 0x48))  /* Frame number register */
+#define USB_DADDR  (*(volatile uint16_t *)(USB_BASE + 0x4C))  /* Device address register */
+#define USB_BTABLE (*(volatile uint16_t *)(USB_BASE + 0x50))  /* Buffer table address */
+
+/* --- EPnR bit definitions --- */
+#define EP_CTR_RX    (1u << 15)  /* Correct Transfer RX — read-only, write-0-to-clear */
+#define EP_DTOG_RX   (1u << 14)  /* Data toggle RX */
+#define EP_STAT_RX   (3u << 12)  /* Status bits RX: DISABLED/STALL/NAK/VALID */
+#define EP_SETUP     (1u << 11)  /* Set by HW on SETUP packet reception */
+#define EP_TYPE      (3u <<  9)  /* Endpoint type: BULK/CONTROL/ISO/INTERRUPT */
+#define EP_KIND      (1u <<  8)  /* Endpoint kind (DBL_BUF for bulk, STATUS_OUT for ctrl) */
+#define EP_CTR_TX    (1u <<  7)  /* Correct Transfer TX — read-only, write-0-to-clear */
+#define EP_DTOG_TX   (1u <<  6)  /* Data toggle TX */
+#define EP_STAT_TX   (3u <<  4)  /* Status bits TX: DISABLED/STALL/NAK/VALID */
+#define EP_ADDR      (0xFu)      /* Endpoint address (lower 4 bits) */
+
+/* EP_STAT values (used in both STAT_TX and STAT_RX fields) */
+#define EP_STAT_DISABLED  0x0
+#define EP_STAT_STALL     0x1
+#define EP_STAT_NAK       0x2
+#define EP_STAT_VALID     0x3
+
+/* EP_TYPE values */
+#define EP_TYPE_BULK      0x0
+#define EP_TYPE_CONTROL   0x1
+#define EP_TYPE_ISO       0x2
+#define EP_TYPE_INTERRUPT 0x3
+
+/* USB_CNTR bit definitions */
+#define CNTR_CTRM    (1u << 15)  /* Correct transfer interrupt mask */
+#define CNTR_ERRM    (1u << 13)  /* Error interrupt mask */
+#define CNTR_SOFM    (1u << 9)   /* Start of frame interrupt mask */
+#define CNTR_RESETM  (1u << 10)  /* USB reset interrupt mask */
+#define CNTR_SUSPM   (1u << 11)  /* Suspend interrupt mask */
+#define CNTR_WKUPM   (1u << 12)  /* Wakeup interrupt mask */
+#define CNTR_FRES    (1u <<  0)  /* Force USB reset */
+#define CNTR_PDWN    (1u <<  1)  /* Power down */
+
+/* USB_ISTR bit definitions */
+#define ISTR_CTR     (1u << 15)  /* Correct transfer */
+#define ISTR_RESET   (1u << 10)  /* USB reset */
+#define ISTR_SUSP    (1u << 11)  /* Suspend */
+#define ISTR_WKUP    (1u << 12)  /* Wakeup */
+#define ISTR_SOF     (1u <<  9)  /* Start of frame */
+#define ISTR_ERR     (1u << 13)  /* Error */
+#define ISTR_DIR     (1u <<  4)  /* Direction of last correct transfer */
+#define ISTR_EP_ID   (0xFu)      /* Endpoint ID of last correct transfer */
+
+/* USB_DADDR bit definitions */
+#define DADDR_EF     (1u <<  7)  /* USB enable function */
+#define DADDR_ADD    (0x7Fu)     /* Device address (7 bits) */</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 3 — PMA MANAGEMENT
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="pma-management" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-memory me-2 text-teal"></i>Packet Memory (PMA) Management</h2>
+
+                    <p>The Packet Memory Area (PMA) is the most confusing aspect of the STM32 FSDEV peripheral. It is a block of dedicated SRAM that is accessible by both the USB hardware and the CPU, but with a peculiar access constraint: it is <strong>16-bit wide</strong>, and on many STM32 variants (F1, F0) the CPU must access it using 32-bit reads/writes where only the lower 16 bits carry data. This means a 64-byte buffer in PMA occupies 128 bytes of PMA address space.</p>
+
+                    <h3>Buffer Descriptor Table (BDT)</h3>
+
+                    <p>The PMA begins with the Buffer Descriptor Table. The BTABLE register points to its start (usually 0x0000, meaning the BDT is at the beginning of PMA). The BDT contains one 8-byte entry per endpoint (up to 8 endpoints = 64 bytes for the BDT itself):</p>
+
+<pre><code class="language-c">/*
+ * PMA layout (total: 512 bytes on typical FSDEV):
+ *
+ * Offset 0x000: Buffer Descriptor Table (BDT)
+ *   EP0 TX descriptor (4 bytes): ADDR_TX, COUNT_TX
+ *   EP0 RX descriptor (4 bytes): ADDR_RX, COUNT_RX
+ *   EP1 TX descriptor (4 bytes)
+ *   EP1 RX descriptor (4 bytes)
+ *   ... (up to EP7 = 8 × 8 = 64 bytes total for BDT)
+ *
+ * Offset 0x040: EP0 TX buffer  (64 bytes = 0x40)
+ * Offset 0x080: EP0 RX buffer  (64 bytes = 0x40)
+ * Offset 0x0C0: EP1 TX buffer  (64 bytes = 0x40)
+ * Offset 0x100: EP1 RX buffer  (64 bytes = 0x40)
+ * ... etc.
+ */
+
+/* PMA base address in CPU address space */
+#define PMA_BASE   0x40006000UL
+
+/*
+ * PMA access macros — on F1/F0, use 32-bit pointer with stride 2
+ * (each 16-bit PMA word occupies 32 bits of CPU address space)
+ */
+#define PMA_WORD(offset)   (*(volatile uint16_t *)(PMA_BASE + (offset) * 2))
+
+/* BDT entry structure (at PMA offset, NOT CPU offset) */
+/* EP n TX descriptor is at PMA offset: BTABLE + n*8 + 0 (ADDR_TX), +2 (COUNT_TX) */
+/* EP n RX descriptor is at PMA offset: BTABLE + n*8 + 4 (ADDR_RX), +4 (COUNT_RX) */
+#define EP_TX_ADDR(n)   PMA_WORD(USB_BTABLE/2 + (n)*4 + 0)
+#define EP_TX_COUNT(n)  PMA_WORD(USB_BTABLE/2 + (n)*4 + 1)
+#define EP_RX_ADDR(n)   PMA_WORD(USB_BTABLE/2 + (n)*4 + 2)
+#define EP_RX_COUNT(n)  PMA_WORD(USB_BTABLE/2 + (n)*4 + 3)
+
+/* PMA buffer allocation — planned layout for a minimal CDC device */
+#define PMA_BDT_BASE     0x00   /* BDT: 2 endpoints × 8 bytes = 16 bytes */
+#define PMA_EP0_TX_BASE  0x10   /* EP0 TX buffer at PMA offset 0x10 (64 bytes) */
+#define PMA_EP0_RX_BASE  0x50   /* EP0 RX buffer at PMA offset 0x50 (64 bytes) */
+#define PMA_EP1_TX_BASE  0x90   /* EP1 TX buffer (bulk IN) */
+#define PMA_EP1_RX_BASE  0xD0   /* EP1 RX buffer (bulk OUT) */
+/* Total: 0xD0 + 0x40 = 0x110 = 272 bytes — fits in 512-byte PMA */
+
+/* Copy data from system SRAM to PMA buffer (16-bit transfer, word-aligned) */
+void pma_write(uint16_t pma_offset, const uint8_t *src, uint16_t len)
+{
+    volatile uint16_t *dst = (volatile uint16_t *)(PMA_BASE + pma_offset * 2);
+    while (len >= 2) {
+        *dst++ = src[0] | ((uint16_t)src[1] &lt;&lt; 8);
+        dst++;          /* Skip the upper 16 bits (only lower 16 valid on F1/F0) */
+        src += 2;
+        len -= 2;
+    }
+    if (len == 1) {
+        *dst = src[0]; /* Last odd byte */
+    }
+}
+
+/* Copy data from PMA to system SRAM */
+void pma_read(uint16_t pma_offset, uint8_t *dst, uint16_t len)
+{
+    volatile uint16_t *src = (volatile uint16_t *)(PMA_BASE + pma_offset * 2);
+    while (len >= 2) {
+        uint16_t w = *src;
+        src += 2;       /* Skip upper 16 bits */
+        dst[0] = (uint8_t)(w &amp; 0xFF);
+        dst[1] = (uint8_t)(w >> 8);
+        dst += 2;
+        len -= 2;
+    }
+    if (len == 1) {
+        *dst = (uint8_t)(*src &amp; 0xFF);
+    }
+}</code></pre>
+
+                    <h3>COUNT_RX Field — Block Size Encoding</h3>
+
+                    <p>The <code>COUNT_RX</code> field in the BDT is not simply "number of bytes the buffer can hold". It uses a special encoding where you set either the number of 2-byte blocks (BL_SIZE=0, BLKSZ field = N/2) or 32-byte blocks (BL_SIZE=1, BLKSZ field = N/32) for RX buffers. This encoding tells the USB hardware the maximum buffer size so it knows when to raise an overflow error:</p>
+
+<pre><code class="language-c">/* Set the RX buffer size in the COUNT_RX BDT field.
+   For a 64-byte buffer: BL_SIZE=0, BLKSZ=32 → COUNT_RX = (32 << 10) = 0x8000 */
+#define COUNT_RX_64   ((1u &lt;&lt; 15) | (1u &lt;&lt; 10))   /* BL_SIZE=1, BLKSZ=1 → 2×32=64 bytes */
+/* Simpler: BL_SIZE=0 means blocks of 2 bytes, BLKSZ = (size/2)              */
+/* For 64 bytes: BL_SIZE=0, BLKSZ=32 → 0x8000                               */
+#define COUNT_RX_BLKS(n)  (((n)/2) &lt;&lt; 10)          /* BL_SIZE=0, n must be even ≤ 62 */
+/* For 64 bytes exactly:                                                      */
+#define COUNT_RX_64B      ((1u &lt;&lt; 15) | (1u &lt;&lt; 10)) /* BL_SIZE=1, BLKSZ=1 → 64 bytes */</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 4 — USB INTERRUPTS
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="usb-interrupts" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-bell me-2 text-teal"></i>USB Interrupts on STM32</h2>
+
+                    <p>The FSDEV peripheral shares its interrupt vector with CAN on some STM32F1 devices (<code>USB_LP_CAN_RX0_IRQn</code>). On STM32F0, G0, and L0 it has its own vector (<code>USB_IRQn</code>). The interrupt service routine must examine the <code>USB_ISTR</code> register to determine which event triggered the interrupt.</p>
+
+<pre><code class="language-c">/* USB interrupt handler — STM32F0/G0/L0 */
+void USB_IRQHandler(void)
+{
+    uint16_t istr = USB_ISTR;
+
+    /* ── USB bus RESET ── */
+    if (istr &amp; ISTR_RESET) {
+        USB_ISTR = ~ISTR_RESET;         /* Clear by writing 0 to the bit */
+        usb_handle_reset();
+    }
+
+    /* ── SUSPEND ── */
+    if (istr &amp; ISTR_SUSP) {
+        USB_ISTR = ~ISTR_SUSP;
+        /* Enter low-power mode if desired */
+        USB_CNTR |= (1u &lt;&lt; 3);         /* FSUSP bit */
+    }
+
+    /* ── WAKEUP ── */
+    if (istr &amp; ISTR_WKUP) {
+        USB_CNTR &amp;= ~(1u &lt;&lt; 3);        /* Clear FSUSP */
+        USB_ISTR = ~ISTR_WKUP;
+    }
+
+    /* ── CORRECT TRANSFER (CTR) — most important ── */
+    while (USB_ISTR &amp; ISTR_CTR) {
+        uint8_t  ep_id  = (uint8_t)(USB_ISTR &amp; ISTR_EP_ID);
+        uint8_t  dir    = (USB_ISTR &amp; ISTR_DIR) ? 1u : 0u;
+        /* dir=1: OUT or SETUP (host wrote to device); dir=0: IN (device wrote to host) */
+
+        if (ep_id == 0) {
+            usb_handle_ep0(dir);
+        } else {
+            usb_handle_epn(ep_id, dir);
+        }
+        /* CTR is cleared by clearing CTR_RX or CTR_TX in the EPnR register,
+           NOT in ISTR. The while loop continues until all CTR events are processed. */
+    }
+
+    /* ── SOF (start of frame, every 1 ms) ── */
+    if (istr &amp; ISTR_SOF) {
+        USB_ISTR = ~ISTR_SOF;
+        /* Optional: 1 ms tick for application timing */
+    }
+}
+
+/* Initialise the USB peripheral after clock enable */
+void usb_init(void)
+{
+    /* 1. Enable USB clock (RCC) — device-specific, not shown */
+
+    /* 2. Exit power-down mode */
+    USB_CNTR = CNTR_FRES;              /* Keep in reset, clear PDWN */
+    /* Wait at least 1 µs for analog section to stabilise */
+    for (volatile int i = 0; i &lt; 72; i++); /* ~1 µs at 72 MHz */
+
+    /* 3. Clear reset */
+    USB_CNTR = 0;
+
+    /* 4. Clear any pending interrupts */
+    USB_ISTR = 0;
+
+    /* 5. Set BTABLE — BDT at PMA offset 0 */
+    USB_BTABLE = PMA_BDT_BASE;
+
+    /* 6. Enable interrupts: CTR, RESET, SUSP, WKUP */
+    USB_CNTR = CNTR_CTRM | CNTR_RESETM | CNTR_SUSPM | CNTR_WKUPM;
+
+    /* 7. Enable USB interrupt in NVIC */
+    NVIC_SetPriority(USB_IRQn, 2);
+    NVIC_EnableIRQ(USB_IRQn);
+
+    /* 8. Connect D+ pull-up (if using external pull-up or internal on G0/L4) */
+    /* STM32G0: USB->BCDR |= USB_BCDR_DPPU; */
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 5 — EP0 STATE MACHINE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="ep0-state-machine" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-sitemap me-2 text-teal"></i>Control Endpoint 0 State Machine</h2>
+
+                    <p>EP0 is mandatory on all USB devices and handles all control transfers — enumeration, SetAddress, GetDescriptor, SetConfiguration, and class-specific control requests. The control transfer protocol has three stages: SETUP, DATA (optional), and STATUS. Getting the state machine wrong causes the host to fail enumeration silently.</p>
+
+                    <p>The EP0 state machine has five states:</p>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>State</th>
+                                <th>Meaning</th>
+                                <th>Transition Triggers</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>IDLE</strong></td>
+                                <td>Waiting for a SETUP packet</td>
+                                <td>&rarr; SETUP_RX when SETUP packet arrives</td>
+                            </tr>
+                            <tr>
+                                <td><strong>SETUP_RX</strong></td>
+                                <td>SETUP packet received, decode request</td>
+                                <td>&rarr; DATA_TX (IN request with data), DATA_RX (OUT request with data), STATUS_TX (IN with no data stage), STATUS_RX (OUT with no data stage)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>DATA_TX</strong></td>
+                                <td>Sending descriptor/data to host (IN direction)</td>
+                                <td>&rarr; STATUS_RX after all data sent</td>
+                            </tr>
+                            <tr>
+                                <td><strong>DATA_RX</strong></td>
+                                <td>Receiving data from host (OUT direction)</td>
+                                <td>&rarr; STATUS_TX after all data received</td>
+                            </tr>
+                            <tr>
+                                <td><strong>STATUS_TX / STATUS_RX</strong></td>
+                                <td>Zero-length status packet exchange</td>
+                                <td>&rarr; IDLE after status ACK</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+<pre><code class="language-c">/* ep0_state_machine.c — complete control endpoint 0 implementation */
+
+typedef enum {
+    EP0_IDLE,
+    EP0_SETUP_RX,
+    EP0_DATA_TX,
+    EP0_DATA_RX,
+    EP0_STATUS_TX,
+    EP0_STATUS_RX,
+    EP0_STALL
+} ep0_state_t;
+
+static ep0_state_t  ep0_state      = EP0_IDLE;
+static uint8_t      ep0_setup[8];           /* Received SETUP packet */
+static const uint8_t *ep0_tx_data  = NULL;  /* Pointer to descriptor/data to send */
+static uint16_t     ep0_tx_len     = 0;     /* Remaining bytes to send */
+static uint16_t     ep0_tx_sent    = 0;     /* Bytes already sent */
+static uint8_t      ep0_pending_addr = 0;   /* New USB address (SET_ADDRESS) */
+
+/* Helper: safely write to EPnR without toggling RO bits */
+static void ep_set_stat_tx(uint8_t ep, uint16_t stat)
+{
+    uint16_t reg = USB_EP0R;  /* Read current value */
+    /* Clear toggle bits we do NOT want to change (XOR trick):
+       Bits that are 1 in both old and new value toggle — we must mask them out. */
+    reg &amp;= ~(EP_CTR_RX | EP_CTR_TX);  /* Do not clear these */
+    reg &amp;= ~(EP_DTOG_RX | EP_DTOG_TX);/* Do not toggle data toggle */
+    reg &amp;= ~EP_STAT_TX;               /* Clear current stat_tx */
+    reg ^= stat;                       /* XOR to set desired state */
+    USB_EP0R = reg;
+}
+
+static void ep_set_stat_rx(uint8_t ep, uint16_t stat)
+{
+    uint16_t reg = USB_EP0R;
+    reg &amp;= ~(EP_CTR_RX | EP_CTR_TX);
+    reg &amp;= ~(EP_DTOG_RX | EP_DTOG_TX);
+    reg &amp;= ~EP_STAT_RX;
+    reg ^= (stat &lt;&lt; 12);
+    USB_EP0R = reg;
+}
+
+/* Initialise EP0 after USB reset */
+void usb_handle_reset(void)
+{
+    /* Reset device address to 0 */
+    USB_DADDR = DADDR_EF | 0;
+
+    /* Configure EP0 as control endpoint */
+    USB_EP0R = (EP_TYPE_CONTROL &lt;&lt; 9) | 0;  /* CONTROL type, EP address 0 */
+
+    /* Set BDT entries for EP0 */
+    EP_TX_ADDR(0)  = PMA_EP0_TX_BASE;
+    EP_TX_COUNT(0) = 0;
+    EP_RX_ADDR(0)  = PMA_EP0_RX_BASE;
+    EP_RX_COUNT(0) = COUNT_RX_64B;          /* 64-byte RX buffer */
+
+    /* Set EP0 TX to NAK (no data to send yet), RX to VALID (ready to receive SETUP) */
+    ep_set_stat_tx(0, EP_STAT_NAK);
+    ep_set_stat_rx(0, EP_STAT_VALID);
+
+    ep0_state = EP0_IDLE;
+    ep0_pending_addr = 0;
+}
+
+/* Called from the USB IRQ when a CTR event occurs on EP0 */
+void usb_handle_ep0(uint8_t dir)
+{
+    uint16_t ep0r = USB_EP0R;
+
+    if (ep0r &amp; EP_CTR_RX) {
+        /* RX event: SETUP or OUT data received */
+        if (ep0r &amp; EP_SETUP) {
+            /* SETUP packet received — read 8 bytes from PMA */
+            pma_read(PMA_EP0_RX_BASE, ep0_setup, 8);
+            /* Clear CTR_RX — write 0 to CTR_RX, preserve other bits */
+            USB_EP0R = ep0r &amp; ~EP_CTR_RX &amp; ~EP_CTR_TX;
+            ep0_handle_setup();
+        } else {
+            /* OUT data packet (DATA_RX state) */
+            uint16_t count = EP_RX_COUNT(0) &amp; 0x3FF;
+            /* Read received data — not shown for brevity */
+            USB_EP0R = ep0r &amp; ~EP_CTR_RX &amp; ~EP_CTR_TX;
+            ep_set_stat_rx(0, EP_STAT_VALID); /* Ready for more */
+        }
+    }
+
+    if (ep0r &amp; EP_CTR_TX) {
+        /* TX event: host acknowledged IN packet */
+        USB_EP0R = ep0r &amp; ~EP_CTR_TX &amp; ~EP_CTR_RX;
+
+        if (ep0_state == EP0_DATA_TX) {
+            ep0_continue_tx();  /* Send next chunk */
+        } else if (ep0_state == EP0_STATUS_TX) {
+            /* Status ZLP sent — apply any pending address change */
+            if (ep0_pending_addr) {
+                USB_DADDR = DADDR_EF | ep0_pending_addr;
+                ep0_pending_addr = 0;
+            }
+            ep0_state = EP0_IDLE;
+            ep_set_stat_rx(0, EP_STAT_VALID);
+        }
+    }
+}
+
+/* Handle a received SETUP packet */
+void ep0_handle_setup(void)
+{
+    uint8_t  bmRequestType = ep0_setup[0];
+    uint8_t  bRequest      = ep0_setup[1];
+    uint16_t wValue        = ep0_setup[2] | ((uint16_t)ep0_setup[3] &lt;&lt; 8);
+    uint16_t wIndex        = ep0_setup[4] | ((uint16_t)ep0_setup[5] &lt;&lt; 8);
+    uint16_t wLength       = ep0_setup[6] | ((uint16_t)ep0_setup[7] &lt;&lt; 8);
+
+    /* Standard device requests */
+    if ((bmRequestType &amp; 0x60) == 0x00) {  /* Type = Standard */
+        switch (bRequest) {
+            case 0x05:  /* SET_ADDRESS */
+                ep0_pending_addr = (uint8_t)(wValue &amp; 0x7F);
+                ep0_tx_len = 0;
+                ep0_state  = EP0_STATUS_TX;
+                EP_TX_COUNT(0) = 0;
+                ep_set_stat_tx(0, EP_STAT_VALID); /* Send ZLP status */
+                ep_set_stat_rx(0, EP_STAT_NAK);
+                break;
+
+            case 0x06:  /* GET_DESCRIPTOR */
+                ep0_handle_get_descriptor(wValue, wIndex, wLength);
+                break;
+
+            case 0x09:  /* SET_CONFIGURATION */
+                ep0_handle_set_configuration(wValue);
+                break;
+
+            default:
+                /* Stall unsupported standard requests */
+                ep_set_stat_tx(0, EP_STAT_STALL);
+                ep_set_stat_rx(0, EP_STAT_STALL);
+                break;
+        }
+    } else {
+        /* Class or vendor requests — application-specific */
+        ep_set_stat_tx(0, EP_STAT_STALL);
+        ep_set_stat_rx(0, EP_STAT_STALL);
+    }
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 6 — IMPLEMENTING GETDESCRIPTOR
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="get-descriptor" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-file-code me-2 text-teal"></i>Implementing GetDescriptor</h2>
+
+                    <p>GetDescriptor is the most frequently called control request during enumeration. The host calls it multiple times: first for the device descriptor, then for the configuration descriptor (first a short 9-byte read to get wTotalLength, then the full configuration), then for string descriptors. Your implementation must handle short transfers (when <code>wLength</code> is less than the descriptor length) and the ZLP rule correctly.</p>
+
+<pre><code class="language-c">/* Descriptor type codes in the high byte of wValue for GET_DESCRIPTOR */
+#define DESC_TYPE_DEVICE        0x01
+#define DESC_TYPE_CONFIGURATION 0x02
+#define DESC_TYPE_STRING        0x03
+#define DESC_TYPE_INTERFACE     0x04
+#define DESC_TYPE_ENDPOINT      0x05
+#define DESC_TYPE_BOS           0x0F
+
+/* Static descriptors — defined in descriptors.c, extern here */
+extern const uint8_t  device_descriptor[18];
+extern const uint8_t  configuration_descriptor[CONFIG_TOTAL_LEN];
+extern const uint8_t *string_descriptors[];
+extern const uint8_t  num_string_descriptors;
+
+void ep0_handle_get_descriptor(uint16_t wValue, uint16_t wIndex, uint16_t wLength)
+{
+    uint8_t  desc_type  = (uint8_t)(wValue >> 8);
+    uint8_t  desc_index = (uint8_t)(wValue &amp; 0xFF);
+    const uint8_t *desc_ptr = NULL;
+    uint16_t       desc_len = 0;
+
+    switch (desc_type) {
+        case DESC_TYPE_DEVICE:
+            desc_ptr = device_descriptor;
+            desc_len = sizeof(device_descriptor);
+            break;
+
+        case DESC_TYPE_CONFIGURATION:
+            if (desc_index == 0) {
+                desc_ptr = configuration_descriptor;
+                desc_len = CONFIG_TOTAL_LEN;
+            }
+            break;
+
+        case DESC_TYPE_STRING:
+            if (desc_index &lt; num_string_descriptors &amp;&amp; string_descriptors[desc_index]) {
+                desc_ptr = string_descriptors[desc_index];
+                desc_len = desc_ptr[0]; /* First byte is bLength */
+            }
+            break;
+
+        default:
+            break;
+    }
+
+    if (desc_ptr == NULL) {
+        /* Unsupported descriptor — stall */
+        ep_set_stat_tx(0, EP_STAT_STALL);
+        ep_set_stat_rx(0, EP_STAT_STALL);
+        return;
+    }
+
+    /* Clamp to wLength (host may request fewer bytes than the full descriptor) */
+    if (desc_len > wLength) desc_len = wLength;
+
+    /* Start the DATA_TX phase */
+    ep0_tx_data = desc_ptr;
+    ep0_tx_len  = desc_len;
+    ep0_tx_sent = 0;
+    ep0_state   = EP0_DATA_TX;
+
+    ep0_continue_tx();
+}
+
+/* Send the next chunk of the IN data stage (up to 64 bytes per packet) */
+void ep0_continue_tx(void)
+{
+    uint16_t chunk = ep0_tx_len - ep0_tx_sent;
+    if (chunk > 64) chunk = 64;
+
+    if (chunk == 0) {
+        /* All data sent — transition to STATUS_RX (host will send a ZLP status OUT) */
+        ep0_state = EP0_STATUS_RX;
+        EP_TX_COUNT(0) = 0;
+        ep_set_stat_rx(0, EP_STAT_VALID);
+        ep_set_stat_tx(0, EP_STAT_NAK);
+        return;
+    }
+
+    /* Copy next chunk to PMA TX buffer */
+    pma_write(PMA_EP0_TX_BASE, ep0_tx_data + ep0_tx_sent, chunk);
+    EP_TX_COUNT(0) = chunk;
+    ep0_tx_sent   += chunk;
+
+    /* If this was the last chunk, prepare to send ZLP if needed.
+       ZLP rule: required when sent bytes == max packet size (64) and
+       total transfer was an exact multiple of 64. */
+    if (ep0_tx_sent == ep0_tx_len &amp;&amp; chunk &lt; 64) {
+        /* Short packet — signals end of transfer, no ZLP needed */
+        ep0_state = EP0_DATA_TX;   /* Will transition to STATUS_RX after TX ACK */
+    }
+
+    ep_set_stat_tx(0, EP_STAT_VALID); /* Arm TX — hardware sends the packet */
+    ep_set_stat_rx(0, EP_STAT_NAK);
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 7 — SETADDRESS PROCEDURE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="set-address" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-address-card me-2 text-teal"></i>SetAddress Procedure</h2>
+
+                    <p>SetAddress is the one control request with a timing requirement that catches almost every first-time bare-metal implementer. The USB specification mandates that the new device address takes effect <em>after</em> the status stage of the SetAddress request is complete — not immediately after the SETUP packet is received. If you write the new address to <code>USB_DADDR</code> while handling the SETUP packet, the device sends the status ZLP from the wrong address and enumeration fails.</p>
+
+<pre><code class="language-c">/*
+ * SetAddress correct timing:
+ *
+ * 1. Host sends SETUP (bRequest=SET_ADDRESS, wValue=new_addr)
+ * 2. Device stores new_addr in ep0_pending_addr
+ * 3. Device sends STATUS ZLP (IN direction, zero length)
+ * 4. Host ACKs the status ZLP — this is the CTR_TX interrupt
+ * 5. NOW (in the CTR_TX handler) we write new_addr to USB_DADDR
+ *
+ * This is already implemented in ep0_handle_setup() and the CTR_TX
+ * handler above. Here is the isolated logic for clarity:
+ */
+
+/* Called in SETUP handler for SET_ADDRESS: */
+void handle_set_address_setup(uint8_t new_addr)
+{
+    /* DO NOT set USB_DADDR here — the address is not valid yet */
+    ep0_pending_addr = new_addr;
+
+    /* Prepare zero-length status packet */
+    EP_TX_COUNT(0) = 0;
+    ep0_state = EP0_STATUS_TX;
+    ep_set_stat_tx(0, EP_STAT_VALID);   /* Send ZLP */
+    ep_set_stat_rx(0, EP_STAT_NAK);
+}
+
+/* Called in CTR_TX handler when status ZLP is acknowledged: */
+void handle_set_address_complete(void)
+{
+    /* NOW it is safe to apply the new address */
+    if (ep0_pending_addr != 0) {
+        USB_DADDR = DADDR_EF | ep0_pending_addr;
+        ep0_pending_addr = 0;
+    }
+    ep0_state = EP0_IDLE;
+    ep_set_stat_rx(0, EP_STAT_VALID);   /* Ready for next SETUP */
+}
+
+/*
+ * Common bug: writing USB_DADDR in the SETUP handler.
+ * The host sends the status ACK to address 0 (before seeing the ZLP).
+ * If you change the address before sending the ZLP, the ZLP goes out
+ * on the new address — the host, still at address 0, never sees it.
+ * Enumeration times out.
+ */</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>The Address Timing Rule:</strong> For SET_ADDRESS only, the new address becomes active after the handshake of the status stage, not after the SETUP stage. For all other control requests (including SET_CONFIGURATION), the action takes effect immediately. This is a USB spec exception that exists for only this one request.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 8 — BULK ENDPOINT IMPLEMENTATION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="bulk-endpoint" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-exchange-alt me-2 text-teal"></i>Bulk Endpoint Implementation</h2>
+
+                    <p>After successful enumeration (device descriptor, configuration descriptor, SET_CONFIGURATION), the host can use the non-EP0 endpoints. Here is a complete bulk endpoint implementation for EP1 IN and EP1 OUT, implementing a simple loopback:</p>
+
+<pre><code class="language-c">/* bulk_endpoint.c — EP1 IN (device to host) and EP1 OUT (host to device) */
+
+static uint8_t bulk_rx_buf[64];
+static uint8_t bulk_tx_buf[64];
+static bool    bulk_tx_busy = false;
+
+/* Configure EP1 as bulk after SET_CONFIGURATION */
+void ep1_init(void)
+{
+    /* Set EP1 type = BULK, address = 1 */
+    USB_EP1R = (EP_TYPE_BULK &lt;&lt; 9) | 1;
+
+    /* Set BDT addresses */
+    EP_TX_ADDR(1)  = PMA_EP1_TX_BASE;
+    EP_TX_COUNT(1) = 0;
+    EP_RX_ADDR(1)  = PMA_EP1_RX_BASE;
+    EP_RX_COUNT(1) = COUNT_RX_64B;
+
+    /* EP1 TX: DTOG=0 (DATA0), STAT=NAK */
+    /* Clear DTOG_TX by writing 1 to it (it's a toggle bit) if currently set */
+    if (USB_EP1R &amp; EP_DTOG_TX) {
+        USB_EP1R ^= EP_DTOG_TX;   /* Toggle DTOG_TX to clear it */
+    }
+    /* Set STAT_TX = NAK (nothing to send yet) */
+    /* STAT is also toggle: to set to NAK (0b10), XOR with (current XOR desired) */
+    /* ... use the helper function from Section 5 for EP1 */
+
+    /* EP1 RX: DTOG=0 (DATA0), STAT=VALID (ready to receive) */
+    if (USB_EP1R &amp; EP_DTOG_RX) {
+        USB_EP1R ^= EP_DTOG_RX;
+    }
+    /* ep_set_stat_rx(1, EP_STAT_VALID); — enable reception */
+
+    bulk_tx_busy = false;
+}
+
+/* Send data on EP1 IN (device to host) */
+bool ep1_send(const uint8_t *data, uint16_t len)
+{
+    if (bulk_tx_busy) return false;  /* Previous TX not complete */
+    if (len > 64) len = 64;
+
+    pma_write(PMA_EP1_TX_BASE, data, len);
+    EP_TX_COUNT(1) = len;
+    bulk_tx_busy   = true;
+
+    /* Arm EP1 TX — set STAT_TX to VALID */
+    /* (same EPnR XOR manipulation as shown in ep_set_stat_tx) */
+
+    return true;
+}
+
+/* Called from USB IRQ when EP1 has a CTR event */
+void usb_handle_epn(uint8_t ep_id, uint8_t dir)
+{
+    if (ep_id == 1) {
+        uint16_t ep1r = USB_EP1R;
+
+        if (ep1r &amp; EP_CTR_RX) {
+            /* OUT data received from host */
+            uint16_t count = EP_RX_COUNT(1) &amp; 0x3FF;
+            pma_read(PMA_EP1_RX_BASE, bulk_rx_buf, count);
+
+            /* Clear CTR_RX */
+            USB_EP1R = ep1r &amp; ~EP_CTR_RX &amp; ~EP_CTR_TX;
+
+            /* Application callback: process received data */
+            on_bulk_rx(bulk_rx_buf, count);
+
+            /* Re-arm EP1 RX for next packet */
+            /* ep_set_stat_rx(1, EP_STAT_VALID); */
+        }
+
+        if (ep1r &amp; EP_CTR_TX) {
+            /* IN data acknowledged by host */
+            USB_EP1R = ep1r &amp; ~EP_CTR_TX &amp; ~EP_CTR_RX;
+            bulk_tx_busy = false;
+
+            /* Application callback: TX complete, may send next chunk */
+            on_bulk_tx_complete();
+        }
+    }
+}
+
+/* Simple loopback: echo received data back */
+void on_bulk_rx(const uint8_t *data, uint16_t len)
+{
+    /* Copy to TX buffer and send */
+    memcpy(bulk_tx_buf, data, len);
+    ep1_send(bulk_tx_buf, len);
+}
+
+void on_bulk_tx_complete(void) { /* Nothing to do for loopback */ }
+
+/*
+ * DATA0/DATA1 toggle:
+ * The USB spec requires alternating DATA0/DATA1 packet IDs.
+ * The STM32 FSDEV hardware handles DTOG automatically for normal transfers:
+ * it toggles DTOG_TX after each successful IN transfer (CTR_TX)
+ * and DTOG_RX after each successful OUT transfer (CTR_RX).
+ * You only need to manually control DTOG in error recovery scenarios
+ * (e.g., after a STALL, you must reset DTOG to DATA0).
+ */</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 9 — WHAT TINYUSB GIVES YOU
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="tinyusb-comparison" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-balance-scale me-2 text-teal"></i>What TinyUSB Gives You</h2>
+
+                    <p>After implementing bare-metal EP0 and a bulk endpoint, you have a new appreciation for what TinyUSB handles on your behalf. Here is a side-by-side comparison of what you wrote vs what TinyUSB gives you for free:</p>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Concern</th>
+                                <th>Bare-Metal (your code)</th>
+                                <th>TinyUSB (automatic)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>EP0 state machine</td>
+                                <td>~200 lines of careful C, multiple subtle bugs possible</td>
+                                <td>0 lines — fully handled internally</td>
+                            </tr>
+                            <tr>
+                                <td>Descriptor handling</td>
+                                <td>Manual switch/case, pointer arithmetic, length clamping</td>
+                                <td>Callbacks: <code>tud_descriptor_device_cb()</code> etc.</td>
+                            </tr>
+                            <tr>
+                                <td>PMA management</td>
+                                <td>Manual allocation, 16-bit stride, pma_read/pma_write</td>
+                                <td>Fully automatic</td>
+                            </tr>
+                            <tr>
+                                <td>DTOG (data toggle)</td>
+                                <td>Hardware automatic for normal transfers, manual for error recovery</td>
+                                <td>Fully automatic including error recovery</td>
+                            </tr>
+                            <tr>
+                                <td>SetAddress timing</td>
+                                <td>Must remember to defer DADDR write to CTR_TX handler</td>
+                                <td>Handled correctly in TinyUSB core</td>
+                            </tr>
+                            <tr>
+                                <td>ZLP rule</td>
+                                <td>Must calculate and send manually</td>
+                                <td>Automatic</td>
+                            </tr>
+                            <tr>
+                                <td>Suspend/Resume</td>
+                                <td>Manual CNTR/FSUSP bit manipulation</td>
+                                <td>Callbacks: <code>tud_suspend_cb()</code>, <code>tud_resume_cb()</code></td>
+                            </tr>
+                            <tr>
+                                <td>EPnR write safety</td>
+                                <td>XOR-based write to avoid toggling RO bits — must get right for every write</td>
+                                <td>Abstracted in dcd_fsdev.c</td>
+                            </tr>
+                            <tr>
+                                <td>Multi-MCU portability</td>
+                                <td>Zero — completely MCU-specific</td>
+                                <td>30+ MCU families, same application code</td>
+                            </tr>
+                            <tr>
+                                <td>Class drivers</td>
+                                <td>Must implement all class logic manually</td>
+                                <td>CDC, HID, MSC, Audio, MIDI, vendor — all ready</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Conclusion from this exercise:</strong> TinyUSB's <code>src/portable/st/stm32_fsdev/dcd_stm32_fsdev.c</code> is approximately 600 lines of carefully written hardware driver code. The EP0 state machine in <code>src/device/usbd.c</code> is another ~800 lines. You just wrote a simplified version of that in this article. Use TinyUSB for production. Study bare-metal to understand production.
+                    </div>
+
+                    <h3>When Bare-Metal Is Still the Right Answer</h3>
+
+                    <p>Despite the comparison above, there are legitimate production scenarios for bare-metal USB:</p>
+                    <ul>
+                        <li><strong>USB DFU bootloader in &lt;4 KB:</strong> A USB DFU Class bootloader that fits in the first 4 KB of flash (before any application) must be extremely compact. libopencm3's USB stack and similar minimal stacks achieve this. TinyUSB does not fit.</li>
+                        <li><strong>Single-purpose fixed-protocol device:</strong> A USB HID keyboard that only ever sends one 8-byte report can implement EP0 (enumeration only) and EP1 interrupt IN in under 2 KB with a stripped bare-metal approach.</li>
+                        <li><strong>Custom RTOS without TinyUSB port:</strong> If your RTOS is a proprietary system without a TinyUSB port, bare-metal USB integration may be the only path without porting effort.</li>
+                    </ul>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 10 — PRACTICAL EXERCISES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="exercises" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-dumbbell me-2 text-teal"></i>Practical Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 1</span>
+                            <span class="badge bg-success text-white ms-2">Beginner</span>
+                        </div>
+                        <h4>Bare-Metal Enumeration</h4>
+                        <p>On an STM32F103 or STM32F042 development board, implement bare-metal USB enumeration without any USB library. Your goal is to reach the point where Device Manager (Windows) or <code>lsusb</code> (Linux) shows your device with the correct VID/PID, manufacturer string, and product string. Implement only EP0 control transfers: GetDescriptor (device descriptor, configuration descriptor, string descriptors) and SetAddress. Use Wireshark/USBPcap to capture and verify that each request is handled correctly. Log all received SETUP packets over UART for debugging.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">STM32 FSDEV</span>
+                            <span class="bias-tag">EP0 State Machine</span>
+                            <span class="bias-tag">USB Enumeration</span>
+                            <span class="bias-tag">Wireshark</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 2</span>
+                            <span class="badge bg-warning text-dark ms-2">Intermediate</span>
+                        </div>
+                        <h4>Add a Bulk Endpoint Loopback</h4>
+                        <p>Extend the bare-metal enumerator from Exercise 1 to include EP1 bulk IN and EP1 bulk OUT. After successful SetConfiguration, configure EP1 as described in Section 8. Write a Python pyusb script that sends 100 payloads of random size (1–64 bytes) and verifies the loopback echo. Deliberately introduce a DTOG error (set DTOG to wrong state) and observe in Wireshark how the host and device recover (or fail to recover). Document the DTOG recovery procedure.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">Bulk Endpoint</span>
+                            <span class="bias-tag">DTOG Toggle</span>
+                            <span class="bias-tag">PMA Management</span>
+                            <span class="bias-tag">Error Recovery</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 3</span>
+                            <span class="badge bg-danger text-white ms-2">Advanced</span>
+                        </div>
+                        <h4>Implement CDC Without TinyUSB</h4>
+                        <p>Implement a complete USB CDC-ACM (virtual COM port) device from scratch on STM32F0 using only bare-metal register access. You will need: EP0 (control + standard CDC class requests SET_LINE_CODING, GET_LINE_CODING, SET_CONTROL_LINE_STATE), EP1 bulk IN (data from device to host), EP1 bulk OUT (data from host to device), and EP2 interrupt IN (CDC notification endpoint, required by spec even if unused). The device should enumerate as a CDC serial port on Windows (using the inbox usbser.sys), accept data from a terminal program, and echo it back with the bytes uppercased. Measure the throughput in bytes/second and compare it against a TinyUSB CDC device on the same hardware.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">CDC-ACM Bare-Metal</span>
+                            <span class="bias-tag">Class Requests</span>
+                            <span class="bias-tag">Multi-Endpoint</span>
+                            <span class="bias-tag">Throughput Measurement</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 11 — DOCUMENT GENERATOR
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="usb-bare-metal-tool" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-file-alt me-2 text-teal"></i>Bare-Metal USB Design Generator</h2>
+
+                    <p>Document your bare-metal USB design — target MCU, peripheral type, PMA size, endpoint plan, device classes, and implementation notes. Download as Word, Excel, PDF, or PPTX for design documentation or learning records.</p>
+
+                    <div class="canvas-form" id="usbBmForm">
+                        <h4 class="canvas-form-title"><i class="fas fa-hammer me-2"></i>Bare-Metal USB Design Generator</h4>
+                        <p class="form-help-text">Document your bare-metal USB peripheral design. Download as Word, Excel, PDF, or PPTX.</p>
+                        <div id="usbBmBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <p class="form-privacy-notice"><i class="fas fa-shield-alt"></i> All data stays in your browser. Nothing is sent to or stored on any server.</p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbBmProjName">Project Name *</label>
+                                <input type="text" id="usbBmProjName" placeholder="e.g., Bare-Metal HID Bootloader">
+                            </div>
+                            <div class="form-group">
+                                <label for="usbBmMcu">Target MCU *</label>
+                                <input type="text" id="usbBmMcu" placeholder="e.g., STM32F042F6P6, STM32F103C8T6">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbBmPeripheral">USB Peripheral Type</label>
+                                <select id="usbBmPeripheral">
+                                    <option value="STM32 FSDEV">STM32 FSDEV</option>
+                                    <option value="STM32 OTG_FS">STM32 OTG_FS</option>
+                                    <option value="STM32 OTG_HS">STM32 OTG_HS</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="usbBmEndpoints">Endpoint Plan</label>
+                                <input type="text" id="usbBmEndpoints" placeholder="e.g., EP0 control, EP1 bulk IN/OUT, EP2 interrupt IN">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbBmPmaSize">PMA Size</label>
+                                <select id="usbBmPmaSize">
+                                    <option value="512 bytes">512 bytes</option>
+                                    <option value="1024 bytes">1024 bytes</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label for="usbBmClasses">Device Classes to Implement</label>
+                                <textarea id="usbBmClasses" rows="3" placeholder="e.g., CDC-ACM (virtual serial port), HID (custom 8-byte report)"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label for="usbBmNotes">Implementation Notes</label>
+                                <textarea id="usbBmNotes" rows="4" placeholder="e.g., EP0 handled in USB_IRQ, no RTOS, UART logging on PA9/PA10, WinUSB via MSOS 2.0, PMA layout: BDT@0x00, EP0_TX@0x40, EP0_RX@0x80, EP1_TX@0xC0, EP1_RX@0x100"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="usbBmHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="usbBmHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="usbBmHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-generate" onclick="usbBmHandler.generatePPTX()"><i class="fas fa-file-powerpoint me-1"></i>PPTX</button>
+                            <button class="btn-reset" onclick="usbBmHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="usbBmSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="usbBmSuccessText"></span></div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 12 — CONCLUSION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="conclusion" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion &amp; Next Steps</h2>
+
+                    <p>Implementing bare-metal USB on an STM32 FSDEV peripheral is one of the most technically demanding exercises in embedded firmware development. After completing this article and its exercises, you now understand:</p>
+
+                    <ul>
+                        <li>The <strong>STM32 FSDEV register architecture</strong> — USB_EPnR, USB_CNTR, USB_ISTR, USB_DADDR, USB_BTABLE and their precise semantics, including the XOR-based write protocol for EPnR.</li>
+                        <li><strong>PMA management</strong> — the 16-bit wide SRAM, the Buffer Descriptor Table layout, 32-bit CPU access stride on F1/F0, and the COUNT_RX block encoding.</li>
+                        <li>The <strong>EP0 control state machine</strong> — five states, the SETUP-DATA-STATUS phases, ZLP rules, and the stall mechanism for unsupported requests.</li>
+                        <li>The <strong>SetAddress timing trap</strong> — the single most common bare-metal USB bug, now permanently understood.</li>
+                        <li><strong>Bulk endpoint operation</strong> — DTOG, STAT_TX/RX, CTR flags, and the PMA copy path for TX and RX.</li>
+                        <li>Why <strong>TinyUSB is the right choice for production</strong> — it correctly handles all of the above plus DTOG recovery, suspend/resume, all standard requests, class drivers, and multi-MCU portability. The bare-metal path exists to give you the mental model that makes you a better user of TinyUSB — not to replace it.</li>
+                    </ul>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="usb-dev-part16-security.html"><strong>Part 16: Security in USB</strong></a>, we examine USB from an adversarial perspective: BadUSB attacks (malicious firmware on commodity USB devices), USB keystroke injection, device authentication mechanisms (USB PD authentication, DFU security), secure firmware update over USB, and practical USB firewall solutions for both end users and embedded system designers. Understanding USB security is essential before any USB-connected product reaches market.</p>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 14: Custom USB Class Drivers</h5>
+                            <p>Vendor-specific class, WinUSB MSOS 2.0 descriptors, custom binary protocol over bulk endpoints, and Python libusb host applications.</p>
+                            <a href="usb-dev-part14-custom-class-drivers.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 5: TinyUSB Deep Dive</h5>
+                            <p>TinyUSB architecture, the execution model, STM32 FSDEV driver source walkthrough, descriptor callbacks, and your first working TinyUSB device.</p>
+                            <a href="usb-dev-part05-tinyusb-deep-dive.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 16: Security in USB</h5>
+                            <p>BadUSB attacks, USB device authentication, DFU security, secure firmware update protocols, and hardware USB firewall designs.</p>
+                            <a href="usb-dev-part16-security.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div><!-- end col-lg-8 -->
+            </div><!-- end row -->
+        </div><!-- end container -->
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> |
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> |
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? &#9749; <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Document Generation -->
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-usb-dev.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- Bare-Metal USB Design Form Handler -->
+    <script>
+        var usbBmPersistence = new FormPersistence('usb-p15-bm-draft', {
+            'usbBmProjName':   'projectName',
+            'usbBmMcu':        'mcu',
+            'usbBmPeripheral': 'peripheral',
+            'usbBmEndpoints':  'endpoints',
+            'usbBmPmaSize':    'pmaSize',
+            'usbBmClasses':    'deviceClasses',
+            'usbBmNotes':      'notes'
+        }, 'usbBmBadge');
+
+        var usbBmHandler = new CanvasFormHandler({
+            formId:         'usbBmForm',
+            successId:      'usbBmSuccess',
+            successTextId:  'usbBmSuccessText',
+            persistence:    usbBmPersistence,
+            filenameField:  'projectName',
+            filenameSuffix: '-bare-metal-usb-design',
+            requiredFields: ['usbBmProjName', 'usbBmMcu'],
+            requiredMessage:'Please enter Project Name and MCU.',
+            docType:        'BareMetalUsbDesign'
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            usbBmPersistence.init();
+        });
+    </script>
+
+</body>
+</html>

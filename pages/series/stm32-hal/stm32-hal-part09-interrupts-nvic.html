@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Master STM32 NVIC priority grouping, preemption, nested interrupts, ISR design rules, HAL callback architecture, and latency measurement. Part 9 of 18." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="STM32, NVIC, interrupts, priority grouping, preemption, ISR design, HAL callbacks, interrupt latency, Cortex-M, embedded systems" />
+    <meta property="og:title" content="STM32 Interrupt Management &amp; NVIC — STM32 Unleashed Series Part 9" />
+    <meta property="og:description" content="Poorly configured interrupt priorities are the hidden cause of most STM32 concurrency bugs — master priority grouping, preemption, ISR design rules, and HAL callback architecture." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>STM32 Interrupt Management &amp; NVIC — STM32 Unleashed Series Part 9 - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/stm32-hal/stm32-hal-part09-interrupts-nvic.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting (6 themes) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'ad_user_data': 'granted',
+            'ad_personalization': 'granted',
+            'analytics_storage': 'granted'
+        });
+
+        gtag('set', 'url_passthrough', true);
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+            var f = d.getElementsByTagName(s)[0],
+                j = d.createElement(s),
+                dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking &ldquo;Accept All&rdquo;, you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">STM32 Part 9: Interrupt Management &amp; NVIC</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>March 31, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>26 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Poorly configured interrupt priorities are the hidden cause of most STM32 concurrency bugs — master priority grouping, preemption, ISR design rules, and HAL callback architecture to build rock-solid real-time firmware.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#nvic-architecture" onclick="closeNav()">NVIC Architecture</a>
+                <ul>
+                    <li><a href="#exception-types" onclick="closeNav()">System Exceptions</a></li>
+                    <li><a href="#vector-table" onclick="closeNav()">Interrupt Vector Table</a></li>
+                    <li><a href="#priority-bits" onclick="closeNav()">Priority Register Width</a></li>
+                </ul>
+            </li>
+            <li><a href="#priority-grouping" onclick="closeNav()">Priority Grouping</a></li>
+            <li><a href="#preemption-nesting" onclick="closeNav()">Preemption &amp; Nesting</a></li>
+            <li><a href="#isr-design" onclick="closeNav()">ISR Design Rules</a></li>
+            <li><a href="#hal-callbacks" onclick="closeNav()">HAL Callback Architecture</a></li>
+            <li><a href="#latency-measurement" onclick="closeNav()">Latency Measurement</a></li>
+            <li><a href="#pitfalls" onclick="closeNav()">Common Interrupt Pitfalls</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#nvic-config-tool" onclick="closeNav()">NVIC Configuration Tool</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 1 — NVIC ARCHITECTURE (first section: no mt-5)
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="nvic-architecture" class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Series Overview:</strong> This is Part 9 of the 18-part STM32 Unleashed series. We have covered architecture, GPIO, UART, timers, ADC, SPI, I2C, and DMA. Now we tackle the interrupt subsystem — the mechanism that makes every one of those peripherals reactive instead of polling-bound.
+                    </div>
+
+                    <!-- Series Navigation Path -->
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>STM32 Unleashed: HAL Driver Development</h4>
+                            <div class="path-subtitle">Your 18-step learning path &bull; Currently on Step 9</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="stm32-hal-part01-architecture-cubemx.html" class="step-card completed">
+                                <div class="step-num completed">1</div>
+                                <div class="step-info"><h6>Architecture &amp; CubeMX Setup</h6><small>STM32 family, clock tree, HAL vs LL, CubeMX workflow, first project</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part02-gpio-debounce.html" class="step-card completed">
+                                <div class="step-num completed">2</div>
+                                <div class="step-info"><h6>GPIO &amp; Button Debounce</h6><small>GPIO modes, pull-up/down, EXTI, software debounce, HAL_GPIO_ReadPin</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part03-uart-communication.html" class="step-card completed">
+                                <div class="step-num completed">3</div>
+                                <div class="step-info"><h6>UART Communication</h6><small>Polling, interrupt, DMA modes, printf retargeting, ring buffers</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part04-timers-pwm.html" class="step-card completed">
+                                <div class="step-num completed">4</div>
+                                <div class="step-info"><h6>Timers, PWM &amp; Input Capture</h6><small>TIM basics, PWM generation, input capture, encoder mode</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part05-adc-dac.html" class="step-card completed">
+                                <div class="step-num completed">5</div>
+                                <div class="step-info"><h6>ADC &amp; DAC</h6><small>Single/continuous conversion, DMA, injected channels, DAC waveforms</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part06-spi-protocol.html" class="step-card completed">
+                                <div class="step-num completed">6</div>
+                                <div class="step-info"><h6>SPI Protocol</h6><small>SPI master/slave, full-duplex, DMA transfers, sensor drivers</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part07-i2c-protocol.html" class="step-card completed">
+                                <div class="step-num completed">7</div>
+                                <div class="step-info"><h6>I2C Protocol</h6><small>I2C master, 7/10-bit addressing, DMA, multi-master, error handling</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part08-dma-memory.html" class="step-card completed">
+                                <div class="step-num completed">8</div>
+                                <div class="step-info"><h6>DMA &amp; Memory Efficiency</h6><small>DMA streams, circular mode, memory-to-memory, zero-copy patterns</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <div class="step-card current">
+                                <div class="step-num active">9</div>
+                                <div class="step-info"><h6>Interrupt Management &amp; NVIC</h6><small>Priority grouping, preemption, ISR design, HAL callbacks, latency</small></div>
+                                <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                            </div>
+                            <a href="stm32-hal-part10-low-power.html" class="step-card">
+                                <div class="step-num upcoming">10</div>
+                                <div class="step-info"><h6>Low-Power Modes</h6><small>Sleep, Stop, Standby modes, RTC wakeup, LP UART, power profiling</small></div>
+                            </a>
+                            <a href="stm32-hal-part11-rtc-calendar.html" class="step-card">
+                                <div class="step-num upcoming">11</div>
+                                <div class="step-info"><h6>RTC &amp; Calendar</h6><small>RTC configuration, alarms, backup registers, calendar subseconds</small></div>
+                            </a>
+                            <a href="stm32-hal-part12-can-bus.html" class="step-card">
+                                <div class="step-num upcoming">12</div>
+                                <div class="step-info"><h6>CAN Bus</h6><small>FDCAN/bxCAN, filters, message frames, error handling, automotive use</small></div>
+                            </a>
+                            <a href="stm32-hal-part13-usb-cdc.html" class="step-card">
+                                <div class="step-num upcoming">13</div>
+                                <div class="step-info"><h6>USB CDC Virtual COM Port</h6><small>USB FS/HS, CDC class, virtual serial, control transfers, descriptors</small></div>
+                            </a>
+                            <a href="stm32-hal-part14-freertos.html" class="step-card">
+                                <div class="step-num upcoming">14</div>
+                                <div class="step-info"><h6>FreeRTOS Integration</h6><small>Tasks, queues, semaphores, mutexes, CMSIS-RTOS2 wrapper, stack sizing</small></div>
+                            </a>
+                            <a href="stm32-hal-part15-bootloader.html" class="step-card">
+                                <div class="step-num upcoming">15</div>
+                                <div class="step-info"><h6>Bootloader Development</h6><small>Custom IAP bootloader, UART/USB DFU, flash programming, jump-to-app</small></div>
+                            </a>
+                            <a href="stm32-hal-part16-external-storage.html" class="step-card">
+                                <div class="step-num upcoming">16</div>
+                                <div class="step-info"><h6>External Storage: SD &amp; QSPI Flash</h6><small>FATFS on SD card, QSPI NOR flash, memory-mapped execution, wear levelling</small></div>
+                            </a>
+                            <a href="stm32-hal-part17-ethernet-tcpip.html" class="step-card">
+                                <div class="step-num upcoming">17</div>
+                                <div class="step-info"><h6>Ethernet &amp; TCP/IP Stack</h6><small>LwIP integration, DHCP, TCP server, HTTP, MQTT, Ethernet DMA descriptors</small></div>
+                            </a>
+                            <a href="stm32-hal-part18-production-readiness.html" class="step-card">
+                                <div class="step-num upcoming">18</div>
+                                <div class="step-info"><h6>Production Readiness</h6><small>Watchdog, HardFault handler, flash option bytes, code signing, CI/CD</small></div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <h2><i class="fas fa-bolt me-2 text-teal"></i>NVIC Architecture</h2>
+
+                    <p>The <strong>Nested Vectored Interrupt Controller (NVIC)</strong> is a standard component of all ARM Cortex-M processors. It provides hardware-managed interrupt prioritisation, preemption, nesting, and tail-chaining — capabilities that are absent in simpler 8-bit architectures and that make real-time firmware engineering on Cortex-M qualitatively different from what developers encounter on AVR or PIC platforms.</p>
+
+                    <p>The NVIC on Cortex-M supports up to <strong>240 external (peripheral) interrupts</strong> plus <strong>16 internal system exceptions</strong>, for a total of 256 exception sources. The STM32F4 implements a subset of these — typically 90 to 97 IRQs depending on the specific device — defined in the device-specific header (<code>stm32f4xx.h</code>) as the <code>IRQn_Type</code> enumeration.</p>
+
+                    <h3 id="exception-types">System Exceptions with Fixed Priority</h3>
+
+                    <p>Three system exceptions have negative (fixed) priority levels that cannot be changed: <strong>Reset</strong> at -3, <strong>NMI</strong> (Non-Maskable Interrupt) at -2, and <strong>HardFault</strong> at -1. These priorities are lower-numbered — and therefore higher-priority — than any configurable interrupt. This guarantees that a HardFault caused by memory access violation, division by zero, or invalid instruction can always fire, even when all configurable interrupts are masked. The NMI is typically connected to the Clock Security System (CSS) on STM32F4 — if the HSE oscillator fails, the CSS triggers an NMI to allow the firmware to gracefully fall back to the internal HSI before system behaviour becomes undefined.</p>
+
+                    <table class="table table-bordered table-sm">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Exception</th>
+                                <th>Vector Offset</th>
+                                <th>Default Priority</th>
+                                <th>Maskable?</th>
+                                <th>Purpose</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Reset</strong></td><td>0x04</td><td>-3 (fixed)</td><td>No</td><td>System startup, highest priority of all</td></tr>
+                            <tr><td><strong>NMI</strong></td><td>0x08</td><td>-2 (fixed)</td><td>No</td><td>Clock security system, watchdog NMI</td></tr>
+                            <tr><td><strong>HardFault</strong></td><td>0x0C</td><td>-1 (fixed)</td><td>No</td><td>Escalated fault, always reachable</td></tr>
+                            <tr><td><strong>MemManage</strong></td><td>0x10</td><td>Configurable</td><td>No (always active)</td><td>MPU violation</td></tr>
+                            <tr><td><strong>BusFault</strong></td><td>0x14</td><td>Configurable</td><td>No</td><td>Precise/imprecise bus error</td></tr>
+                            <tr><td><strong>UsageFault</strong></td><td>0x18</td><td>Configurable</td><td>No</td><td>Undefined instruction, divide by zero</td></tr>
+                            <tr><td><strong>SVC</strong></td><td>0x2C</td><td>Configurable</td><td>Yes</td><td>Supervisor call (FreeRTOS task switch)</td></tr>
+                            <tr><td><strong>PendSV</strong></td><td>0x38</td><td>Configurable</td><td>Yes</td><td>Context switch trigger (FreeRTOS)</td></tr>
+                            <tr><td><strong>SysTick</strong></td><td>0x3C</td><td>Configurable</td><td>Yes</td><td>HAL timebase, RTOS tick</td></tr>
+                            <tr><td><strong>IRQ0–IRQn</strong></td><td>0x40+</td><td>Configurable</td><td>Yes</td><td>Peripheral interrupts (EXTI, UART, TIM…)</td></tr>
+                        </tbody>
+                    </table>
+
+                    <h3 id="priority-bits">Priority Register Width</h3>
+
+                    <p>The Cortex-M architecture supports up to 8 bits for priority registers, but most STM32 devices implement only 4 bits (the most significant 4 bits of the 8-bit register). This gives values 0–15 for <code>HAL_NVIC_SetPriority()</code>. The unused lower 4 bits always read as zero. STM32L0 and STM32G0 (Cortex-M0/M0+) implement only 2 bits — 4 priority levels — so code written for F4 must account for this when porting.</p>
+
+                    <h3 id="vector-table">Interrupt Vector Table</h3>
+
+                    <p>The interrupt vector table is an array of 32-bit function pointers located at the start of Flash memory by default (address <code>0x08000000</code> on STM32F4). Each entry contains the address of the corresponding handler function. Entry 0 holds the initial stack pointer; entry 1 holds the Reset_Handler address. Peripheral interrupt handlers start at offset 0x40 (IRQ0 = entry 16).</p>
+
+                    <p>The table is relocatable via the VTOR (Vector Table Offset Register) at <code>0xE000ED08</code>. This is used by bootloaders that jump to an application: the application writes its own vector table address into VTOR so that subsequent interrupts dispatch to the application's handlers, not the bootloader's.</p>
+
+                    <pre><code class="language-c">/* ─── Low-level CMSIS NVIC functions — raw priority management ──────────── */
+#include "core_cm4.h"   /* or core_cm7.h, included via stm32f4xx.h */
+
+/* Set interrupt priority for USART1 (IRQn = 37 on STM32F407) */
+NVIC_SetPriority(USART1_IRQn, 6);   /* priority value 0–15 in Group 4 */
+
+/* Enable the interrupt in NVIC (peripheral must also have its IE bit set) */
+NVIC_EnableIRQ(USART1_IRQn);
+
+/* Read back the currently configured priority */
+uint32_t prio = NVIC_GetPriority(USART1_IRQn);   /* returns 6 */
+
+/* Trigger a software interrupt (useful for testing) */
+NVIC_SetPendingIRQ(USART1_IRQn);
+
+/* Disable and clear pending */
+NVIC_DisableIRQ(USART1_IRQn);
+NVIC_ClearPendingIRQ(USART1_IRQn);
+
+/* Relocate vector table to SRAM (for runtime patching) */
+extern uint32_t g_pfnVectors;           /* defined in linker script */
+SCB->VTOR = (uint32_t)&g_pfnVectors;    /* must be 512-byte aligned */
+__DSB();                                /* data sync barrier */</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 2 — PRIORITY GROUPING
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="priority-grouping" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-layer-group me-2 text-teal"></i>Priority Grouping</h2>
+
+                    <p>The STM32F4 NVIC uses <strong>4 bits</strong> for interrupt priorities, giving 16 levels (0–15). These 4 bits can be split between two concepts: <strong>preemption priority</strong> (also called group priority) and <strong>sub-priority</strong>. The split is controlled by the <code>PRIGROUP</code> field in the SCB Application Interrupt and Reset Control Register (AIRCR), configurable via <code>HAL_NVIC_SetPriorityGrouping()</code>.</p>
+
+                    <p>The most important rule: <code>HAL_NVIC_SetPriorityGrouping()</code> must be called <strong>exactly once</strong>, before any interrupt priorities are configured. Changing the grouping after setting priorities scrambles all previously assigned values. STM32 HAL defaults to <strong>NVIC_PRIORITYGROUP_4</strong> (4 preemption bits, 0 sub-priority bits), which gives 16 distinct preemption levels and is the simplest configuration to reason about.</p>
+
+                    <table class="table table-bordered table-sm">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Priority Group</th>
+                                <th>Preemption Bits</th>
+                                <th>Sub-Priority Bits</th>
+                                <th>Max Preemption Levels</th>
+                                <th>Max Sub-Levels</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>NVIC_PRIORITYGROUP_0</td><td>0</td><td>4</td><td>1 (no preemption)</td><td>16</td></tr>
+                            <tr><td>NVIC_PRIORITYGROUP_1</td><td>1</td><td>3</td><td>2</td><td>8</td></tr>
+                            <tr><td>NVIC_PRIORITYGROUP_2</td><td>2</td><td>2</td><td>4</td><td>4</td></tr>
+                            <tr><td>NVIC_PRIORITYGROUP_3</td><td>3</td><td>1</td><td>8</td><td>2</td></tr>
+                            <tr><td><strong>NVIC_PRIORITYGROUP_4</strong></td><td><strong>4</strong></td><td><strong>0</strong></td><td><strong>16</strong></td><td><strong>1 (none)</strong></td></tr>
+                        </tbody>
+                    </table>
+
+                    <p>Sub-priority only determines which of two <em>equal-preemption</em> interrupts is handled first when both are pending simultaneously. It does <em>not</em> cause preemption — an ISR with sub-priority 0 cannot preempt an ISR with the same preemption priority but sub-priority 3. This distinction is critical: if you need interrupt A to preempt interrupt B, they must have different preemption priorities.</p>
+
+                    <h3>Choosing the Right Priority Values in Practice</h3>
+
+                    <p>A practical priority assignment strategy for an STM32F4 project using FreeRTOS and NVIC_PRIORITYGROUP_4 (16 levels, 0 = highest):</p>
+                    <ul>
+                        <li><strong>0:</strong> Reserved — never assign to a FreeRTOS-aware ISR. Use for non-maskable hardware safety functions (e.g., emergency shutdown GPIO) that must fire even during RTOS scheduler operation.</li>
+                        <li><strong>1–4:</strong> High-urgency, non-FreeRTOS ISRs. These can preempt the RTOS scheduler and must never call any FreeRTOS API. Use for cycle-accurate timing, hardware encoder capture, or safety watchdog resets.</li>
+                        <li><strong>5 (configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY):</strong> The boundary. ISRs at this priority and above can safely use FreeRTOS <code>FromISR</code> API functions (xQueueSendFromISR, xSemaphoreGiveFromISR, etc.).</li>
+                        <li><strong>5–10:</strong> Real-time peripheral ISRs (DMA complete, UART, SPI). Higher priority = lower number = more responsive.</li>
+                        <li><strong>11–14:</strong> Non-urgent peripheral ISRs (slow UART logging, ADC batch complete).</li>
+                        <li><strong>15 (lowest):</strong> SysTick (FreeRTOS tick) and PendSV (context switch). These are set automatically by FreeRTOS at the lowest possible configurable priority to ensure that all application ISRs can preempt the scheduler tick.</li>
+                    </ul>
+
+                    <pre><code class="language-c">/* ─── Priority configuration with NVIC_PRIORITYGROUP_4 (HAL default) ─────── */
+
+/* Call once in SystemClock_Config or before MX_GPIO_Init */
+HAL_NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_4);
+
+/* SysTick: HAL timebase — highest among configurables to keep HAL_Delay working */
+HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
+
+/* USART1: data logging — low urgency */
+HAL_NVIC_SetPriority(USART1_IRQn, 8, 0);
+HAL_NVIC_EnableIRQ(USART1_IRQn);
+
+/* TIM2 Update: 1 kHz scheduler tick — medium urgency */
+HAL_NVIC_SetPriority(TIM2_IRQn, 5, 0);
+HAL_NVIC_EnableIRQ(TIM2_IRQn);
+
+/* EXTI0: safety-critical button (PA0) — high urgency, preempts TIM2 and USART1 */
+HAL_NVIC_SetPriority(EXTI0_IRQn, 3, 0);
+HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+/* FreeRTOS note: all FreeRTOS-aware ISRs must use priorities >= configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY
+   (typically 5 on STM32). Priorities 0-4 are reserved for non-maskable ISRs
+   that must never call FreeRTOS API functions.                               */</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 3 — PREEMPTION AND NESTING
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="preemption-nesting" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-code-branch me-2 text-teal"></i>Preemption &amp; Nesting</h2>
+
+                    <p>Interrupt nesting occurs when a higher-priority interrupt fires while a lower-priority ISR is already executing. The Cortex-M processor automatically pushes the current processor state (8 registers: PC, PSR, R0–R3, R12, LR) onto the stack, enters the higher-priority ISR, and then resumes the original ISR seamlessly when the higher-priority one returns. This entire context save/restore is performed by hardware — no software stack management is needed.</p>
+
+                    <p>The depth of nesting is limited only by available stack space. Each nested interrupt consumes at least 32 bytes of stack (8 × 4 bytes), plus up to 136 bytes if the FPU lazy stacking feature must save FPU registers. Always size your main stack (in the linker script) to accommodate the maximum expected nesting depth.</p>
+
+                    <h3>Masking Interrupts: PRIMASK vs BASEPRI</h3>
+
+                    <p><code>__disable_irq()</code> sets the PRIMASK register, which masks <em>all</em> configurable interrupts globally. It is used for the shortest possible critical sections — typically protecting a read-modify-write on a shared variable. Always restore PRIMASK immediately; leaving it set for more than a few microseconds can cause missed interrupts in time-critical systems.</p>
+
+                    <p>BASEPRI is a more surgical mask: it blocks all interrupts with priority numerically <em>greater than or equal to</em> the BASEPRI value, while allowing higher-priority interrupts through. FreeRTOS uses this mechanism in <code>taskENTER_CRITICAL()</code> — it sets BASEPRI to <code>configMAX_SYSCALL_INTERRUPT_PRIORITY</code>, masking only FreeRTOS-aware interrupts while leaving high-priority hardware ISRs (priority 0–4) fully operational.</p>
+
+                    <pre><code class="language-c">/* ─── Demonstrating preemption: TIM2 ISR (priority 5) preempted by EXTI0 (priority 3) */
+
+/* In stm32f4xx_it.c: */
+
+/* TIM2 Update ISR — priority 5, runs at 1 kHz */
+void TIM2_IRQHandler(void)
+{
+    __HAL_TIM_CLEAR_IT(&htim2, TIM_IT_UPDATE);
+
+    /* Simulate non-trivial work: this ISR can be preempted */
+    HAL_GPIO_WritePin(DEBUG_TIM2_GPIO_Port, DEBUG_TIM2_Pin, GPIO_PIN_SET);
+
+    /* --- EXTI0 ISR can fire here if button pressed --- */
+
+    HAL_GPIO_WritePin(DEBUG_TIM2_GPIO_Port, DEBUG_TIM2_Pin, GPIO_PIN_RESET);
+}
+
+/* EXTI0 ISR — priority 3, preempts TIM2_IRQHandler */
+void EXTI0_IRQHandler(void)
+{
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+    HAL_GPIO_EXTI_Callback(GPIO_PIN_0);   /* dispatches to user callback */
+}
+
+/* Bare-metal critical section using BASEPRI (FreeRTOS-style) */
+void ProtectedOperation(void)
+{
+    uint32_t prev_basepri = __get_BASEPRI();
+    __set_BASEPRI(5 << (8 - __NVIC_PRIO_BITS));  /* mask priorities >= 5 */
+    __DSB();
+    __ISB();
+
+    /* --- critical section: safe to access shared state --- */
+    shared_counter++;
+
+    __set_BASEPRI(prev_basepri);  /* restore previous mask level */
+    __DSB();
+    __ISB();
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 4 — ISR DESIGN RULES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="isr-design" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-ruler-combined me-2 text-teal"></i>ISR Design Rules</h2>
+
+                    <p>The cardinal rule of ISR design is: <strong>do as little as possible inside the ISR</strong>. Every microsecond spent in an ISR is a microsecond during which lower-priority interrupts are blocked (or, if PRIMASK is set, all interrupts are blocked). High-latency ISRs cause missed events, overrun buffers, and system instability that manifests as intermittent bugs under load — exactly the class of bug that is hardest to reproduce and diagnose.</p>
+
+                    <p>The recommended pattern is <strong>flag-and-defer</strong>: the ISR does the minimum hardware acknowledgement (clear the interrupt flag), sets a <code>volatile</code> flag variable or posts to a queue, and returns. The main loop (or a FreeRTOS task) checks the flag and performs the actual work. This pattern keeps ISR execution time in the tens of nanoseconds while moving the computational work to a context where blocking, printf, and long processing are safe.</p>
+
+                    <h3>Volatile and Memory Barriers</h3>
+
+                    <p>Variables shared between ISR and non-ISR code must be declared <code>volatile</code>. Without <code>volatile</code>, the compiler may cache the variable in a register and never re-read it from memory, causing the main loop to see a stale value forever. Additionally, on Cortex-M4 and M7, a memory barrier (<code>__DSB()</code>) before returning from the ISR ensures that all pending memory writes have completed before the processor resumes background code.</p>
+
+                    <h3>Stack Usage and ISR Stack Depth</h3>
+
+                    <p>Every interrupt entry pushes 8 registers onto the stack (PC, PSR, R0–R3, R12, LR = 32 bytes). Local variables in the ISR are allocated on top. If the FPU is in use, lazy stacking reserves an additional 72 bytes (18 × 4 bytes for S0–S15, FPSCR, and alignment padding). With a nesting depth of N, the maximum additional stack consumption is N × (32 + 72) = N × 104 bytes in the worst case. For a bare-metal system with maximum nesting depth 4, reserve at least 420 bytes of stack headroom beyond the application's normal stack usage.</p>
+
+                    <p>Use the STM32CubeIDE stack analyser or a watermark pattern (<code>0xDEADBEEF</code> fill at startup, scan at runtime) to measure peak stack usage. A stack overflow on Cortex-M4 without an MPU is catastrophic — it silently corrupts adjacent memory and produces a HardFault far from the actual overflow point, making it one of the hardest classes of firmware bug to diagnose after the fact.</p>
+
+                    <pre><code class="language-c">/* ─── Correct vs incorrect ISR patterns ─────────────────────────────────── */
+
+/* SHARED STATE — always volatile */
+volatile uint8_t  uart_rx_flag  = 0;
+volatile uint8_t  uart_rx_byte  = 0;
+volatile uint32_t button_events = 0;
+
+/* === CORRECT: minimal ISR — flag only === */
+void USART1_IRQHandler(void)
+{
+    /* HAL dispatches to callbacks internally */
+    HAL_UART_IRQHandler(&huart1);
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART1)
+    {
+        uart_rx_flag = 1;   /* defer all processing to main loop */
+        /* Re-arm single-byte receive */
+        HAL_UART_Receive_IT(&huart1, &uart_rx_byte, 1);
+    }
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if (GPIO_Pin == BUTTON_Pin)
+    {
+        button_events++;   /* atomic on Cortex-M4 for 32-bit accesses */
+    }
+}
+
+/* === INCORRECT: long-running work in ISR (DO NOT DO THIS) === */
+/*
+void BAD_USART1_IRQHandler(void)
+{
+    uint8_t ch = USART1->DR & 0xFF;
+    sprintf(log_buf, "RX: 0x%02X\r\n", ch);   // WRONG: sprintf in ISR
+    HAL_UART_Transmit(&huart2, log_buf, ...);   // WRONG: blocking in ISR
+    HAL_Delay(1);                               // WRONG: HAL_Delay in ISR
+    process_protocol_frame(ch);                 // WRONG: long processing in ISR
+}
+*/
+
+/* === MAIN LOOP: deferred processing === */
+void main_loop_tick(void)
+{
+    if (uart_rx_flag)
+    {
+        uart_rx_flag = 0;
+        handle_received_byte(uart_rx_byte);   /* safe: not in ISR context */
+    }
+    if (button_events)
+    {
+        uint32_t events = button_events;
+        button_events = 0;             /* clear atomically */
+        handle_button_press(events);
+    }
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 5 — HAL CALLBACK ARCHITECTURE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="hal-callbacks" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-sitemap me-2 text-teal"></i>HAL Callback Architecture</h2>
+
+                    <p>STM32 HAL implements a layered callback dispatch system. When a peripheral interrupt fires, the execution path is: <strong>hardware IRQ → IRQHandler → HAL peripheral handler → HAL callback</strong>. Each layer has a specific responsibility, and understanding all three is necessary for correctly extending HAL behaviour.</p>
+
+                    <p>The <strong>IRQHandler</strong> (e.g., <code>USART2_IRQHandler</code>) is defined as a <code>weak</code> symbol in <code>stm32f4xx_it.c</code> — the CubeMX-generated interrupt table file. You override it by providing a non-weak definition of the same name in your own source. By convention, the generated code calls the corresponding HAL handler (<code>HAL_UART_IRQHandler()</code>), which then reads the peripheral status flags, clears them, and dispatches to the appropriate callback.</p>
+
+                    <h3>Registering Callbacks at Runtime (HAL v1.8+)</h3>
+
+                    <p>Starting with STM32 HAL version 1.8 (released with CubeMX for STM32F4 v1.27.0), HAL supports a runtime callback registration API as an alternative to the weak-override pattern. When <code>USE_HAL_UART_REGISTER_CALLBACKS</code> is defined as <code>1</code> in <code>stm32f4xx_hal_conf.h</code>, you can use <code>HAL_UART_RegisterCallback()</code> to bind a function pointer to a specific event. This is useful for plugin architectures where the callback implementation is not known at link time.</p>
+
+                    <pre><code class="language-c">/* ─── Runtime callback registration (HAL 1.8+) ──────────────────────────── */
+/* stm32f4xx_hal_conf.h: #define USE_HAL_UART_REGISTER_CALLBACKS 1         */
+
+static void MyRxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART2)
+    {
+        uart2_rx_flag = 1;
+        HAL_UART_Receive_IT(huart, &uart2_rx_byte, 1);
+    }
+}
+
+void RegisterCallbacks(void)
+{
+    /* Register callback for RX complete event on UART2 */
+    HAL_UART_RegisterCallback(&huart2, HAL_UART_RX_COMPLETE_CB_ID,
+                              MyRxCpltCallback);
+
+    /* Unregister (restore default empty weak implementation) */
+    /* HAL_UART_UnRegisterCallback(&huart2, HAL_UART_RX_COMPLETE_CB_ID); */
+}
+</code></pre>
+
+                    <p>The runtime registration approach has a small overhead compared to the weak-override approach (one indirect function call through a pointer per callback invocation), but it enables fully modular driver architectures where peripheral drivers can be loaded and unloaded without recompilation. For most embedded applications, the weak-override approach is simpler and equally effective.</p>
+
+                    <p>The <strong>HAL callbacks</strong> themselves are declared <code>__weak</code> in the HAL source (e.g., <code>stm32f4xx_hal_uart.c</code>). When you define a function with the same name in your code, the linker selects your non-weak version. This means you never need to modify HAL source files — a critical principle for maintaining vendor update compatibility.</p>
+
+                    <pre><code class="language-c">/* ─── Complete IRQ dispatch chain: USART2 receive ───────────────────────── */
+
+/* Level 1: Hardware IRQ → IRQHandler (in stm32f4xx_it.c, CubeMX generated)
+   This is the actual vector table entry. Calls the HAL handler.           */
+void USART2_IRQHandler(void)
+{
+    HAL_UART_IRQHandler(&huart2);
+    /* After this returns, NVIC clears the active bit and returns from ISR  */
+}
+
+/* Level 2: HAL_UART_IRQHandler (in stm32f4xx_hal_uart.c — do NOT modify)
+   Reads USART2->SR, determines which event occurred (RXNE, TC, ORE, etc.),
+   clears interrupt flags, updates handle state machine, then calls:        */
+
+/*   HAL_UART_RxCpltCallback()  — when complete transfer done               */
+/*   HAL_UART_ErrorCallback()   — on framing/parity/overrun error           */
+
+/* Level 3: User callback — override the __weak HAL version here            */
+/* __weak void HAL_UART_RxCpltCallback(...) defined in stm32f4xx_hal_uart.c */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART2)
+    {
+        /* At this point huart->pRxBuffPtr has been incremented past the
+           received data; use the buffer address you passed to Receive_IT   */
+        uart2_rx_flag = 1;
+
+        /* Re-arm for the next byte (interrupt mode: one byte at a time) */
+        HAL_UART_Receive_IT(&huart2, &uart2_rx_byte, 1);
+    }
+}
+
+/* Multiple UART callbacks can coexist safely — check huart->Instance */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART2)
+    {
+        /* Log the error type and attempt recovery */
+        uint32_t error = HAL_UART_GetError(huart);
+        if (error & HAL_UART_ERROR_ORE)
+        {
+            /* Overrun: re-init UART and re-arm receive */
+            HAL_UART_Init(huart);
+            HAL_UART_Receive_IT(huart, &uart2_rx_byte, 1);
+        }
+    }
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 6 — LATENCY MEASUREMENT
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="latency-measurement" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-stopwatch me-2 text-teal"></i>Latency Measurement</h2>
+
+                    <p>Interrupt latency is the time elapsed between the hardware event that triggers an interrupt and the execution of the first instruction of the ISR. On Cortex-M4, the hardware interrupt response time is <strong>12 clock cycles</strong> under ideal conditions (interrupt assertion while the processor is executing a single-cycle instruction, no wait states, no FPU state save). At 168 MHz, this corresponds to approximately 71 nanoseconds.</p>
+
+                    <p>In practice, several factors increase latency above this theoretical minimum:</p>
+                    <ul>
+                        <li><strong>Flash wait states:</strong> STM32F4 at 168 MHz uses 5 wait states for Flash accesses. The instruction pre-fetch buffer (ART Accelerator) mitigates this for sequential code, but interrupt entry requires fetching the vector table from Flash, adding up to 5 × 6 ns = 30 ns.</li>
+                        <li><strong>FPU lazy stacking:</strong> If the interrupted code was using FPU registers, the hardware may need to push up to 18 additional FPU registers on the stack (lazy stacking defers this to the first FPU instruction in the ISR). This adds up to 64 additional cycles in the worst case.</li>
+                        <li><strong>DMA bus contention:</strong> If DMA is actively transferring when the interrupt fires, the Cortex-M4 bus interface must wait for the current DMA burst to complete before the stack push can proceed.</li>
+                        <li><strong>Higher-priority ISR active:</strong> If a higher-priority ISR is already executing, the new interrupt is pended and will not fire until the higher-priority ISR completes (unless it has even higher priority — which would preempt).</li>
+                    </ul>
+
+                    <pre><code class="language-c">/* ─── GPIO latency measurement: toggle PA0 at interrupt entry and exit ────── */
+
+/* Setup: connect an external signal to EXTI1 (PB1) and monitor both PB1
+   (trigger) and PA0 (ISR entry marker) on a two-channel oscilloscope.
+   The time between rising edge on PB1 and rising edge on PA0 is the
+   total interrupt latency including vector fetch and stack push.          */
+
+/* Enable DWT cycle counter for sub-cycle measurement */
+void DWT_Init(void)
+{
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT       = 0;
+    DWT->CTRL        |= DWT_CTRL_CYCCNTENA_Msk;
+}
+
+static uint32_t isr_entry_cycle;
+static uint32_t isr_exit_cycle;
+volatile uint32_t last_latency_cycles;
+
+void EXTI1_IRQHandler(void)
+{
+    /* First instruction: capture DWT cycle count and assert GPIO */
+    isr_entry_cycle = DWT->CYCCNT;
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_SET);   /* rising edge */
+
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_1);   /* clear pending flag */
+
+    /* Minimal work */
+    HAL_GPIO_EXTI_Callback(GPIO_PIN_1);
+
+    /* Last instruction before return: capture exit cycle */
+    isr_exit_cycle = DWT->CYCCNT;
+    last_latency_cycles = isr_exit_cycle - isr_entry_cycle;  /* ISR duration */
+
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_RESET);  /* falling edge */
+    /* Oscilloscope: PA0 pulse width = ISR duration in cycles / 168 ns/cycle */
+}</code></pre>
+
+                    <p>The DWT (Data Watchpoint and Trace) unit's cycle counter is the most accurate software timing mechanism on Cortex-M — it increments at the CPU clock frequency with no overhead and no interrupt-disable required. It is available on all Cortex-M3, M4, M7 devices and is the preferred tool for firmware latency profiling.</p>
+
+                    <h3>Tail-Chaining and Late-Arrival</h3>
+
+                    <p>Cortex-M hardware implements two additional optimisations that reduce interrupt overhead beyond the baseline 12-cycle entry cost:</p>
+                    <ul>
+                        <li><strong>Tail-chaining:</strong> When an ISR returns and another interrupt of equal or higher priority is already pending, the processor does <em>not</em> restore the stack frame only to push a new one. Instead, it transitions directly to the next ISR in 6 cycles (the pop-push cycle is eliminated). For applications with many interrupts firing in rapid succession, tail-chaining can roughly halve the per-ISR overhead.</li>
+                        <li><strong>Late arrival:</strong> If a higher-priority interrupt arrives while the processor is still in the initial 12-cycle stack-push phase of a lower-priority interrupt entry, the processor switches to the higher-priority ISR first. The lower-priority ISR's stack frame is already on the stack, so it will execute via tail-chain when the higher-priority ISR completes. This ensures that high-priority interrupts are serviced with the minimum possible latency even when they arrive during another interrupt's entry sequence.</li>
+                    </ul>
+
+                    <p>Both mechanisms are entirely transparent to the programmer — no code changes are required. However, understanding them is important for accurately modelling worst-case interrupt latency in time-critical systems. Software that disables interrupts during critical sections prevents tail-chaining and can significantly increase the latency of any interrupts that fire during the disabled window.</p>
+
+                    <p>Tail-chaining is visible on a logic analyser: if you toggle a GPIO at the start of each ISR, you will see consecutive ISR GPIO pulses with no gap between them (or a minimal 6-cycle gap) when tail-chaining occurs, versus a full stack-pop + stack-push cycle (~24 cycles) when no tail-chaining happens. This is a useful sanity check that your system is operating as the Cortex-M hardware architecture documentation predicts.</p>
+
+                    <h3>FPU and Interrupt Latency: Lazy Stacking</h3>
+
+                    <p>On Cortex-M4F and M7 (STM32F4, F7, H7), the FPU introduces a potential latency penalty at interrupt entry. The processor uses a technique called <strong>lazy stacking</strong>: when an interrupt fires, the hardware reserves space on the stack for the FPU context (S0–S15 and FPSCR) but does <em>not</em> immediately save the FPU registers. The save is deferred to the first instruction inside the ISR that actually uses the FPU. If the ISR never uses FPU registers, the save never occurs and the latency is the same as a non-FPU device.</p>
+
+                    <p>If the ISR does execute a floating-point instruction, the deferred save occurs at that point — adding up to 12 cycles for the register dump. To eliminate this uncertainty for a latency-critical ISR, you can either: (a) avoid all floating-point operations in that ISR, or (b) disable lazy stacking in <code>FPU->FPCCR</code> to force eager stacking (consistent 12-cycle overhead but always paid). For most applications, lazy stacking is the right default.</p>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 7 — COMMON PITFALLS
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="pitfalls" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-exclamation-triangle me-2 text-teal"></i>Common Interrupt Pitfalls</h2>
+
+                    <p>Most STM32 interrupt bugs fall into a small number of well-known categories. Understanding them in advance will save hours of debugging.</p>
+
+                    <table class="table table-bordered table-sm">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Pitfall</th>
+                                <th>Symptom</th>
+                                <th>Root Cause</th>
+                                <th>Fix</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Missing IRQHandler</strong></td>
+                                <td>Firmware hangs or watchdog triggers on first interrupt</td>
+                                <td>No user-defined handler; default_handler loops forever</td>
+                                <td>Define the handler in <code>stm32f4xx_it.c</code> or user code</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Wrong IRQn</strong></td>
+                                <td>Different peripheral fires, or no interrupt at all</td>
+                                <td><code>NVIC_EnableIRQ(TIM3_IRQn)</code> when TIM2 is the source</td>
+                                <td>Check <code>IRQn_Type</code> enum in stm32f4xx.h; use CubeMX generated code</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Peripheral IE bit not set</strong></td>
+                                <td>ISR never fires despite NVIC being configured</td>
+                                <td>TIM DIER update IE, USART CR1 RXNEIE, etc. not enabled</td>
+                                <td>Use HAL init functions or set peripheral IE bits explicitly</td>
+                            </tr>
+                            <tr>
+                                <td><strong>EXTI line conflict</strong></td>
+                                <td>Two GPIO pins on same EXTI line; only one works</td>
+                                <td>PA5 and PB5 both map to EXTI5 — only one can be active</td>
+                                <td>Reassign one GPIO to a line not in use; check SYSCFG_EXTICRx</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Missing interrupt flag clear</strong></td>
+                                <td>ISR re-enters immediately in a tight loop; system appears hung</td>
+                                <td>Interrupt pending flag not cleared before IRET</td>
+                                <td>Always clear the source flag (EXTI PR, TIM SR, etc.) at ISR entry</td>
+                            </tr>
+                            <tr>
+                                <td><strong>HAL_Delay in ISR</strong></td>
+                                <td>SysTick-driven delay never completes; system deadlocks</td>
+                                <td>SysTick priority equal to or lower than current ISR priority</td>
+                                <td>Never call <code>HAL_Delay()</code> or any blocking function from an ISR</td>
+                            </tr>
+                            <tr>
+                                <td><strong>FreeRTOS priority violation</strong></td>
+                                <td>Hard fault or assert in FreeRTOS scheduler</td>
+                                <td>ISR priority lower than <code>configMAX_SYSCALL_INTERRUPT_PRIORITY</code> calls <code>FromISR</code> API</td>
+                                <td>Assign all FreeRTOS-aware ISRs priorities &ge; <code>configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY</code></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p>The EXTI line conflict deserves special attention because it is silent — the firmware compiles and links without error, and one of the two GPIOs simply never generates interrupts. The root cause is that EXTI lines 0–15 each correspond to a single GPIO pin number (PA0/PB0/PC0 all map to EXTI0, etc.), and only one port can be connected to each EXTI line at a time via the SYSCFG_EXTICRx multiplexer. CubeMX will warn about this conflict, but hand-written code will not.</p>
+
+                    <h3>Debugging Stuck Interrupts with CoreSight</h3>
+
+                    <p>When an interrupt fires but the ISR never seems to execute, or the system appears to hang, the CoreSight debug infrastructure provides powerful diagnostic tools accessible from STM32CubeIDE's debug perspective:</p>
+
+                    <ul>
+                        <li><strong>NVIC registers view:</strong> In the Registers pane, expand NVIC. The <code>ISER0</code>–<code>ISER7</code> registers show which IRQs are enabled. <code>ISPR0</code>–<code>ISPR7</code> show which are currently <em>pending</em>. <code>IABR0</code>–<code>IABR7</code> show which are <em>active</em> (currently executing). If ISPR shows an interrupt pending but IABR never shows it active, the interrupt is being blocked by a higher-priority interrupt or by PRIMASK/BASEPRI.</li>
+                        <li><strong>SysTick counter check:</strong> If the system is completely hung, check whether <code>SysTick->VAL</code> is counting down. If it is not changing, the processor is in a hard lock (WFI with all interrupts masked, or in a HardFault loop). If it is counting but SysTick callbacks are not firing, the SysTick interrupt is pending but masked.</li>
+                        <li><strong>ITM/SWO trace:</strong> Insert <code>ITM_SendChar()</code> calls at the start of each ISR. If the trace shows characters from one ISR but not another, the missing ISR is either not enabled, its peripheral is not generating the request, or it is being starved by a higher-priority ISR that never returns.</li>
+                    </ul>
+
+                    <pre><code class="language-c">/* ─── Diagnostic: dump NVIC pending and active state via UART ─────────────── */
+void NVIC_DiagnosticDump(void)
+{
+    char buf[128];
+
+    /* Read ICSR (Interrupt Control and State Register) */
+    uint32_t icsr = SCB->ICSR;
+    uint32_t vect_active  = icsr & SCB_ICSR_VECTACTIVE_Msk;   /* currently active exception number */
+    uint32_t vect_pending = (icsr & SCB_ICSR_VECTPENDING_Msk) >> SCB_ICSR_VECTPENDING_Pos;
+    uint8_t  primask      = __get_PRIMASK();
+    uint32_t basepri      = __get_BASEPRI();
+
+    snprintf(buf, sizeof(buf),
+        "NVIC: active=%lu pending=%lu PRIMASK=%u BASEPRI=%lu\r\n",
+        vect_active, vect_pending, primask, basepri);
+    HAL_UART_Transmit(&huart2, (uint8_t *)buf, strlen(buf), 10);
+
+    /* Check if any peripheral interrupt is stuck pending */
+    for (int i = 0; i < 3; i++)
+    {
+        uint32_t ispr = NVIC->ISPR[i];   /* Interrupt Set-Pending Register */
+        if (ispr)
+        {
+            snprintf(buf, sizeof(buf), "ISPR[%d] = 0x%08lX (stuck pending!)\r\n", i, ispr);
+            HAL_UART_Transmit(&huart2, (uint8_t *)buf, strlen(buf), 10);
+        }
+    }
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 8 — EXERCISES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="exercises" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-dumbbell me-2 text-teal"></i>Exercises</h2>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Practice Approach:</strong> A two-channel oscilloscope or logic analyser significantly improves visibility for these exercises. SWV (Serial Wire Viewer) in STM32CubeIDE can also be used to track interrupt counts in real time.
+                    </div>
+
+                    <h3><span class="badge bg-success me-2">Beginner</span>Exercise 1: EXTI Preempting TIM2</h3>
+                    <p>Configure an external interrupt on a button connected to PC13 with priority 5. Configure TIM2's update interrupt with priority 8 and set it to fire at 1 kHz. Press the button while TIM2 is generating interrupts. Using printf (via SWO or UART) inside each ISR, log which handler is executing. Verify from the logs that the EXTI callback runs to completion within the TIM2 ISR's execution window — confirming that priority 5 preempts priority 8. Then swap the priorities and confirm that the button interrupt no longer preempts TIM2.</p>
+
+                    <h3><span class="badge bg-warning text-dark me-2">Intermediate</span>Exercise 2: SysTick Multi-Rate Task Scheduler</h3>
+                    <p>Implement a bare-metal cooperative task scheduler using only SysTick (priority 0) and a software flag array. In the SysTick handler (1 ms period), increment a counter and set flags for three different periods: 1 ms, 10 ms, and 100 ms. In the main loop, check each flag and call the corresponding task function (Task1: toggle LED, Task2: read ADC, Task3: transmit UART). Toggle a separate GPIO at the start and end of each task. Use an oscilloscope to verify timing accuracy and confirm that no task misses its deadline when all three are running simultaneously at full load.</p>
+
+                    <h3><span class="badge bg-danger me-2">Advanced</span>Exercise 3: Interrupt Latency Profile &amp; Priority Inversion</h3>
+                    <p>Measure the interrupt latency for EXTI0 (PA0, driven by a signal generator at 10 kHz) against a background workload of: DMA2 Stream0 running continuous M2M copies, USART1 at 1 Mbit/s DMA, and TIM2 at 10 kHz. For each of the 16 priority levels assigned to EXTI0, record the worst-case latency using the DWT cycle counter technique described in Section 6. Plot latency vs priority level on a graph. Then deliberately create a priority inversion: assign a low-priority mutex-holding task a higher NVIC priority than EXTI0, observe the latency spike, and resolve it using BASEPRI masking to create a bounded critical section.</p>
+
+                    <p>As a bonus step, enable the FPU and verify that the EXTI0 latency increases when the interrupted background code was executing a floating-point multiply-accumulate loop (demonstrating the lazy stacking cost). Then disable lazy stacking in <code>FPU->FPCCR</code> and confirm that the latency becomes deterministic (constant regardless of whether background code used the FPU), at the cost of a fixed overhead on every interrupt entry. Compare the two approaches in terms of worst-case and best-case latency, and form a conclusion about which is appropriate for your target application's timing budget.</p>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 9 — CANVAS FORM
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="nvic-config-tool" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-tools me-2 text-teal"></i>STM32 NVIC Configuration Document Generator</h2>
+
+                    <p>Use this tool to document your interrupt priority assignments for a project. Fill in IRQ assignments, critical section strategy, and latency budgets, then export to Word, Excel, PDF, or PowerPoint. Drafts are saved automatically in your browser.</p>
+
+                    <div id="stm32NvicBadge"></div>
+
+                    <form id="stm32NvicForm" class="canvas-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32NvicProjName">Project Name <span class="text-danger">*</span></label>
+                                <input type="text" id="stm32NvicProjName" placeholder="e.g., Motor Controller v3.1" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32NvicPriorityGroup">NVIC Priority Group <span class="text-danger">*</span></label>
+                                <select id="stm32NvicPriorityGroup" required>
+                                    <option value="">Select priority group...</option>
+                                    <option value="Group 0 (0 preempt, 4 sub)">Group 0 — 0 preempt bits, 4 sub-priority bits (no preemption)</option>
+                                    <option value="Group 1 (1 preempt, 3 sub)">Group 1 — 1 preempt bit, 3 sub-priority bits</option>
+                                    <option value="Group 2 (2 preempt, 2 sub)">Group 2 — 2 preempt bits, 2 sub-priority bits</option>
+                                    <option value="Group 3 (3 preempt, 1 sub)">Group 3 — 3 preempt bits, 1 sub-priority bit</option>
+                                    <option value="Group 4 (4 preempt, 0 sub)">Group 4 — 4 preempt bits, 0 sub-priority bits (HAL default)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32NvicIrqTable">IRQ Assignments</label>
+                                <textarea id="stm32NvicIrqTable" rows="6" placeholder="IRQ assignments — peripheral, IRQn, preempt priority, subpriority, purpose&#10;e.g.,&#10;SysTick,     SysTick_IRQn,   0,  0,  HAL timebase + RTOS tick&#10;EXTI0,       EXTI0_IRQn,     3,  0,  Safety shutdown button PA0&#10;TIM2_Update, TIM2_IRQn,      5,  0,  1 kHz control loop tick&#10;USART1,      USART1_IRQn,    8,  0,  Debug UART RX&#10;DMA2_S0,     DMA2_Stream0_IRQn, 6, 0, ADC DMA complete"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32NvicCritical">Critical Sections</label>
+                                <textarea id="stm32NvicCritical" rows="4" placeholder="Critical sections — resource, protection mechanism&#10;e.g.,&#10;shared_sensor_buf: __disable_irq() / __enable_irq(), &lt;1µs&#10;protocol_queue:    BASEPRI = 5 (FreeRTOS taskENTER_CRITICAL)&#10;flash_write_state: PRIMASK, entire erase/write sequence"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32NvicLatency">Max Acceptable ISR Latency</label>
+                                <input type="text" id="stm32NvicLatency" placeholder="Max acceptable ISR latency (µs) — e.g., 5 µs for EXTI0 safety shutdown">
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32NvicNotes">Design Notes</label>
+                                <textarea id="stm32NvicNotes" rows="3" placeholder="Design Notes&#10;e.g., FreeRTOS used — all FreeRTOS-aware ISRs must be priority &ge; 5. Priorities 0-4 reserved for non-maskable hardware ISRs."></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="stm32NvicHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="stm32NvicHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="stm32NvicHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-generate" onclick="stm32NvicHandler.generatePPTX()"><i class="fas fa-file-powerpoint me-1"></i>PPTX</button>
+                            <button class="btn-reset" onclick="stm32NvicHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="stm32NvicSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="stm32NvicSuccessText"></span></div>
+                    </form>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 10 — CONCLUSION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="conclusion" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion &amp; Next Steps</h2>
+
+                    <p>The NVIC is one of the most powerful — and most frequently misconfigured — features of the STM32 platform. In this article we covered:</p>
+                    <ul>
+                        <li><strong>NVIC architecture:</strong> 240 external IRQs + 16 system exceptions, fixed-priority system exceptions (Reset/NMI/HardFault), the interrupt vector table and VTOR relocation.</li>
+                        <li><strong>Priority grouping:</strong> The five PRIGROUP configurations, preemption vs sub-priority bits, HAL default NVIC_PRIORITYGROUP_4, and the critical rule of setting grouping once before any priorities.</li>
+                        <li><strong>Preemption and nesting:</strong> Hardware context save/restore, PRIMASK for global masking, BASEPRI for threshold masking (FreeRTOS pattern), stack sizing for nested interrupts.</li>
+                        <li><strong>ISR design rules:</strong> Flag-and-defer pattern, volatile shared variables, memory barriers, what never to do in an ISR (HAL_Delay, blocking I/O, long processing loops).</li>
+                        <li><strong>HAL callback architecture:</strong> The three-level dispatch chain (IRQHandler → HAL handler → callback), weak symbol override, and multi-peripheral callback demultiplexing.</li>
+                        <li><strong>Latency measurement:</strong> DWT cycle counter technique, GPIO toggle measurement, sources of latency above the 12-cycle theoretical minimum.</li>
+                        <li><strong>Common pitfalls:</strong> Missing handlers, wrong IRQn, peripheral IE bits, EXTI line conflicts, missing flag clears, FreeRTOS priority violations.</li>
+                    </ul>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="stm32-hal-part10-low-power.html"><strong>Part 10: Low-Power Modes</strong></a>, we will master Sleep, Stop, and Standby power modes, configure RTC wakeup from Standby, use the LP-UART to receive data while in Stop mode, and profile current consumption with a Nordic PPK2 or STM32CubeMonitor-Power — essential skills for any battery-powered or energy-constrained embedded design.</p>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 10: Low-Power Modes</h5>
+                            <p>Sleep, Stop, and Standby modes, RTC wakeup, LP UART receive in Stop mode, and power profiling with hardware energy monitors.</p>
+                            <a href="stm32-hal-part10-low-power.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 14: FreeRTOS Integration</h5>
+                            <p>FreeRTOS tasks, queues, semaphores, mutexes, and the CMSIS-RTOS2 wrapper — building on the priority and ISR design rules established in this article.</p>
+                            <a href="stm32-hal-part14-freertos.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 8: DMA &amp; Memory Efficiency</h5>
+                            <p>DMA stream configuration, circular mode, double buffering, and zero-copy patterns — all driven by the DMA transfer-complete and half-transfer interrupts covered here.</p>
+                            <a href="stm32-hal-part08-dma-memory.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div><!-- end col-lg-8 -->
+            </div><!-- end row -->
+        </div><!-- end container -->
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> |
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> |
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? &#9749; <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Document Generation -->
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-stm32-hal.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- STM32 NVIC Configuration Form Handler -->
+    <script>
+        var stm32NvicPersistence = new FormPersistence('stm32-p09-nvic-draft', {
+            'stm32NvicProjName':      'projectName',
+            'stm32NvicPriorityGroup': 'priorityGroup',
+            'stm32NvicIrqTable':      'irqTable',
+            'stm32NvicCritical':      'criticalSections',
+            'stm32NvicLatency':       'latencyBudget',
+            'stm32NvicNotes':         'notes'
+        }, 'stm32NvicBadge');
+
+        var stm32NvicHandler = new CanvasFormHandler({
+            formId:         'stm32NvicForm',
+            successId:      'stm32NvicSuccess',
+            successTextId:  'stm32NvicSuccessText',
+            persistence:    stm32NvicPersistence,
+            filenameField:  'projectName',
+            filenameSuffix: '-stm32-nvic-config',
+            requiredFields: ['stm32NvicProjName', 'stm32NvicPriorityGroup'],
+            requiredMessage:'Please enter a Project Name and Priority Group.',
+            docType:        'Stm32NvicConfig'
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            stm32NvicPersistence.init();
+        });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Master STM32 SPI in polling, interrupt, and DMA modes — configure clock polarity/phase, build a chip-select manager, and drive real sensors over SPI. Part 6 of 18." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="STM32, SPI, HAL, DMA, CPOL, CPHA, W25Q128, ST7789, SPI driver, embedded systems, STM32F4" />
+    <meta property="og:title" content="STM32 SPI Protocol — STM32 Unleashed Series Part 6" />
+    <meta property="og:description" content="From bit-order and clock phase theory through DMA full-duplex transfers to a reusable multi-device SPI bus manager — everything you need to connect sensors, displays, and flash chips to STM32 via SPI." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>STM32 Part 6: SPI Protocol — STM32 Unleashed Series - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/stm32-hal/stm32-hal-part06-spi-protocol.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'ad_user_data': 'granted',
+            'ad_personalization': 'granted',
+            'analytics_storage': 'granted'
+        });
+
+        gtag('set', 'url_passthrough', true);
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+            var f = d.getElementsByTagName(s)[0],
+                j = d.createElement(s),
+                dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking &ldquo;Accept All&rdquo;, you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">STM32 Part 6: SPI Protocol</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>March 31, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>25 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">From bit-order and clock phase theory through DMA full-duplex transfers to a reusable multi-device SPI bus manager — everything you need to connect sensors, displays, and flash chips to STM32 via SPI.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#spi-fundamentals" onclick="closeNav()">SPI Protocol Fundamentals</a>
+                <ul>
+                    <li><a href="#spi-signals" onclick="closeNav()">4-Wire SPI Signals</a></li>
+                    <li><a href="#cpol-cpha" onclick="closeNav()">CPOL &amp; CPHA — 4 Modes</a></li>
+                    <li><a href="#nss-management" onclick="closeNav()">NSS Management</a></li>
+                </ul>
+            </li>
+            <li><a href="#hal-spi-api" onclick="closeNav()">HAL SPI API</a>
+                <ul>
+                    <li><a href="#polling-mode" onclick="closeNav()">Polling Mode</a></li>
+                    <li><a href="#interrupt-mode" onclick="closeNav()">Interrupt Mode</a></li>
+                </ul>
+            </li>
+            <li><a href="#spi-dma" onclick="closeNav()">SPI DMA Mode</a></li>
+            <li><a href="#multi-device-spi" onclick="closeNav()">Multi-Device SPI Bus</a></li>
+            <li><a href="#w25q-driver" onclick="closeNav()">Sensor Driver: W25Q128 Flash</a></li>
+            <li><a href="#spi-vs-i2c-uart" onclick="closeNav()">SPI vs I2C vs UART</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#spi-design-tool" onclick="closeNav()">SPI Design Tool</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 1 — SPI FUNDAMENTALS (first section: no mt-5)
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="spi-fundamentals" class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Series Overview:</strong> This is Part 6 of our 18-part STM32 Unleashed series. In this part we master SPI in polling, interrupt, and DMA modes, then build a reusable multi-device bus manager and a complete W25Q128 NOR flash driver.
+                    </div>
+
+                    <!-- Series Navigation Path -->
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>STM32 Unleashed: HAL Driver Development</h4>
+                            <div class="path-subtitle">Your 18-step learning path &bull; Currently on Step 6</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="stm32-hal-part01-architecture-cubemx.html" class="step-card completed">
+                                <div class="step-num completed">1</div>
+                                <div class="step-info"><h6>Architecture &amp; CubeMX Setup</h6><small>STM32 family, clock tree, HAL vs LL, CubeMX workflow, first project</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part02-gpio-debounce.html" class="step-card completed">
+                                <div class="step-num completed">2</div>
+                                <div class="step-info"><h6>GPIO &amp; Button Debounce</h6><small>GPIO modes, pull-up/down, EXTI, software debounce, HAL_GPIO_ReadPin</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part03-uart-communication.html" class="step-card completed">
+                                <div class="step-num completed">3</div>
+                                <div class="step-info"><h6>UART Communication</h6><small>Polling, interrupt, DMA modes, printf retargeting, ring buffers</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part04-timers-pwm.html" class="step-card completed">
+                                <div class="step-num completed">4</div>
+                                <div class="step-info"><h6>Timers, PWM &amp; Input Capture</h6><small>TIM basics, PWM generation, input capture, encoder mode</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part05-adc-dac.html" class="step-card completed">
+                                <div class="step-num completed">5</div>
+                                <div class="step-info"><h6>ADC &amp; DAC</h6><small>Single/continuous conversion, DMA, injected channels, DAC waveforms</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <div class="step-card current">
+                                <div class="step-num active">6</div>
+                                <div class="step-info"><h6>SPI Protocol</h6><small>SPI master/slave, full-duplex, DMA transfers, sensor drivers</small></div>
+                                <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                            </div>
+                            <a href="stm32-hal-part07-i2c-protocol.html" class="step-card">
+                                <div class="step-num upcoming">7</div>
+                                <div class="step-info"><h6>I2C Protocol</h6><small>I2C master, 7/10-bit addressing, DMA, multi-master, error handling</small></div>
+                            </a>
+                            <a href="stm32-hal-part08-dma-memory.html" class="step-card">
+                                <div class="step-num upcoming">8</div>
+                                <div class="step-info"><h6>DMA &amp; Memory Efficiency</h6><small>DMA streams, circular mode, memory-to-memory, zero-copy patterns</small></div>
+                            </a>
+                            <a href="stm32-hal-part09-interrupts-nvic.html" class="step-card">
+                                <div class="step-num upcoming">9</div>
+                                <div class="step-info"><h6>Interrupt Management &amp; NVIC</h6><small>Priority grouping, preemption, ISR design, HAL callbacks, latency</small></div>
+                            </a>
+                            <a href="stm32-hal-part10-low-power.html" class="step-card">
+                                <div class="step-num upcoming">10</div>
+                                <div class="step-info"><h6>Low-Power Modes</h6><small>Sleep, Stop, Standby modes, RTC wakeup, LP UART, power profiling</small></div>
+                            </a>
+                            <a href="stm32-hal-part11-rtc-calendar.html" class="step-card">
+                                <div class="step-num upcoming">11</div>
+                                <div class="step-info"><h6>RTC &amp; Calendar</h6><small>RTC configuration, alarms, backup registers, calendar subseconds</small></div>
+                            </a>
+                            <a href="stm32-hal-part12-can-bus.html" class="step-card">
+                                <div class="step-num upcoming">12</div>
+                                <div class="step-info"><h6>CAN Bus</h6><small>FDCAN/bxCAN, filters, message frames, error handling, automotive use</small></div>
+                            </a>
+                            <a href="stm32-hal-part13-usb-cdc.html" class="step-card">
+                                <div class="step-num upcoming">13</div>
+                                <div class="step-info"><h6>USB CDC Virtual COM Port</h6><small>USB FS/HS, CDC class, virtual serial, control transfers, descriptors</small></div>
+                            </a>
+                            <a href="stm32-hal-part14-freertos.html" class="step-card">
+                                <div class="step-num upcoming">14</div>
+                                <div class="step-info"><h6>FreeRTOS Integration</h6><small>Tasks, queues, semaphores, mutexes, CMSIS-RTOS2 wrapper, stack sizing</small></div>
+                            </a>
+                            <a href="stm32-hal-part15-bootloader.html" class="step-card">
+                                <div class="step-num upcoming">15</div>
+                                <div class="step-info"><h6>Bootloader Development</h6><small>Custom IAP bootloader, UART/USB DFU, flash programming, jump-to-app</small></div>
+                            </a>
+                            <a href="stm32-hal-part16-external-storage.html" class="step-card">
+                                <div class="step-num upcoming">16</div>
+                                <div class="step-info"><h6>External Storage: SD &amp; QSPI Flash</h6><small>FATFS on SD card, QSPI NOR flash, memory-mapped execution, wear levelling</small></div>
+                            </a>
+                            <a href="stm32-hal-part17-ethernet-tcpip.html" class="step-card">
+                                <div class="step-num upcoming">17</div>
+                                <div class="step-info"><h6>Ethernet &amp; TCP/IP Stack</h6><small>LwIP integration, DHCP, TCP server, HTTP, MQTT, Ethernet DMA descriptors</small></div>
+                            </a>
+                            <a href="stm32-hal-part18-production-readiness.html" class="step-card">
+                                <div class="step-num upcoming">18</div>
+                                <div class="step-info"><h6>Production Readiness</h6><small>Watchdog, HardFault handler, flash option bytes, code signing, CI/CD</small></div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <h2><i class="fas fa-exchange-alt me-2 text-teal"></i>SPI Protocol Fundamentals</h2>
+
+                    <p>The Serial Peripheral Interface (SPI) is a synchronous, full-duplex serial communication protocol developed by Motorola in the 1980s. Unlike UART (no clock line) or I2C (open-drain, shared clock and data), SPI uses a dedicated clock driven by the master and separate data lines for transmit and receive. This makes SPI inherently faster and simpler at the hardware level, at the cost of requiring more pins and a dedicated chip-select line per slave device.</p>
+
+                    <p>SPI is the protocol of choice for high-speed peripherals: SPI NOR flash (W25Q128 at up to 80 MHz), TFT displays (ST7789 at up to 62.5 MHz), ADCs (ADS8865 at up to 50 MHz), and RF transceivers (CC1101 at up to 6.5 MHz). Understanding its timing model precisely is non-negotiable for reliable driver development.</p>
+
+                    <h3 id="spi-signals">4-Wire SPI: SCLK, MOSI, MISO, NSS</h3>
+
+                    <p>The classic SPI bus has four signals, each with a defined role:</p>
+                    <ul>
+                        <li><strong>SCLK (Serial Clock)</strong> — always driven by the master. Slaves use it to sample incoming data and to clock out their own data. The frequency is set by the master and must not exceed the slave's maximum rated clock speed.</li>
+                        <li><strong>MOSI (Master Out Slave In)</strong> — data driven by the master and received by the selected slave. On STM32, this maps to the SPI <em>TX</em> pin.</li>
+                        <li><strong>MISO (Master In Slave Out)</strong> — data driven by the selected slave and received by the master. On STM32, this maps to the SPI <em>RX</em> pin. In a half-duplex or simplex scenario this line may be absent.</li>
+                        <li><strong>NSS / CS (Chip Select)</strong> — active-low signal driven by the master to select a specific slave. When NSS is asserted low, the addressed slave drives MISO and accepts MOSI data; all unselected slaves tri-state their MISO output.</li>
+                    </ul>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Multiple Slaves:</strong> With N slaves sharing SCLK, MOSI, and MISO, you need N individual CS lines. The STM32 hardware NSS pin can only manage one CS automatically; for multi-device buses, use software NSS (GPIO outputs) for every device, including the first.
+                    </div>
+
+                    <h3 id="cpol-cpha">Clock Polarity (CPOL) and Phase (CPHA) — 4 Modes</h3>
+
+                    <p>SPI defines two clock parameters that together determine when data is valid relative to clock edges. Getting these wrong is the single most common cause of SPI communication failure.</p>
+
+                    <ul>
+                        <li><strong>CPOL (Clock Polarity)</strong> defines the idle (inactive) state of SCLK. CPOL=0 means SCLK idles low; CPOL=1 means SCLK idles high.</li>
+                        <li><strong>CPHA (Clock Phase)</strong> defines which edge latches data. CPHA=0 means data is captured on the first (leading) clock edge; CPHA=1 means data is captured on the second (trailing) clock edge.</li>
+                    </ul>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>SPI Mode</th>
+                                <th>CPOL</th>
+                                <th>CPHA</th>
+                                <th>SCLK Idle State</th>
+                                <th>Data Captured On</th>
+                                <th>Common Devices</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Mode 0</strong></td>
+                                <td>0</td>
+                                <td>0</td>
+                                <td>Low</td>
+                                <td>Rising edge</td>
+                                <td>W25Q128 flash, MPU-9250, SD cards, ADS1118</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Mode 1</strong></td>
+                                <td>0</td>
+                                <td>1</td>
+                                <td>Low</td>
+                                <td>Falling edge</td>
+                                <td>MAX7219 LED driver, some ADCs</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Mode 2</strong></td>
+                                <td>1</td>
+                                <td>0</td>
+                                <td>High</td>
+                                <td>Falling edge</td>
+                                <td>Some Atmel AVR as slave, nRF24L01+</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Mode 3</strong></td>
+                                <td>1</td>
+                                <td>1</td>
+                                <td>High</td>
+                                <td>Rising edge</td>
+                                <td>ADXL345 accelerometer, MAX31855 thermocouple, MCP4921 DAC</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p>The rule of thumb: always check the slave device datasheet timing diagram first. Look for <em>CPOL</em> and <em>CPHA</em> values, or look at the clock waveform showing which edge transitions data. If a datasheet shows "clock idles high, data valid on rising edge" — that is CPOL=1, CPHA=1 → Mode 3.</p>
+
+                    <h3 id="nss-management">NSS Hardware vs Software Management</h3>
+
+                    <p>STM32 SPI peripheral offers two NSS modes. <strong>Hardware NSS</strong> (SSM=0): the peripheral automatically drives the NSS pin low when transmitting and releases it high on completion — useful for single-slave scenarios. <strong>Software NSS</strong> (SSM=1, SSI=1): the NSS pin is treated as a regular GPIO; you drive it manually with <code>HAL_GPIO_WritePin()</code> before and after each transaction. Software NSS is almost always the right choice for multi-device buses or when precise CS timing control is needed.</p>
+
+                    <p>In CubeMX: set <em>NSS Signal Type</em> to <strong>Software</strong>. Configure the CS GPIO as an output push-pull, initially high (deasserted). Toggle it manually in your driver code surrounding each SPI transfer.</p>
+
+                    <pre><code class="language-c">/* ---------------------------------------------------------------
+ * SPI1 Init — Mode 0 (CPOL=0, CPHA=0), 10 MHz, Software NSS
+ * Target: STM32F4, SPI1 on APB2 (84 MHz) → Prescaler /8 = 10.5 MHz
+ * --------------------------------------------------------------- */
+SPI_HandleTypeDef hspi1;
+
+static void MX_SPI1_Init(void)
+{
+    hspi1.Instance               = SPI1;
+    hspi1.Init.Mode              = SPI_MODE_MASTER;
+    hspi1.Init.Direction         = SPI_DIRECTION_2LINES;   /* full-duplex */
+    hspi1.Init.DataSize          = SPI_DATASIZE_8BIT;
+    hspi1.Init.CLKPolarity       = SPI_POLARITY_LOW;       /* CPOL = 0   */
+    hspi1.Init.CLKPhase          = SPI_PHASE_1EDGE;        /* CPHA = 0   */
+    hspi1.Init.NSS               = SPI_NSS_SOFT;           /* software   */
+    hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;/* ~10.5 MHz  */
+    hspi1.Init.FirstBit          = SPI_FIRSTBIT_MSB;
+    hspi1.Init.TIMode            = SPI_TIMODE_DISABLE;
+    hspi1.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLE;
+    hspi1.Init.CRCPolynomial     = 10;
+
+    if (HAL_SPI_Init(&amp;hspi1) != HAL_OK) {
+        Error_Handler();
+    }
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 2 — HAL SPI API
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="hal-spi-api" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-code me-2 text-teal"></i>HAL SPI API</h2>
+
+                    <p>STM32 HAL provides three transfer models for SPI: <strong>polling</strong> (blocking, CPU stalls until transfer complete), <strong>interrupt</strong> (non-blocking, CPU free during transfer, completion signalled via callback), and <strong>DMA</strong> (non-blocking, DMA engine moves data, CPU completely free). Each model has HAL functions for transmit-only, receive-only, and full-duplex transmit+receive.</p>
+
+                    <h3 id="polling-mode">Polling Mode</h3>
+
+                    <p>Polling mode is the simplest — call the function, it blocks until the transfer is complete (or a timeout fires), then returns. Use it for low-throughput, latency-insensitive operations or during driver bring-up.</p>
+
+                    <ul>
+                        <li><code>HAL_SPI_Transmit(&amp;hspi1, pTxData, Size, Timeout)</code> — sends <em>Size</em> bytes from <em>pTxData</em>. MISO is ignored.</li>
+                        <li><code>HAL_SPI_Receive(&amp;hspi1, pRxData, Size, Timeout)</code> — clocks out dummy bytes on MOSI while capturing MISO into <em>pRxData</em>.</li>
+                        <li><code>HAL_SPI_TransmitReceive(&amp;hspi1, pTxData, pRxData, Size, Timeout)</code> — true full-duplex: sends from <em>pTxData</em> while simultaneously receiving into <em>pRxData</em>.</li>
+                    </ul>
+
+                    <h3 id="interrupt-mode">Interrupt Mode and Callbacks</h3>
+
+                    <p>Interrupt variants append <code>_IT</code> to the function name. They return <code>HAL_OK</code> immediately; the HAL SPI ISR runs in the background and calls a callback when done:</p>
+                    <ul>
+                        <li><code>HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)</code> — transmit-only complete.</li>
+                        <li><code>HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)</code> — full-duplex complete.</li>
+                        <li><code>HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)</code> — error occurred; check <code>HAL_SPI_GetError(hspi)</code>.</li>
+                    </ul>
+
+                    <p>The code below demonstrates the most common SPI pattern in embedded firmware: a <strong>JEDEC ID read</strong> from a W25Q128 NOR flash. The JEDEC command (0x9F) returns three bytes: manufacturer ID, memory type, and capacity. This is the canonical "hello world" for any SPI NOR flash driver.</p>
+
+                    <pre><code class="language-c">/* ---------------------------------------------------------------
+ * Read JEDEC ID from W25Q128 NOR flash via SPI polling
+ * W25Q128: Mode 0 or Mode 3, up to 80 MHz clock
+ * Expected response: Manufacturer=0xEF, Type=0x40, Capacity=0x18
+ * CS_PIN: PA4 configured as GPIO output, pull-up, idle HIGH
+ * --------------------------------------------------------------- */
+#define W25Q_CS_GPIO_PORT   GPIOA
+#define W25Q_CS_PIN         GPIO_PIN_4
+#define W25Q_CS_LOW()       HAL_GPIO_WritePin(W25Q_CS_GPIO_PORT, W25Q_CS_PIN, GPIO_PIN_RESET)
+#define W25Q_CS_HIGH()      HAL_GPIO_WritePin(W25Q_CS_GPIO_PORT, W25Q_CS_PIN, GPIO_PIN_SET)
+
+#define W25Q_CMD_JEDEC_ID   0x9F
+
+typedef struct {
+    uint8_t manufacturer;   /* 0xEF for Winbond */
+    uint8_t mem_type;       /* 0x40 for W25Q series */
+    uint8_t capacity;       /* 0x18 = 16 MB (128 Mbit) */
+} W25Q_JEDEC_t;
+
+HAL_StatusTypeDef w25q_read_jedec_id(SPI_HandleTypeDef *hspi, W25Q_JEDEC_t *jedec)
+{
+    uint8_t cmd    = W25Q_CMD_JEDEC_ID;
+    uint8_t rx[3]  = {0};
+    HAL_StatusTypeDef ret;
+
+    W25Q_CS_LOW();
+
+    /* Send command byte */
+    ret = HAL_SPI_Transmit(hspi, &amp;cmd, 1, HAL_MAX_DELAY);
+    if (ret != HAL_OK) {
+        W25Q_CS_HIGH();
+        return ret;
+    }
+
+    /* Receive 3-byte ID response */
+    ret = HAL_SPI_Receive(hspi, rx, 3, HAL_MAX_DELAY);
+    W25Q_CS_HIGH();
+
+    if (ret == HAL_OK) {
+        jedec->manufacturer = rx[0];
+        jedec->mem_type     = rx[1];
+        jedec->capacity     = rx[2];
+    }
+    return ret;
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 3 — SPI DMA MODE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="spi-dma" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-bolt me-2 text-teal"></i>SPI DMA Mode</h2>
+
+                    <p>DMA-driven SPI is indispensable for bandwidth-intensive peripherals. Consider an ST7789 TFT display at 320×240 pixels with 16-bit colour depth: a full-frame push is 320 × 240 × 2 = 153,600 bytes. At 40 MHz SPI, that takes roughly 3.84 ms — but with polling, the CPU is entirely blocked for those 3.84 ms. At 60 fps you would spend 23% of CPU time just pushing pixels. DMA eliminates this waste entirely.</p>
+
+                    <p>The key insight is that <code>HAL_SPI_TransmitReceive_DMA()</code> configures the DMA controller to read from the TX buffer and write to the RX buffer simultaneously, fires the SPI peripheral, and returns immediately to the caller. The DMA generates an interrupt on completion, which the HAL uses to invoke your callback — at which point you deassert CS and signal your application layer.</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Critical Rule:</strong> Never deassert CS (drive it high) before the DMA completion callback fires. Deasserting early truncates the transfer. The callback is the only safe place to release CS in DMA mode.
+                    </div>
+
+                    <p>The double-buffering (ping-pong) pattern below is the professional approach for continuous streaming. While DMA is pushing buffer A to the display, the CPU is rendering the next frame into buffer B. When the DMA callback fires, we swap pointers — zero CPU stall, zero frame tearing.</p>
+
+                    <pre><code class="language-c">/* ---------------------------------------------------------------
+ * DMA SPI transmit to ST7789 TFT — double-buffer ping-pong
+ * SPI2, DMA1 Stream4 (TX), DMA1 Stream3 (RX dummy)
+ * Two framebuffers: 320x240x2 = 153,600 bytes each in SRAM
+ * ---------------------------------------------------------------
+ * Requires: SPI2 + DMA configured in CubeMX,
+ *           HAL_SPI_TxCpltCallback weak override below
+ * --------------------------------------------------------------- */
+#define LCD_WIDTH   320
+#define LCD_HEIGHT  240
+#define FB_SIZE     (LCD_WIDTH * LCD_HEIGHT * 2)  /* 16-bit colour */
+
+static uint8_t framebuf_A[FB_SIZE];
+static uint8_t framebuf_B[FB_SIZE];
+
+static volatile uint8_t *active_fb  = framebuf_A;  /* DMA is sending this */
+static volatile uint8_t *render_fb  = framebuf_B;  /* CPU renders into this */
+static volatile uint8_t  dma_busy   = 0;
+
+#define LCD_CS_LOW()   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET)
+#define LCD_CS_HIGH()  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET)
+#define LCD_DC_DATA()  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_SET)
+
+/* Call this after rendering a frame into render_fb */
+void lcd_flush_frame(SPI_HandleTypeDef *hspi)
+{
+    while (dma_busy) { /* wait for previous DMA to finish */ }
+
+    /* Swap buffers */
+    volatile uint8_t *tmp = active_fb;
+    active_fb  = render_fb;
+    render_fb  = tmp;
+
+    dma_busy = 1;
+    LCD_DC_DATA();
+    LCD_CS_LOW();
+
+    /* Launch DMA transfer — returns immediately */
+    HAL_SPI_Transmit_DMA(hspi, (uint8_t *)active_fb, FB_SIZE);
+}
+
+/* DMA completion callback — deassert CS here, NOT before */
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+    if (hspi->Instance == SPI2) {
+        LCD_CS_HIGH();
+        dma_busy = 0;
+        /* Optionally signal a FreeRTOS semaphore here */
+    }
+}</code></pre>
+
+                    <p>For full-duplex DMA (e.g. reading sensor data while simultaneously sending a command), use <code>HAL_SPI_TransmitReceive_DMA()</code> and override <code>HAL_SPI_TxRxCpltCallback()</code> instead. Ensure both TX and RX DMA streams are configured in CubeMX.</p>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 4 — MULTI-DEVICE SPI BUS
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="multi-device-spi" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-network-wired me-2 text-teal"></i>Multi-Device SPI Bus</h2>
+
+                    <p>Real applications routinely attach 3–6 devices to a single SPI bus: a NOR flash, an accelerometer, a DAC, an LCD, and an RF transceiver, each with its own CS pin. The bus manager's job is to ensure exactly one CS is asserted at any time, that CS setup/hold timing requirements are met, and that in an RTOS environment, concurrent access attempts from different tasks are serialised through a mutex.</p>
+
+                    <p>CS timing requirements: most SPI devices require a minimum CS setup time (t_CS) of 5–20 ns before the first SCLK edge, and a minimum hold time after the last SCLK edge (t_CH) of 5–10 ns. At low SPI speeds (a few MHz) these constraints are easily satisfied by the GPIO write itself. At very high speeds (40+ MHz), you may need to insert a single NOP between CS assert and the HAL_SPI call.</p>
+
+                    <p>In FreeRTOS, the SPI bus is a shared resource. The canonical pattern is a binary semaphore or mutex that any task must acquire before touching the SPI bus and must release immediately after deasserting CS. This prevents one task from interleaving its SPI bytes with another task's transaction.</p>
+
+                    <pre><code class="language-c">/* ---------------------------------------------------------------
+ * Multi-device SPI bus manager
+ * Supports up to 8 devices sharing one SPI peripheral
+ * Thread-safe: uses a FreeRTOS mutex for bus arbitration
+ * --------------------------------------------------------------- */
+#include "FreeRTOS.h"
+#include "semphr.h"
+
+typedef struct {
+    SPI_HandleTypeDef *hspi;      /* SPI peripheral handle         */
+    GPIO_TypeDef      *cs_port;   /* GPIO port for chip select     */
+    uint16_t           cs_pin;    /* GPIO pin mask for chip select */
+    uint32_t           max_speed; /* max SCLK in Hz (for logging)  */
+    const char        *name;      /* device name string            */
+} spi_device_t;
+
+static SemaphoreHandle_t spi_bus_mutex = NULL;
+
+/* Initialise the bus manager — call once before any transfers */
+void spi_bus_init(void)
+{
+    spi_bus_mutex = xSemaphoreCreateMutex();
+    configASSERT(spi_bus_mutex != NULL);
+}
+
+/* Thread-safe SPI full-duplex transfer for a specific device.
+ * pTx and pRx may point to the same buffer for in-place operations.
+ * Returns HAL_OK on success, HAL_TIMEOUT if bus is not free in time. */
+HAL_StatusTypeDef spi_transfer(spi_device_t *dev,
+                                const uint8_t *pTx,
+                                uint8_t       *pRx,
+                                uint16_t       len,
+                                uint32_t       timeout_ms)
+{
+    if (xSemaphoreTake(spi_bus_mutex,
+                       pdMS_TO_TICKS(timeout_ms)) != pdTRUE) {
+        return HAL_TIMEOUT;
+    }
+
+    HAL_GPIO_WritePin(dev->cs_port, dev->cs_pin, GPIO_PIN_RESET); /* CS low  */
+    __NOP(); __NOP();   /* ≥5 ns setup time at 168 MHz core */
+
+    HAL_StatusTypeDef ret =
+        HAL_SPI_TransmitReceive(dev->hspi,
+                                (uint8_t *)pTx, pRx, len,
+                                HAL_MAX_DELAY);
+
+    __NOP(); __NOP();   /* hold time before CS release */
+    HAL_GPIO_WritePin(dev->cs_port, dev->cs_pin, GPIO_PIN_SET);   /* CS high */
+
+    xSemaphoreGive(spi_bus_mutex);
+    return ret;
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 5 — W25Q128 FLASH DRIVER
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="w25q-driver" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-memory me-2 text-teal"></i>Sensor Driver Example — W25Q128 NOR Flash</h2>
+
+                    <p>The W25Q128FV is a 128 Mbit (16 MB) SPI NOR flash that supports Mode 0 and Mode 3, up to 80 MHz dual/quad SPI. It is ubiquitous in embedded designs for firmware storage, logging, and configuration data. Understanding its command set is the foundation for any SPI flash driver.</p>
+
+                    <p>Key register commands: <code>0x9F</code> (JEDEC ID), <code>0x05</code> (Read Status Register-1), <code>0x06</code> (Write Enable — must precede every program or erase), <code>0x02</code> (Page Program — write up to 256 bytes), <code>0x20</code> (Sector Erase — erase 4 KB at an address), <code>0x03</code> (Read Data — read any length). All address arguments are 24-bit (3 bytes, MSB first).</p>
+
+                    <p>The status register BUSY bit (bit 0 of SR1) must be polled after any write or erase operation — the W25Q128 drives this bit high during internal operations and clears it when complete. Attempting another command while BUSY=1 is silently ignored.</p>
+
+                    <pre><code class="language-c">/* ---------------------------------------------------------------
+ * W25Q128 NOR Flash Driver — core operations
+ * Assumes: SPI handle hspi1, CS on GPIOA pin 4 (W25Q_CS_LOW/HIGH macros)
+ * --------------------------------------------------------------- */
+#define W25Q_CMD_READ_SR1    0x05
+#define W25Q_CMD_WRITE_EN    0x06
+#define W25Q_CMD_READ_DATA   0x03
+#define W25Q_CMD_PAGE_PROG   0x02
+#define W25Q_CMD_SECT_ERASE  0x20
+#define W25Q_SR1_BUSY_MASK   0x01
+#define W25Q_PAGE_SIZE       256U
+
+/* Poll BUSY bit — returns when flash is idle */
+static void w25q_wait_ready(SPI_HandleTypeDef *hspi)
+{
+    uint8_t cmd = W25Q_CMD_READ_SR1;
+    uint8_t sr1 = 0;
+    do {
+        W25Q_CS_LOW();
+        HAL_SPI_Transmit(hspi, &amp;cmd, 1, HAL_MAX_DELAY);
+        HAL_SPI_Receive(hspi,  &amp;sr1, 1, HAL_MAX_DELAY);
+        W25Q_CS_HIGH();
+    } while (sr1 &amp; W25Q_SR1_BUSY_MASK);
+}
+
+/* Read len bytes from 24-bit flash address into buf */
+HAL_StatusTypeDef w25q_read_data(SPI_HandleTypeDef *hspi,
+                                  uint32_t addr, uint8_t *buf, uint32_t len)
+{
+    uint8_t cmd[4] = {
+        W25Q_CMD_READ_DATA,
+        (addr >> 16) &amp; 0xFF,
+        (addr >>  8) &amp; 0xFF,
+        (addr      ) &amp; 0xFF
+    };
+    W25Q_CS_LOW();
+    HAL_SPI_Transmit(hspi, cmd, 4, HAL_MAX_DELAY);
+    HAL_StatusTypeDef ret = HAL_SPI_Receive(hspi, buf, len, HAL_MAX_DELAY);
+    W25Q_CS_HIGH();
+    return ret;
+}
+
+/* Program one page (up to 256 bytes) — address must be page-aligned */
+HAL_StatusTypeDef w25q_page_program(SPI_HandleTypeDef *hspi,
+                                     uint32_t addr,
+                                     const uint8_t *data, uint16_t len)
+{
+    if (len > W25Q_PAGE_SIZE) return HAL_ERROR;
+
+    /* Issue Write Enable before every program operation */
+    uint8_t wen = W25Q_CMD_WRITE_EN;
+    W25Q_CS_LOW();
+    HAL_SPI_Transmit(hspi, &amp;wen, 1, HAL_MAX_DELAY);
+    W25Q_CS_HIGH();
+
+    /* Send Page Program command + 24-bit address + data payload */
+    uint8_t hdr[4] = {
+        W25Q_CMD_PAGE_PROG,
+        (addr >> 16) &amp; 0xFF,
+        (addr >>  8) &amp; 0xFF,
+        (addr      ) &amp; 0xFF
+    };
+    W25Q_CS_LOW();
+    HAL_SPI_Transmit(hspi, hdr,  4,   HAL_MAX_DELAY);
+    HAL_SPI_Transmit(hspi, (uint8_t *)data, len, HAL_MAX_DELAY);
+    W25Q_CS_HIGH();
+
+    w25q_wait_ready(hspi);   /* typically 0.4–3 ms for page program */
+    return HAL_OK;
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 6 — SPI vs I2C vs UART
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="spi-vs-i2c-uart" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-balance-scale me-2 text-teal"></i>SPI vs I2C vs UART — When to Choose</h2>
+
+                    <p>Every experienced embedded engineer asks the same question when picking up a new sensor or memory chip: which protocol should I use? The answer depends on speed requirements, board layout constraints, available pins, and how many devices need to coexist. The table below consolidates the key trade-offs.</p>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Protocol</th>
+                                <th>Typical Speed</th>
+                                <th>Wires</th>
+                                <th>Multi-device</th>
+                                <th>Full-duplex</th>
+                                <th>Distance</th>
+                                <th>Typical Use</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>SPI</strong></td>
+                                <td>Up to 80+ MHz</td>
+                                <td>4 (+ 1 CS per device)</td>
+                                <td>CS per device</td>
+                                <td>Yes</td>
+                                <td>Short (&lt;30 cm)</td>
+                                <td>Flash, displays, ADC/DAC, RF ICs</td>
+                            </tr>
+                            <tr>
+                                <td><strong>I2C</strong></td>
+                                <td>100 kHz–1 MHz</td>
+                                <td>2 (SDA + SCL)</td>
+                                <td>7/10-bit address</td>
+                                <td>No (half-duplex)</td>
+                                <td>Short (&lt;1 m)</td>
+                                <td>Sensors, EEPROMs, PMICs, RTC</td>
+                            </tr>
+                            <tr>
+                                <td><strong>UART</strong></td>
+                                <td>Up to ~15 Mbit/s</td>
+                                <td>2 (TX + RX)</td>
+                                <td>Point-to-point only</td>
+                                <td>Yes</td>
+                                <td>Up to 15 m (RS-232)</td>
+                                <td>GPS modules, BT/WiFi modules, PC debug</td>
+                            </tr>
+                            <tr>
+                                <td><strong>CAN</strong></td>
+                                <td>Up to 1 Mbit/s (5 Mbit/s FDCAN)</td>
+                                <td>2 differential</td>
+                                <td>Up to 110 nodes</td>
+                                <td>No</td>
+                                <td>Up to 1 km</td>
+                                <td>Automotive, industrial fieldbus</td>
+                            </tr>
+                            <tr>
+                                <td><strong>1-Wire</strong></td>
+                                <td>15.4 kbit/s</td>
+                                <td>1 (+ GND)</td>
+                                <td>ROM-based addressing</td>
+                                <td>No</td>
+                                <td>Up to 100 m</td>
+                                <td>DS18B20 temperature sensors</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p><strong>Choose SPI when:</strong> you need maximum throughput (flash, displays, high-speed ADCs), when you have sufficient GPIO pins for CS lines, when the peripheral is physically close on the PCB, and when full-duplex operation simplifies your protocol.</p>
+
+                    <p><strong>Choose I2C when:</strong> you have many low-speed sensors sharing a 2-wire bus, pin count is critical, and the devices support addressable I2C (most sensors do). I2C's ACK mechanism also makes it easier to detect communication failures.</p>
+
+                    <p><strong>Avoid SPI when:</strong> you have more than 5–6 devices (CS proliferation becomes unmanageable), when long cable runs introduce capacitance that distorts the clock edge, or when the slave device requires a specific I2C or UART interface only.</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Practical Decision Guide:</strong> In 80% of embedded sensor designs, SPI handles the fast peripherals (flash, display, RF) and I2C handles the slow sensors (IMU, barometer, temperature, RTC). UART handles external module communication (GPS, WiFi, BT). These three protocols together cover the vast majority of embedded interface needs.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 7 — EXERCISES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="exercises" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flask me-2 text-teal"></i>Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 1</span>
+                            <span class="badge bg-success text-white ms-2">Beginner</span>
+                        </div>
+                        <h4>W25Q NOR Flash JEDEC ID and Page Verify</h4>
+                        <p>Connect a W25Q64 or W25Q128 SPI NOR flash to your STM32 development board. Configure SPI1 in Mode 0 (CPOL=0, CPHA=0) at 8 MHz with software NSS. Read the JEDEC ID using the 0x9F command and verify the manufacturer byte (0xEF for Winbond). Read the Status Register-1 and verify the BUSY bit is clear. Write a 256-byte page at address 0x000000 (after erasing the sector with command 0x20) and read it back, performing a byte-for-byte comparison to confirm data integrity. Print all results over UART at 115200 baud.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">SPI</span>
+                            <span class="bias-tag">W25Q Flash</span>
+                            <span class="bias-tag">JEDEC ID</span>
+                            <span class="bias-tag">Page Program</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 2</span>
+                            <span class="badge bg-warning text-dark ms-2">Intermediate</span>
+                        </div>
+                        <h4>DMA SPI Display Refresh with Framebuffer</h4>
+                        <p>Drive an SPI TFT display (ST7789 240×240 or ILI9341 320×240) over DMA SPI. Allocate a 16-bit colour framebuffer in SRAM. Implement an <code>lcd_fill_rect(x, y, w, h, colour)</code> function that writes to the framebuffer, and a <code>lcd_flush()</code> function that kicks off a DMA transfer. Achieve at least 30 frames per second refresh by measuring the time between flush calls with a GPIO toggle and oscilloscope. Draw a moving rectangle that scrolls horizontally and verify no visible tearing occurs during the update.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">DMA SPI</span>
+                            <span class="bias-tag">ST7789</span>
+                            <span class="bias-tag">Framebuffer</span>
+                            <span class="bias-tag">Double Buffer</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 3</span>
+                            <span class="badge bg-danger text-white ms-2">Advanced</span>
+                        </div>
+                        <h4>3-Device SPI Bus Manager with FreeRTOS Mutex</h4>
+                        <p>Build a 3-device SPI bus manager with the <code>spi_device_t</code> structure and <code>spi_transfer()</code> wrapper function shown in Section 4. Attach three devices to one SPI bus: a W25Q NOR flash, an ADXL345 accelerometer (Mode 3), and an MCP4921 12-bit DAC (Mode 0). Create three FreeRTOS tasks, each responsible for one device, all running at 100 Hz. Each task must acquire the bus mutex before transferring. Verify correct operation by checking each device's response register contents. Use a logic analyser or GPIO toggles to confirm that no two CS lines are ever asserted simultaneously under simultaneous task scheduling pressure.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">FreeRTOS</span>
+                            <span class="bias-tag">SPI Mutex</span>
+                            <span class="bias-tag">Multi-device Bus</span>
+                            <span class="bias-tag">Logic Analyser</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 8 — DOCUMENT GENERATOR
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="spi-design-tool" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-file-alt me-2 text-teal"></i>SPI Bus Design Tool</h2>
+
+                    <p>Use this tool to document your STM32 SPI configuration — peripheral instance, clock mode, transfer method, connected devices, and design notes. Download as Word, Excel, PDF, or PPTX for project documentation or hardware review.</p>
+
+                    <div class="canvas-form" id="stm32SpiForm">
+                        <h4 class="canvas-form-title"><i class="fas fa-exchange-alt me-2"></i>STM32 SPI Bus Design Generator</h4>
+                        <p class="form-help-text">Document your SPI peripheral configuration and connected device list. Download as Word, Excel, PDF, or PPTX.</p>
+                        <div id="stm32SpiBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <p class="form-privacy-notice"><i class="fas fa-shield-alt"></i> All data stays in your browser. Nothing is sent to or stored on any server.</p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32SpiProjName">Project Name *</label>
+                                <input type="text" id="stm32SpiProjName" placeholder="e.g., Sensor Gateway Rev B">
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32SpiInstance">SPI Instance *</label>
+                                <select id="stm32SpiInstance">
+                                    <option value="">Select instance...</option>
+                                    <option value="SPI1">SPI1</option>
+                                    <option value="SPI2">SPI2</option>
+                                    <option value="SPI3">SPI3</option>
+                                    <option value="SPI4">SPI4</option>
+                                    <option value="SPI5">SPI5</option>
+                                    <option value="SPI6">SPI6</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32SpiMode">SPI Clock Mode</label>
+                                <select id="stm32SpiMode">
+                                    <option value="">Select mode...</option>
+                                    <option value="Mode 0 (CPOL=0, CPHA=0)">Mode 0 — CPOL=0, CPHA=0 (most common)</option>
+                                    <option value="Mode 1 (CPOL=0, CPHA=1)">Mode 1 — CPOL=0, CPHA=1</option>
+                                    <option value="Mode 2 (CPOL=1, CPHA=0)">Mode 2 — CPOL=1, CPHA=0</option>
+                                    <option value="Mode 3 (CPOL=1, CPHA=1)">Mode 3 — CPOL=1, CPHA=1</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32SpiBaudRate">Baud Rate Prescaler</label>
+                                <select id="stm32SpiBaudRate">
+                                    <option value="">Select prescaler...</option>
+                                    <option value="PCLK/2 (fastest)">PCLK/2 (fastest)</option>
+                                    <option value="PCLK/4">PCLK/4</option>
+                                    <option value="PCLK/8">PCLK/8</option>
+                                    <option value="PCLK/16">PCLK/16</option>
+                                    <option value="PCLK/32">PCLK/32</option>
+                                    <option value="PCLK/64">PCLK/64</option>
+                                    <option value="PCLK/128">PCLK/128</option>
+                                    <option value="PCLK/256 (slowest)">PCLK/256 (slowest)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32SpiTransfer">Transfer Mode</label>
+                                <select id="stm32SpiTransfer">
+                                    <option value="">Select transfer mode...</option>
+                                    <option value="Polling">Polling (blocking)</option>
+                                    <option value="Interrupt">Interrupt (non-blocking)</option>
+                                    <option value="DMA">DMA (non-blocking, high throughput)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32SpiDataWidth">Data Frame Width</label>
+                                <select id="stm32SpiDataWidth">
+                                    <option value="">Select width...</option>
+                                    <option value="8-bit">8-bit (most devices)</option>
+                                    <option value="16-bit">16-bit (some ADC/DAC)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32SpiDevices">Connected Devices</label>
+                                <textarea id="stm32SpiDevices" rows="4" placeholder="Connected devices — name, CS pin, speed, notes&#10;e.g.:&#10;W25Q128 flash — CS: PA4, 40 MHz, Mode 0&#10;ST7789 TFT — CS: PB12, DC: PB13, 40 MHz, Mode 0&#10;ADXL345 accel — CS: PC5, 5 MHz, Mode 3"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32SpiNotes">Design Notes</label>
+                                <textarea id="stm32SpiNotes" rows="4" placeholder="Design Notes&#10;e.g.:&#10;Bus shared via mutex in FreeRTOS&#10;DMA used for display refresh only&#10;Level shifters on MOSI/SCLK for 5V devices"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="stm32SpiHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="stm32SpiHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="stm32SpiHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-generate" onclick="stm32SpiHandler.generatePPTX()"><i class="fas fa-file-powerpoint me-1"></i>PPTX</button>
+                            <button class="btn-reset" onclick="stm32SpiHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="stm32SpiSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="stm32SpiSuccessText"></span></div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 9 — CONCLUSION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="conclusion" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion &amp; Next Steps</h2>
+
+                    <p>In this part we have built a complete SPI skill set from the ground up:</p>
+                    <ul>
+                        <li>The <strong>4-wire SPI bus</strong> (SCLK, MOSI, MISO, NSS) and its full-duplex capability make it the fastest on-board serial protocol available — ideal for flash, displays, high-speed ADCs, and RF transceivers.</li>
+                        <li><strong>CPOL and CPHA</strong> define four clock modes. Always read the slave datasheet's timing diagram to determine the correct mode — a mismatch produces corrupted data that can look valid, making this a notoriously tricky bug.</li>
+                        <li><strong>HAL polling mode</strong> is sufficient for low-throughput, initialisation-time operations. <strong>HAL interrupt mode</strong> frees the CPU for short transactions. <strong>DMA mode</strong> is essential for any bulk data transfer — displays, flash page reads, streaming ADC data.</li>
+                        <li>A <strong>multi-device SPI bus manager</strong> with per-device CS control and an RTOS mutex is the professional pattern for any design with more than one SPI slave.</li>
+                        <li>The <strong>W25Q128 driver</strong> pattern (JEDEC ID read, status polling, write-enable before program/erase) applies to virtually every SPI NOR flash device on the market.</li>
+                    </ul>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="stm32-hal-part07-i2c-protocol.html"><strong>Part 7: I2C Protocol</strong></a>, we master the 2-wire I2C bus — address scanning, register read/write with <code>HAL_I2C_Mem_Read</code>, DMA I2C for high-rate sensor fusion, I2C multiplexers (TCA9548A) for devices with fixed addresses, and robust bus hang recovery through hardware bit-banging. We will build a complete BMP280 pressure and temperature driver using only 2 wires.</p>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 7: I2C Protocol</h5>
+                            <p>I2C master, 7/10-bit addressing, DMA transfers, multi-master bus, TCA9548A multiplexer, and hardware bus recovery.</p>
+                            <a href="stm32-hal-part07-i2c-protocol.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 8: DMA &amp; Memory Efficiency</h5>
+                            <p>DMA streams, circular mode, memory-to-memory transfers, zero-copy patterns, and cache coherency on Cortex-M7.</p>
+                            <a href="stm32-hal-part08-dma-memory.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 16: External Storage — SD &amp; QSPI Flash</h5>
+                            <p>FATFS on SD card over SPI/SDIO, QSPI NOR flash memory-mapped execution, wear levelling strategies.</p>
+                            <a href="stm32-hal-part16-external-storage.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div><!-- end col-lg-8 -->
+            </div><!-- end row -->
+        </div><!-- end container -->
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> |
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> |
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? &#9749; <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Document Generation -->
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-stm32-hal.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- STM32 SPI Design Form Handler -->
+    <script>
+        var stm32SpiPersistence = new FormPersistence('stm32-p06-spi-draft', {
+            'stm32SpiProjName': 'projectName',
+            'stm32SpiInstance': 'spiInstance',
+            'stm32SpiMode':     'spiMode',
+            'stm32SpiBaudRate': 'baudRate',
+            'stm32SpiTransfer': 'transferMode',
+            'stm32SpiDataWidth':'dataWidth',
+            'stm32SpiDevices':  'devices',
+            'stm32SpiNotes':    'notes'
+        }, 'stm32SpiBadge');
+
+        var stm32SpiHandler = new CanvasFormHandler({
+            formId:         'stm32SpiForm',
+            successId:      'stm32SpiSuccess',
+            successTextId:  'stm32SpiSuccessText',
+            persistence:    stm32SpiPersistence,
+            filenameField:  'projectName',
+            filenameSuffix: '-stm32-spi-design',
+            requiredFields: ['stm32SpiProjName', 'stm32SpiInstance'],
+            requiredMessage:'Please enter a Project Name and SPI Instance.',
+            docType:        'Stm32SpiDesign'
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            stm32SpiPersistence.init();
+        });
+    </script>
+
+</body>
+</html>

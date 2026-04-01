@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Maximize USB throughput — understand the theoretical limits of FS/HS bulk transfers, implement double buffering, use DMA for zero-copy transfers, tune endpoint buffer sizes, measure real throughput with benchmarks, and identify bottlenecks in the USB data path." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="USB throughput, USB DMA, double buffering, USB performance, TinyUSB optimization, STM32 USB DMA, CDC throughput, MSC throughput, USB bulk transfer, embedded USB performance" />
+    <meta property="og:title" content="USB Performance Optimization — USB Development Mastery Series Part 13" />
+    <meta property="og:description" content="Maximize USB throughput with double buffering, DMA transfers, endpoint buffer tuning, TX/RX path optimization, and real-world benchmarking techniques." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>USB Performance Optimization — USB Development Mastery Series Part 13 - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/usb-dev/usb-dev-part13-performance.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting (6 themes) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'ad_user_data': 'granted',
+            'ad_personalization': 'granted',
+            'analytics_storage': 'granted'
+        });
+
+        gtag('set', 'url_passthrough', true);
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+            var f = d.getElementsByTagName(s)[0],
+                j = d.createElement(s),
+                dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking &ldquo;Accept All&rdquo;, you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">USB Part 13: Performance &amp; Optimisation</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>March 31, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>~18 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Unlock the full throughput potential of your USB device — calculate theoretical limits, implement DMA and double buffering for zero-copy transfers, optimise CDC and MSC data paths, measure real-world throughput with Python benchmarks, and identify bottlenecks using GPIO timing and DWT cycle counters.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#throughput-theory" onclick="closeNav()">USB Throughput Theory</a></li>
+            <li><a href="#ep-buffer-size" onclick="closeNav()">Endpoint Buffer Size Impact</a></li>
+            <li><a href="#double-buffering" onclick="closeNav()">Double Buffering Bulk Endpoints</a></li>
+            <li><a href="#dma-zero-copy" onclick="closeNav()">DMA for Zero-Copy Transfers</a></li>
+            <li><a href="#measuring-throughput" onclick="closeNav()">Measuring USB Throughput</a></li>
+            <li><a href="#tx-path" onclick="closeNav()">TX Path Optimization</a></li>
+            <li><a href="#rx-path" onclick="closeNav()">RX Path Optimization</a></li>
+            <li><a href="#msc-throughput" onclick="closeNav()">MSC Throughput Optimization</a></li>
+            <li><a href="#profiling" onclick="closeNav()">Profiling &amp; Bottleneck Identification</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#usb-perf-tool" onclick="closeNav()">Performance Plan Generator</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 1 — USB THROUGHPUT THEORY (first: no mt-5)
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="throughput-theory" class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Series Context:</strong> This is Part 13 of 17 in the USB Development Mastery series. Parts 1–12 covered USB fundamentals through advanced topics including DFU and OTG. This part is dedicated entirely to performance — understanding the theoretical ceiling, then systematically approaching it through DMA, double buffering, and careful data path design.
+                    </div>
+
+                    <!-- Series Navigation Path -->
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-plug"></i></div>
+                            <h4>USB Development Mastery</h4>
+                            <div class="path-subtitle">Your 17-step learning path &bull; Currently on Step 13</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="usb-dev-part01-fundamentals.html" class="step-card">
+                                <div class="step-num completed">1</div>
+                                <div class="step-info"><h6>USB Fundamentals</h6><small>USB system architecture, transfer types, host/device model, protocol stack</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="usb-dev-part02-electrical-hardware.html" class="step-card">
+                                <div class="step-num completed">2</div>
+                                <div class="step-info"><h6>Electrical &amp; Hardware Layer</h6><small>D+/D- signalling, pull-ups, connectors, USB-C, STM32 USB peripherals</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="usb-dev-part03-protocol-enumeration.html" class="step-card">
+                                <div class="step-num completed">3</div>
+                                <div class="step-info"><h6>Protocol &amp; Enumeration</h6><small>Enumeration sequence, USB packets, descriptors, endpoint concepts</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="usb-dev-part04-device-classes.html" class="step-card">
+                                <div class="step-num completed">4</div>
+                                <div class="step-info"><h6>USB Device Classes</h6><small>HID, CDC, MSC, MIDI, Audio, composite devices, vendor class</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="usb-dev-part05-tinyusb-deep-dive.html" class="step-card">
+                                <div class="step-num completed">5</div>
+                                <div class="step-info"><h6>TinyUSB Deep Dive</h6><small>Stack architecture, execution model, STM32 integration, descriptor callbacks</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="usb-dev-part06-cdc-virtual-com.html" class="step-card">
+                                <div class="step-num completed">6</div>
+                                <div class="step-info"><h6>CDC Virtual COM Port</h6><small>CDC class, bulk transfers, printf over USB, baud rate handling</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="usb-dev-part07-hid-keyboard-mouse.html" class="step-card">
+                                <div class="step-num completed">7</div>
+                                <div class="step-info"><h6>HID Keyboard &amp; Mouse</h6><small>HID descriptors, report format, keyboard/mouse/gamepad implementation</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="usb-dev-part08-mass-storage.html" class="step-card">
+                                <div class="step-num completed">8</div>
+                                <div class="step-info"><h6>USB Mass Storage</h6><small>MSC class, SCSI commands, FATFS integration, RAM disk</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="usb-dev-part09-composite-devices.html" class="step-card">
+                                <div class="step-num completed">9</div>
+                                <div class="step-info"><h6>Composite Devices</h6><small>Multiple classes, IAD descriptor, CDC+HID, CDC+MSC</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="usb-dev-part10-debugging.html" class="step-card">
+                                <div class="step-num completed">10</div>
+                                <div class="step-info"><h6>Debugging USB</h6><small>Wireshark capture, protocol analyser, enumeration debugging, common failures</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="usb-dev-part11-rtos-integration.html" class="step-card">
+                                <div class="step-num completed">11</div>
+                                <div class="step-info"><h6>RTOS + USB Integration</h6><small>FreeRTOS + TinyUSB, task priorities, thread-safe communication</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="usb-dev-part12-advanced-topics.html" class="step-card">
+                                <div class="step-num completed">12</div>
+                                <div class="step-info"><h6>Advanced USB Topics</h6><small>UAC2 audio, DFU bootloader, OTG host mode, hubs, suspend, USB PD, SuperSpeed</small></div>
+                                <span class="step-badge completed-badge"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <div class="step-card current">
+                                <div class="step-num active">13</div>
+                                <div class="step-info"><h6>Performance &amp; Optimisation</h6><small>DMA, zero-copy buffers, throughput maximisation, latency tuning, benchmarking</small></div>
+                                <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                            </div>
+                            <a href="usb-dev-part14-custom-class-drivers.html" class="step-card">
+                                <div class="step-num upcoming">14</div>
+                                <div class="step-info"><h6>Custom USB Class Drivers</h6><small>Vendor class, writing descriptors, OS driver interaction</small></div>
+                            </a>
+                            <a href="usb-dev-part15-bare-metal-usb.html" class="step-card">
+                                <div class="step-num upcoming">15</div>
+                                <div class="step-info"><h6>Bare-Metal USB</h6><small>Direct register programming, writing USB stack from scratch, PHY timing</small></div>
+                            </a>
+                            <a href="usb-dev-part16-security.html" class="step-card">
+                                <div class="step-num upcoming">16</div>
+                                <div class="step-info"><h6>Security in USB</h6><small>BadUSB attacks, device authentication, secure firmware, USB firewall</small></div>
+                            </a>
+                            <a href="usb-dev-part17-hardware-design.html" class="step-card">
+                                <div class="step-num upcoming">17</div>
+                                <div class="step-info"><h6>USB Hardware Design</h6><small>PCB layout, differential pairs, impedance matching, EMI, USB-C PD</small></div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <h2><i class="fas fa-chart-line me-2 text-teal"></i>USB Throughput Theory</h2>
+
+                    <p>Before optimising USB performance, you need an accurate mental model of where the theoretical ceiling is and why measured throughput always falls below it. The gap between "480 Mbps" and what your device actually delivers is not a bug — it is a consequence of USB's protocol overhead, shared-bus scheduling, and the host's polling behaviour.</p>
+
+                    <h3>Gross Bandwidth vs Net Throughput</h3>
+
+                    <p>The raw bit rates advertised for USB speeds are <em>gross</em> figures that include NRZI encoding, bit stuffing, sync fields, PIDs, CRCs, and inter-packet gaps. The actual user data throughput is always lower. For bulk transfers specifically:</p>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>USB Speed</th>
+                                <th>Gross Bit Rate</th>
+                                <th>Theoretical Net Bulk</th>
+                                <th>Achievable Measured</th>
+                                <th>Overhead Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Full Speed</td>
+                                <td>12 Mbps</td>
+                                <td>~1.2 MB/s</td>
+                                <td>0.8–1.0 MB/s</td>
+                                <td>SOF (12%), ACK/NAK, token packets</td>
+                            </tr>
+                            <tr>
+                                <td>High Speed</td>
+                                <td>480 Mbps</td>
+                                <td>~53 MB/s theoretical</td>
+                                <td>25–38 MB/s typical</td>
+                                <td>Microframe overhead, host scheduling, CDC buffering</td>
+                            </tr>
+                            <tr>
+                                <td>HS (vendor bulk class)</td>
+                                <td>480 Mbps</td>
+                                <td>~53 MB/s</td>
+                                <td>35–42 MB/s</td>
+                                <td>Reduced CDC overhead, direct bulk, DMA</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h3>Per-Microframe Budget</h3>
+
+                    <p>High Speed USB divides time into microframes of 125 µs, and each second contains 8,000 microframes. The theoretical maximum bulk data per second is calculated from the fraction of each microframe available to bulk transactions after control and isochronous reservations. Bulk gets whatever bandwidth remains after higher-priority transfers have been scheduled.</p>
+
+                    <pre><code class="language-c">/*
+ * HS USB per-microframe budget calculation:
+ *
+ * Total HS bandwidth:     480,000,000 bits/s
+ * Microframes per second: 8,000
+ * Bits per microframe:    480,000,000 / 8,000 = 60,000 bits = 7,500 bytes
+ *
+ * Per microframe overhead:
+ *   SOF packet:           ~8 bytes
+ *   Token + handshake:    ~4 bytes per transaction
+ *   Inter-packet gaps:    ~5 bytes equivalent
+ *
+ * With a single 512-byte bulk packet per microframe:
+ *   Net data: 512 bytes
+ *   Net throughput: 512 * 8,000 = ~4 MB/s (one transaction/microframe)
+ *
+ * With host pipelining (multiple IN per microframe):
+ *   Host issues multiple IN tokens without waiting for previous ACK
+ *   Up to ~7 512-byte transactions per 125 µs microframe
+ *   Theoretical: 512 * 7 * 8,000 = ~28 MB/s
+ *
+ * Reaching 35-42 MB/s requires:
+ *   - Device always has data ready (zero NAK rate)
+ *   - DMA feeding endpoint buffer with no CPU intervention
+ *   - 512-byte wMaxPacketSize (not 64-byte FS legacy)
+ *   - Host driver pipeline depth >= 4 outstanding requests
+ */</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>SOF Overhead at Full Speed:</strong> Each SOF packet consumes approximately 2.5 µs per 1 ms frame — 0.25% overhead. The real FS ceiling loss comes from token + handshake packets: each bulk IN transaction uses ~24 bits (IN token) + 8 + 64×8 + 16 bits (DATA0) + 8 bits (ACK) = 568 bits for 64 bytes payload. That is 89% efficiency, giving a ceiling of 12 Mbps × 89% / 8 ≈ 1.34 MB/s. Bus scheduling further reduces the sustained rate to roughly 1 MB/s for a single bulk endpoint.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 2 — ENDPOINT BUFFER SIZE IMPACT
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="ep-buffer-size" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-database me-2 text-teal"></i>Endpoint Buffer Size Impact</h2>
+
+                    <p>The single most impactful configuration change for USB throughput is packet size. Moving from Full Speed's 64-byte maximum bulk packet to High Speed's 512-byte maximum is a direct 8× throughput multiplier for the same transaction count. But even within a given speed, software buffer sizes determine how efficiently the endpoint can stream data.</p>
+
+                    <h3>Max Bulk Packet Sizes by Speed</h3>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>USB Speed</th>
+                                <th>Max Bulk Packet</th>
+                                <th>Max Interrupt Packet</th>
+                                <th>Max Isochronous Packet</th>
+                                <th>Control EP0 Max</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Low Speed (1.5 Mbps)</td>
+                                <td>N/A (no bulk)</td>
+                                <td>8 bytes</td>
+                                <td>N/A</td>
+                                <td>8 bytes</td>
+                            </tr>
+                            <tr>
+                                <td>Full Speed (12 Mbps)</td>
+                                <td>64 bytes</td>
+                                <td>64 bytes</td>
+                                <td>1023 bytes</td>
+                                <td>8, 16, 32, or 64 bytes</td>
+                            </tr>
+                            <tr>
+                                <td>High Speed (480 Mbps)</td>
+                                <td>512 bytes</td>
+                                <td>1024 bytes</td>
+                                <td>1024 bytes (×3 = 3072)</td>
+                                <td>64 bytes</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h3>TinyUSB Buffer Size Configuration</h3>
+
+                    <pre><code class="language-c">/* tusb_config.h — critical buffer size settings */
+
+/* CDC endpoint buffer — determines how much data can be queued.    */
+/* FS: use 512 (8 x 64-byte packets). HS: use 4096 (8 x 512-byte). */
+#define CFG_TUD_CDC_EP_BUFSIZE      512    /* FS default            */
+/* #define CFG_TUD_CDC_EP_BUFSIZE   4096 */ /* HS recommended       */
+
+/* CDC RX/TX FIFO sizes — application-side buffers             */
+/* Should be 4-8x EP buffer size to absorb processing bursts   */
+#define CFG_TUD_CDC_RX_BUFSIZE      (4 * CFG_TUD_CDC_EP_BUFSIZE)
+#define CFG_TUD_CDC_TX_BUFSIZE      (4 * CFG_TUD_CDC_EP_BUFSIZE)
+
+/* MSC buffer size — must match or exceed SCSI READ10 block size */
+/* SDMMC sector = 512 bytes. Use 4096 for 8-sector read blocks.  */
+#define CFG_TUD_MSC_EP_BUFSIZE      512    /* FS */
+/* #define CFG_TUD_MSC_EP_BUFSIZE   4096 */ /* HS, 8 sectors/xfer */
+
+/* Vendor bulk endpoint buffers */
+#define CFG_TUD_VENDOR_EPSIZE       512    /* HS max packet size   */
+#define CFG_TUD_VENDOR_RX_BUFSIZE   (16 * 512)  /* 8 KB RX FIFO   */
+#define CFG_TUD_VENDOR_TX_BUFSIZE   (16 * 512)  /* 8 KB TX FIFO   */
+
+/* Impact of going from 64-byte to 512-byte packets:            */
+/* For same number of USB transactions:                         */
+/*   64-byte: 1000 transactions/ms * 64 = 64 KB/s              */
+/*   512-byte: 1000 transactions/ms * 512 = 512 KB/s           */
+/*   Improvement: 8x — purely from wMaxPacketSize change        */
+/* Note: transactions/ms is host-dependent but illustrates      */
+/* the multiplier effect of larger packet sizes                 */</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 3 — DOUBLE BUFFERING
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="double-buffering" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-copy me-2 text-teal"></i>Double Buffering Bulk Endpoints</h2>
+
+                    <p>The fundamental throughput bottleneck in a single-buffered USB endpoint is the dead time between transactions: after the host reads buffer A, there is a gap before buffer A is refilled and presented for the next IN transaction. During this gap, the host issues an IN token and receives a NAK — wasted bus time. Double buffering eliminates this gap by maintaining two alternating buffers: while the host reads buffer A, the device fills buffer B. When the host finishes buffer A, buffer B is immediately available with fresh data.</p>
+
+                    <h3>STM32 FSDEV Double-Buffer Mode</h3>
+
+                    <p>The STM32 USB Full Speed Device (FSDEV) peripheral — used on STM32F0, F1, F3, L0, L1 series — supports hardware double-buffering for bulk endpoints via the <code>USB_EP_KIND</code> bit in the endpoint register. When set, the endpoint uses two separate packet buffers in USB SRAM, toggled automatically by hardware after each successful transaction.</p>
+
+                    <pre><code class="language-c">/* STM32 FSDEV double-buffer bulk endpoint setup */
+
+/* USB BTABLE (Buffer Descriptor Table) in USB SRAM.             */
+/* Each endpoint has 4 x 16-bit entries:                         */
+/*   BUF0_ADDR  — buffer 0 base address in USB SRAM             */
+/*   BUF0_COUNT — TX: bytes to send; RX: buffer capacity         */
+/*   BUF1_ADDR  — buffer 1 base address                         */
+/*   BUF1_COUNT — same as above for buffer 1                     */
+
+#define EP_BUF0_ADDR  0x0040   /* USB SRAM offset for buffer 0  */
+#define EP_BUF1_ADDR  0x0080   /* USB SRAM offset for buffer 1  */
+#define EP_BUF_SIZE   64       /* FS max packet size            */
+
+void setup_double_buffer_bulk_ep(uint8_t ep_num) {
+    /* Point both buffer addresses in BTABLE */
+    PCD_SET_EP_TX_ADDRESS(USB, ep_num, EP_BUF0_ADDR);
+    PCD_SET_EP_RX_ADDRESS(USB, ep_num, EP_BUF1_ADDR);
+
+    /* Set USB_EP_KIND bit to enable double-buffer mode */
+    PCD_SET_EP_KIND(USB, ep_num);
+
+    /* Initialise both buffer counts to zero */
+    PCD_SET_EP_TX_CNT(USB, ep_num, 0);
+    PCD_SET_EP_RX_CNT(USB, ep_num, 0);
+
+    /* Enable double-buffered bulk TX */
+    PCD_SET_EP_DBUF_TX_STATUS(USB, ep_num, USB_EP_TX_VALID);
+}
+
+/* Hardware buffer-toggle rule:                                  */
+/* After each IN transaction, hardware flips SW_BUF bit.        */
+/* Firmware checks SW_BUF to know which buffer to fill next.    */
+/* Reading SW_BUF: (USB->EPnR >> 14) & 1                        */
+
+void fill_next_double_buffer(uint8_t ep_num, uint8_t *data, uint16_t len) {
+    uint32_t sw_buf = (USB->EP0R >> 14) & 1;  /* Example: EP0 */
+    if (sw_buf == 0) {
+        /* Fill buffer 0 */
+        USB_WritePMA(USB, data, EP_BUF0_ADDR, len);
+        PCD_SET_EP_TX_CNT(USB, ep_num, len);
+    } else {
+        /* Fill buffer 1 */
+        USB_WritePMA(USB, data, EP_BUF1_ADDR, len);
+        PCD_SET_EP_RX_CNT(USB, ep_num, len);
+    }
+}
+
+/* TinyUSB transparency:                                         */
+/* TinyUSB's stm32_fsdev port driver handles double-buffering    */
+/* automatically for bulk endpoints. No application changes      */
+/* are needed — the throughput improvement is automatic.         */
+/* On STM32 OTG_FS (F4, H7), deep TX FIFOs provide equivalent   */
+/* pipelining without explicit double-buffer configuration.      */</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 4 — DMA FOR ZERO-COPY TRANSFERS
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="dma-zero-copy" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-arrows-alt me-2 text-teal"></i>DMA for Zero-Copy Transfers</h2>
+
+                    <p>The biggest CPU-side bottleneck in high-throughput USB transfers is the memory copy between the application buffer and the USB peripheral's packet memory area (PMA/SRAM). On a 168 MHz Cortex-M4 without DMA, a <code>memcpy()</code> of 512 bytes to USB SRAM consumes approximately 3–4 µs — enough time for the host to issue an IN token and receive a NAK, wasting a full transaction slot. DMA eliminates this cost entirely: the USB DMA engine reads directly from the application buffer in main SRAM, with zero CPU involvement.</p>
+
+                    <h3>STM32 OTG_FS DMA Mode</h3>
+
+                    <pre><code class="language-c">/* Enable USB OTG_FS DMA mode (STM32F4/H7 with OTG_FS peripheral) */
+
+void usb_otg_dma_enable(void) {
+    /* Enable DMA in AHB Global Configuration Register */
+    USB_OTG_FS->GAHBCFG |= USB_OTG_GAHBCFG_DMAEN;
+
+    /* Set burst type — INCR4 balances AHB bus utilisation */
+    USB_OTG_FS->GAHBCFG &amp;= ~USB_OTG_GAHBCFG_HBSTLEN_Msk;
+    USB_OTG_FS->GAHBCFG |= (USB_OTG_GAHBCFG_HBSTLEN_1);  /* INCR4 */
+}
+
+/* CFG_TUSB_MEM_SECTION places buffers in DMA-accessible SRAM.  */
+/* On STM32H7: USB DMA can access SRAM1/SRAM2 but NOT DTCM RAM. */
+/* Place DMA buffers explicitly to avoid silent DMA failures.   */
+
+CFG_TUSB_MEM_SECTION CFG_TUSB_MEM_ALIGN
+static uint8_t cdc_tx_dma_buf[4096];
+
+CFG_TUSB_MEM_SECTION CFG_TUSB_MEM_ALIGN
+static uint8_t cdc_rx_dma_buf[4096];
+
+/* Cortex-M7 cache coherency for DMA transfers */
+/* STM32H7 has 16 KB L1 D-cache enabled by default in CubeIDE   */
+/* CPU writes go to cache — DMA reads from RAM see stale data    */
+
+void prepare_tx_for_dma(const uint8_t *src, uint32_t len) {
+    memcpy(cdc_tx_dma_buf, src, len);
+    /* Flush data cache: write dirty cache lines back to SRAM     */
+    SCB_CleanDCache_by_Addr((uint32_t *)cdc_tx_dma_buf,
+                             (len + 31) &amp; ~31UL);
+}
+
+void invalidate_rx_after_dma(uint32_t len) {
+    /* Invalidate data cache: force CPU to re-read from SRAM      */
+    /* Must be called BEFORE reading DMA-received data            */
+    SCB_InvalidateDCache_by_Addr((uint32_t *)cdc_rx_dma_buf,
+                                  (len + 31) &amp; ~31UL);
+}</code></pre>
+
+                    <h3>Measured Throughput: CPU Copy vs DMA</h3>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Configuration</th>
+                                <th>MCU</th>
+                                <th>USB Speed</th>
+                                <th>CPU Copy MB/s</th>
+                                <th>DMA MB/s</th>
+                                <th>Improvement</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>CDC Bulk IN</td>
+                                <td>STM32F407 @ 168 MHz</td>
+                                <td>FS (12 Mbps)</td>
+                                <td>0.95</td>
+                                <td>1.02</td>
+                                <td>~7% (bus-limited)</td>
+                            </tr>
+                            <tr>
+                                <td>CDC Bulk IN</td>
+                                <td>STM32F407 @ 168 MHz</td>
+                                <td>HS (480 Mbps)</td>
+                                <td>18</td>
+                                <td>32</td>
+                                <td>~78%</td>
+                            </tr>
+                            <tr>
+                                <td>Vendor Bulk IN</td>
+                                <td>STM32H743 @ 480 MHz</td>
+                                <td>HS (480 Mbps)</td>
+                                <td>26</td>
+                                <td>40</td>
+                                <td>~54%</td>
+                            </tr>
+                            <tr>
+                                <td>MSC Read10</td>
+                                <td>STM32F407 @ 168 MHz</td>
+                                <td>HS (480 Mbps)</td>
+                                <td>14</td>
+                                <td>22</td>
+                                <td>~57%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>DMA at Full Speed:</strong> For Full Speed USB (12 Mbps), DMA provides minimal throughput benefit because the USB bus itself is the bottleneck — the CPU keeps up with 64-byte packets at 1 MB/s without effort. DMA becomes essential at High Speed where the USB bus can consume data faster than a CPU memcpy can supply it. If your application runs at Full Speed, focus on reducing NAK rates and ensuring the endpoint buffer is always pre-filled before the host polls it.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 5 — MEASURING USB THROUGHPUT
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="measuring-throughput" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-stopwatch me-2 text-teal"></i>Measuring USB Throughput</h2>
+
+                    <p>Accurate throughput measurement requires discipline on both sides. Exclude connection setup time from the measurement window and measure over a multi-second window to average out bus scheduling noise. Always warm up the connection by discarding the first 100 KB before starting the timer.</p>
+
+                    <h3>Device Firmware: TX Benchmark</h3>
+
+                    <pre><code class="language-c">/* Continuous TX flood — fill CDC buffer every main loop iteration */
+static uint8_t tx_buf[4096];
+
+void usb_tx_benchmark_task(void) {
+    if (!tud_cdc_connected()) return;
+    /* Only write when a full block fits — maximises packet fill */
+    if (tud_cdc_write_available() >= sizeof(tx_buf)) {
+        tud_cdc_write(tx_buf, sizeof(tx_buf));
+        tud_cdc_write_flush();
+    }
+}
+
+/* host-side pyserial benchmark: pip install pyserial
+   python -c "import serial,time; s=serial.Serial('COM12',115200,timeout=1);
+   s.reset_input_buffer(); [s.read(4096) for _ in range(25)];
+   n=0; t=time.perf_counter()
+   while time.perf_counter()-t<10: n+=len(s.read(4096))
+   print(f'{n/(time.perf_counter()-t)/1e6:.2f} MB/s')"
+*/
+                    </code></pre>
+
+                    <p>Common measurement pitfalls: (1) measuring from first byte rather than after warmup — initial latency inflates the time denominator; (2) including enumeration in the window; (3) measuring RTT (round-trip) for a one-directional benchmark.</p>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 6 — TX PATH OPTIMIZATION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="tx-path" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-arrow-up me-2 text-teal"></i>TX Path Optimization (Device to Host)</h2>
+
+                    <p>The TX path — data flowing from device firmware to the USB host — has several common implementation patterns that severely limit throughput. Understanding the TinyUSB CDC TX buffer model and the correct flush strategy is the foundation of TX path optimisation.</p>
+
+                    <h3>CDC Write Buffer Strategy</h3>
+
+                    <p>TinyUSB CDC maintains an internal FIFO between application writes and the USB endpoint. The key insight: <code>tud_cdc_write()</code> copies data into this FIFO but does <em>not</em> immediately initiate a USB transfer. The transfer is initiated when either (a) <code>tud_cdc_write_flush()</code> is called, or (b) the FIFO fills up. Calling <code>tud_cdc_write_flush()</code> after every byte is the single most common throughput killer.</p>
+
+                    <pre><code class="language-c">/* WRONG: flush after every small write — catastrophic for throughput */
+void bad_send_data(const uint8_t *data, uint32_t len) {
+    for (uint32_t i = 0; i &lt; len; i++) {
+        tud_cdc_write(&amp;data[i], 1);
+        tud_cdc_write_flush();  /* USB transaction for EVERY BYTE */
+    }
+}
+
+/* CORRECT: batch into large writes, flush once at end */
+void good_send_data(const uint8_t *data, uint32_t len) {
+    uint32_t written = 0;
+    while (written &lt; len) {
+        uint32_t avail = tud_cdc_write_available();
+        if (avail == 0) {
+            tud_task();  /* Process USB events to drain TX FIFO */
+            continue;
+        }
+        uint32_t chunk = (len - written &lt; avail) ? len - written : avail;
+        tud_cdc_write(data + written, chunk);
+        written += chunk;
+    }
+    tud_cdc_write_flush();  /* Single flush at end */
+}
+
+/* BEST: circular buffer + DMA feeding CDC write */
+/* ADC DMA fills ring_buf[] continuously.         */
+/* USB task drains ring_buf into CDC TX FIFO.     */
+
+#define RING_BUF_SIZE  (16 * 1024)
+static uint8_t  ring_buf[RING_BUF_SIZE];
+static uint32_t ring_head = 0;  /* DMA write position  */
+static uint32_t ring_tail = 0;  /* USB read position   */
+
+/* Called from DMA transfer complete callback (half + full) */
+void adc_dma_half_cb(void) { ring_head = RING_BUF_SIZE / 2; }
+void adc_dma_full_cb(void) { ring_head = 0; }
+
+void usb_tx_drain_task(void) {
+    if (!tud_cdc_connected()) return;
+    uint32_t avail = tud_cdc_write_available();
+    if (avail == 0) return;
+
+    uint32_t head = ring_head;  /* Atomic 32-bit read on Cortex-M */
+    uint32_t bytes = (head - ring_tail + RING_BUF_SIZE) % RING_BUF_SIZE;
+    if (bytes == 0) return;
+
+    uint32_t chunk = bytes &lt; avail ? bytes : avail;
+    /* Handle wrap-around */
+    if (ring_tail + chunk &lt;= RING_BUF_SIZE) {
+        tud_cdc_write(ring_buf + ring_tail, chunk);
+    } else {
+        uint32_t first = RING_BUF_SIZE - ring_tail;
+        tud_cdc_write(ring_buf + ring_tail, first);
+        tud_cdc_write(ring_buf, chunk - first);
+    }
+    ring_tail = (ring_tail + chunk) & (RING_BUF_SIZE - 1u);
+    tud_cdc_write_flush();
+}
+                    </code></pre>
+
+                    <p>The <code>tud_cdc_write_available()</code> function returns remaining space in the CDC TX FIFO. For maximum throughput, keep the TX FIFO at least 50% full at all times by writing large chunks rather than byte-by-byte.</p>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 7 — RX PATH OPTIMIZATION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="rx-path" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-arrow-down me-2 text-teal"></i>RX Path Optimization (Host to Device)</h2>
+
+                    <p>The RX path — data flowing from the USB host into the device firmware — has its own set of bottlenecks. The most common mistake is reading data one byte at a time from the CDC RX buffer, which causes the TinyUSB stack to generate a NAK for incoming packets until the application has drained the previous data. This stalls the host's bulk transfer pipeline.</p>
+
+                    <pre><code class="language-c">/* WRONG: read byte-by-byte — causes NAK storms */
+void bad_rx_handler(void) {
+    uint8_t byte;
+    while (tud_cdc_available()) {
+        tud_cdc_read(&amp;byte, 1);
+        process_byte(byte);  /* Slow per-byte processing */
+    }
+}
+
+/* CORRECT: drain entire available buffer in one tud_cdc_read() call */
+void tud_cdc_rx_cb(uint8_t itf) {
+    uint8_t buf[CFG_TUD_CDC_EP_BUFSIZE];  /* 512 for HS, 64 for FS */
+    uint32_t count;
+
+    /* Read ALL available bytes in a single call */
+    while ((count = tud_cdc_n_read(itf, buf, sizeof(buf))) > 0) {
+        /* Hand off entire packet to application */
+        app_rx_handler(buf, count);
+    }
+}
+
+/* If application cannot keep up with RX rate:            */
+/* USB NAK (Not Acknowledge) is the correct behaviour.   */
+/* TinyUSB automatically NAKs when RX buffer is full.    */
+/* Do NOT discard data — instead signal application.     */
+
+/* Flow control using circular buffer */
+#define APP_RX_BUF_SIZE  8192
+static uint8_t  app_rx_buf[APP_RX_BUF_SIZE];
+static uint32_t app_rx_head = 0;
+static uint32_t app_rx_tail = 0;
+
+void tud_cdc_rx_cb_buffered(uint8_t itf) {
+    uint8_t pkt[512];
+    uint32_t count = tud_cdc_n_read(itf, pkt, sizeof(pkt));
+    if (count == 0) return;
+
+    /* Check if ring buffer has space */
+    uint32_t free_space = (app_rx_tail - app_rx_head - 1 + APP_RX_BUF_SIZE)
+                          % APP_RX_BUF_SIZE;
+    if (count &gt; free_space) {
+        /* Cannot accept — TinyUSB will NAK next packet automatically */
+        /* Re-push back into TinyUSB buffer (not possible directly)  */
+        /* Best approach: process some data first, then call read again */
+        return;
+    }
+
+    /* Copy packet into ring buffer */
+    for (uint32_t i = 0; i &lt; count; i++) {
+        app_rx_buf[app_rx_head] = pkt[i];
+        app_rx_head = (app_rx_head + 1) % APP_RX_BUF_SIZE;
+    }
+}
+                    </code></pre>
+
+                    <p>When the application processing rate falls below the USB RX rate, TinyUSB's flow control kicks in automatically: the RX FIFO fills, and TinyUSB NAKs the next IN token from the host. The host retries — no data is lost. This back-pressure mechanism is correct behaviour, not a bug.</p>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 8 — MSC THROUGHPUT
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="msc-throughput" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-hdd me-2 text-teal"></i>MSC Throughput Optimization</h2>
+
+                    <p>USB Mass Storage throughput is a chain of three components: USB bulk transfer rate, MCU processing (SCSI command decode), and storage medium read/write speed. Optimising only the USB link without addressing SDMMC throughput leaves the majority of performance gain on the table.</p>
+
+                    <pre><code class="language-c">/* MSC read10 callback — called when host requests a READ(10) command */
+/* buf must be 4-byte aligned for DMA to work correctly              */
+
+/* Place MSC buffer in DMA-accessible SRAM region */
+CFG_TUSB_MEM_SECTION CFG_TUSB_MEM_ALIGN
+static uint8_t msc_buf[4096];   /* 8 x 512-byte sectors per transfer */
+
+int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba,
+                           uint32_t offset, void *buffer,
+                           uint32_t bufsize) {
+    (void)lun; (void)offset;
+
+    /* Use SDMMC DMA for zero-copy read into MSC buffer */
+    if (HAL_SD_ReadBlocks_DMA(&amp;hsd, (uint8_t *)buffer,
+                               lba, bufsize / 512) != HAL_OK) {
+        return -1;
+    }
+
+    /* Wait for DMA transfer complete (or use callback for async) */
+    uint32_t t = HAL_GetTick();
+    while (HAL_SD_GetCardState(&amp;hsd) != HAL_SD_CARD_TRANSFER) {
+        if (HAL_GetTick() - t &gt; 500) return -1;
+    }
+
+    /* On Cortex-M7: invalidate cache before TinyUSB reads buffer */
+    SCB_InvalidateDCache_by_Addr((uint32_t *)buffer,
+                                  (bufsize + 31) &amp; ~31u);
+    return (int32_t)bufsize;
+}
+
+/* SDMMC configuration for maximum throughput */
+/* STM32F407: SDMMC1, 4-bit wide bus, 48 MHz SDMMC clock           */
+/* Achievable: ~12 MB/s read from Class 10 microSD                 */
+/* Combined USB HS + SDMMC: bottleneck is SD card at ~12 MB/s      */
+/* USB HS bulk can sustain ~22 MB/s — so SD card is limiting factor */
+
+/* Pre-fetch optimisation: read next sector while current transmits */
+/* TinyUSB calls tud_msc_read10_cb for each READ(10) command        */
+/* Pre-fetch is complex with TinyUSB but achievable with double buf */
+                    </code></pre>
+
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr><th>MCU</th><th>USB Speed</th><th>Storage</th><th>Measured Read</th><th>Measured Write</th><th>Bottleneck</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>STM32F407 @ 168 MHz</td><td>HS 480 Mbps</td><td>SDMMC Class 10</td><td>10.5 MB/s</td><td>8.2 MB/s</td><td>SD card</td></tr>
+                            <tr><td>STM32H743 @ 480 MHz</td><td>HS 480 Mbps</td><td>SDMMC UHS-I</td><td>22 MB/s</td><td>18 MB/s</td><td>USB bulk pipelining</td></tr>
+                            <tr><td>STM32F407 @ 168 MHz</td><td>FS 12 Mbps</td><td>SDMMC Class 10</td><td>0.95 MB/s</td><td>0.85 MB/s</td><td>USB Full Speed</td></tr>
+                            <tr><td>RP2040 @ 133 MHz</td><td>FS 12 Mbps</td><td>SPI Flash 80 MHz</td><td>0.9 MB/s</td><td>0.6 MB/s</td><td>USB Full Speed</td></tr>
+                        </tbody>
+                    </table>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 9 — PROFILING & BOTTLENECK IDENTIFICATION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="profiling" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-search me-2 text-teal"></i>Profiling &amp; Bottleneck Identification</h2>
+
+                    <p>When USB throughput is lower than expected, the bottleneck is in one of three places: the USB bus itself (too many NAKs), the MCU's processing pipeline (CPU too slow to feed the endpoint), or the storage/peripheral (SD card, ADC, memory bus). Identifying which one requires measurement — guessing leads to optimising the wrong thing.</p>
+
+                    <h3>GPIO Toggle Timing Method</h3>
+
+                    <pre><code class="language-c">/* GPIO timing method: toggle a spare GPIO at callback entry/exit */
+/* Measure high/low times with oscilloscope or logic analyser    */
+
+#define PROFILE_GPIO_PORT   GPIOC
+#define PROFILE_GPIO_PIN    GPIO_PIN_13
+
+static inline void profile_high(void) {
+    PROFILE_GPIO_PORT->BSRR = PROFILE_GPIO_PIN;
+}
+static inline void profile_low(void) {
+    PROFILE_GPIO_PORT->BRR  = PROFILE_GPIO_PIN;
+}
+
+/* In tud_cdc_rx_cb: */
+void tud_cdc_rx_cb(uint8_t itf) {
+    profile_high();  /* GPIO goes HIGH when callback starts */
+    uint8_t buf[512];
+    uint32_t count = tud_cdc_n_read(itf, buf, sizeof(buf));
+    app_process_rx(buf, count);
+    profile_low();   /* GPIO goes LOW when callback returns  */
+}
+
+/* Oscilloscope interpretation:                              */
+/* HIGH duration = callback execution time                  */
+/* LOW duration between callbacks = time USB bus was idle   */
+/* If LOW duration is very short: MCU is the bottleneck     */
+/* If HIGH duration is very short: USB bus is bottleneck    */
+
+/* DWT Cycle Counter for µs-resolution timing without GPIO */
+/* Available on all Cortex-M3/M4/M7 cores (not M0)        */
+
+void dwt_init(void) {
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0;
+    DWT->CTRL  |= DWT_CTRL_CYCCNTENA_Msk;
+}
+
+static inline uint32_t dwt_get_cycles(void) {
+    return DWT->CYCCNT;
+}
+
+static inline uint32_t dwt_cycles_to_us(uint32_t cycles) {
+    return cycles / (SystemCoreClock / 1000000u);
+}
+
+/* Usage: */
+void measure_callback_duration(void) {
+    uint32_t t0 = dwt_get_cycles();
+    do_usb_operation();
+    uint32_t elapsed_us = dwt_cycles_to_us(dwt_get_cycles() - t0);
+    printf("Operation took %lu µs\n", elapsed_us);
+}
+                    </code></pre>
+
+                    <p>A well-optimised High Speed USB device shows: callback execution time (HIGH GPIO) of 5–15 µs for a 512-byte packet, with very short idle gaps. If idle gaps are long (50+ µs), the MCU is slow to refill the endpoint — DMA is needed. If callback time is short but throughput is still low, the bottleneck is the USB host driver scheduling on the PC side.</p>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 10 — EXERCISES (already rendered above)
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="exercises" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-dumbbell me-2 text-teal"></i>Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 1</span>
+                            <span class="badge bg-success text-white ms-2">Beginner</span>
+                        </div>
+                        <h4>Measure Baseline CDC Throughput</h4>
+                        <p>Using a Full Speed TinyUSB CDC device: (a) implement the TX flood firmware (<code>usb_tx_benchmark_task()</code>) that continuously fills the CDC TX buffer; (b) run the Python pyserial benchmark script on the host, measuring with a 10-second window and 100 KB warmup; (c) record the baseline throughput in MB/s; (d) change <code>CFG_TUD_CDC_TX_BUFSIZE</code> from 512 to 2048 bytes and remeasure — document the improvement; (e) try calling <code>tud_cdc_write_flush()</code> after every 64-byte write versus after every 512-byte write and compare the throughput difference.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">CDC Throughput</span>
+                            <span class="bias-tag">Buffer Sizing</span>
+                            <span class="bias-tag">Benchmarking</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 2</span>
+                            <span class="badge bg-warning text-dark ms-2">Intermediate</span>
+                        </div>
+                        <h4>Profile USB TX Callback with GPIO and Logic Analyser</h4>
+                        <p>Set up GPIO toggle profiling on your MCU: (a) configure a spare GPIO pin as fast push-pull output; (b) set the GPIO HIGH at the start of <code>tud_cdc_rx_cb()</code> and LOW at the end; (c) capture 10 ms of GPIO waveform on a logic analyser while running the loopback benchmark; (d) measure the average HIGH (callback active) and LOW (idle) times; (e) calculate the duty cycle — what percentage of time is the MCU processing vs idle?; (f) identify whether the bottleneck is USB bus latency or MCU processing by analysing the waveform pattern.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">GPIO Profiling</span>
+                            <span class="bias-tag">Logic Analyser</span>
+                            <span class="bias-tag">Bottleneck Analysis</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 3</span>
+                            <span class="badge bg-danger text-white ms-2">Advanced</span>
+                        </div>
+                        <h4>Implement DMA-Driven ADC to USB Streaming at Maximum Throughput</h4>
+                        <p>Design a complete high-throughput streaming pipeline: (a) configure an ADC in continuous DMA mode on a Cortex-M4/M7 MCU, sampling at the maximum rate the USB can sustain (for FS: ~100 kSPS at 16-bit; for HS: ~2 MSPS); (b) use a ping-pong (double buffer) DMA setup — DMA fills buffer A while USB sends buffer B; (c) implement cache flush in the DMA half-complete callback before TinyUSB reads buffer A; (d) measure achieved throughput and compare to theoretical maximum; (e) add DWT cycle counter instrumentation to measure total latency from ADC sample to USB packet transmission; (f) identify and eliminate any idle gaps in the TX pipeline.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">DMA Streaming</span>
+                            <span class="bias-tag">Ping-Pong Buffers</span>
+                            <span class="bias-tag">ADC to USB</span>
+                            <span class="bias-tag">Cache Coherency</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 11 — CANVAS FORM
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="usb-perf-tool" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-file-alt me-2 text-teal"></i>USB Performance Plan Generator</h2>
+
+                    <p>Use this tool to document your USB performance optimisation plan — target MCU, USB speed, device class, throughput goal, DMA and double-buffer strategy. Download as Word, Excel, PDF, or PPTX for project documentation.</p>
+
+                    <div class="canvas-form" id="usbPerfForm">
+                        <h4 class="canvas-form-title"><i class="fas fa-tachometer-alt me-2"></i>USB Performance Plan Generator</h4>
+                        <p class="form-help-text">Document your USB performance strategy and throughput targets. Download as Word, Excel, PDF, or PPTX.</p>
+                        <div id="usbPerfBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <p class="form-privacy-notice"><i class="fas fa-shield-alt"></i> All data stays in your browser. Nothing is sent to or stored on any server.</p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbPerfProjName">Project Name *</label>
+                                <input type="text" id="usbPerfProjName" placeholder="e.g., High-Speed Data Acquisition v2.0">
+                            </div>
+                            <div class="form-group">
+                                <label for="usbPerfMcu">Target MCU *</label>
+                                <input type="text" id="usbPerfMcu" placeholder="e.g., STM32H743, STM32F407, RP2040">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbPerfSpeed">USB Speed</label>
+                                <select id="usbPerfSpeed">
+                                    <option value="">Select speed...</option>
+                                    <option value="Full Speed">Full Speed</option>
+                                    <option value="High Speed">High Speed</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="usbPerfClass">USB Class</label>
+                                <select id="usbPerfClass">
+                                    <option value="">Select class...</option>
+                                    <option value="CDC">CDC</option>
+                                    <option value="MSC">MSC</option>
+                                    <option value="Bulk Vendor">Bulk Vendor</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbPerfTargetMbs">Target Throughput (MB/s)</label>
+                                <input type="text" id="usbPerfTargetMbs" placeholder="e.g., 25 MB/s sustained TX">
+                            </div>
+                            <div class="form-group">
+                                <label for="usbPerfDmaEnabled">DMA Enabled</label>
+                                <select id="usbPerfDmaEnabled">
+                                    <option value="">Select...</option>
+                                    <option value="No">No</option>
+                                    <option value="Yes">Yes</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="usbPerfDoubleBuffer">Double Buffering</label>
+                                <select id="usbPerfDoubleBuffer">
+                                    <option value="">Select...</option>
+                                    <option value="No">No</option>
+                                    <option value="Yes">Yes</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="usbPerfNotes">Optimisation Notes</label>
+                                <textarea id="usbPerfNotes" rows="4" placeholder="e.g., DMA from ADC FIFO to USB buffer, 4096-byte EP buffer, DWT profiling shows 8 µs callback time"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="usbPerfHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="usbPerfHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="usbPerfHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-generate" onclick="usbPerfHandler.generatePPTX()"><i class="fas fa-file-powerpoint me-1"></i>PPTX</button>
+                            <button class="btn-reset" onclick="usbPerfHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="usbPerfSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="usbPerfSuccessText"></span></div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 12 — CONCLUSION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="conclusion" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion &amp; Next Steps</h2>
+
+                    <p>Part 13 has given you a complete toolkit for USB performance analysis and optimisation. The key lessons to take forward:</p>
+
+                    <ul>
+                        <li><strong>Know the ceiling.</strong> USB Full Speed bulk caps at ~1 MB/s. High Speed bulk can reach 35–42 MB/s with optimal buffering and DMA. Start by understanding what is theoretically possible.</li>
+                        <li><strong>Packet size is the biggest single lever.</strong> Switching from 64-byte (FS) to 512-byte (HS) bulk packets delivers an 8× throughput gain with no code change — only hardware and descriptor changes required.</li>
+                        <li><strong>DMA is essential at High Speed.</strong> At Full Speed, CPU memcpy keeps up easily. At High Speed, DMA eliminates the CPU copy bottleneck and unlocks the last 40–80% of available throughput.</li>
+                        <li><strong>Flush strategy dominates CDC TX throughput.</strong> Calling <code>tud_cdc_write_flush()</code> after every byte reduces throughput from 18 MB/s to under 1 MB/s. Batch large writes and flush once at the end of each burst.</li>
+                        <li><strong>Drain the RX FIFO completely in one call.</strong> Reading byte-by-byte from <code>tud_cdc_read()</code> stalls the USB pipeline. Always read all available bytes in a single <code>tud_cdc_n_read()</code> call.</li>
+                        <li><strong>MSC performance is usually SD-card limited.</strong> USB HS can sustain 22+ MB/s; the bottleneck is almost always the storage medium. SDMMC DMA in 4-bit HS mode is essential for maximising MSC write throughput.</li>
+                        <li><strong>Measure with GPIO toggles first.</strong> One GPIO toggle per callback entry/exit, captured on a logic analyser for 10 ms, immediately reveals whether the bottleneck is USB bus time or MCU processing time — no guessing required.</li>
+                    </ul>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="usb-dev-part14-custom-class-drivers.html"><strong>Part 14: Custom USB Class Drivers</strong></a>, we move beyond standard classes to design custom vendor-specific USB drivers. We will write a complete custom class descriptor set, implement Microsoft OS descriptors (WCID/BOS) for driver-free Windows operation, build a libusb-based host application, and explore when a custom class is the right choice versus extending a standard one.</p>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 12: Advanced USB Topics</h5>
+                            <p>USB Audio Class 2.0, DFU bootloader design, OTG host mode, hub support, suspend/resume, USB PD, and SuperSpeed overview.</p>
+                            <a href="usb-dev-part12-advanced-topics.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 6: CDC Virtual COM Port</h5>
+                            <p>CDC class fundamentals, bulk transfer mechanics, and the TinyUSB CDC API — the foundation for the TX/RX path optimisations in this article.</p>
+                            <a href="usb-dev-part06-cdc-virtual-com.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 14: Custom USB Class Drivers</h5>
+                            <p>Vendor-specific USB class implementation, Microsoft OS descriptors for Windows, and libusb host application development.</p>
+                            <a href="usb-dev-part14-custom-class-drivers.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div><!-- end col-lg-8 -->
+            </div><!-- end row -->
+        </div><!-- end container -->
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> |
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> |
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? &#9749; <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Document Generation -->
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-usb-dev.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- USB Performance Plan Form Handler -->
+    <script>
+        var usbPerfPersistence = new FormPersistence('usb-p13-perf-draft', {
+            'usbPerfProjName':    'projectName',
+            'usbPerfMcu':         'targetMcu',
+            'usbPerfSpeed':       'usbSpeed',
+            'usbPerfClass':       'usbClass',
+            'usbPerfTargetMbs':   'targetMbs',
+            'usbPerfDmaEnabled':  'dmaEnabled',
+            'usbPerfDoubleBuffer':'doubleBuffer',
+            'usbPerfNotes':       'notes'
+        }, 'usbPerfBadge');
+
+        var usbPerfHandler = new CanvasFormHandler({
+            formId:         'usbPerfForm',
+            successId:      'usbPerfSuccess',
+            successTextId:  'usbPerfSuccessText',
+            persistence:    usbPerfPersistence,
+            filenameField:  'projectName',
+            filenameSuffix: '-usb-performance-plan',
+            requiredFields: ['usbPerfProjName', 'usbPerfMcu'],
+            requiredMessage:'Please enter Project Name and MCU.',
+            docType:        'UsbPerformancePlan'
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            usbPerfPersistence.init();
+        });
+    </script>
+
+</body>
+</html>
+
+
