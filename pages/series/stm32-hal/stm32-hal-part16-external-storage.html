@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Expand STM32 storage with SD cards via FATFS and QSPI NOR flash — configure SDMMC, mount filesystems, implement wear-aware logging, and execute code from external flash. Part 16 of 18." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="STM32, FATFS, SD card, QSPI, NOR flash, W25Q128, SDMMC, wear levelling, external storage, embedded systems, HAL" />
+    <meta property="og:title" content="STM32 External Storage: SD Card &amp; QSPI Flash — STM32 Unleashed Series Part 16" />
+    <meta property="og:description" content="When internal flash isn't enough — connect an SD card for gigabytes of file storage using FATFS, add a QSPI NOR flash chip for XIP capability, and implement wear-levelled data logging." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>STM32 External Storage: SD Card &amp; QSPI Flash — STM32 Unleashed Series Part 16 - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/stm32-hal/stm32-hal-part16-external-storage.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting (6 themes) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'ad_user_data': 'granted',
+            'ad_personalization': 'granted',
+            'analytics_storage': 'granted'
+        });
+
+        gtag('set', 'url_passthrough', true);
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+            var f = d.getElementsByTagName(s)[0],
+                j = d.createElement(s),
+                dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking &ldquo;Accept All&rdquo;, you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">STM32 Part 16: External Storage &mdash; SD Card &amp; QSPI Flash</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>March 31, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>29 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">When internal flash isn't enough — connect an SD card for gigabytes of file storage using FATFS, add a QSPI NOR flash chip for XIP (execute-in-place) capability, and implement wear-levelled data logging for production data recorders.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#storage-options" onclick="closeNav()">External Storage Options</a></li>
+            <li><a href="#sdmmc-fatfs" onclick="closeNav()">SD Card with SDMMC &amp; FATFS</a></li>
+            <li><a href="#fatfs-operations" onclick="closeNav()">FATFS File Operations</a></li>
+            <li><a href="#qspi-nor-flash" onclick="closeNav()">QSPI NOR Flash</a></li>
+            <li><a href="#xip-mode" onclick="closeNav()">Memory-Mapped (XIP) Mode</a></li>
+            <li><a href="#wear-levelling" onclick="closeNav()">Wear-Levelling for Data Logging</a></li>
+            <li><a href="#fatfs-qspi" onclick="closeNav()">FatFS on QSPI Flash</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#storage-config-tool" onclick="closeNav()">Storage Configuration Tool</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 1 — EXTERNAL STORAGE OPTIONS (first section: no mt-5)
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="storage-options" class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Series Overview:</strong> This is Part 16 of our 18-part STM32 Unleashed series. We now tackle the full spectrum of external storage — SD cards, QSPI NOR flash, wear levelling, and memory-mapped execution — skills that are indispensable for data loggers, firmware update systems, and resource-rich embedded applications.
+                    </div>
+
+                    <!-- Series Navigation Path -->
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>STM32 Unleashed: HAL Driver Development</h4>
+                            <div class="path-subtitle">Your 18-step learning path &bull; Currently on Step 16</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="stm32-hal-part01-architecture-cubemx.html" class="step-card completed">
+                                <div class="step-num completed">1</div>
+                                <div class="step-info"><h6>Architecture &amp; CubeMX Setup</h6><small>STM32 family, clock tree, HAL vs LL, CubeMX workflow, first project</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part02-gpio-debounce.html" class="step-card completed">
+                                <div class="step-num completed">2</div>
+                                <div class="step-info"><h6>GPIO &amp; Button Debounce</h6><small>GPIO modes, pull-up/down, EXTI, software debounce, HAL_GPIO_ReadPin</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part03-uart-communication.html" class="step-card completed">
+                                <div class="step-num completed">3</div>
+                                <div class="step-info"><h6>UART Communication</h6><small>Polling, interrupt, DMA modes, printf retargeting, ring buffers</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part04-timers-pwm.html" class="step-card completed">
+                                <div class="step-num completed">4</div>
+                                <div class="step-info"><h6>Timers, PWM &amp; Input Capture</h6><small>TIM basics, PWM generation, input capture, encoder mode</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part05-adc-dac.html" class="step-card completed">
+                                <div class="step-num completed">5</div>
+                                <div class="step-info"><h6>ADC &amp; DAC</h6><small>Single/continuous conversion, DMA, injected channels, DAC waveforms</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part06-spi-protocol.html" class="step-card completed">
+                                <div class="step-num completed">6</div>
+                                <div class="step-info"><h6>SPI Protocol</h6><small>SPI master/slave, full-duplex, DMA transfers, sensor drivers</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part07-i2c-protocol.html" class="step-card completed">
+                                <div class="step-num completed">7</div>
+                                <div class="step-info"><h6>I2C Protocol</h6><small>I2C master, 7/10-bit addressing, DMA, multi-master, error handling</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part08-dma-memory.html" class="step-card completed">
+                                <div class="step-num completed">8</div>
+                                <div class="step-info"><h6>DMA &amp; Memory Efficiency</h6><small>DMA streams, circular mode, memory-to-memory, zero-copy patterns</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part09-interrupts-nvic.html" class="step-card completed">
+                                <div class="step-num completed">9</div>
+                                <div class="step-info"><h6>Interrupt Management &amp; NVIC</h6><small>Priority grouping, preemption, ISR design, HAL callbacks, latency</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part10-low-power.html" class="step-card completed">
+                                <div class="step-num completed">10</div>
+                                <div class="step-info"><h6>Low-Power Modes</h6><small>Sleep, Stop, Standby modes, RTC wakeup, LP UART, power profiling</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part11-rtc-calendar.html" class="step-card completed">
+                                <div class="step-num completed">11</div>
+                                <div class="step-info"><h6>RTC &amp; Calendar</h6><small>RTC configuration, alarms, backup registers, calendar subseconds</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part12-can-bus.html" class="step-card completed">
+                                <div class="step-num completed">12</div>
+                                <div class="step-info"><h6>CAN Bus</h6><small>FDCAN/bxCAN, filters, message frames, error handling, automotive use</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part13-usb-cdc.html" class="step-card completed">
+                                <div class="step-num completed">13</div>
+                                <div class="step-info"><h6>USB CDC Virtual COM Port</h6><small>USB FS/HS, CDC class, virtual serial, control transfers, descriptors</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part14-freertos.html" class="step-card completed">
+                                <div class="step-num completed">14</div>
+                                <div class="step-info"><h6>FreeRTOS Integration</h6><small>Tasks, queues, semaphores, mutexes, CMSIS-RTOS2 wrapper, stack sizing</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part15-bootloader.html" class="step-card completed">
+                                <div class="step-num completed">15</div>
+                                <div class="step-info"><h6>Bootloader Development</h6><small>Custom IAP bootloader, UART/USB DFU, flash programming, jump-to-app</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <div class="step-card current">
+                                <div class="step-num active">16</div>
+                                <div class="step-info"><h6>External Storage: SD &amp; QSPI Flash</h6><small>FATFS on SD card, QSPI NOR flash, memory-mapped execution, wear levelling</small></div>
+                                <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                            </div>
+                            <a href="stm32-hal-part17-ethernet-tcpip.html" class="step-card">
+                                <div class="step-num upcoming">17</div>
+                                <div class="step-info"><h6>Ethernet &amp; TCP/IP Stack</h6><small>LwIP integration, DHCP, TCP server, HTTP, MQTT, Ethernet DMA descriptors</small></div>
+                            </a>
+                            <a href="stm32-hal-part18-production-readiness.html" class="step-card">
+                                <div class="step-num upcoming">18</div>
+                                <div class="step-info"><h6>Production Readiness</h6><small>Watchdog, HardFault handler, flash option bytes, code signing, CI/CD</small></div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <h2><i class="fas fa-hdd me-2 text-teal"></i>External Storage Options for STM32</h2>
+
+                    <p>Every serious embedded application eventually outgrows the internal flash of its microcontroller. Whether you need to store megabytes of calibration data, log thousands of sensor readings per second, hold large audio or font assets, or execute code that simply won't fit in the MCU's internal flash, you need external storage. The STM32 family supports a rich set of external storage interfaces — each with different capacity, speed, endurance, and cost trade-offs.</p>
+
+                    <p>Understanding the full spectrum before committing to a design is critical. The wrong choice leads to either wasted cost (EEPROM used for logging) or catastrophic wear-out (NOR flash used as a swap partition). Here is the complete landscape:</p>
+
+                    <ul>
+                        <li><strong>SD/microSD card (1 GB–2 TB):</strong> Removable, FAT32/exFAT filesystem, accessible from a PC out of the box. The STM32 SDMMC peripheral drives the card in 4-bit wide mode at 25 or 50 MHz. Alternatively, any SPI master can drive an SD card in 1-bit SPI mode, though throughput is significantly reduced.</li>
+                        <li><strong>SPI NOR Flash (W25Q series, 1 MB–256 MB):</strong> Byte-addressable reads, page (256-byte) writes, sector (4 KB) erases. Typical endurance is 100,000 erase cycles per sector. The Winbond W25Q128JV (16 MB) is the most common choice for embedded applications worldwide.</li>
+                        <li><strong>SPI NAND Flash:</strong> Higher density than NOR at lower cost per megabyte. Block-erase only (128 KB blocks), requires a wear-levelling layer and bad-block management. Not byte-addressable — unsuitable for XIP without an MMU.</li>
+                        <li><strong>QSPI/OctoSPI NOR Flash:</strong> The same NOR flash cell accessed over a 4-bit (QSPI) or 8-bit (OctoSPI) parallel interface. The STM32 QUADSPI peripheral supports memory-mapped mode, allowing the CPU to read flash at 0x90000000 as if it were normal memory — enabling execute-in-place (XIP) for code and read-only data.</li>
+                        <li><strong>EEPROM (I2C, SPI):</strong> Very small (typically 1 KB–512 KB), byte or word writable without erase, effectively unlimited write endurance (1,000,000+ cycles). Ideal for configuration data, calibration coefficients, and non-volatile counters — not for bulk data logging.</li>
+                    </ul>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Storage Type</th>
+                                <th>Capacity</th>
+                                <th>Interface</th>
+                                <th>Write Unit</th>
+                                <th>Erase Unit</th>
+                                <th>Endurance</th>
+                                <th>XIP?</th>
+                                <th>Relative Cost</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>microSD (SDMMC)</strong></td>
+                                <td>1 GB–2 TB</td>
+                                <td>SDMMC 4-bit</td>
+                                <td>512-byte sector</td>
+                                <td>Cluster</td>
+                                <td>Managed internally</td>
+                                <td>No</td>
+                                <td>Low</td>
+                            </tr>
+                            <tr>
+                                <td><strong>microSD (SPI)</strong></td>
+                                <td>1 GB–2 TB</td>
+                                <td>SPI 1-bit</td>
+                                <td>512-byte sector</td>
+                                <td>Cluster</td>
+                                <td>Managed internally</td>
+                                <td>No</td>
+                                <td>Low</td>
+                            </tr>
+                            <tr>
+                                <td><strong>SPI NOR Flash</strong></td>
+                                <td>1 MB–256 MB</td>
+                                <td>SPI up to 104 MHz</td>
+                                <td>Page (256 B)</td>
+                                <td>Sector (4 KB)</td>
+                                <td>100k cycles/sector</td>
+                                <td>No (standard SPI)</td>
+                                <td>Medium</td>
+                            </tr>
+                            <tr>
+                                <td><strong>QSPI NOR Flash</strong></td>
+                                <td>1 MB–256 MB</td>
+                                <td>QUADSPI 4-bit</td>
+                                <td>Page (256 B)</td>
+                                <td>Sector (4 KB)</td>
+                                <td>100k cycles/sector</td>
+                                <td><strong>Yes</strong></td>
+                                <td>Medium</td>
+                            </tr>
+                            <tr>
+                                <td><strong>OctoSPI NOR Flash</strong></td>
+                                <td>Up to 512 MB</td>
+                                <td>OctoSPI 8-bit</td>
+                                <td>Page (256 B)</td>
+                                <td>Sector (4 KB)</td>
+                                <td>100k cycles/sector</td>
+                                <td><strong>Yes</strong></td>
+                                <td>High</td>
+                            </tr>
+                            <tr>
+                                <td><strong>SPI NAND Flash</strong></td>
+                                <td>128 MB–8 GB</td>
+                                <td>SPI up to 120 MHz</td>
+                                <td>Page (2 KB)</td>
+                                <td>Block (128 KB)</td>
+                                <td>100k cycles/block</td>
+                                <td>No</td>
+                                <td>Low</td>
+                            </tr>
+                            <tr>
+                                <td><strong>I2C EEPROM</strong></td>
+                                <td>1 KB–512 KB</td>
+                                <td>I2C up to 1 MHz</td>
+                                <td>Byte</td>
+                                <td>None (byte-erase)</td>
+                                <td>1M+ cycles</td>
+                                <td>No</td>
+                                <td>Low</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p>The code below shows the handle type declarations for both SDMMC and QSPI — the two interfaces we will use throughout this article:</p>
+
+<pre><code class="language-c">/* ================================================================
+ * External Storage Handle Declarations
+ * SDMMC1 for microSD (4-bit, 25 MHz)
+ * QUADSPI for W25Q128JV NOR Flash (quad mode, 80 MHz)
+ * ================================================================ */
+
+#include "stm32f4xx_hal.h"
+#include "stm32f4xx_hal_sd.h"
+#include "stm32f4xx_hal_qspi.h"
+
+/* SDMMC handle — initialised by MX_SDIO_SD_Init() */
+SD_HandleTypeDef hsd;
+
+/* QUADSPI handle — initialised by MX_QUADSPI_Init() */
+QSPI_HandleTypeDef hqspi;
+
+/* CubeMX-generated SDMMC init (4-bit, 25 MHz, card type auto-detect) */
+void MX_SDIO_SD_Init(void)
+{
+    hsd.Instance                 = SDIO;
+    hsd.Init.ClockEdge           = SDIO_CLOCK_EDGE_RISING;
+    hsd.Init.ClockBypass         = SDIO_CLOCK_BYPASS_DISABLE;
+    hsd.Init.ClockPowerSave      = SDIO_CLOCK_POWER_SAVE_DISABLE;
+    hsd.Init.BusWide             = SDIO_BUS_WIDE_4B;
+    hsd.Init.HardwareFlowControl = SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
+    hsd.Init.ClockDiv            = 2;   /* 48 MHz SDIO_CK / (2+2) = 12 MHz */
+    HAL_SD_Init(&hsd);
+    HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B);
+}
+
+/* CubeMX-generated QUADSPI init for W25Q128JV (16 MB, 3-byte addr) */
+void MX_QUADSPI_Init(void)
+{
+    hqspi.Instance               = QUADSPI;
+    hqspi.Init.ClockPrescaler    = 1;     /* 168 MHz AHB / (1+1) = 84 MHz */
+    hqspi.Init.FifoThreshold     = 4;
+    hqspi.Init.SampleShifting    = QSPI_SAMPLE_SHIFTING_HALFCYCLE;
+    hqspi.Init.FlashSize         = 23;    /* 2^(23+1) = 16 MB */
+    hqspi.Init.ChipSelectHighTime = QSPI_CS_HIGH_TIME_2_CYCLE;
+    hqspi.Init.ClockMode         = QSPI_CLOCK_MODE_0;
+    hqspi.Init.FlashID           = QSPI_FLASH_ID_1;
+    hqspi.Init.DualFlash         = QSPI_DUALFLASH_DISABLE;
+    HAL_QSPI_Init(&hqspi);
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 2 — SD CARD WITH SDMMC & FATFS
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="sdmmc-fatfs" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-sd-card me-2 text-teal"></i>SD Card with SDMMC &amp; FATFS</h2>
+
+                    <p>The STM32 SDMMC (or SDIO on F4) peripheral implements the SD Host Controller Specification directly in hardware. When configured for 4-bit wide bus operation at 25 MHz, it delivers approximately 12.5 MB/s raw throughput — more than enough for audio recording, high-rate sensor logging, or firmware update image transfer. Compare this to the SPI SD card mode, which at 10 MHz SPI clock delivers roughly 1.25 MB/s in 1-bit mode.</p>
+
+                    <p>The FATFS middleware, included in STM32Cube, sits between your application and the block-level hardware driver. FATFS was written by ChaN and is a de-facto standard for embedded FAT/exFAT implementations. STM32CubeMX generates the necessary <code>diskio.c</code> glue layer that connects FATFS to the HAL SD driver.</p>
+
+                    <h3>CubeMX Setup</h3>
+                    <ol>
+                        <li>In the Pinout &amp; Configuration view, enable <strong>SDIO</strong> (F4) or <strong>SDMMC1</strong> (F7/H7).</li>
+                        <li>Set Bus Width to 4 bits and the clock divider to achieve 25 MHz or lower.</li>
+                        <li>Under <strong>Middleware → FATFS</strong>, enable it and select <strong>SD Card</strong> as the physical drive.</li>
+                        <li>In FATFS configuration, set <code>_USE_LFN</code> to 1 (heap) for long filename support, <code>_VOLUMES</code> to 1, and <code>_FS_TINY</code> to 0 for best performance.</li>
+                        <li>Enable DMA for SDIO/SDMMC (DMA2 Stream 3/6 for F4) to avoid CPU-blocking block transfers.</li>
+                    </ol>
+
+                    <h3>FATFS Core API</h3>
+                    <p>The essential FATFS functions your application will call:</p>
+                    <ul>
+                        <li><code>f_mount(&amp;fs, "0:", 1)</code> — mount the filesystem on logical drive 0. The second argument is the path, the third forces immediate mounting.</li>
+                        <li><code>f_open(&amp;fil, "path/file.txt", mode)</code> — open or create a file. Returns <code>FR_OK</code> on success.</li>
+                        <li><code>f_write(&amp;fil, buf, len, &amp;bw)</code> — write <code>len</code> bytes from <code>buf</code>; <code>bw</code> receives actual bytes written.</li>
+                        <li><code>f_read(&amp;fil, buf, len, &amp;br)</code> — read up to <code>len</code> bytes into <code>buf</code>.</li>
+                        <li><code>f_close(&amp;fil)</code> — flush write buffers and release the file object.</li>
+                        <li><code>f_mkdir("logs")</code> — create a directory.</li>
+                        <li><code>f_sync(&amp;fil)</code> — flush without closing, for periodic safety-flush during long logging sessions.</li>
+                    </ul>
+
+<pre><code class="language-c">/* ================================================================
+ * SD Card Init via FATFS + Write 10 sensor readings to CSV
+ * Requires: FATFS middleware enabled, SDMMC DMA configured
+ * ================================================================ */
+
+#include "fatfs.h"
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+FATFS   SDFatFS;      /* FATFS work area for logical drive 0 */
+FIL     SDFile;       /* File object */
+FRESULT fres;         /* FATFS return code */
+
+void sd_write_sensor_data(void)
+{
+    char    line[64];
+    UINT    bytes_written;
+    uint32_t tick_start;
+
+    /* Mount the filesystem — forces immediate card detection */
+    fres = f_mount(&SDFatFS, (TCHAR const*)"0:", 1);
+    if (fres != FR_OK) {
+        printf("f_mount failed: %d\r\n", fres);
+        return;
+    }
+
+    /* Create (or overwrite) data.csv on the SD card root */
+    fres = f_open(&SDFile, "0:/data.csv",
+                  FA_CREATE_ALWAYS | FA_WRITE);
+    if (fres != FR_OK) {
+        printf("f_open failed: %d\r\n", fres);
+        f_mount(NULL, "0:", 0);
+        return;
+    }
+
+    /* Write CSV header */
+    const char *header = "tick_ms,adc_raw,voltage_mV\r\n";
+    f_write(&SDFile, header, strlen(header), &bytes_written);
+
+    /* Append 10 sensor readings */
+    for (int i = 0; i < 10; i++) {
+        uint32_t tick   = HAL_GetTick();
+        uint32_t adc    = HAL_ADC_GetValue(&hadc1);
+        uint32_t mv     = (adc * 3300UL) / 4095UL;
+
+        snprintf(line, sizeof(line),
+                 "%lu,%lu,%lu\r\n", tick, adc, mv);
+
+        fres = f_write(&SDFile, line, strlen(line), &bytes_written);
+        if (fres != FR_OK || bytes_written != strlen(line)) {
+            printf("Write error at record %d: %d\r\n", i, fres);
+            break;
+        }
+        HAL_Delay(100);  /* 100 ms between samples */
+    }
+
+    /* Close file — flushes and updates directory entry */
+    f_close(&SDFile);
+
+    /* Unmount — good practice before power-off */
+    f_mount(NULL, "0:", 0);
+
+    printf("SD write complete\r\n");
+}</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>DMA and DCACHE Warning (H7):</strong> On STM32H7, the D-cache is enabled by default. DMA operates on physical memory, bypassing the cache. Any buffer used for DMA transfers must be placed in a non-cached memory region (e.g., SRAM4 at 0x38000000) or must be explicitly invalidated after a DMA receive and cleaned before a DMA transmit. Failure to do this causes subtle data corruption that looks like random bit errors in your SD card files.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 3 — FATFS FILE OPERATIONS
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="fatfs-operations" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-folder-open me-2 text-teal"></i>FATFS File Operations</h2>
+
+                    <p>FATFS exposes a POSIX-like file API. Mastering the open flags, error codes, and random-access functions gives you the flexibility to implement anything from a simple data logger to a structured filesystem application.</p>
+
+                    <h3>Open Flags</h3>
+                    <p>The <code>f_open</code> mode argument is a bitfield of the following flags:</p>
+                    <ul>
+                        <li><code>FA_READ</code> — open for reading. The file must exist.</li>
+                        <li><code>FA_WRITE</code> — open for writing. Can be combined with <code>FA_READ</code> for read/write.</li>
+                        <li><code>FA_CREATE_ALWAYS</code> — create a new file; if it exists, truncate it to zero length.</li>
+                        <li><code>FA_CREATE_NEW</code> — create a new file; fail if it already exists.</li>
+                        <li><code>FA_OPEN_EXISTING</code> — open existing file (default if no create flag given).</li>
+                        <li><code>FA_OPEN_APPEND</code> — open existing file and seek to the end before writing. Equivalent to fopen("a").</li>
+                    </ul>
+
+                    <h3>Useful Utility Functions</h3>
+                    <ul>
+                        <li><code>f_printf(&amp;fil, fmt, ...)</code> — formatted write, like fprintf. Requires <code>_USE_STRFUNC &gt;= 1</code>.</li>
+                        <li><code>f_lseek(&amp;fil, offset)</code> — move file pointer to absolute byte offset. Use <code>f_size(&amp;fil)</code> to seek to end.</li>
+                        <li><code>f_stat("path", &amp;fno)</code> — get file/directory metadata (size, date, attributes).</li>
+                        <li><code>f_getfree("0:", &amp;fre_clust, &amp;pfs)</code> — query free clusters. Multiply by cluster size to get free bytes.</li>
+                        <li><code>f_unlink("path")</code> — delete a file or empty directory.</li>
+                        <li><code>f_rename("old", "new")</code> — rename/move a file.</li>
+                    </ul>
+
+                    <h3>FATFS Error Codes</h3>
+                    <p>Always check the return value of every FATFS call. Production code must handle all failure modes gracefully:</p>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Error Code</th>
+                                <th>Value</th>
+                                <th>Meaning</th>
+                                <th>Typical Cause &amp; Response</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>FR_OK</code></td>
+                                <td>0</td>
+                                <td>Success</td>
+                                <td>Operation completed normally</td>
+                            </tr>
+                            <tr>
+                                <td><code>FR_DISK_ERR</code></td>
+                                <td>1</td>
+                                <td>Hard disk error</td>
+                                <td>DMA error, CRC failure — retry once, then unmount</td>
+                            </tr>
+                            <tr>
+                                <td><code>FR_INT_ERR</code></td>
+                                <td>2</td>
+                                <td>Internal assertion failed</td>
+                                <td>FATFS work area corrupted — re-mount</td>
+                            </tr>
+                            <tr>
+                                <td><code>FR_NOT_READY</code></td>
+                                <td>3</td>
+                                <td>Drive not ready</td>
+                                <td>Card removed or not inserted — check CD pin</td>
+                            </tr>
+                            <tr>
+                                <td><code>FR_NO_FILE</code></td>
+                                <td>4</td>
+                                <td>File not found</td>
+                                <td>Wrong path — check directory and filename spelling</td>
+                            </tr>
+                            <tr>
+                                <td><code>FR_NO_PATH</code></td>
+                                <td>5</td>
+                                <td>Path not found</td>
+                                <td>Intermediate directory missing — call f_mkdir first</td>
+                            </tr>
+                            <tr>
+                                <td><code>FR_DENIED</code></td>
+                                <td>7</td>
+                                <td>Access denied</td>
+                                <td>Write-protect tab engaged, or read-only file attribute</td>
+                            </tr>
+                            <tr>
+                                <td><code>FR_NO_SPACE</code></td>
+                                <td>20</td>
+                                <td>Volume full</td>
+                                <td>Not enough free clusters — call f_getfree before logging</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+<pre><code class="language-c">/* ================================================================
+ * Production Data Logger: RTC timestamp + ADC to CSV
+ * Flushes every 10 records; handles FATFS errors with retry
+ * ================================================================ */
+
+#include "fatfs.h"
+#include "rtc.h"
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+#define LOG_FLUSH_INTERVAL   10   /* f_sync every N records */
+#define LOG_MAX_RETRIES       3
+
+static FATFS  fs;
+static FIL    logfile;
+static uint32_t record_count = 0;
+
+static FRESULT logger_open(void)
+{
+    FRESULT fr;
+    /* Create "logs" directory if not present */
+    fr = f_mkdir("0:/logs");
+    if (fr != FR_OK && fr != FR_EXIST) return fr;
+
+    /* Append to existing log or create new one */
+    fr = f_open(&logfile, "0:/logs/sensor.csv",
+                FA_OPEN_APPEND | FA_WRITE);
+    if (fr == FR_NO_FILE) {
+        /* File doesn't exist yet — create with header */
+        fr = f_open(&logfile, "0:/logs/sensor.csv",
+                    FA_CREATE_ALWAYS | FA_WRITE);
+        if (fr == FR_OK) {
+            f_printf(&logfile,
+                     "date,time,adc_raw,voltage_mV,temperature_C\r\n");
+        }
+    }
+    return fr;
+}
+
+void logger_append_record(void)
+{
+    RTC_TimeTypeDef t;
+    RTC_DateTypeDef d;
+    UINT bw;
+    char line[80];
+    FRESULT fr;
+    int retries = 0;
+
+    HAL_RTC_GetTime(&hrtc, &t, RTC_FORMAT_BIN);
+    HAL_RTC_GetDate(&hrtc, &d, RTC_FORMAT_BIN);
+
+    uint32_t adc  = HAL_ADC_GetValue(&hadc1);
+    uint32_t mv   = (adc * 3300UL) / 4095UL;
+    int32_t  temp = (int32_t)((mv - 760) / 2.5f + 25);
+
+    snprintf(line, sizeof(line),
+             "20%02d-%02d-%02d,%02d:%02d:%02d,%lu,%lu,%ld\r\n",
+             d.Year, d.Month, d.Date,
+             t.Hours, t.Minutes, t.Seconds,
+             adc, mv, temp);
+
+retry:
+    fr = f_write(&logfile, line, strlen(line), &bw);
+    if (fr != FR_OK && retries++ < LOG_MAX_RETRIES) {
+        /* Re-mount and reopen on error */
+        f_close(&logfile);
+        f_mount(NULL, "0:", 0);
+        HAL_Delay(20);
+        f_mount(&fs, "0:", 1);
+        logger_open();
+        goto retry;
+    }
+
+    record_count++;
+    if (record_count % LOG_FLUSH_INTERVAL == 0) {
+        f_sync(&logfile);  /* Safety flush — survive power loss */
+    }
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 4 — QSPI NOR FLASH
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="qspi-nor-flash" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-memory me-2 text-teal"></i>QSPI NOR Flash</h2>
+
+                    <p>The QUADSPI peripheral on STM32F4/F7/H7 provides a 4-bit parallel SPI interface that delivers up to 4x the throughput of standard SPI at the same clock frequency. With a 84 MHz QUADSPI clock and quad I/O mode, the effective read bandwidth reaches ~42 MB/s — sufficient to execute code directly from the flash chip.</p>
+
+                    <p>The Winbond W25Q128JV is a 16 MB (128 Mbit) NOR flash device in SOIC-8 or WSON-8 package. It is pin-compatible with the entire W25Q family (W25Q16 through W25Q256) and supports all standard SPI commands plus an extended quad I/O mode. Key specifications: 3.3 V supply, 133 MHz max clock, 256-byte page program, 4 KB sector erase, 100,000 erase cycles per sector, data retention 20 years.</p>
+
+                    <h3>Critical W25Q128JV Command Bytes</h3>
+                    <ul>
+                        <li><code>0x06</code> — Write Enable (WREN). Must precede every program or erase command.</li>
+                        <li><code>0x04</code> — Write Disable (WRDI). Sent automatically after page program completes.</li>
+                        <li><code>0x05</code> — Read Status Register 1 (RDSR1). Bit 0 = BUSY — poll until clear after erase.</li>
+                        <li><code>0x35</code> — Read Status Register 2. Bit 1 = QE (Quad Enable) — must be set for quad mode.</li>
+                        <li><code>0x40</code> — Write Status Register 2 to set QE bit (enable quad I/O).</li>
+                        <li><code>0x9F</code> — Read JEDEC ID: returns manufacturer (0xEF), memory type (0x40), capacity (0x18 for 16 MB).</li>
+                        <li><code>0xEB</code> — Fast Read Quad I/O (4-4-4 mode): address and data on all 4 pins.</li>
+                        <li><code>0x02</code> — Page Program (1-1-1): up to 256 bytes per call.</li>
+                        <li><code>0x20</code> — Sector Erase (4 KB): sets all bits in the addressed sector to 1.</li>
+                        <li><code>0xD8</code> — Block Erase (64 KB): erases a 64 KB block in ~1 second.</li>
+                        <li><code>0xC7</code> — Chip Erase: erases the entire device (~40 seconds for 16 MB).</li>
+                    </ul>
+
+<pre><code class="language-c">/* ================================================================
+ * W25Q128JV QSPI Driver — Read JEDEC, Sector Erase,
+ * Page Program, and Quad Fast Read
+ * ================================================================ */
+
+#define W25Q_CMD_JEDEC_ID     0x9F
+#define W25Q_CMD_WRITE_EN     0x06
+#define W25Q_CMD_READ_SR1     0x05
+#define W25Q_CMD_SECTOR_ERASE 0x20
+#define W25Q_CMD_PAGE_PROG    0x02
+#define W25Q_CMD_FAST_READ_QIO 0xEB
+#define W25Q_TIMEOUT_MS       5000
+
+/* Read JEDEC ID: returns 0x00EF4018 for W25Q128JV */
+uint32_t qspi_read_jedec(void)
+{
+    QSPI_CommandTypeDef cmd = {0};
+    uint8_t buf[3];
+
+    cmd.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+    cmd.Instruction     = W25Q_CMD_JEDEC_ID;
+    cmd.DataMode        = QSPI_DATA_1_LINE;
+    cmd.NbData          = 3;
+    cmd.AddressMode     = QSPI_ADDRESS_NONE;
+    cmd.DummyCycles     = 0;
+
+    HAL_QSPI_Command(&hqspi, &cmd, W25Q_TIMEOUT_MS);
+    HAL_QSPI_Receive(&hqspi, buf, W25Q_TIMEOUT_MS);
+
+    return ((uint32_t)buf[0] << 16) |
+           ((uint32_t)buf[1] <<  8) |
+            (uint32_t)buf[2];
+}
+
+/* Poll BUSY bit in Status Register 1 until clear */
+static HAL_StatusTypeDef qspi_wait_idle(uint32_t timeout_ms)
+{
+    QSPI_CommandTypeDef cmd = {0};
+    QSPI_AutoPollingTypeDef cfg = {0};
+
+    cmd.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+    cmd.Instruction     = W25Q_CMD_READ_SR1;
+    cmd.DataMode        = QSPI_DATA_1_LINE;
+
+    cfg.Match           = 0x00;   /* BUSY = 0 */
+    cfg.Mask            = 0x01;   /* Check bit 0 only */
+    cfg.MatchMode       = QSPI_MATCH_MODE_AND;
+    cfg.Interval        = 0x10;
+    cfg.AutomaticStop   = QSPI_AUTOMATIC_STOP_ENABLE;
+    cfg.StatusBytesSize = 1;
+
+    return HAL_QSPI_AutoPolling(&hqspi, &cmd, &cfg, timeout_ms);
+}
+
+/* Write Enable — must call before every erase or program */
+static void qspi_write_enable(void)
+{
+    QSPI_CommandTypeDef cmd = {0};
+    cmd.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+    cmd.Instruction     = W25Q_CMD_WRITE_EN;
+    HAL_QSPI_Command(&hqspi, &cmd, W25Q_TIMEOUT_MS);
+}
+
+/* Erase one 4 KB sector at the given 24-bit address */
+HAL_StatusTypeDef qspi_sector_erase(uint32_t addr)
+{
+    QSPI_CommandTypeDef cmd = {0};
+
+    qspi_write_enable();
+
+    cmd.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+    cmd.Instruction     = W25Q_CMD_SECTOR_ERASE;
+    cmd.AddressMode     = QSPI_ADDRESS_1_LINE;
+    cmd.AddressSize     = QSPI_ADDRESS_24_BITS;
+    cmd.Address         = addr & ~0xFFFUL; /* Align to 4 KB */
+    cmd.DataMode        = QSPI_DATA_NONE;
+
+    HAL_QSPI_Command(&hqspi, &cmd, W25Q_TIMEOUT_MS);
+    return qspi_wait_idle(W25Q_TIMEOUT_MS); /* Erase ~50 ms */
+}
+
+/* Program up to 256 bytes at addr (must be erased first) */
+HAL_StatusTypeDef qspi_page_program(uint32_t addr,
+                                     const uint8_t *data,
+                                     uint16_t len)
+{
+    QSPI_CommandTypeDef cmd = {0};
+
+    if (len == 0 || len > 256) return HAL_ERROR;
+
+    qspi_write_enable();
+
+    cmd.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+    cmd.Instruction     = W25Q_CMD_PAGE_PROG;
+    cmd.AddressMode     = QSPI_ADDRESS_1_LINE;
+    cmd.AddressSize     = QSPI_ADDRESS_24_BITS;
+    cmd.Address         = addr;
+    cmd.DataMode        = QSPI_DATA_1_LINE;
+    cmd.NbData          = len;
+
+    HAL_QSPI_Command(&hqspi, &cmd, W25Q_TIMEOUT_MS);
+    HAL_QSPI_Transmit(&hqspi, (uint8_t*)data, W25Q_TIMEOUT_MS);
+    return qspi_wait_idle(W25Q_TIMEOUT_MS); /* Program ~0.7 ms */
+}
+
+/* Quad Fast Read — 4-bit data, 2 dummy cycles after address */
+HAL_StatusTypeDef qspi_read_data(uint32_t addr,
+                                  uint8_t *buf,
+                                  uint32_t len)
+{
+    QSPI_CommandTypeDef cmd = {0};
+
+    cmd.InstructionMode = QSPI_INSTRUCTION_1_LINE;
+    cmd.Instruction     = W25Q_CMD_FAST_READ_QIO;
+    cmd.AddressMode     = QSPI_ADDRESS_4_LINES;
+    cmd.AddressSize     = QSPI_ADDRESS_24_BITS;
+    cmd.Address         = addr;
+    cmd.DataMode        = QSPI_DATA_4_LINES;
+    cmd.NbData          = len;
+    cmd.DummyCycles     = 4;  /* W25Q128JV requires 4 dummy cycles in QPI */
+
+    HAL_QSPI_Command(&hqspi, &cmd, W25Q_TIMEOUT_MS);
+    return HAL_QSPI_Receive(&hqspi, buf, W25Q_TIMEOUT_MS);
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 5 — MEMORY-MAPPED (XIP) MODE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="xip-mode" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-map me-2 text-teal"></i>Memory-Mapped (XIP) Mode</h2>
+
+                    <p>One of the most powerful features of the STM32 QUADSPI peripheral is memory-mapped mode — also called XIP (execute-in-place). In this mode, the CPU accesses the QSPI flash as if it were normal read-only memory, starting at address <code>0x90000000</code> on STM32F4/F7 or <code>0x90000000</code>/<code>0x70000000</code> on H7. The QUADSPI hardware transparently issues read commands to the flash chip whenever the CPU (or DMA) reads from that address range.</p>
+
+                    <p>Practical applications of XIP mode:</p>
+                    <ul>
+                        <li><strong>Large lookup tables:</strong> Sine/cosine tables for motor control, gamma correction tables for displays, dithering matrices for audio DACs.</li>
+                        <li><strong>Font and graphics assets:</strong> Bitmap fonts, icons, UI images — particularly useful for colour TFT display projects where the internal flash would be entirely consumed by assets.</li>
+                        <li><strong>Audio samples:</strong> WAV or raw PCM data for tone generation or speech synthesis.</li>
+                        <li><strong>Executable code:</strong> The linker can place entire functions or modules in a <code>.text_qspi</code> section and execute them directly from the flash — effectively giving you 16 MB of addressable program memory. Be aware of the fetch latency (a few extra cycles per cache miss) and ensure functions are not called from ISRs where deterministic latency is required.</li>
+                    </ul>
+
+<pre><code class="language-c">/* ================================================================
+ * Enable QUADSPI Memory-Mapped Mode (XIP)
+ * Maps W25Q128JV to 0x90000000 on STM32F4/F7
+ * ================================================================ */
+
+#define QSPI_XIP_BASE  0x90000000UL
+
+HAL_StatusTypeDef qspi_enable_memory_mapped(void)
+{
+    QSPI_CommandTypeDef      cmd  = {0};
+    QSPI_MemoryMappedTypeDef cfg  = {0};
+
+    /* Configure the read command used by the memory-mapped engine */
+    cmd.InstructionMode   = QSPI_INSTRUCTION_1_LINE;
+    cmd.Instruction       = 0xEB;            /* Fast Read Quad I/O */
+    cmd.AddressMode       = QSPI_ADDRESS_4_LINES;
+    cmd.AddressSize       = QSPI_ADDRESS_24_BITS;
+    cmd.AlternateByteMode = QSPI_ALTERNATE_BYTES_4_LINES;
+    cmd.AlternateBytes    = 0xFF;            /* Continuous mode pattern */
+    cmd.AlternateBytesSize= QSPI_ALTERNATE_BYTES_8_BITS;
+    cmd.DummyCycles       = 4;
+    cmd.DataMode          = QSPI_DATA_4_LINES;
+    cmd.DdrMode           = QSPI_DDR_MODE_DISABLE;
+    cmd.SIOOMode          = QSPI_SIOO_INST_ONLY_FIRST_CMD;
+
+    /* No timeout — memory-mapped mode runs indefinitely */
+    cfg.TimeOutActivation = QSPI_TIMEOUT_COUNTER_DISABLE;
+
+    HAL_StatusTypeDef ret =
+        HAL_QSPI_MemoryMapped(&hqspi, &cmd, &cfg);
+
+    if (ret != HAL_OK) {
+        printf("XIP enable failed: %d\r\n", ret);
+        return ret;
+    }
+
+    printf("XIP active — flash mapped at 0x%08lX\r\n",
+           (uint32_t)QSPI_XIP_BASE);
+    return HAL_OK;
+}
+
+/* Example: read 1 KB of data through the XIP memory map */
+void xip_read_demo(void)
+{
+    /* After qspi_enable_memory_mapped(), just dereference the pointer */
+    const uint8_t *flash_ptr = (const uint8_t *)QSPI_XIP_BASE;
+
+    uint32_t checksum = 0;
+    for (uint32_t i = 0; i < 1024; i++) {
+        checksum += flash_ptr[i];   /* CPU reads, QSPI fetches automatically */
+    }
+
+    printf("XIP 1 KB checksum: 0x%08lX\r\n", checksum);
+
+    /* Function pointer example: call a function stored in QSPI flash
+     * (function must be placed in .text_qspi section by linker) */
+    typedef void (*qspi_func_t)(void);
+    qspi_func_t qspi_entry =
+        (qspi_func_t)(QSPI_XIP_BASE | 0x00000001UL); /* Thumb bit */
+    /* qspi_entry(); -- uncomment if you have code flashed there */
+}</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>XIP and DCache on H7:</strong> On STM32H7, if the D-cache is enabled, configure the MPU to mark the QSPI region (0x90000000–0x9FFFFFFF) as <em>Normal, Non-Cacheable</em> or <em>Write-Through</em> to prevent stale cache entries when the flash content is updated. For code execution (I-cache), this is handled automatically by the hardware cache coherency of the Cortex-M7 instruction fetch path.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 6 — WEAR-LEVELLING FOR DATA LOGGING
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="wear-levelling" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-recycle me-2 text-teal"></i>Wear-Levelling for Data Logging</h2>
+
+                    <p>NOR flash endurance is finite: the W25Q128JV guarantees 100,000 erase cycles per 4 KB sector. For a data logger that appends to a single sector every second, that sector would reach end-of-life in about 27 hours. The solution is <strong>circular (round-robin) logging</strong>: distribute writes across many sectors so that each sector is erased only once every N records, where N is the number of sectors in your log ring.</p>
+
+                    <p>With 128 sectors (512 KB log area), each sector experiences only 1/128 of the total erase count. A 100 Hz logger writing 128-byte records would take over 350 years to exhaust any single sector — comfortably within product lifetime.</p>
+
+                    <h3>Sector Header Design</h3>
+                    <p>Each sector in the ring carries a small header that allows the firmware to find the current write position after power-cycling, without scanning every byte of flash:</p>
+                    <ul>
+                        <li><strong>Magic word (4 bytes):</strong> e.g., <code>0xDEADC0DE</code>. A blank (erased) sector has <code>0xFFFFFFFF</code> — instantly distinguishable.</li>
+                        <li><strong>Sequence number (4 bytes):</strong> Monotonically increasing 32-bit counter. The sector with the highest sequence number in the ring is the most recently written one.</li>
+                        <li><strong>Record count (2 bytes):</strong> How many records are currently stored in this sector.</li>
+                        <li><strong>CRC (2 bytes):</strong> CRC-16 over the header — detects a partially written header from a power loss mid-erase.</li>
+                    </ul>
+
+<pre><code class="language-c">/* ================================================================
+ * Circular QSPI Log — wear-levelled logging with sequence numbers
+ * Log area: 128 sectors × 4 KB = 512 KB starting at QSPI addr 0
+ * Record size: 64 bytes (fixed)
+ * ================================================================ */
+
+#define LOG_SECTOR_SIZE    4096U
+#define LOG_SECTOR_COUNT   128U
+#define LOG_RECORD_SIZE    64U
+#define LOG_MAGIC          0xDEADC0DEUL
+#define LOG_HEADER_SIZE    12U  /* magic(4) + seq(4) + reccount(2) + crc(2) */
+#define LOG_RECS_PER_SEC   ((LOG_SECTOR_SIZE - LOG_HEADER_SIZE) / LOG_RECORD_SIZE)
+
+typedef struct {
+    uint32_t magic;
+    uint32_t sequence;
+    uint16_t record_count;
+    uint16_t header_crc;
+} LogSectorHeader;
+
+static uint32_t current_sector = 0;
+static uint32_t current_seq    = 0;
+static uint16_t current_rec    = 0;
+
+/* Find the sector with the highest sequence number (power-on resume) */
+uint32_t circular_log_find_latest(void)
+{
+    uint32_t best_seq    = 0;
+    uint32_t best_sector = 0;
+    LogSectorHeader hdr;
+
+    for (uint32_t s = 0; s < LOG_SECTOR_COUNT; s++) {
+        uint32_t addr = s * LOG_SECTOR_SIZE;
+        qspi_read_data(addr, (uint8_t*)&hdr, sizeof(hdr));
+
+        if (hdr.magic == LOG_MAGIC && hdr.sequence > best_seq) {
+            best_seq    = hdr.sequence;
+            best_sector = s;
+        }
+    }
+
+    /* Restore state from found sector */
+    uint32_t addr = best_sector * LOG_SECTOR_SIZE;
+    qspi_read_data(addr, (uint8_t*)&hdr, sizeof(hdr));
+    current_sector = best_sector;
+    current_seq    = hdr.sequence;
+    current_rec    = hdr.record_count;
+
+    printf("Resume: sector=%lu seq=%lu rec=%u\r\n",
+           best_sector, best_seq, current_rec);
+    return best_sector;
+}
+
+/* Write one 64-byte record to the circular log */
+HAL_StatusTypeDef circular_log_write(const uint8_t *record)
+{
+    /* If current sector is full, advance to next sector */
+    if (current_rec >= LOG_RECS_PER_SEC) {
+        current_sector = (current_sector + 1) % LOG_SECTOR_COUNT;
+        current_seq++;
+        current_rec = 0;
+
+        /* Erase new sector */
+        uint32_t erase_addr = current_sector * LOG_SECTOR_SIZE;
+        if (qspi_sector_erase(erase_addr) != HAL_OK) {
+            return HAL_ERROR;
+        }
+
+        /* Write sector header */
+        LogSectorHeader hdr = {
+            .magic        = LOG_MAGIC,
+            .sequence     = current_seq,
+            .record_count = 0,
+            .header_crc   = 0  /* TODO: compute CRC-16 */
+        };
+        qspi_page_program(erase_addr,
+                          (uint8_t*)&hdr, sizeof(hdr));
+    }
+
+    /* Calculate address of this record within the sector */
+    uint32_t rec_addr = (current_sector * LOG_SECTOR_SIZE)
+                      + LOG_HEADER_SIZE
+                      + (current_rec * LOG_RECORD_SIZE);
+
+    /* Program the record */
+    HAL_StatusTypeDef ret =
+        qspi_page_program(rec_addr, record, LOG_RECORD_SIZE);
+    if (ret != HAL_OK) return ret;
+
+    /* Update record count in sector header */
+    current_rec++;
+    uint16_t count = current_rec;
+    uint32_t count_addr = (current_sector * LOG_SECTOR_SIZE)
+                         + offsetof(LogSectorHeader, record_count);
+    /* NOR flash bits can only be cleared (0); incrementing count
+     * requires a full sector erase — use a dedicated count page or
+     * bitfield scheme in production. This simplified version assumes
+     * the count field is written only once per sector. */
+
+    return HAL_OK;
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 7 — FATFS ON QSPI FLASH
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="fatfs-qspi" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-layer-group me-2 text-teal"></i>FatFS on QSPI Flash</h2>
+
+                    <p>For applications that need a proper filesystem on QSPI NOR flash — rather than the custom circular log above — there are two practical options:</p>
+
+                    <h3>LittleFS (Recommended for NOR Flash)</h3>
+                    <p>LittleFS is an open-source embedded filesystem designed specifically for NOR flash by ARM Research. It provides:</p>
+                    <ul>
+                        <li><strong>Built-in wear levelling:</strong> Dynamic wear-levelling distributes erasures automatically without any application-level sector management.</li>
+                        <li><strong>Power-loss resilience:</strong> Copy-on-write (COW) metadata updates guarantee filesystem consistency even on sudden power loss.</li>
+                        <li><strong>Small footprint:</strong> ~4 KB RAM, configurable block size, works with 4 KB NOR sectors.</li>
+                        <li><strong>Simple port:</strong> Provide four function pointers (read, prog, erase, sync) pointing to your QSPI driver — that's the entire HAL layer.</li>
+                    </ul>
+
+                    <p>The LittleFS port to QSPI requires mapping five function pointers in the <code>lfs_config</code> structure:</p>
+                    <ul>
+                        <li><code>lfs_cfg.read</code> → <code>qspi_read_data()</code></li>
+                        <li><code>lfs_cfg.prog</code> → <code>qspi_page_program()</code></li>
+                        <li><code>lfs_cfg.erase</code> → <code>qspi_sector_erase()</code></li>
+                        <li><code>lfs_cfg.sync</code> → a no-op for NOR flash (no write buffer to flush)</li>
+                        <li><code>lfs_cfg.read_size</code> / <code>prog_size</code> / <code>block_size</code> = 256 / 256 / 4096</li>
+                    </ul>
+
+                    <h3>FATFS Diskio Layer on QSPI</h3>
+                    <p>If you need FAT compatibility (files readable by a PC after extraction, or compatibility with existing FATFS-based code), you can implement the FATFS <code>diskio</code> layer on top of your QSPI driver. The key consideration is that FATFS does not understand NOR flash erase semantics — a sector write always requires erase-then-program. The <code>disk_write()</code> implementation must:</p>
+                    <ol>
+                        <li>Read the 4 KB NOR sector into a RAM buffer.</li>
+                        <li>Modify the 512-byte FATFS logical sector within that buffer.</li>
+                        <li>Erase the 4 KB NOR sector.</li>
+                        <li>Re-program all 4 KB from the RAM buffer.</li>
+                    </ol>
+                    <p>This read-modify-erase-write cycle requires 4 KB of RAM for the sector buffer and inflicts one extra erase per FATFS sector write. For small NOR flash devices used as configuration storage (not bulk logging), this is acceptable. For high-write applications, LittleFS or the custom circular log is preferable.</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Choosing the Right Approach:</strong> Use SD card + FATFS for large files and PC interoperability. Use LittleFS on QSPI for wear-safe embedded storage. Use the circular log for high-throughput, fixed-size records. Use FATFS on QSPI only when you specifically need FAT compatibility on NOR flash and writes are infrequent.
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 8 — EXERCISES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="exercises" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-dumbbell me-2 text-teal"></i>Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 1</span>
+                            <span class="badge bg-success text-white ms-2">Beginner</span>
+                        </div>
+                        <h4>Mount an SD Card and Read/Write a File</h4>
+                        <p>Mount a FAT32 microSD card using SDMMC (4-bit mode). Create a file called <code>test.txt</code>, write the string <code>"Hello SD Card!"</code>, close the file, re-open it for reading, read it back, and print the contents over UART. Use <code>f_getfree()</code> to display the available space in megabytes. Verify the file is visible on a PC when the card is removed and inserted into a card reader.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">FATFS</span>
+                            <span class="bias-tag">SDMMC</span>
+                            <span class="bias-tag">f_open</span>
+                            <span class="bias-tag">f_getfree</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 2</span>
+                            <span class="badge bg-warning text-dark ms-2">Intermediate</span>
+                        </div>
+                        <h4>Triggered High-Rate Datalogger</h4>
+                        <p>Build a triggered datalogger. On the first button press, start recording ADC readings at 10 kHz to an SD card file (<code>adc_log.bin</code>), using DMA-driven ADC and a double-buffer scheme so that writing to the SD card does not interrupt the ADC stream. On the second button press, stop recording and close the file. Compute and store a CRC32 checksum of the entire file in the last 4 bytes. Verify the file and checksum integrity with a Python script on a PC.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">DMA Double Buffer</span>
+                            <span class="bias-tag">ADC 10 kHz</span>
+                            <span class="bias-tag">CRC32</span>
+                            <span class="bias-tag">Python Verification</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 3</span>
+                            <span class="badge bg-danger text-white ms-2">Advanced</span>
+                        </div>
+                        <h4>Power-Loss–Safe Circular QSPI Log</h4>
+                        <p>Connect a W25Q128JV QSPI flash. Implement the wear-levelled circular log from Section 6, extended with: (a) CRC-16 over the sector header to detect partial writes, (b) a sector sequence that wraps correctly at sector 127 → 0, and (c) a verified power-loss test: power-cycle the STM32 mid-write (pull VDD while writing sector header), then verify on restart that no records are missing and the next write continues from the correct position. Log sensor data + RTC timestamp in each 64-byte record. Verify 10,000 records written and read back correctly with zero corruption.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">QSPI</span>
+                            <span class="bias-tag">Wear Levelling</span>
+                            <span class="bias-tag">CRC-16</span>
+                            <span class="bias-tag">Power-Loss Safe</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 9 — CANVAS FORM: STORAGE CONFIGURATION TOOL
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="storage-config-tool" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-file-alt me-2 text-teal"></i>STM32 Storage Configuration Tool</h2>
+
+                    <p>Use this tool to document your external storage design — storage type selection, SD card bus configuration, QSPI chip details, FATFS settings, and wear-levelling strategy. Download as Word, Excel, PDF, or PPTX for project documentation or design review.</p>
+
+                    <div class="canvas-form" id="stm32StorageForm">
+                        <h4 class="canvas-form-title"><i class="fas fa-hdd me-2"></i>STM32 Storage Configuration Generator</h4>
+                        <p class="form-help-text">Document your external storage design — SD card, QSPI flash, FATFS settings, and wear-levelling strategy. Download as Word, Excel, PDF, or PPTX.</p>
+                        <div id="stm32StorageBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <p class="form-privacy-notice"><i class="fas fa-shield-alt"></i> All data stays in your browser. Nothing is sent to or stored on any server.</p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32StorageProjName">Project Name *</label>
+                                <input type="text" id="stm32StorageProjName" placeholder="e.g., Industrial Data Recorder v2.0">
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32StorageType">Storage Type *</label>
+                                <select id="stm32StorageType">
+                                    <option value="">Select storage type...</option>
+                                    <option value="SD Card (SDMMC)">SD Card (SDMMC)</option>
+                                    <option value="SD Card (SPI)">SD Card (SPI)</option>
+                                    <option value="QSPI NOR Flash">QSPI NOR Flash</option>
+                                    <option value="OctoSPI Flash">OctoSPI Flash</option>
+                                    <option value="SD+QSPI">SD + QSPI (Combined)</option>
+                                    <option value="EEPROM">EEPROM (I2C/SPI)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32SdConfig">SD Card Configuration</label>
+                                <input type="text" id="stm32SdConfig" placeholder="SD card — bus width, clock, FATFS version">
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32QspiChip">QSPI Flash Chip</label>
+                                <input type="text" id="stm32QspiChip" placeholder="QSPI Flash chip model, e.g. W25Q128JV">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32FatfsConfig">FATFS Configuration</label>
+                                <textarea id="stm32FatfsConfig" rows="4" placeholder="FATFS config — cluster size, sector size, disk size, features enabled"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32WearConfig">Wear-Levelling Strategy</label>
+                                <textarea id="stm32WearConfig" rows="3" placeholder="Wear levelling — strategy, sector count, cycle budget"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label for="stm32StorageNotes">Design Notes</label>
+                                <textarea id="stm32StorageNotes" rows="3" placeholder="Design Notes"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="stm32StorageHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="stm32StorageHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="stm32StorageHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-generate" onclick="stm32StorageHandler.generatePPTX()"><i class="fas fa-file-powerpoint me-1"></i>PPTX</button>
+                            <button class="btn-reset" onclick="stm32StorageHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="stm32StorageSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="stm32StorageSuccessText"></span></div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 10 — CONCLUSION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="conclusion" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion &amp; Next Steps</h2>
+
+                    <p>In this article we have built a complete toolkit for STM32 external storage:</p>
+                    <ul>
+                        <li><strong>Storage landscape:</strong> The seven major external storage options — microSD (SDMMC/SPI), SPI NOR flash, QSPI NOR flash, OctoSPI flash, SPI NAND, and I2C EEPROM — were compared across capacity, interface speed, write/erase granularity, endurance, XIP capability, and cost. Choose based on your application's read/write pattern, not just capacity.</li>
+                        <li><strong>SDMMC + FATFS:</strong> The SDMMC peripheral with 4-bit DMA gives ~12 MB/s throughput. FATFS provides a robust FAT32/exFAT layer with a POSIX-like API. The combination is ideal for field-deployable data loggers where SD cards are removed for PC-side analysis.</li>
+                        <li><strong>FATFS file operations:</strong> Mastering open flags, error codes, <code>f_sync()</code> for power-loss safety, and <code>f_getfree()</code> for capacity monitoring transforms your code from a demo into a production-quality logger.</li>
+                        <li><strong>QSPI NOR flash driver:</strong> The <code>HAL_QSPI_Command</code> / <code>HAL_QSPI_Transmit</code> / <code>HAL_QSPI_Receive</code> trio drives the complete W25Q128JV command set. Auto-polling for the BUSY bit eliminates CPU-blocking spin loops.</li>
+                        <li><strong>XIP memory-mapped mode:</strong> <code>HAL_QSPI_MemoryMapped()</code> maps 16 MB of NOR flash to the CPU's address space, enabling direct pointer access to lookup tables, font data, audio assets, and even executable code without explicit read commands.</li>
+                        <li><strong>Wear-levelled circular log:</strong> Distributing erase cycles across N sectors via a sequence-number ring extends NOR flash lifetime from hours to decades. Sector headers with magic words and sequence numbers enable instant power-on resume without a full scan.</li>
+                        <li><strong>Filesystem selection:</strong> LittleFS is the right choice for a proper filesystem on NOR flash — built-in wear levelling, power-loss safety, and a compact footprint make it the industry standard for embedded non-volatile storage.</li>
+                    </ul>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="stm32-hal-part17-ethernet-tcpip.html"><strong>Part 17: Ethernet &amp; TCP/IP Stack</strong></a>, we will wire up an external Ethernet PHY (LAN8720A), integrate LwIP, configure DHCP, build a UDP telemetry sender, implement a TCP server and HTTP endpoint, and publish sensor data over MQTT — transforming your STM32 into a fully networked embedded node.</p>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 17: Ethernet &amp; TCP/IP Stack</h5>
+                            <p>LwIP integration, DHCP client, UDP telemetry, TCP server, HTTP endpoint, and MQTT sensor publishing on STM32.</p>
+                            <a href="stm32-hal-part17-ethernet-tcpip.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 15: Bootloader Development</h5>
+                            <p>Custom IAP bootloader over UART and USB DFU, flash programming, image validation, and jump-to-application sequences.</p>
+                            <a href="stm32-hal-part15-bootloader.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 8: DMA &amp; Memory Efficiency</h5>
+                            <p>DMA streams, circular buffer mode, memory-to-memory transfers, and zero-copy data pipelines for high-throughput peripherals.</p>
+                            <a href="stm32-hal-part08-dma-memory.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div><!-- end col-lg-8 -->
+            </div><!-- end row -->
+        </div><!-- end container -->
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> |
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> |
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? &#9749; <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Document Generation -->
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-stm32-hal.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- STM32 Storage Configuration Form Handler -->
+    <script>
+        var stm32StoragePersistence = new FormPersistence('stm32-p16-storage-draft', {
+            'stm32StorageProjName': 'projectName',
+            'stm32StorageType':     'storageType',
+            'stm32SdConfig':        'sdConfig',
+            'stm32QspiChip':        'qspiChip',
+            'stm32FatfsConfig':     'fatfsConfig',
+            'stm32WearConfig':      'wearConfig',
+            'stm32StorageNotes':    'notes'
+        }, 'stm32StorageBadge');
+
+        var stm32StorageHandler = new CanvasFormHandler({
+            formId:         'stm32StorageForm',
+            successId:      'stm32StorageSuccess',
+            successTextId:  'stm32StorageSuccessText',
+            persistence:    stm32StoragePersistence,
+            filenameField:  'projectName',
+            filenameSuffix: '-stm32-storage-config',
+            requiredFields: ['stm32StorageProjName', 'stm32StorageType'],
+            requiredMessage:'Please enter a Project Name and Storage Type.',
+            docType:        'Stm32StorageConfig'
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            stm32StoragePersistence.init();
+        });
+    </script>
+
+</body>
+</html>

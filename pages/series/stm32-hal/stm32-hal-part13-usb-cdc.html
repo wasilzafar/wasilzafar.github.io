@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Implement STM32 USB CDC Virtual COM Port — enumerate as USB serial device, implement bulk transfers, handle control requests, and build a reliable PC-to-MCU command interface. Part 13 of 18." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="STM32, USB CDC, Virtual COM Port, USB OTG, HAL, embedded systems, USB enumeration, bulk transfer, STM32F4" />
+    <meta property="og:title" content="STM32 USB CDC Virtual COM Port — STM32 Unleashed Series Part 13" />
+    <meta property="og:description" content="Turn your STM32 into a USB serial device — understand USB enumeration, implement CDC bulk data transfers, handle baud-rate change callbacks, and build a virtual COM port that works reliably at maximum USB FS throughput." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-03-31" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>STM32 USB CDC Virtual COM Port — STM32 Unleashed Series Part 13 - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/stm32-hal/stm32-hal-part13-usb-cdc.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting (6 themes) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Document Generation Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'ad_user_data': 'granted',
+            'ad_personalization': 'granted',
+            'analytics_storage': 'granted'
+        });
+
+        gtag('set', 'url_passthrough', true);
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+            var f = d.getElementsByTagName(s)[0],
+                j = d.createElement(s),
+                dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript>
+        <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe>
+    </noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking &ldquo;Accept All&rdquo;, you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14">
+                        <path fill="currentColor" d="M487.4 315.7l-42.6-24.6c4.3-23.2 4.3-47 0-70.2l42.6-24.6c4.9-2.8 7.1-8.6 5.5-14-11.1-35.6-30-67.8-54.7-94.6-3.8-4.1-10-5.1-14.8-2.3L380.8 110c-17.9-15.4-38.5-27.3-60.8-35.1V25.8c0-5.6-3.9-10.5-9.4-11.7-36.7-8.2-74.3-7.8-109.2 0-5.5 1.2-9.4 6.1-9.4 11.7V75c-22.2 7.9-42.8 19.8-60.8 35.1L88.7 85.5c-4.9-2.8-11-1.9-14.8 2.3-24.7 26.7-43.6 58.9-54.7 94.6-1.7 5.4.6 11.2 5.5 14L67.3 221c-4.3 23.2-4.3 47 0 70.2l-42.6 24.6c-4.9 2.8-7.1 8.6-5.5 14 11.1 35.6 30 67.8 54.7 94.6 3.8 4.1 10 5.1 14.8 2.3l42.6-24.6c17.9 15.4 38.5 27.3 60.8 35.1v49.2c0 5.6 3.9 10.5 9.4 11.7 36.7 8.2 74.3 7.8 109.2 0 5.5-1.2 9.4-6.1 9.4-11.7v-49.2c22.2-7.9 42.8-19.8 60.8-35.1l42.6 24.6c4.9 2.8 11 1.9 14.8-2.3 24.7-26.7 43.6-58.9 54.7-94.6 1.5-5.5-.7-11.3-5.6-14.1zM256 336c-44.1 0-80-35.9-80-80s35.9-80 80-80 80 35.9 80 80-35.9 80-80 80z"></path>
+                    </svg>
+                    <span style="margin-left: 5px; font-size: 12px; font-weight: 600; color: var(--color-navy);">Customize Settings</span>
+                </div>
+                <div id="cookieTypes" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(59, 151, 151, 0.2);">
+                    <h5 style="font-size: 12px; font-weight: 700; color: var(--color-navy); margin-bottom: 10px; text-transform: uppercase;">Cookie Preferences</h5>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" checked disabled style="margin-top: 2px; margin-right: 8px; cursor: not-allowed;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Essential Cookies (Required)</strong>
+                                <span style="font-size: 12px; color: #666;">Necessary for the website to function properly.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="analyticsCookies" checked style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Analytics Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Help us understand how you interact with the website.</span>
+                            </div>
+                        </label>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: flex; align-items: start; cursor: pointer;">
+                            <input type="checkbox" id="marketingCookies" style="margin-top: 2px; margin-right: 8px;">
+                            <div>
+                                <strong style="font-size: 13px; color: var(--color-navy); display: block; margin-bottom: 2px;">Marketing Cookies</strong>
+                                <span style="font-size: 12px; color: #666;">Used to deliver relevant advertisements.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept" style="background: var(--color-teal); color: white; font-weight: 600;">Accept All</button>
+                <button id="cookieReject" style="background: transparent; color: var(--color-navy); border: 2px solid var(--color-teal); font-weight: 600;">Reject All</button>
+                <button id="cookieSave" style="background: var(--color-blue); color: white; font-weight: 600; display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <span class="gradient-text">Wasil Zafar</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#skills">Skills</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#certifications">Certifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/#interests">Interests</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="/pages/categories/technology.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Technology
+                </a>
+                <h1 class="display-4 fw-bold mb-3">STM32 Part 13: USB CDC Virtual COM Port</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>March 31, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>26 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+                <p class="lead">Turn your STM32 into a USB serial device — understand USB enumeration, implement CDC bulk data transfers, handle baud-rate change callbacks, and build a virtual COM port that works reliably at maximum USB FS throughput.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li><a href="#usb-fundamentals" onclick="closeNav()">USB Fundamentals for STM32</a></li>
+            <li><a href="#cdc-architecture" onclick="closeNav()">CDC Class Architecture</a></li>
+            <li><a href="#usb-cdc-transmit" onclick="closeNav()">USB CDC Transmit</a></li>
+            <li><a href="#usb-cdc-receive" onclick="closeNav()">USB CDC Receive</a></li>
+            <li><a href="#control-requests" onclick="closeNav()">Control Requests &amp; Baud Rate Change</a></li>
+            <li><a href="#uart-bridge" onclick="closeNav()">USB CDC as UART Bridge</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#usb-config-tool" onclick="closeNav()">USB Config Tool</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 1 — USB FUNDAMENTALS (first section: no mt-5)
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="usb-fundamentals" class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Series Overview:</strong> This is Part 13 of our 18-part STM32 Unleashed series. We implement a complete USB CDC Virtual COM Port — from USB enumeration and descriptor configuration through bulk data transfer, control request handling, and a production-quality UART-to-USB bridge.
+                    </div>
+
+                    <!-- Series Navigation Path -->
+                    <div class="series-nav-path">
+                        <div class="sn-header">
+                            <div class="path-icon"><i class="fas fa-microchip"></i></div>
+                            <h4>STM32 Unleashed: HAL Driver Development</h4>
+                            <div class="path-subtitle">Your 18-step learning path &bull; Currently on Step 13</div>
+                        </div>
+                        <div class="path-steps">
+                            <a href="stm32-hal-part01-architecture-cubemx.html" class="step-card completed">
+                                <div class="step-num completed">1</div>
+                                <div class="step-info"><h6>Architecture &amp; CubeMX Setup</h6><small>STM32 family, clock tree, HAL vs LL, CubeMX workflow, first project</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part02-gpio-debounce.html" class="step-card completed">
+                                <div class="step-num completed">2</div>
+                                <div class="step-info"><h6>GPIO &amp; Button Debounce</h6><small>GPIO modes, pull-up/down, EXTI, software debounce, HAL_GPIO_ReadPin</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part03-uart-communication.html" class="step-card completed">
+                                <div class="step-num completed">3</div>
+                                <div class="step-info"><h6>UART Communication</h6><small>Polling, interrupt, DMA modes, printf retargeting, ring buffers</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part04-timers-pwm.html" class="step-card completed">
+                                <div class="step-num completed">4</div>
+                                <div class="step-info"><h6>Timers, PWM &amp; Input Capture</h6><small>TIM basics, PWM generation, input capture, encoder mode</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part05-adc-dac.html" class="step-card completed">
+                                <div class="step-num completed">5</div>
+                                <div class="step-info"><h6>ADC &amp; DAC</h6><small>Single/continuous conversion, DMA, injected channels, DAC waveforms</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part06-spi-protocol.html" class="step-card completed">
+                                <div class="step-num completed">6</div>
+                                <div class="step-info"><h6>SPI Protocol</h6><small>SPI master/slave, full-duplex, DMA transfers, sensor drivers</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part07-i2c-protocol.html" class="step-card completed">
+                                <div class="step-num completed">7</div>
+                                <div class="step-info"><h6>I2C Protocol</h6><small>I2C master, 7/10-bit addressing, DMA, multi-master, error handling</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part08-dma-memory.html" class="step-card completed">
+                                <div class="step-num completed">8</div>
+                                <div class="step-info"><h6>DMA &amp; Memory Efficiency</h6><small>DMA streams, circular mode, memory-to-memory, zero-copy patterns</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part09-interrupts-nvic.html" class="step-card completed">
+                                <div class="step-num completed">9</div>
+                                <div class="step-info"><h6>Interrupt Management &amp; NVIC</h6><small>Priority grouping, preemption, ISR design, HAL callbacks, latency</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part10-low-power.html" class="step-card completed">
+                                <div class="step-num completed">10</div>
+                                <div class="step-info"><h6>Low-Power Modes</h6><small>Sleep, Stop, Standby modes, RTC wakeup, LP UART, power profiling</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part11-rtc-calendar.html" class="step-card completed">
+                                <div class="step-num completed">11</div>
+                                <div class="step-info"><h6>RTC &amp; Calendar</h6><small>RTC configuration, alarms, backup registers, calendar subseconds</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <a href="stm32-hal-part12-can-bus.html" class="step-card completed">
+                                <div class="step-num completed">12</div>
+                                <div class="step-info"><h6>CAN Bus</h6><small>FDCAN/bxCAN, filters, message frames, error handling, automotive use</small></div>
+                                <span class="step-badge completed"><i class="fas fa-check me-1"></i>Completed</span>
+                            </a>
+                            <div class="step-card current">
+                                <div class="step-num active">13</div>
+                                <div class="step-info"><h6>USB CDC Virtual COM Port</h6><small>USB FS/HS, CDC class, virtual serial, control transfers, descriptors</small></div>
+                                <span class="step-badge you-are-here"><i class="fas fa-map-marker-alt me-1"></i>You Are Here</span>
+                            </div>
+                            <a href="stm32-hal-part14-freertos.html" class="step-card">
+                                <div class="step-num upcoming">14</div>
+                                <div class="step-info"><h6>FreeRTOS Integration</h6><small>Tasks, queues, semaphores, mutexes, CMSIS-RTOS2 wrapper, stack sizing</small></div>
+                            </a>
+                            <a href="stm32-hal-part15-bootloader.html" class="step-card">
+                                <div class="step-num upcoming">15</div>
+                                <div class="step-info"><h6>Bootloader Development</h6><small>Custom IAP bootloader, UART/USB DFU, flash programming, jump-to-app</small></div>
+                            </a>
+                            <a href="stm32-hal-part16-external-storage.html" class="step-card">
+                                <div class="step-num upcoming">16</div>
+                                <div class="step-info"><h6>External Storage: SD &amp; QSPI Flash</h6><small>FATFS on SD card, QSPI NOR flash, memory-mapped execution, wear levelling</small></div>
+                            </a>
+                            <a href="stm32-hal-part17-ethernet-tcpip.html" class="step-card">
+                                <div class="step-num upcoming">17</div>
+                                <div class="step-info"><h6>Ethernet &amp; TCP/IP Stack</h6><small>LwIP integration, DHCP, TCP server, HTTP, MQTT, Ethernet DMA descriptors</small></div>
+                            </a>
+                            <a href="stm32-hal-part18-production-readiness.html" class="step-card">
+                                <div class="step-num upcoming">18</div>
+                                <div class="step-info"><h6>Production Readiness</h6><small>Watchdog, HardFault handler, flash option bytes, code signing, CI/CD</small></div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <h2><i class="fas fa-usb me-2 text-teal"></i>USB Fundamentals for STM32</h2>
+
+                    <p>USB (Universal Serial Bus) is a host-controlled, polled bus. Unlike CAN or UART where nodes can transmit at will, USB devices <em>never</em> initiate communication — they can only respond to host requests. Every data transfer on the bus is initiated by the host controller inside the PC, and the device answers within a strict time window. Understanding this host-centric model is essential before writing a single line of USB firmware.</p>
+
+                    <p>STM32 devices expose USB in two forms. <strong>USB Full Speed (FS, 12 Mbit/s)</strong> is available on virtually all mid-range STM32 devices as either a standalone USB FS peripheral (STM32F0/G0/L0) or as part of the OTG_FS core (STM32F4/F7/H7). <strong>USB High Speed (HS, 480 Mbit/s)</strong> requires the OTG_HS core plus an external ULPI PHY or internal FS PHY (limited to 12 Mbit/s despite the HS core name). For CDC applications, FS at 12 Mbit/s provides more than enough bandwidth — the practical throughput ceiling is determined by CDC protocol overhead and PC driver behaviour, not the raw link speed.</p>
+
+                    <h3>USB Descriptor Hierarchy</h3>
+                    <p>USB descriptors form a hierarchical configuration tree that the host reads during enumeration. The STM32 USB middleware (located in <code>Middlewares/ST/STM32_USB_Device_Library/</code>) provides default CDC descriptors that you can customise in <code>usbd_desc.c</code> — primarily the VID/PID, manufacturer string, product string, and serial number.</p>
+
+                    <ul>
+                        <li><strong>Device Descriptor</strong> — USB version, class codes, max packet size, VID/PID, number of configurations.</li>
+                        <li><strong>Configuration Descriptor</strong> — total length, number of interfaces, power source, maximum current draw.</li>
+                        <li><strong>Interface Descriptor</strong> — CDC uses two interfaces: Control Interface (class 0x02) and Data Interface (class 0x0A).</li>
+                        <li><strong>Endpoint Descriptor</strong> — CDC Data Interface has Bulk IN (device to host) and Bulk OUT (host to device) at 64 bytes max packet size for FS.</li>
+                        <li><strong>String Descriptors</strong> — language ID (0x0409 for English), manufacturer, product, serial. These appear in Device Manager and <code>/dev/</code> listings.</li>
+                    </ul>
+
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>USB Transfer Type</th>
+                                <th>Max Packet Size (FS)</th>
+                                <th>Guaranteed Timing</th>
+                                <th>Typical Use in CDC</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Control</strong></td>
+                                <td>8–64 bytes</td>
+                                <td>Yes (&le;10 ms)</td>
+                                <td>Enumeration, SET_LINE_CODING, GET_LINE_CODING</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Bulk IN</strong></td>
+                                <td>64 bytes</td>
+                                <td>No (best effort)</td>
+                                <td>Device → PC data (CDC_Transmit_FS)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Bulk OUT</strong></td>
+                                <td>64 bytes</td>
+                                <td>No (best effort)</td>
+                                <td>PC → device data (CDC_Receive_FS)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Interrupt</strong></td>
+                                <td>64 bytes</td>
+                                <td>Yes (per frame)</td>
+                                <td>CDC notification endpoint (serial state)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Isochronous</strong></td>
+                                <td>1023 bytes</td>
+                                <td>Yes (per frame)</td>
+                                <td>Not used in CDC</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p>The USB enumeration sequence — bus reset, get device descriptor, set address, get full configuration descriptor, set configuration — happens automatically when the device connects. The STM32 USB stack handles all of this internally. Your application code starts running as soon as <code>USBD_CDC_SetTxBuffer</code> and <code>CDC_Receive_FS</code> are available, which occurs after the host sends <code>SET_CONFIGURATION</code>.</p>
+
+                    <pre><code class="language-c">/* USB CDC device initialisation — called from main() after clock setup
+ * File: usb_device.c (CubeMX-generated, add to USER CODE sections)
+ */
+#include "usb_device.h"
+#include "usbd_core.h"
+#include "usbd_desc.h"
+#include "usbd_cdc.h"
+#include "usbd_cdc_if.h"
+
+USBD_HandleTypeDef hUsbDeviceFS;
+
+void MX_USB_DEVICE_Init(void)
+{
+    /* Initialise device library with Full Speed core */
+    if (USBD_Init(&hUsbDeviceFS, &FS_Desc, DEVICE_FS) != USBD_OK)
+    {
+        Error_Handler();
+    }
+
+    /* Register CDC class */
+    if (USBD_RegisterClass(&hUsbDeviceFS, &USBD_CDC) != USBD_OK)
+    {
+        Error_Handler();
+    }
+
+    /* Register CDC interface callbacks (usbd_cdc_if.c) */
+    if (USBD_CDC_RegisterInterface(&hUsbDeviceFS, &USBD_Interface_fops_FS)
+        != USBD_OK)
+    {
+        Error_Handler();
+    }
+
+    /* Connect to host — pull D+ high via internal pull-up */
+    USBD_Start(&hUsbDeviceFS);
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 2 — CDC CLASS ARCHITECTURE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="cdc-architecture" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-layer-group me-2 text-teal"></i>CDC Class Architecture</h2>
+
+                    <p>The <strong>CDC ACM</strong> (Communications Device Class — Abstract Control Model) is the USB class that makes an STM32 appear as a virtual COM port on the host. The OS loads a standard CDC driver (built into Windows 10+, Linux, and macOS) without requiring any custom driver installation — one of CDC's greatest practical advantages over custom HID or vendor-class implementations.</p>
+
+                    <p>The CDC class uses <strong>two USB interfaces</strong>:</p>
+                    <ul>
+                        <li><strong>Control Interface</strong> (Interface 0): carries management traffic over an Interrupt IN endpoint — serial state notifications, flow control signals, and modem emulation. Most applications never need to actively use this endpoint.</li>
+                        <li><strong>Data Interface</strong> (Interface 1): the actual data path — Bulk IN (EP1 IN, STM32 to PC) and Bulk OUT (EP1 OUT, PC to STM32) endpoints, each 64 bytes maximum for FS.</li>
+                    </ul>
+
+                    <p>In CubeMX-generated code, the file <code>USB_DEVICE/App/usbd_cdc_if.c</code> is where your application logic lives. It contains three stub functions you must implement:</p>
+                    <ul>
+                        <li><code>CDC_Init_FS</code> — called when USB is configured; set up RX buffers here.</li>
+                        <li><code>CDC_DeInit_FS</code> — called on disconnect; release resources.</li>
+                        <li><code>CDC_Control_FS</code> — handles control requests (SET_LINE_CODING, DTR/RTS signals).</li>
+                        <li><code>CDC_Receive_FS</code> — called from USB interrupt when an OUT packet arrives; copy data and call <code>USBD_CDC_ReceivePacket</code> to re-arm.</li>
+                    </ul>
+
+                    <p>TX is handled from any context by calling <code>CDC_Transmit_FS(buf, len)</code>, which internally calls <code>USBD_CDC_SetTxBuffer</code> + <code>USBD_CDC_TransmitPacket</code>. The critical constraint: you must not call <code>CDC_Transmit_FS</code> while a previous transmission is still in progress — the TX busy flag must be checked first.</p>
+
+                    <pre><code class="language-c">/* usbd_cdc_if.c — core CDC callbacks
+ * Ring buffer for thread-safe delivery to main loop
+ */
+#include "usbd_cdc_if.h"
+#include "ring_buffer.h"
+
+#define APP_RX_RING_SIZE   512U
+#define APP_TX_BUF_SIZE    256U
+
+static uint8_t s_usbRxRingMem[APP_RX_RING_SIZE];
+static RingBuffer_t s_usbRxRing;
+static uint8_t s_usbRxPacketBuf[CDC_DATA_FS_MAX_PACKET_SIZE]; /* 64 bytes */
+
+/* Called when USB is successfully configured */
+static int8_t CDC_Init_FS(void)
+{
+    RingBuffer_Init(&s_usbRxRing, s_usbRxRingMem, sizeof(s_usbRxRingMem));
+    /* Point OUT endpoint buffer at our packet buffer */
+    USBD_CDC_SetRxBuffer(&hUsbDeviceFS, s_usbRxPacketBuf);
+    return USBD_OK;
+}
+
+/* Called from USB interrupt when an OUT packet arrives */
+static int8_t CDC_Receive_FS(uint8_t *Buf, uint32_t *Len)
+{
+    /* Copy received bytes into ring buffer (interrupt-safe) */
+    RingBuffer_WriteBlock(&s_usbRxRing, Buf, (uint16_t)*Len);
+
+    /* Re-arm OUT endpoint immediately so we do not NAK the next packet */
+    USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+    return USBD_OK;
+}
+
+/* Public helper — send up to 512 bytes over CDC with timeout */
+HAL_StatusTypeDef CDC_Transmit_FS_Safe(const uint8_t *buf, uint16_t len)
+{
+    USBD_CDC_HandleTypeDef *hcdc =
+        (USBD_CDC_HandleTypeDef *)hUsbDeviceFS.pClassData;
+
+    uint32_t tickStart = HAL_GetTick();
+    while (hcdc->TxState != 0)
+    {
+        if (HAL_GetTick() - tickStart > 10U) /* 10 ms timeout */
+        {
+            return HAL_TIMEOUT;
+        }
+    }
+    USBD_CDC_SetTxBuffer(&hUsbDeviceFS, (uint8_t *)buf, len);
+    USBD_CDC_TransmitPacket(&hUsbDeviceFS);
+    return HAL_OK;
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 3 — USB CDC TRANSMIT
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="usb-cdc-transmit" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-paper-plane me-2 text-teal"></i>USB CDC Transmit</h2>
+
+                    <p>The STM32 USB stack handles fragmentation of data larger than 64 bytes automatically — you pass a pointer to your complete buffer and the stack schedules multiple USB transactions as needed. However, the transmit path is <em>not re-entrant</em>: while the stack is transmitting one buffer, calling <code>USBD_CDC_TransmitPacket</code> again will silently fail or corrupt state. Always check <code>TxState</code> first.</p>
+
+                    <p>A <strong>zero-length packet (ZLP)</strong> is required when the transmitted length is an exact multiple of 64. Without it, the host may wait indefinitely for more data because it cannot distinguish between "64 bytes arrived, more coming" and "64 bytes arrived, transfer complete". The ST CDC middleware handles ZLPs automatically when the total transfer length is a multiple of max packet size — verify this in your BSP version.</p>
+
+                    <p>For debug logging and human-readable output, a <code>cdc_printf</code> wrapper is far more convenient than manually marshalling buffers. The key is to format into a local stack buffer of adequate size, then pass it to the transmit function with the busy check integrated.</p>
+
+                    <pre><code class="language-c">/* cdc_printf — printf-style helper for USB CDC output
+ * Safe to call from main loop context only (not from USB ISR).
+ */
+#include &lt;stdarg.h&gt;
+#include &lt;stdio.h&gt;
+
+#define CDC_PRINTF_BUF_SIZE  256U
+
+int cdc_printf(const char *fmt, ...)
+{
+    static uint8_t s_txBuf[CDC_PRINTF_BUF_SIZE];
+    va_list args;
+    va_start(args, fmt);
+    int n = vsnprintf((char *)s_txBuf, sizeof(s_txBuf), fmt, args);
+    va_end(args);
+
+    if (n &lt;= 0) return n;
+
+    /* Clamp to buffer size */
+    uint16_t len = (n &lt; (int)sizeof(s_txBuf)) ? (uint16_t)n
+                                               : (uint16_t)(sizeof(s_txBuf) - 1);
+
+    /* Check USB is actually connected and configured */
+    if (hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED)
+    {
+        return -1;
+    }
+
+    USBD_CDC_HandleTypeDef *hcdc =
+        (USBD_CDC_HandleTypeDef *)hUsbDeviceFS.pClassData;
+
+    uint32_t t0 = HAL_GetTick();
+    while (hcdc->TxState != 0)
+    {
+        if (HAL_GetTick() - t0 > 5U) return -1; /* timeout */
+    }
+
+    USBD_CDC_SetTxBuffer(&hUsbDeviceFS, s_txBuf, len);
+    USBD_CDC_TransmitPacket(&hUsbDeviceFS);
+    return (int)len;
+}
+
+/* Example usage in main loop */
+void App_PrintStatus(uint32_t adcVal, float tempC)
+{
+    cdc_printf("{\"tick\":%lu,\"adc\":%lu,\"temp\":%.2f}\r\n",
+               HAL_GetTick(), adcVal, (double)tempC);
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 4 — USB CDC RECEIVE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="usb-cdc-receive" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-inbox me-2 text-teal"></i>USB CDC Receive</h2>
+
+                    <p>The CDC receive path has a subtle but critical ownership model. When the USB core delivers a packet, it calls <code>CDC_Receive_FS</code> from the USB interrupt handler with a pointer to the internal endpoint buffer and the byte count. Your callback has a <strong>very short window</strong> to copy the data before the buffer is reused — do not process commands inside the callback. Copy to a ring buffer, set a flag, or use a queue, then do all processing in the main loop.</p>
+
+                    <p>After copying, you <strong>must</strong> call <code>USBD_CDC_ReceivePacket(&hUsbDeviceFS)</code> to re-arm the OUT endpoint. If you forget this call, the USB host will receive a NAK for every subsequent OUT transaction and eventually consider the device stalled. This is the most common CDC receive bug in production code.</p>
+
+                    <p>The USB callback is called from an ISR with a priority level controlled by <code>USB_OTG_FS_IRQn</code> in your NVIC configuration. If your ring buffer uses a critical section or a mutex, ensure the priority level is compatible. The safest pattern is a lock-free ring buffer with a power-of-2 size and separate head/tail indices, where the ISR writes and the main loop reads.</p>
+
+                    <pre><code class="language-c">/* Complete receive pipeline:
+ * USB ISR → ring buffer → main loop command processor
+ */
+
+/* --- main.c / app loop ------------------------------------------------ */
+#define CMD_LINE_MAX  128U
+
+static char s_cmdLine[CMD_LINE_MAX];
+static uint16_t s_cmdLen = 0;
+
+void App_ProcessUsbRx(void)
+{
+    uint8_t byte;
+
+    /* Drain ring buffer one byte at a time in main loop */
+    while (RingBuffer_ReadByte(&s_usbRxRing, &byte) == RING_OK)
+    {
+        if (byte == '\r' || byte == '\n')
+        {
+            if (s_cmdLen > 0)
+            {
+                s_cmdLine[s_cmdLen] = '\0';
+                App_ExecuteCommand(s_cmdLine, s_cmdLen);
+                s_cmdLen = 0;
+            }
+        }
+        else if (s_cmdLen < CMD_LINE_MAX - 1)
+        {
+            s_cmdLine[s_cmdLen++] = (char)byte;
+        }
+        /* else: overflow — discard byte */
+    }
+}
+
+/* Simple command interpreter */
+static void App_ExecuteCommand(const char *cmd, uint16_t len)
+{
+    (void)len;
+    if (strcmp(cmd, "led on") == 0)
+    {
+        HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+        cdc_printf("{\"status\":\"ok\",\"led\":\"on\"}\r\n");
+    }
+    else if (strcmp(cmd, "led off") == 0)
+    {
+        HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+        cdc_printf("{\"status\":\"ok\",\"led\":\"off\"}\r\n");
+    }
+    else if (strcmp(cmd, "version") == 0)
+    {
+        cdc_printf("{\"fw\":\"1.0.0\",\"build\":\"" __DATE__ "\"}\r\n");
+    }
+    else
+    {
+        cdc_printf("{\"status\":\"err\",\"msg\":\"unknown command\"}\r\n");
+    }
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 5 — CONTROL REQUESTS & BAUD RATE CHANGE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="control-requests" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-sliders-h me-2 text-teal"></i>Control Requests &amp; Baud Rate Change</h2>
+
+                    <p>The CDC ACM control interface handles a small set of class-specific requests defined in the CDC specification. The most important for firmware developers are:</p>
+
+                    <ul>
+                        <li><strong>SET_LINE_CODING (0x20)</strong>: the host sends the virtual COM port settings — baud rate (4 bytes), stop bits (1 byte: 0=1 stop, 1=1.5 stop, 2=2 stop), parity (1 byte: 0=none, 1=odd, 2=even), and data bits (1 byte: typically 8). Your <code>CDC_Control_FS</code> receives this and can reconfigure a physical UART to match if you are building a USB-UART bridge.</li>
+                        <li><strong>GET_LINE_CODING (0x21)</strong>: the host asks the device to report its current line coding. Reply with the same struct you stored from the last SET_LINE_CODING.</li>
+                        <li><strong>SET_CONTROL_LINE_STATE (0x22)</strong>: the host sets DTR (bit 0) and RTS (bit 1). DTR being set indicates the host application has opened the COM port. This is your connection-detection mechanism — when DTR goes high, the host is ready to receive data.</li>
+                    </ul>
+
+                    <p>A <strong>critical practical point</strong>: many USB-CDC firmware designs send data immediately after enumeration and are surprised that frames are lost. The correct approach is to wait for DTR to be asserted before transmitting — this guarantees the host application is listening.</p>
+
+                    <pre><code class="language-c">/* CDC_Control_FS — handle class-specific control requests
+ * Located in usbd_cdc_if.c, USER CODE section
+ */
+
+/* Line coding storage (persists between GET/SET pairs) */
+static uint8_t s_lineCoding[7] = {
+    0x00, 0xC2, 0x01, 0x00,  /* 115200 baud (little-endian) */
+    0x00,                     /* 1 stop bit                  */
+    0x00,                     /* no parity                   */
+    0x08                      /* 8 data bits                 */
+};
+static uint8_t s_dtrActive = 0;  /* Set when host opens the port */
+
+static int8_t CDC_Control_FS(uint8_t cmd, uint8_t *pbuf, uint16_t length)
+{
+    switch (cmd)
+    {
+        case CDC_SET_LINE_CODING:
+            /* Copy the 7-byte line coding structure from host */
+            memcpy(s_lineCoding, pbuf, sizeof(s_lineCoding));
+            {
+                /* Extract baud rate and reconfigure USART2 if bridging */
+                uint32_t baud = (uint32_t)pbuf[0]
+                              | ((uint32_t)pbuf[1] << 8)
+                              | ((uint32_t)pbuf[2] << 16)
+                              | ((uint32_t)pbuf[3] << 24);
+                if (baud >= 1200U && baud <= 3000000U)
+                {
+                    huart2.Init.BaudRate = baud;
+                    HAL_UART_Init(&huart2);
+                }
+            }
+            break;
+
+        case CDC_GET_LINE_CODING:
+            /* Reply with current line coding */
+            memcpy(pbuf, s_lineCoding, sizeof(s_lineCoding));
+            break;
+
+        case CDC_SET_CONTROL_LINE_STATE:
+            /* Bit 0 = DTR, Bit 1 = RTS */
+            s_dtrActive = (pbuf[0] & 0x01) ? 1 : 0;
+            break;
+
+        default:
+            break;
+    }
+    return USBD_OK;
+}
+
+/* Check from application code before sending data */
+uint8_t CDC_IsHostConnected(void)
+{
+    return (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED)
+           && s_dtrActive;
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 6 — USB CDC AS UART BRIDGE
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="uart-bridge" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-exchange-alt me-2 text-teal"></i>USB CDC as UART Bridge</h2>
+
+                    <p>A common application for STM32 USB CDC is a <strong>transparent UART bridge</strong> — the STM32 forwards USB data to a UART peripheral and vice versa. This replaces dedicated USB-UART chips (CP2102, CH340) with a software implementation that also allows baud rate changes under software control, custom flow control, and protocol sniffing.</p>
+
+                    <p>The critical design challenge is <strong>matching the two data rates</strong>. USB FS bulk transfer can burst at up to 12 Mbit/s but is frame-limited to 1 ms granularity — data arrives in 64-byte chunks every 1 ms at maximum. UART at 115200 baud produces ~11.5 kByte/s. You need ring buffers on both paths to absorb bursts and avoid dropped bytes.</p>
+
+                    <p>The recommended approach: use <strong>UART DMA in circular mode</strong> for the UART RX path (always receiving, never dropping characters), and copy from the DMA buffer to a ring buffer using a DMA half-complete/complete interrupt. The USB TX path drains the ring buffer periodically (every 1 ms via TIM6 or SysTick hook). USB RX data goes directly to UART TX via <code>HAL_UART_Transmit_DMA</code>.</p>
+
+                    <pre><code class="language-c">/* USB CDC &lt;-&gt; UART bridge implementation
+ * USB RX → UART TX (direct)
+ * UART RX (DMA circular) → ring buffer → USB TX (periodic flush)
+ */
+
+#define UART_DMA_BUF_SIZE    256U
+#define UART_RING_SIZE       512U
+#define USB_TX_FLUSH_MS      2U      /* Flush every 2 ms */
+
+static uint8_t s_uartDmaBuf[UART_DMA_BUF_SIZE];
+static uint8_t s_uartRingMem[UART_RING_SIZE];
+static RingBuffer_t s_uartRxRing;
+static uint16_t s_lastDmaPos = 0;
+
+void Bridge_Init(void)
+{
+    RingBuffer_Init(&s_uartRxRing, s_uartRingMem, sizeof(s_uartRingMem));
+    /* Start UART RX DMA in circular mode */
+    HAL_UART_Receive_DMA(&huart2, s_uartDmaBuf, UART_DMA_BUF_SIZE);
+}
+
+/* Called from SysTick or TIM6 every 1 ms */
+void Bridge_PollUartToUsb(void)
+{
+    /* Calculate how many new bytes DMA has written */
+    uint16_t head = (uint16_t)(UART_DMA_BUF_SIZE
+                    - __HAL_DMA_GET_COUNTER(huart2.hdmarx));
+    uint16_t newBytes;
+
+    if (head >= s_lastDmaPos)
+        newBytes = head - s_lastDmaPos;
+    else
+        newBytes = (uint16_t)(UART_DMA_BUF_SIZE - s_lastDmaPos + head);
+
+    if (newBytes == 0) return;
+
+    /* Copy new bytes into ring buffer with wrap-around handling */
+    for (uint16_t i = 0; i &lt; newBytes; i++)
+    {
+        uint16_t idx = (s_lastDmaPos + i) % UART_DMA_BUF_SIZE;
+        RingBuffer_WriteByte(&s_uartRxRing, s_uartDmaBuf[idx]);
+    }
+    s_lastDmaPos = head;
+
+    /* Flush ring buffer to USB in chunks */
+    static uint8_t s_usbTxBuf[64];
+    uint16_t available = RingBuffer_BytesAvailable(&s_uartRxRing);
+    if (available == 0) return;
+
+    uint16_t toSend = (available &gt; sizeof(s_usbTxBuf))
+                     ? (uint16_t)sizeof(s_usbTxBuf) : available;
+    RingBuffer_ReadBlock(&s_uartRxRing, s_usbTxBuf, toSend);
+    CDC_Transmit_FS_Safe(s_usbTxBuf, toSend);
+}
+
+/* USB RX → UART TX (called from CDC_Receive_FS) */
+void Bridge_UsbToUart(const uint8_t *data, uint32_t len)
+{
+    /* Non-blocking DMA transmit; for reliability add a TX queue */
+    HAL_UART_Transmit_DMA(&huart2, (uint8_t *)data, (uint16_t)len);
+}</code></pre>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 7 — EXERCISES
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="exercises" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flask me-2 text-teal"></i>Exercises</h2>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 1</span>
+                            <span class="badge bg-success text-white ms-2">Beginner</span>
+                        </div>
+                        <h4>USB CDC Echo Device</h4>
+                        <p>Configure USB CDC on any STM32 with USB OTG (F4 Nucleo, F7-Discovery, G0, L4 etc.) using CubeMX. Connect to a PC. Open a terminal (PuTTY on Windows, minicom on Linux). Send any character string — the device must echo it back with a prefix showing tick count: <code>[1234] echo: hello</code>. Verify Windows Device Manager shows "USB Serial Device (COMx)" or <code>ls /dev/ttyACM*</code> shows the device on Linux. Confirm that unplugging and reconnecting re-enumerates without a reset.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">USB CDC</span>
+                            <span class="bias-tag">Enumeration</span>
+                            <span class="bias-tag">CubeMX</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 2</span>
+                            <span class="badge bg-warning text-dark ms-2">Intermediate</span>
+                        </div>
+                        <h4>JSON Command Interpreter over USB CDC</h4>
+                        <p>Build a USB CDC command interpreter that accepts text commands terminated by newline: <code>led on</code>, <code>led off</code>, <code>adc read</code>, <code>version</code>. Reply with JSON responses: <code>{"status":"ok","led":"on"}</code>, <code>{"adc":2048,"voltage":1.65}</code>. Write a Python test script using <code>pyserial</code> that opens the COM port, sends each command, parses the JSON reply, and validates the response structure. Achieve 100 round-trip transactions per second. Measure latency using Python timestamps and verify &lt;5 ms average response time.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">CDC Command Parser</span>
+                            <span class="bias-tag">pyserial</span>
+                            <span class="bias-tag">JSON Protocol</span>
+                        </div>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="badge bg-navy text-white">Exercise 3</span>
+                            <span class="badge bg-danger text-white ms-2">Advanced</span>
+                        </div>
+                        <h4>High-Speed ADC Streaming Benchmark</h4>
+                        <p>Implement continuous ADC sample streaming over USB CDC. Configure ADC1 in DMA circular mode at 100 kSps (12-bit). Pack samples in 64-byte blocks and transmit each block immediately via <code>CDC_Transmit_FS_Safe</code>. On the PC, write a Python script using <code>pyserial</code> with <code>read(timeout=1)</code> in a tight loop that counts received bytes per second. Measure achieved throughput in bytes/second and samples/second. Compare to theoretical maximum (12 Mbit/s = 1.5 MB/s for FS, but CDC overhead reduces this). Identify whether the bottleneck is STM32 ADC+DMA, STM32 USB scheduling, USB frame timing (1 ms), or Python receive rate. Document your findings.</p>
+                        <div class="bias-tags">
+                            <span class="bias-tag">ADC DMA</span>
+                            <span class="bias-tag">USB Throughput</span>
+                            <span class="bias-tag">Python Benchmark</span>
+                            <span class="bias-tag">Performance Profiling</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 8 — CANVAS FORM
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="usb-config-tool" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-file-alt me-2 text-teal"></i>USB CDC Config Tool</h2>
+
+                    <p>Use this tool to document your USB CDC peripheral configuration — peripheral selection, buffer sizes, descriptor values, and design notes. Download as Word, Excel, PDF, or PPTX for project documentation and team reviews.</p>
+
+                    <div class="canvas-form" id="stm32UsbForm">
+                        <h4 class="canvas-form-title"><i class="fas fa-usb me-2"></i>STM32 USB CDC Configuration Generator</h4>
+                        <p class="form-help-text">Document your USB CDC setup — peripheral, buffer sizes, descriptor customisation, and design intent. Download as Word, Excel, PDF, or PPTX.</p>
+                        <div id="stm32UsbBadge" class="form-autosave-badge">Draft auto-saved</div>
+                        <p class="form-privacy-notice"><i class="fas fa-shield-alt"></i> All data stays in your browser. Nothing is sent to or stored on any server.</p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32UsbProjName">Project Name *</label>
+                                <input type="text" id="stm32UsbProjName" placeholder="e.g., USB Debug Console v1.0">
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32UsbPeripheral">USB Peripheral *</label>
+                                <select id="stm32UsbPeripheral">
+                                    <option value="">Select peripheral...</option>
+                                    <option value="USB OTG FS">USB OTG FS (STM32F4/F7/H7/L4/G4)</option>
+                                    <option value="USB OTG HS">USB OTG HS (STM32F4/F7/H7 + ULPI PHY)</option>
+                                    <option value="USB FS (G0/L0/F0)">USB FS built-in (STM32G0/L0/F0/L4+)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32UsbClass">USB Class</label>
+                                <select id="stm32UsbClass">
+                                    <option value="">Select class...</option>
+                                    <option value="CDC Virtual COM Port">CDC Virtual COM Port</option>
+                                    <option value="CDC UART Bridge">CDC UART Bridge (transparent)</option>
+                                    <option value="Custom CDC">Custom CDC (application-defined)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32UsbSpeed">USB Speed</label>
+                                <select id="stm32UsbSpeed">
+                                    <option value="">Select speed...</option>
+                                    <option value="Full Speed 12 Mbit/s">Full Speed — 12 Mbit/s</option>
+                                    <option value="High Speed 480 Mbit/s">High Speed — 480 Mbit/s (requires HS PHY)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32UsbRxBuf">RX Buffer Size (bytes)</label>
+                                <input type="text" id="stm32UsbRxBuf" placeholder="e.g., 512 (ring buffer for received data)">
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32UsbTxBuf">TX Buffer Size (bytes)</label>
+                                <input type="text" id="stm32UsbTxBuf" placeholder="e.g., 256 (single transmit buffer)">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="stm32UsbDescriptors">Custom Descriptor Values</label>
+                                <textarea id="stm32UsbDescriptors" rows="4" placeholder="VID, PID, serial number, product name&#10;e.g., VID=0x0483 (ST), PID=0x5740 (CDC)&#10;Product: My USB Debug Console&#10;Serial: SN-20260101-001&#10;Manufacturer: My Company Ltd"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="stm32UsbNotes">Design Notes</label>
+                                <textarea id="stm32UsbNotes" rows="4" placeholder="e.g., DTR detection required before TX. UART bridge mode at 115200 baud. Windows requires driver inf for VID/PID below 0x1000. Linux/macOS driver-less."></textarea>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label><i class="fas fa-user me-1"></i>Author Name</label>
+                                <input type="text" data-author placeholder="Your name (appears on document cover page)" style="max-width: 400px;">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-generate" onclick="stm32UsbHandler.generateWord()"><i class="fas fa-file-word me-1"></i>Word</button>
+                            <button class="btn-generate" onclick="stm32UsbHandler.generateExcel()"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                            <button class="btn-generate" onclick="stm32UsbHandler.generatePDF()"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                            <button class="btn-generate" onclick="stm32UsbHandler.generatePPTX()"><i class="fas fa-file-powerpoint me-1"></i>PPTX</button>
+                            <button class="btn-reset" onclick="stm32UsbHandler.reset()"><i class="fas fa-undo me-1"></i>Reset</button>
+                        </div>
+                        <div id="stm32UsbSuccess" class="form-success-message"><i class="fas fa-check-circle me-2"></i><span id="stm32UsbSuccessText"></span></div>
+                    </div>
+
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
+                     SECTION 9 — CONCLUSION
+                     ═══════════════════════════════════════════════════════ -->
+                <div id="conclusion" class="blog-content mt-5">
+
+                    <h2><i class="fas fa-flag-checkered me-2 text-teal"></i>Conclusion &amp; Next Steps</h2>
+
+                    <p>In this article we implemented a complete USB CDC Virtual COM Port on STM32:</p>
+                    <ul>
+                        <li><strong>USB fundamentals</strong>: host-controlled polled bus model, Full Speed vs High Speed, descriptor hierarchy, and the five transfer types — with CDC using Control, Bulk IN, Bulk OUT, and Interrupt endpoints.</li>
+                        <li><strong>CDC class architecture</strong>: two USB interfaces (Control + Data), the four CDC callback functions in <code>usbd_cdc_if.c</code>, and the TX busy state machine that prevents re-entrant transmissions.</li>
+                        <li><strong>Reliable transmit</strong>: <code>cdc_printf</code> wrapper with <code>TxState</code> busy check, connection detection via DTR, and zero-length packet (ZLP) semantics for multiples of 64 bytes.</li>
+                        <li><strong>Safe receive</strong>: interrupt-safe ring buffer pattern, mandatory re-arming of the OUT endpoint via <code>USBD_CDC_ReceivePacket</code>, and main-loop command processing.</li>
+                        <li><strong>Control requests</strong>: implementing <code>SET_LINE_CODING</code> and <code>SET_CONTROL_LINE_STATE</code> — the only two CDC control requests a typical application must handle.</li>
+                        <li><strong>UART bridge</strong>: combining UART DMA circular mode with USB CDC bulk transfer to build a transparent, high-throughput USB-UART bridge without dedicated silicon.</li>
+                    </ul>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                        <p>In <a href="stm32-hal-part14-freertos.html"><strong>Part 14: FreeRTOS Integration</strong></a>, we introduce real-time task scheduling to the STM32 — covering task creation, inter-task queues, binary and counting semaphores, mutexes, and the CMSIS-RTOS2 wrapper that bridges FreeRTOS with the rest of the STM32 middleware stack including USB.</p>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Part 14: FreeRTOS Integration</h5>
+                            <p>Task creation, inter-task queues, semaphores, mutexes, CMSIS-RTOS2 wrapper, and integrating USB CDC with a real-time scheduler.</p>
+                            <a href="stm32-hal-part14-freertos.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 3: UART Communication</h5>
+                            <p>Polling, interrupt, and DMA UART modes, ring buffers, and baud rate calculation — the foundation for the USB CDC UART bridge pattern.</p>
+                            <a href="stm32-hal-part03-uart-communication.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Part 15: Bootloader Development</h5>
+                            <p>Custom IAP bootloader, USB DFU class implementation, flash programming, and application jump — building on the USB CDC foundation.</p>
+                            <a href="stm32-hal-part15-bootloader.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                </div>
+                </div><!-- end col-lg-8 -->
+            </div><!-- end row -->
+        </div><!-- end container -->
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media" class="bg-dark text-light py-5">
+        <div class="container py-5">
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3">Let's Connect</h5>
+                    <p class="text-light">
+                        I'm always interested in sharing content about my interests on different topics. Read disclaimer and feel free to share further.
+                    </p>
+                </div>
+                <div class="col-lg-6">
+                    <h5 class="fw-bold mb-3">Follow Me</h5>
+                    <div class="social-links d-flex gap-2 flex-wrap">
+                        <a href="https://www.facebook.com/wasil.zafar/" target="_blank" class="social-icon" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                        <a href="https://twitter.com/wasilzafar" target="_blank" class="social-icon" title="Twitter"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" class="social-icon" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="https://www.youtube.com/@wasilzafar" target="_blank" class="social-icon" title="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="https://www.instagram.com/itswzee/" target="_blank" class="social-icon" title="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="https://in.pinterest.com/wasilz/" target="_blank" class="social-icon" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                        <a href="mailto:wasil.zafar@gmail.com" class="social-icon" title="Email"><i class="fas fa-envelope"></i></a>
+                    </div>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p class="small">
+                        <i class="fas fa-icons me-2"></i>Icons from <a href="https://www.flaticon.com/" target="_blank" class="text-light">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank" class="text-light">Font Awesome</a>
+                    </p>
+                    <p class="small mt-3">
+                        <a href="/" class="text-light text-decoration-none">Home</a> |
+                        <a href="/disclaimer.html" class="text-light text-decoration-none">Disclaimer</a> |
+                        <a href="/privacy-policy.html" class="text-light text-decoration-none">Privacy Policy</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">
+                        Enjoying this content? &#9749; <a href="https://buymeacoffee.com/itswzee" target="_blank" class="text-light" style="text-decoration: underline;">Keep me caffeinated</a> to keep the pixels flowing!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator" title="Current Section">
+        <i class="fas fa-tag"></i><span id="categoryText">Technology</span>
+    </div>
+
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+
+    <!-- Document Generation -->
+    <script src="../../../js/doc-generator-core.js"></script>
+    <script src="../../../js/series/doc-generator-stm32-hal.js"></script>
+
+    <!-- Prism.js Syntax Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-armasm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- STM32 USB CDC Configuration Form Handler -->
+    <script>
+        var stm32UsbPersistence = new FormPersistence('stm32-p13-usb-draft', {
+            'stm32UsbProjName':    'projectName',
+            'stm32UsbPeripheral':  'usbPeripheral',
+            'stm32UsbClass':       'usbClass',
+            'stm32UsbSpeed':       'usbSpeed',
+            'stm32UsbRxBuf':       'rxBufferSize',
+            'stm32UsbTxBuf':       'txBufferSize',
+            'stm32UsbDescriptors': 'descriptors',
+            'stm32UsbNotes':       'notes'
+        }, 'stm32UsbBadge');
+
+        var stm32UsbHandler = new CanvasFormHandler({
+            formId:         'stm32UsbForm',
+            successId:      'stm32UsbSuccess',
+            successTextId:  'stm32UsbSuccessText',
+            persistence:    stm32UsbPersistence,
+            filenameField:  'projectName',
+            filenameSuffix: '-stm32-usb-config',
+            requiredFields: ['stm32UsbProjName', 'stm32UsbPeripheral'],
+            requiredMessage:'Please enter a Project Name and USB Peripheral.',
+            docType:        'Stm32UsbConfig'
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            stm32UsbPersistence.init();
+        });
+    </script>
+
+</body>
+</html>
