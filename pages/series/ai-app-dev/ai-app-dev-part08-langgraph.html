@@ -452,37 +452,41 @@
 # State flows through the graph, modified by each node
 
 from langgraph.graph import StateGraph, START, END
-from typing import TypedDict, Annotated
-from operator import add
+from typing import TypedDict
 
-# Step 1: Define the state schema
-class SupportState(TypedDict):
-    query: str
-    category: str
-    response: str
-    messages: Annotated[list, add]  # 'add' reducer: appends to the list
+# Step 1: Define the state schema — what data flows through the graph
+class TicketState(TypedDict):
+    query: str        # The customer's original question
+    category: str     # "billing" or "technical" (set by classify node)
+    resolution: str   # The handler's resolution (set by handler node)
+    response: str     # Final formatted response (set by respond node)
 
 # Step 2: Define node functions (each takes state, returns partial update)
-def classify(state: SupportState) -> dict:
-    """Classify the customer query."""
+def classify(state: TicketState) -> dict:
+    """Route the ticket to the right department."""
     query = state["query"].lower()
     if any(word in query for word in ["bill", "charge", "payment", "invoice"]):
         return {"category": "billing"}
     return {"category": "technical"}
 
-def handle_billing(state: SupportState) -> dict:
-    """Handle billing-related queries."""
-    return {"response": f"Billing support for: {state['query']}"}
+def handle_billing(state: TicketState) -> dict:
+    """Billing department resolves payment issues."""
+    return {"resolution": f"Billing team reviewing: {state['query']}"}
 
-def handle_technical(state: SupportState) -> dict:
-    """Handle technical support queries."""
-    return {"response": f"Technical support for: {state['query']}"}
+def handle_technical(state: TicketState) -> dict:
+    """Technical team resolves product issues."""
+    return {"resolution": f"Tech team investigating: {state['query']}"}
+
+def respond(state: TicketState) -> dict:
+    """Format the final customer response."""
+    return {"response": f"[{state['category'].upper()}] {state['resolution']}"}
 
 # Step 3: Build the graph
-graph = StateGraph(SupportState)
+graph = StateGraph(TicketState)
 graph.add_node("classify", classify)
 graph.add_node("billing", handle_billing)
 graph.add_node("technical", handle_technical)
+graph.add_node("respond", respond)
 
 # Edges define transitions between nodes
 graph.add_edge(START, "classify")
@@ -491,13 +495,16 @@ graph.add_conditional_edges(
     lambda state: state["category"],  # Router function
     {"billing": "billing", "technical": "technical"}
 )
-graph.add_edge("billing", END)
-graph.add_edge("technical", END)
+# Both handlers converge into the respond node
+graph.add_edge("billing", "respond")
+graph.add_edge("technical", "respond")
+graph.add_edge("respond", END)
 
 # Step 4: Compile and run
 app = graph.compile()
 result = app.invoke({"query": "I was charged twice on my credit card"})
 print(f"Category: {result['category']}")
+print(f"Resolution: {result['resolution']}")
 print(f"Response: {result['response']}")</code></pre>
 
                     <div class="experiment-card">
@@ -566,11 +573,14 @@ class ManagedState(TypedDict):
 
                     <h3 id="nodes-and-edges">2.2 Nodes & Edges</h3>
 
-                    <pre><code class="language-python"># pip install langgraph langchain-openai
+                    <pre><code class="language-python"># pip install langgraph langchain-openai python-dotenv
 from typing import TypedDict, Annotated
 from operator import add
 from langgraph.graph import StateGraph, START, END
 from langchain_openai import ChatOpenAI
+from dotenv import load_dotenv
+
+load_dotenv()  # Load OPENAI_API_KEY from .env file
 
 # State schema for a research-write-review workflow
 class ResearchState(TypedDict):
@@ -580,36 +590,43 @@ class ResearchState(TypedDict):
     review: str
     final_article: str
 
-# Requires OPENAI_API_KEY environment variable
 llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
 
 def research(state: ResearchState) -> dict:
     """Gather information on the topic."""
+    print(f"[Node: research] Researching '{state['topic']}'...")
     response = llm.invoke(f"Research key facts about: {state['topic']}. List 5 key points.")
+    print(f"[Node: research] Done — collected {len(response.content)} chars of notes")
     return {"search_results": [response.content]}
 
 def write_draft(state: ResearchState) -> dict:
     """Write an article draft from research."""
+    print(f"[Node: write] Writing draft from {len(state['search_results'])} research notes...")
     research_text = "\n".join(state["search_results"])
     response = llm.invoke(
         f"Write a 300-word article about {state['topic']}.\n"
         f"Use these research notes:\n{research_text}"
     )
+    print(f"[Node: write] Done — draft is {len(response.content)} chars")
     return {"draft": response.content}
 
 def review_draft(state: ResearchState) -> dict:
     """Review and critique the draft."""
+    print("[Node: review] Reviewing draft for improvements...")
     response = llm.invoke(
         f"Review this article draft. List specific improvements:\n\n{state['draft']}"
     )
+    print(f"[Node: review] Done — {len(response.content)} chars of feedback")
     return {"review": response.content}
 
 def finalize(state: ResearchState) -> dict:
     """Apply feedback and produce final article."""
+    print("[Node: finalize] Applying review feedback to produce final article...")
     response = llm.invoke(
         f"Improve this draft based on feedback.\n\n"
         f"Draft:\n{state['draft']}\n\nFeedback:\n{state['review']}"
     )
+    print(f"[Node: finalize] Done — final article is {len(response.content)} chars")
     return {"final_article": response.content}
 
 # Build the graph — linear: research → write → review → finalize
@@ -627,7 +644,16 @@ graph.add_edge("finalize", END)
 
 app = graph.compile()
 result = app.invoke({"topic": "The impact of LLMs on software engineering"})
-print(result["final_article"][:200] + "...")</code></pre>
+
+# Show what each node produced
+print("=== Research Notes ===")
+print(result["search_results"][0][:200] + "...\n")
+print("=== Draft (first 200 chars) ===")
+print(result["draft"][:200] + "...\n")
+print("=== Review Feedback (first 200 chars) ===")
+print(result["review"][:200] + "...\n")
+print("=== Final Article (first 300 chars) ===")
+print(result["final_article"][:300] + "...")</code></pre>
 
                     <h3 id="conditional-edges">2.3 Conditional Edges</h3>
 
