@@ -453,22 +453,18 @@
 
                     <p>The simplest memory type — stores the complete conversation history verbatim. Fast and accurate but grows linearly with conversation length:</p>
 
-                    <pre><code class="language-python"># pip install langchain langchain-openai langchain-community chromadb tiktoken redis
+                    <pre><code class="language-python"># pip install langchain-openai langchain-core
 import os
-from langchain.memory import ConversationBufferMemory
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.messages import HumanMessage, AIMessage
 
 # Set your API key: export OPENAI_API_KEY="sk-..."
 os.environ.setdefault("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
 
-# Buffer memory - stores full conversation
-memory = ConversationBufferMemory(
-    memory_key="history",
-    return_messages=True,  # Return as Message objects (not string)
-)
+# Buffer memory - stores full conversation as a list of messages
+history = []
 
 # Build a conversational chain with memory
 prompt = ChatPromptTemplate.from_messages([
@@ -483,21 +479,15 @@ model = ChatOpenAI(model="gpt-4o", temperature=0.7)
 # Manual memory management with LCEL
 def chat_with_memory(user_input: str) -> str:
     """Process a message with conversation memory."""
-    # Load memory
-    history = memory.load_memory_variables({})
-
-    # Run the chain
     chain = prompt | model | StrOutputParser()
     response = chain.invoke({
-        "history": history["history"],
+        "history": history,
         "input": user_input,
     })
 
     # Save to memory
-    memory.save_context(
-        {"input": user_input},
-        {"output": response}
-    )
+    history.append(HumanMessage(content=user_input))
+    history.append(AIMessage(content=response))
 
     return response
 
@@ -510,134 +500,154 @@ print(chat_with_memory("What was I building again?"))  # Recalls "RAG system"</c
 
                     <p>Summary memory uses an LLM to maintain a running summary of the conversation. It grows slowly regardless of conversation length, making it ideal for long interactions:</p>
 
-                    <pre><code class="language-python">from langchain.memory import ConversationSummaryMemory
+                    <pre><code class="language-python"># pip install langchain-openai
 from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
-# Summary memory - LLM summarizes the conversation progressively
-summary_memory = ConversationSummaryMemory(
-    llm=ChatOpenAI(model="gpt-4o-mini", temperature=0),
-    memory_key="history",
-    return_messages=True,
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+# Summary memory - LLM progressively summarizes the conversation
+running_summary = ""
+
+def update_summary(human_input: str, ai_output: str) -> str:
+    """Ask the LLM to update the running summary with new messages."""
+    global running_summary
+    response = model.invoke([
+        SystemMessage(content="Progressively summarize the conversation, "
+                      "adding to the existing summary with new lines."),
+        HumanMessage(content=(
+            f"Current summary:\n{running_summary}\n\n"
+            f"New lines:\nHuman: {human_input}\nAI: {ai_output}\n\n"
+            f"Updated summary:"
+        )),
+    ])
+    running_summary = response.content
+    return running_summary
+
+# After many messages, the summary stays concise:
+update_summary(
+    "I want to build a RAG system for legal documents",
+    "Great choice! Legal RAG requires careful attention to..."
 )
-
-# After many messages, the memory contains a concise summary
-# instead of hundreds of messages:
-# "The user Alex is building a RAG system for legal documents.
-#  They chose text-embedding-3-small for embeddings and Qdrant
-#  for vector storage. They are concerned about chunking quality
-#  and want to implement re-ranking."
-
-# Check memory usage
-summary_memory.save_context(
-    {"input": "I want to build a RAG system for legal documents"},
-    {"output": "Great choice! Legal RAG requires careful attention to..."}
-)
-summary_memory.save_context(
-    {"input": "Should I use Pinecone or Qdrant?"},
-    {"output": "For legal documents, I'd recommend Qdrant because..."}
+update_summary(
+    "Should I use Pinecone or Qdrant?",
+    "For legal documents, I'd recommend Qdrant because..."
 )
 
 # The summary is much smaller than the full conversation
-print(summary_memory.load_memory_variables({}))</code></pre>
+print(f"Summary ({len(running_summary)} chars):\n{running_summary}")</code></pre>
 
                     <h3 id="window-memory">1.3 Conversation Window Memory</h3>
 
                     <p>Window memory keeps only the last N interactions. Simple, predictable token usage, but loses older context:</p>
 
-                    <pre><code class="language-python">from langchain.memory import ConversationBufferWindowMemory
+                    <pre><code class="language-python"># pip install langchain-core
+from langchain_core.messages import HumanMessage, AIMessage
+
+# Window memory - keep only the last K exchanges
+class ConversationWindow:
+    def __init__(self, k: int = 10):
+        self.k = k
+        self.messages = []
+
+    def add(self, human_input: str, ai_output: str):
+        self.messages.append(HumanMessage(content=human_input))
+        self.messages.append(AIMessage(content=ai_output))
+        # Trim to last k exchanges (k * 2 messages)
+        if len(self.messages) > self.k * 2:
+            self.messages = self.messages[-self.k * 2:]
+
+    def get_history(self) -> list:
+        return self.messages
 
 # Keep only the last 10 exchanges
-window_memory = ConversationBufferWindowMemory(
-    k=10,                    # Number of recent exchanges to keep
-    memory_key="history",
-    return_messages=True,
-)
+window = ConversationWindow(k=10)
+window.add("I'm building a RAG system", "Great! What domain?")
+window.add("Legal documents", "Legal RAG needs careful chunking...")
+window.add("What about embeddings?", "Use text-embedding-3-small...")
 
-# Combined approach: Summary + Window
-# Use summary for old messages, full buffer for recent ones
-from langchain.memory import ConversationSummaryBufferMemory
-
-hybrid_memory = ConversationSummaryBufferMemory(
-    llm=ChatOpenAI(model="gpt-4o-mini"),
-    max_token_limit=2000,    # Summarize when buffer exceeds this
-    memory_key="history",
-    return_messages=True,
-)
-# Recent messages are kept verbatim
-# Older messages are progressively summarized
-# Best of both worlds: detail for recent + context for old</code></pre>
+print(f"Window has {len(window.get_history())} messages")
+for msg in window.get_history():
+    role = "Human" if isinstance(msg, HumanMessage) else "AI"
+    print(f"  {role}: {msg.content[:50]}...")</code></pre>
 
                     <h3 id="vector-memory">1.4 Vector Store Memory</h3>
 
                     <p>Vector memory stores conversation turns as embeddings and retrieves the most relevant past interactions using similarity search. This is powerful for long-running conversations where only specific past context is relevant:</p>
 
-                    <pre><code class="language-python">from langchain.memory import VectorStoreRetrieverMemory
-from langchain_community.vectorstores import Chroma
+                    <pre><code class="language-python"># pip install langchain-chroma langchain-openai chromadb
+from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
+from langchain_core.documents import Document
 
-# Create a vector store for memory
-memory_vectorstore = Chroma(
+# Create a vector store for conversation memory
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+memory_store = Chroma(
     collection_name="conversation_memory",
-    embedding_function=OpenAIEmbeddings(),
-    persist_directory="./memory_db",
+    embedding_function=embeddings,
 )
 
-# Vector memory retrieves relevant past conversations
-vector_memory = VectorStoreRetrieverMemory(
-    retriever=memory_vectorstore.as_retriever(
-        search_kwargs={"k": 5}  # Retrieve 5 most relevant memories
-    ),
-    memory_key="relevant_history",
-)
+# Save conversation turns as documents
+memory_store.add_documents([
+    Document(page_content="Human: I prefer using PostgreSQL for all my databases\n"
+             "AI: Noted! pgvector would be a great choice for you then."),
+    Document(page_content="Human: My team uses Python and FastAPI for backends\n"
+             "AI: LangChain integrates perfectly with FastAPI..."),
+])
 
-# Save memories
-vector_memory.save_context(
-    {"input": "I prefer using PostgreSQL for all my databases"},
-    {"output": "Noted! pgvector would be a great choice for you then."}
-)
-vector_memory.save_context(
-    {"input": "My team uses Python and FastAPI for backends"},
-    {"output": "LangChain integrates perfectly with FastAPI..."}
-)
+# Later, retrieve relevant past conversations by similarity
+retriever = memory_store.as_retriever(search_kwargs={"k": 3})
+relevant = retriever.invoke("What vector database should I use?")
 
-# Later, when user asks about database choices...
-# Vector memory retrieves the PostgreSQL preference automatically
-relevant = vector_memory.load_memory_variables(
-    {"input": "What vector database should I use?"}
-)
-# Returns the PostgreSQL conversation as most relevant</code></pre>
+# Returns the PostgreSQL conversation as most relevant
+for doc in relevant:
+    print(doc.page_content[:80])</code></pre>
 
                     <h3 id="entity-memory">1.5 Entity Memory</h3>
 
                     <p>Entity memory extracts and maintains information about specific entities (people, projects, technologies) mentioned in conversation. It builds a structured knowledge graph from unstructured dialogue:</p>
 
-                    <pre><code class="language-python">from langchain.memory import ConversationEntityMemory
+                    <pre><code class="language-python"># pip install langchain-openai
 from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
+import json
 
-# Entity memory tracks entities and their attributes
-entity_memory = ConversationEntityMemory(
-    llm=ChatOpenAI(model="gpt-4o-mini"),
-    memory_key="entities",
-    chat_history_key="history",
-)
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+# Entity memory - extract and track entities from conversation
+entity_store = {}  # {entity_name: description}
+
+def extract_entities(human_input: str, ai_output: str):
+    """Use the LLM to extract entities from a conversation turn."""
+    response = model.invoke([
+        SystemMessage(content=(
+            "Extract named entities (people, projects, technologies) from this "
+            "conversation turn. Return JSON: {\"entity_name\": \"description\"}. "
+            "Return {} if no entities found."
+        )),
+        HumanMessage(content=f"Human: {human_input}\nAI: {ai_output}"),
+    ])
+    try:
+        new_entities = json.loads(response.content)
+        entity_store.update(new_entities)
+    except json.JSONDecodeError:
+        pass
 
 # After several interactions, entity memory maintains:
-entity_memory.save_context(
-    {"input": "Our project Phoenix uses LangGraph for agent orchestration"},
-    {"output": "Project Phoenix sounds interesting! LangGraph is great for..."}
+extract_entities(
+    "Our project Phoenix uses LangGraph for agent orchestration",
+    "Project Phoenix sounds interesting! LangGraph is great for..."
 )
-entity_memory.save_context(
-    {"input": "Sarah leads the ML team and prefers Anthropic models"},
-    {"output": "Got it! Sarah's preference for Anthropic models means..."}
+extract_entities(
+    "Sarah leads the ML team and prefers Anthropic models",
+    "Got it! Sarah's preference for Anthropic models means..."
 )
 
 # Entity store now contains:
 # "Phoenix": "A project that uses LangGraph for agent orchestration"
 # "Sarah": "Leads the ML team, prefers Anthropic models"
-# "LangGraph": "Used in Project Phoenix for agent orchestration"
-
-entities = entity_memory.load_memory_variables({"input": "Tell me about Sarah's project"})
-print(entities)</code></pre>
+for name, desc in entity_store.items():
+    print(f"  {name}: {desc}")</code></pre>
 
                     <div class="highlight-box teal">
                         <i class="fas fa-code me-2"></i>
@@ -975,31 +985,41 @@ for chunk in chunks:
 
                     <h3 id="cohere-rerank">4.1 Cohere Rerank</h3>
 
-                    <pre><code class="language-python"># pip install langchain-cohere
+                    <pre><code class="language-python"># pip install langchain-classic langchain-cohere langchain-chroma langchain-openai chromadb
 import os
-from langchain.retrievers import ContextualCompressionRetriever
+from langchain_classic.retrievers.contextual_compression import ContextualCompressionRetriever
 from langchain_cohere import CohereRerank
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
+from langchain_core.documents import Document
 
-# Base retriever - retrieve broadly
-vectorstore = Chroma(
-    persist_directory="./chroma_db",
-    embedding_function=OpenAIEmbeddings()
+# Create sample documents for demonstration
+sample_docs = [
+    Document(page_content="Semantic chunking splits text at natural topic boundaries using embeddings."),
+    Document(page_content="Fixed-size chunking uses a set number of tokens per chunk with overlap."),
+    Document(page_content="Recursive character splitting tries multiple separators in order."),
+    Document(page_content="Vector databases store high-dimensional embeddings for similarity search."),
+    Document(page_content="Sentence-window retrieval embeds single sentences but retrieves surrounding context."),
+]
+
+# Base retriever - retrieve broadly from in-memory vector store
+vectorstore = Chroma.from_documents(
+    documents=sample_docs,
+    embedding=OpenAIEmbeddings(model="text-embedding-3-small"),
 )
 base_retriever = vectorstore.as_retriever(
-    search_kwargs={"k": 20}  # Retrieve 20 candidates
+    search_kwargs={"k": 5}
 )
 
-# Cohere reranker - rerank to top 5
+# Cohere reranker - rerank to top 3
 # Set your Cohere API key: export COHERE_API_KEY="..."
 cohere_reranker = CohereRerank(
     model="rerank-english-v3.0",
     cohere_api_key=os.getenv("COHERE_API_KEY"),
-    top_n=5,  # Keep top 5 after reranking
+    top_n=3,
 )
 
-# Combine: retrieve 20, rerank to 5
+# Combine: retrieve broadly, then rerank
 reranking_retriever = ContextualCompressionRetriever(
     base_compressor=cohere_reranker,
     base_retriever=base_retriever,
@@ -1016,39 +1036,46 @@ for doc in results:
 
                     <p>ColBERT uses a "late interaction" mechanism — it embeds query tokens and document tokens independently, then computes fine-grained token-level similarity. This provides nearly cross-encoder quality at bi-encoder speed:</p>
 
-                    <pre><code class="language-python"># pip install ragatouille
-# ColBERT re-ranking with RAGatouille
-from ragatouille import RAGPretrainedModel
+                    <pre><code class="language-python"># pip install pylate
+# ColBERT re-ranking with PyLate (successor to RAGatouille)
+from pylate import models, rank
 
-# Load a pre-trained ColBERT model
-colbert = RAGPretrainedModel.from_pretrained("colbert-ir/colbertv2.0")
+# Load a ColBERT model — late interaction for token-level matching
+colbert = models.ColBERT(model_name_or_path="lightonai/GTE-ModernColBERT-v1")
 
-# Index documents with ColBERT
-# Assumes all_documents is a list of LangChain Document objects from your vector store
-colbert.index(
-    collection=[doc.page_content for doc in all_documents],
-    index_name="rag_colbert_index",
-    split_documents=True,
-    document_metadatas=[doc.metadata for doc in all_documents],
-)
+# Sample documents to rerank
+documents = [
+    "Chunking strategies for legal documents require preserving clause boundaries and cross-references between sections.",
+    "Vector databases store embeddings for fast similarity search using approximate nearest neighbors.",
+    "Legal text chunking should respect paragraph structure, numbered lists, and hierarchical section numbering.",
+    "Prompt engineering techniques include few-shot learning, chain-of-thought, and role prompting.",
+    "Document splitting for contracts should keep related clauses together and preserve definition references.",
+]
 
-# Search with ColBERT - returns reranked results
-results = colbert.search(
-    query="What chunking strategies work best for legal documents?",
-    k=5,
+# Encode query and documents separately (late interaction)
+query = "What chunking strategies work best for legal documents?"
+query_embeddings = colbert.encode([query], is_query=True)
+doc_embeddings = colbert.encode([documents], is_query=False)
+
+# Rerank using MaxSim token-level similarity scoring
+reranked = rank.rerank(
+    documents_ids=[list(range(len(documents)))],
+    queries_embeddings=query_embeddings,
+    documents_embeddings=doc_embeddings,
 )
 
 # ColBERT advantages:
 # - Token-level matching catches partial relevance
-# - Pre-computed document embeddings enable fast search
+# - Query and document tokens are encoded independently (late interaction)
 # - MaxSim scoring is more nuanced than single-vector cosine
-for result in results:
+for result in reranked[0]:
+    doc_idx = result["id"]
     print(f"Score: {result['score']:.4f}")
-    print(f"Content: {result['content'][:100]}...\n")</code></pre>
+    print(f"Content: {documents[doc_idx][:100]}...\n")</code></pre>
 
                     <h3 id="cross-encoder">4.3 Cross-Encoder Re-Ranking</h3>
 
-                    <pre><code class="language-python"># pip install sentence-transformers
+                    <pre><code class="language-python"># pip install sentence-transformers langchain-core
 from sentence_transformers import CrossEncoder
 from langchain_core.documents import Document
 
@@ -1079,10 +1106,21 @@ def rerank_with_cross_encoder(
 
     return [doc for doc, _ in scored_docs[:top_k]]
 
-# Retrieve broadly, then rerank precisely
-# Assumes vectorstore is a Chroma or other vector store from earlier sections
-initial_results = vectorstore.similarity_search("RAG optimization", k=20)
-reranked = rerank_with_cross_encoder("RAG optimization", initial_results, top_k=5)</code></pre>
+# Sample documents (in production, these come from a vector store retrieval)
+sample_docs = [
+    Document(page_content="RAG optimization requires careful tuning of chunk size, overlap, and retrieval parameters."),
+    Document(page_content="Vector databases store embeddings for fast similarity search using approximate nearest neighbors."),
+    Document(page_content="Prompt engineering techniques include few-shot learning and chain-of-thought reasoning."),
+    Document(page_content="Optimizing RAG pipelines involves re-ranking retrieved documents and filtering irrelevant results."),
+    Document(page_content="Embedding models like text-embedding-3-small capture semantic meaning in dense vectors."),
+    Document(page_content="Context window management is critical when building production RAG applications."),
+]
+
+# Rerank the sample documents
+reranked = rerank_with_cross_encoder("RAG optimization", sample_docs, top_k=3)
+for doc in reranked:
+    print(f"Score: {doc.metadata['rerank_score']:.4f}")
+    print(f"Content: {doc.page_content[:100]}...\n")</code></pre>
 
                     <table class="table table-bordered table-striped">
                         <thead class="table-dark">
@@ -1135,13 +1173,14 @@ reranked = rerank_with_cross_encoder("RAG optimization", initial_results, top_k=
 
                     <h3 id="llmlingua">5.1 LLMLingua & LongLLMLingua</h3>
 
-                    <pre><code class="language-python"># pip install llmlingua
+                    <pre><code class="language-python"># pip install llmlingua accelerate
 # LLMLingua: compresses prompts by identifying and removing
 # low-information tokens while preserving meaning
 from llmlingua import PromptCompressor
 
 compressor = PromptCompressor(
     model_name="microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank",
+    device_map="cpu",       # Use "cuda" if GPU available
     use_llmlingua2=True,
 )
 
@@ -1166,29 +1205,39 @@ compressed = compressor.compress_prompt(
 
 print(f"Original: {compressed['origin_tokens']} tokens")
 print(f"Compressed: {compressed['compressed_tokens']} tokens")
-print(f"Ratio: {compressed['ratio']:.2f}")
+print(f"Ratio: {compressed['ratio']}")
 print(f"Compressed prompt:\n{compressed['compressed_prompt']}")</code></pre>
 
                     <h3 id="contextual-compression">5.2 Contextual Compression Retriever</h3>
 
-                    <pre><code class="language-python">from langchain.retrievers import ContextualCompressionRetriever
-from langchain.retrievers.document_compressors import (
+                    <pre><code class="language-python"># pip install langchain-classic langchain-chroma langchain-openai chromadb
+from langchain_classic.retrievers.contextual_compression import ContextualCompressionRetriever
+from langchain_classic.retrievers.document_compressors import (
     LLMChainExtractor,
     LLMChainFilter,
     EmbeddingsFilter,
     DocumentCompressorPipeline,
 )
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_core.documents import Document
 
 model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
-# Base retriever - assumes a populated Chroma vector store
-vectorstore = Chroma(
-    persist_directory="./chroma_db",
-    embedding_function=OpenAIEmbeddings()
+# Create sample vector store with documents
+sample_docs = [
+    Document(page_content="Buffer memory stores the full conversation history as a list of messages. Simple but grows unbounded."),
+    Document(page_content="Summary memory uses an LLM to progressively summarize older messages, keeping context compact."),
+    Document(page_content="Window memory keeps only the last K exchanges, discarding older messages automatically."),
+    Document(page_content="Vector memory stores conversations as embeddings for semantic retrieval of relevant past context."),
+    Document(page_content="Entity memory tracks named entities and their attributes across the conversation."),
+]
+
+vectorstore = Chroma.from_documents(
+    documents=sample_docs,
+    embedding=OpenAIEmbeddings(model="text-embedding-3-small"),
 )
-base_retriever = vectorstore.as_retriever(search_kwargs={"k": 20})
+base_retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
 
 # Method 1: LLM extracts only relevant portions
 llm_extractor = LLMChainExtractor.from_llm(model)
@@ -1208,8 +1257,8 @@ filtering_retriever = ContextualCompressionRetriever(
 
 # Method 3: Embedding-based relevance filter (fast, no LLM cost)
 embeddings_filter = EmbeddingsFilter(
-    embeddings=OpenAIEmbeddings(),
-    similarity_threshold=0.75,  # Minimum similarity score
+    embeddings=OpenAIEmbeddings(model="text-embedding-3-small"),
+    similarity_threshold=0.3,   # Tune per dataset; 0.75 is too aggressive for short docs
 )
 
 # Method 4: Pipeline - combine multiple compression strategies
@@ -1226,7 +1275,9 @@ pipeline_retriever = ContextualCompressionRetriever(
 
 # The pipeline first removes low-similarity docs (cheap),
 # then extracts relevant portions from survivors (expensive but fewer docs)
-results = pipeline_retriever.invoke("Best memory strategies for chatbots")</code></pre>
+results = pipeline_retriever.invoke("Best memory strategies for chatbots")
+for doc in results:
+    print(f"Content: {doc.page_content[:100]}")</code></pre>
 
                     <div class="highlight-box">
                         <i class="fas fa-lightbulb"></i>

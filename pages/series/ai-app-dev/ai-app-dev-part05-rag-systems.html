@@ -485,13 +485,17 @@ for i, doc_vec in enumerate(doc_vectors):
 
                     <h3 id="sentence-transformers">1.2 Sentence Transformers (Open Source)</h3>
 
-                    <pre><code class="language-python"># pip install sentence-transformers
-from langchain_community.embeddings import HuggingFaceEmbeddings
+                    <pre><code class="language-python"># pip install langchain-huggingface sentence-transformers
+import torch
+from langchain_huggingface import HuggingFaceEmbeddings
+
+# Auto-detect GPU: uses CUDA if available, otherwise falls back to CPU
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Open-source alternatives - no API costs, runs locally
 embeddings_local = HuggingFaceEmbeddings(
     model_name="BAAI/bge-large-en-v1.5",  # Top-performing open model
-    model_kwargs={"device": "cuda"},        # Use GPU if available
+    model_kwargs={"device": device},        # Use GPU if available
     encode_kwargs={"normalize_embeddings": True},  # For cosine similarity
 )
 
@@ -688,13 +692,15 @@ print(f"Local embedding dimensions: {len(vector)}")</code></pre>
 
                     <h3 id="vectordb-implementation">2.2 Implementation Examples</h3>
 
-                    <pre><code class="language-python">import os
+                    <h4>FAISS (Local, In-Memory)</h4>
+
+                    <pre><code class="language-python"># pip install faiss-cpu langchain-community
 from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
-# Sample documents for all examples
 docs = [
     Document(page_content="RAG combines retrieval with generation for accurate AI responses.",
              metadata={"source": "rag-guide.pdf", "page": 1}),
@@ -706,64 +712,134 @@ docs = [
              metadata={"source": "algorithms.pdf", "page": 34}),
 ]
 
-# === FAISS (Local, in-memory) ===
-from langchain_community.vectorstores import FAISS
-
 faiss_store = FAISS.from_documents(docs, embeddings)
 faiss_store.save_local("./faiss_index")  # Persist to disk
-# faiss_store = FAISS.load_local("./faiss_index", embeddings)
+# faiss_store = FAISS.load_local("./faiss_index", embeddings,
+#     allow_dangerous_deserialization=True)
+
 results = faiss_store.similarity_search("How does RAG work?", k=3)
+for doc in results:
+    print(f"[{doc.metadata['source']}] {doc.page_content[:80]}...")</code></pre>
 
+                    <h4>Chroma (Local, Persistent)</h4>
 
-# === Chroma (Local, persistent) ===
-from langchain_community.vectorstores import Chroma
+                    <pre><code class="language-python"># pip install langchain-chroma chromadb
+from langchain_openai import OpenAIEmbeddings
+from langchain_chroma import Chroma
+from langchain_core.documents import Document
+
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+
+docs = [
+    Document(page_content="RAG combines retrieval with generation for accurate AI responses.",
+             metadata={"source": "rag-guide.pdf", "page": 1}),
+    Document(page_content="Vector databases store embeddings for millisecond similarity search.",
+             metadata={"source": "vectordb-intro.pdf", "page": 5}),
+    Document(page_content="Text chunking strategies significantly impact RAG quality.",
+             metadata={"source": "rag-guide.pdf", "page": 12}),
+    Document(page_content="HNSW indexing provides logarithmic search time complexity.",
+             metadata={"source": "algorithms.pdf", "page": 34}),
+]
 
 chroma_store = Chroma.from_documents(
     docs, embeddings,
-    persist_directory="./chroma_db",
-    collection_name="rag_docs"
+    collection_name="rag_docs",
 )
+
 results = chroma_store.similarity_search("vector search", k=3)
+for doc in results:
+    print(f"[{doc.metadata['source']}] {doc.page_content[:80]}...")</code></pre>
 
+                    <h4>Pinecone (Managed Cloud)</h4>
 
-# === Pinecone (Managed cloud) ===
-# pip install langchain-pinecone pinecone-client
+                    <pre><code class="language-python"># pip install langchain-pinecone pinecone
+import os
+from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
-from pinecone import Pinecone
+from langchain_core.documents import Document
+from pinecone import Pinecone, ServerlessSpec
 
-# Set your Pinecone API key: export PINECONE_API_KEY="pc-..."
+# Use 512 dimensions to match the Pinecone index configuration
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small", dimensions=512)
+
+docs = [
+    Document(page_content="RAG combines retrieval with generation for accurate AI responses.",
+             metadata={"source": "rag-guide.pdf", "page": 1}),
+    Document(page_content="Vector databases store embeddings for millisecond similarity search.",
+             metadata={"source": "vectordb-intro.pdf", "page": 5}),
+]
+
+# Requires: export PINECONE_API_KEY="pc-..."
 pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-# pc.create_index("rag-index", dimension=1536, metric="cosine")
+
+# Create index (only needed once — skip if already exists)
+# pc.create_index(
+#     name="rag-index",
+#     dimension=512,
+#     metric="cosine",
+#     spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+# )
+
 pinecone_store = PineconeVectorStore.from_documents(
     docs, embeddings, index_name="rag-index"
 )
-results = pinecone_store.similarity_search("RAG pipelines", k=3)
+results = pinecone_store.similarity_search("RAG pipelines", k=2)
+for doc in results:
+    print(f"[{doc.metadata['source']}] {doc.page_content[:80]}...")</code></pre>
 
+                    <h4>Qdrant (Self-Hosted or Cloud)</h4>
 
-# === Qdrant (Self-hosted or cloud) ===
+                    <pre><code class="language-python"># pip install langchain-qdrant qdrant-client
+# Requires: docker run -p 6333:6333 qdrant/qdrant
+from langchain_openai import OpenAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
+from langchain_core.documents import Document
+
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+
+docs = [
+    Document(page_content="RAG combines retrieval with generation for accurate AI responses.",
+             metadata={"source": "rag-guide.pdf", "page": 1}),
+    Document(page_content="Text chunking strategies significantly impact RAG quality.",
+             metadata={"source": "rag-guide.pdf", "page": 12}),
+]
 
 qdrant_store = QdrantVectorStore.from_documents(
     docs, embeddings,
     url="http://localhost:6333",
     collection_name="rag_docs",
 )
-# Qdrant supports rich payload filtering
-results = qdrant_store.similarity_search(
-    "RAG techniques", k=3,
-    filter={"source": "rag-guide.pdf"}
-)
 
+results = qdrant_store.similarity_search("RAG techniques", k=2)
+for doc in results:
+    print(f"[{doc.metadata['source']}] {doc.page_content[:80]}...")</code></pre>
 
-# === pgvector (PostgreSQL extension) ===
+                    <h4>pgvector (PostgreSQL Extension)</h4>
+
+                    <pre><code class="language-python"># pip install langchain-postgres psycopg[binary]
+# Requires: PostgreSQL with pgvector extension enabled
+from langchain_openai import OpenAIEmbeddings
 from langchain_postgres import PGVector
+from langchain_core.documents import Document
+
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+
+docs = [
+    Document(page_content="RAG combines retrieval with generation for accurate AI responses.",
+             metadata={"source": "rag-guide.pdf", "page": 1}),
+    Document(page_content="HNSW indexing provides logarithmic search time complexity.",
+             metadata={"source": "algorithms.pdf", "page": 34}),
+]
 
 pgvector_store = PGVector.from_documents(
     docs, embeddings,
-    connection="postgresql://user:pass@localhost:5432/vectordb",
+    connection="postgresql+psycopg://user:pass@localhost:5432/vectordb",
     collection_name="rag_docs",
 )
-results = pgvector_store.similarity_search("indexing algorithms", k=3)</code></pre>
+
+results = pgvector_store.similarity_search("indexing algorithms", k=2)
+for doc in results:
+    print(f"[{doc.metadata['source']}] {doc.page_content[:80]}...")</code></pre>
 
                     <div class="highlight-box teal">
                         <i class="fas fa-code me-2"></i>

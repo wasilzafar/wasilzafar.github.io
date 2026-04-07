@@ -243,6 +243,10 @@
                     <li><a href="#pipe-operator" onclick="closeNav()">The Pipe Operator</a></li>
                     <li><a href="#runnable-protocol" onclick="closeNav()">Runnable Protocol</a></li>
                     <li><a href="#runnable-primitives" onclick="closeNav()">Runnable Primitives</a></li>
+                    <li><a href="#runnable-passthrough" onclick="closeNav()">RunnablePassthrough</a></li>
+                    <li><a href="#runnable-parallel" onclick="closeNav()">RunnableParallel</a></li>
+                    <li><a href="#runnable-lambda" onclick="closeNav()">RunnableLambda</a></li>
+                    <li><a href="#runnable-branch" onclick="closeNav()">RunnableBranch</a></li>
                 </ul>
             </li>
             <li>
@@ -577,9 +581,534 @@ await main()
 
                     <h3 id="runnable-primitives">1.3 Runnable Primitives</h3>
 
-                    <p>LCEL provides several primitive Runnables for common composition patterns:</p>
+                    <p>LCEL provides four primitive Runnables that serve as the building blocks for composing complex chains. Each one solves a specific composition problem: passing data through unchanged, running tasks in parallel, injecting custom Python logic, and routing based on conditions. Mastering these four primitives is essential — they are the glue that connects prompts, models, and parsers into powerful workflows.</p>
 
-                    <pre><code class="language-python">from langchain_openai import ChatOpenAI
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Primitive</th>
+                                <th>Purpose</th>
+                                <th>Input → Output</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>RunnablePassthrough</code></td>
+                                <td>Passes input through unchanged (or adds keys)</td>
+                                <td><code>dict → dict</code> (same or augmented)</td>
+                            </tr>
+                            <tr>
+                                <td><code>RunnableParallel</code></td>
+                                <td>Runs multiple runnables simultaneously on the same input</td>
+                                <td><code>any → dict</code> (keys mapped to each runnable's output)</td>
+                            </tr>
+                            <tr>
+                                <td><code>RunnableLambda</code></td>
+                                <td>Wraps any Python function as a Runnable</td>
+                                <td><code>any → any</code> (whatever your function returns)</td>
+                            </tr>
+                            <tr>
+                                <td><code>RunnableBranch</code></td>
+                                <td>Routes input to different chains based on conditions</td>
+                                <td><code>any → any</code> (output of the selected branch)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h4 id="runnable-passthrough">RunnablePassthrough — The Identity Operator</h4>
+
+                    <p><code>RunnablePassthrough</code> takes whatever input it receives and passes it through unchanged. At first glance this seems useless — why would you need a component that does nothing? The answer becomes clear in multi-key workflows where you need to <strong>preserve the original input</strong> alongside transformed data. The classic use case is RAG (Retrieval-Augmented Generation), where you need to pass the user's question through as-is while simultaneously fetching context from a vector store.</p>
+
+                    <pre><code class="language-python">import os
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough, RunnableParallel
+
+os.environ.setdefault("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+
+model = ChatOpenAI(model="gpt-4o", temperature=0)
+parser = StrOutputParser()
+
+# --- Basic: RunnablePassthrough passes input through unchanged ---
+passthrough = RunnablePassthrough()
+result = passthrough.invoke("hello world")
+print(result)  # "hello world" — unchanged
+
+# --- Key Use Case: Preserving input alongside transformed data ---
+# In a RAG pipeline, you need BOTH the retrieved context AND the original question.
+# RunnablePassthrough keeps the question intact while the retriever fetches context.
+
+# Simulated retriever (in production, this would be a real vector store retriever)
+def fake_retriever(query: str) -> str:
+    return f"Retrieved context for: {query}"
+
+prompt = ChatPromptTemplate.from_template(
+    "Context: {context}\n\nQuestion: {question}\n\nAnswer based on the context above."
+)
+
+# RunnableParallel creates a dict with two keys:
+#   - "context" is produced by the fake retriever
+#   - "question" is passed through unchanged via RunnablePassthrough
+chain = (
+    RunnableParallel(
+        context=lambda x: fake_retriever(x["question"]),
+        question=RunnablePassthrough()  # Keeps the full input dict
+    )
+    # At this point the data looks like:
+    # {"context": "Retrieved context for: ...", "question": {"question": "..."}}
+    # We need to flatten "question" — see assign() below for a cleaner approach
+)
+
+# --- assign(): Add keys without losing existing ones ---
+# RunnablePassthrough.assign() is the preferred way to augment input dicts
+chain_with_assign = (
+    RunnablePassthrough.assign(
+        context=lambda x: fake_retriever(x["question"]),
+        uppercased=lambda x: x["question"].upper()
+    )
+)
+# Input:  {"question": "What is LCEL?"}
+# Output: {"question": "What is LCEL?", "context": "Retrieved...", "uppercased": "WHAT IS LCEL?"}
+result = chain_with_assign.invoke({"question": "What is LCEL?"})
+print(result)
+# Original "question" key is preserved, and "context" + "uppercased" are added</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Key Insight:</strong> <code>RunnablePassthrough.assign()</code> is more useful than plain <code>RunnablePassthrough()</code> in practice. It lets you add new keys to the input dict while preserving all existing keys — perfect for enriching data as it flows through a chain without losing anything.
+                    </div>
+
+                    <h4 id="runnable-parallel">RunnableParallel — Concurrent Execution</h4>
+
+                    <p><code>RunnableParallel</code> runs multiple runnables <strong>simultaneously</strong> on the same input and combines their outputs into a single dictionary. Instead of running tasks one after another (which wastes time when tasks are independent), <code>RunnableParallel</code> executes them concurrently and returns a structured result. This is especially powerful when you need multiple analyses on the same data — summarization, sentiment analysis, keyword extraction — all at once.</p>
+
+                    <pre><code class="language-python">import os
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnableParallel
+
+os.environ.setdefault("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+parser = StrOutputParser()
+
+# --- Step 1: Define individual chains for different analyses ---
+summary_chain = (
+    ChatPromptTemplate.from_template("Summarize this text in 2 sentences: {text}")
+    | model | parser
+)
+sentiment_chain = (
+    ChatPromptTemplate.from_template(
+        "Analyze the sentiment of this text. Reply with: Positive, Negative, or Neutral. Text: {text}")
+    | model | parser
+)
+keyword_chain = (
+    ChatPromptTemplate.from_template(
+        "Extract the 5 most important keywords from this text as a comma-separated list: {text}")
+    | model | parser
+)
+
+# --- Step 2: Combine with RunnableParallel ---
+# Each key becomes a key in the output dict
+# All three chains execute simultaneously on the same input
+parallel_analysis = RunnableParallel(
+    summary=summary_chain,
+    sentiment=sentiment_chain,
+    keywords=keyword_chain,
+)
+
+# --- Step 3: Invoke ---
+text = """LangChain is a framework for developing applications powered by large language
+models. It simplifies the process of building context-aware, reasoning applications
+by providing tools for prompt management, memory, retrieval, and agent orchestration."""
+
+result = parallel_analysis.invoke({"text": text})
+
+# Result is a dict with keys matching the RunnableParallel keys
+print("Summary:", result["summary"])
+print("Sentiment:", result["sentiment"])
+print("Keywords:", result["keywords"])
+# All three analyses ran in parallel — total time ≈ slowest chain, not sum of all three</code></pre>
+
+                    <p><code>RunnableParallel</code> also accepts a <strong>shorthand dict syntax</strong> — you can pass a plain dictionary instead of explicitly constructing a <code>RunnableParallel</code> object. LCEL automatically wraps it for you:</p>
+
+                    <pre><code class="language-python">import os
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnableParallel, RunnableLambda
+
+os.environ.setdefault("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+parser = StrOutputParser()
+
+# --- Chaining with RunnableParallel: generate then analyze ---
+# Step 1: Generate a joke
+joke_chain = (
+    ChatPromptTemplate.from_template("Tell me a short joke about {topic}")
+    | model | parser
+)
+
+# Step 2: Analyze the joke in parallel for humor and clarity
+humor_chain = (
+    ChatPromptTemplate.from_template("Rate this joke's humor from 1-10 and explain why: {joke}")
+    | model | parser
+)
+clarity_chain = (
+    ChatPromptTemplate.from_template("Is this joke clear and easy to understand? Explain: {joke}")
+    | model | parser
+)
+
+# Combine: generate joke → reshape output → analyze in parallel
+full_chain = (
+    joke_chain
+    | (lambda joke: {"joke": joke})  # Reshape string output into dict for next step
+    | RunnableParallel(
+        humor=humor_chain,
+        clarity=clarity_chain,
+    )
+)
+
+result = full_chain.invoke({"topic": "Python programming"})
+print("Humor Analysis:", result["humor"])
+print("Clarity Analysis:", result["clarity"])
+
+# --- Dict shorthand: LCEL auto-wraps dicts as RunnableParallel ---
+# These two are equivalent:
+explicit = RunnableParallel(humor=humor_chain, clarity=clarity_chain)
+shorthand = {"humor": humor_chain, "clarity": clarity_chain}  # Auto-wrapped by LCEL pipe
+# Both produce the same result when used in a chain with |</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-bolt me-2"></i>
+                        <strong>Performance Benefit:</strong> <code>RunnableParallel</code> runs all branches concurrently. If you have 3 LLM calls that each take 2 seconds, sequential execution takes ~6 seconds. With <code>RunnableParallel</code>, it takes ~2 seconds (the slowest single call). This is especially impactful in production APIs where latency matters.
+                    </div>
+
+                    <h4 id="runnable-lambda">RunnableLambda — Custom Python Logic</h4>
+
+                    <p><code>RunnableLambda</code> wraps any Python function as a Runnable, letting you inject arbitrary transformation logic into your chains. This is how you bridge the gap between LLM I/O and your application's business logic — data cleaning, validation, reformatting, API calls, database queries, or any custom computation that isn't an LLM call. Without <code>RunnableLambda</code>, you'd be limited to only LLM-compatible components in your chains.</p>
+
+                    <pre><code class="language-python">import os
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnableLambda
+
+os.environ.setdefault("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+parser = StrOutputParser()
+
+# --- Basic: Wrap a function as a Runnable ---
+def word_count(text: str) -> dict:
+    """Count words and characters in LLM output."""
+    words = text.split()
+    return {
+        "text": text,
+        "word_count": len(words),
+        "char_count": len(text),
+        "avg_word_length": round(sum(len(w) for w in words) / len(words), 1) if words else 0
+    }
+
+# word_count is now a step in the chain
+chain = (
+    ChatPromptTemplate.from_template("Explain {topic} in exactly 3 sentences.")
+    | model
+    | parser
+    | RunnableLambda(word_count)  # Transform LLM string output into structured dict
+)
+
+result = chain.invoke({"topic": "gradient descent"})
+print(f"Words: {result['word_count']}, Chars: {result['char_count']}")
+print(f"Text: {result['text'][:100]}...")
+
+
+# --- Data preprocessing: clean input before sending to LLM ---
+def preprocess_query(input_dict: dict) -> dict:
+    """Clean and normalize user input before LLM processing."""
+    query = input_dict["query"]
+    return {
+        "query": query.strip().lower(),
+        "original_query": query,
+        "query_length": len(query.split()),
+    }
+
+preprocess_chain = (
+    RunnableLambda(preprocess_query)
+    | ChatPromptTemplate.from_template("Answer this question concisely: {query}")
+    | model
+    | parser
+)
+
+result = preprocess_chain.invoke({"query": "  WHAT Is Machine Learning?  "})
+print(result)
+
+
+# --- Post-processing: transform LLM output for your application ---
+def format_for_api(llm_output: str) -> dict:
+    """Structure LLM output as an API response."""
+    return {
+        "status": "success",
+        "answer": llm_output,
+        "model": "gpt-4o-mini",
+        "truncated": len(llm_output) > 500,
+    }
+
+api_chain = (
+    ChatPromptTemplate.from_template("Explain {concept} simply.")
+    | model
+    | parser
+    | RunnableLambda(format_for_api)
+)
+
+result = api_chain.invoke({"concept": "neural networks"})
+print(result["status"])   # "success"
+print(result["answer"])   # The LLM's explanation</code></pre>
+
+                    <p><code>RunnableLambda</code> also supports <strong>async functions</strong> and the <strong>decorator syntax</strong> for cleaner code:</p>
+
+                    <pre><code class="language-python">import os
+import asyncio
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnableLambda, chain as chain_decorator
+
+os.environ.setdefault("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+parser = StrOutputParser()
+
+# --- Async support: wrap async functions for use in async chains ---
+async def async_enrich(text: str) -> dict:
+    """Simulate async enrichment (e.g., API call, database lookup)."""
+    # In production: await httpx.get(...) or await db.query(...)
+    await asyncio.sleep(0.1)  # Simulate async I/O
+    return {
+        "text": text,
+        "enriched": True,
+        "source": "knowledge_base"
+    }
+
+async_chain = (
+    ChatPromptTemplate.from_template("Define {term} in one sentence.")
+    | model
+    | parser
+    | RunnableLambda(async_enrich)  # Works with async functions automatically
+)
+
+# Use with await in async context
+# result = await async_chain.ainvoke({"term": "transformer architecture"})
+
+# --- @chain decorator: define a full Runnable as a function ---
+# Instead of building with | pipes, you can use the @chain decorator
+# to write the entire chain logic as a single function
+
+@chain_decorator
+def analysis_chain(input_dict: dict) -> str:
+    """A complete chain defined as a decorated function."""
+    topic = input_dict["topic"]
+
+    # You can use any Python logic inside
+    if len(topic.split()) > 10:
+        prompt_text = f"Summarize and then explain: {topic}"
+    else:
+        prompt_text = f"Explain in detail: {topic}"
+
+    # Call other chains/runnables inside
+    result = (
+        ChatPromptTemplate.from_template(prompt_text)
+        | model
+        | parser
+    ).invoke({})  # Empty dict since topic is already in the template
+
+    return f"[Analysis] {result}"
+
+# Use like any other Runnable
+result = analysis_chain.invoke({"topic": "attention mechanisms"})
+print(result)</code></pre>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>When to Use RunnableLambda:</strong> Any time you need custom Python logic inside a chain — data cleaning, validation, formatting, API calls, logging, conditional logic, or reshaping data between chain steps. If you find yourself wanting to write <code>(lambda x: ...)</code> in a pipe, consider using <code>RunnableLambda</code> for readability and debuggability (lambdas don't have names in tracing).
+                    </div>
+
+                    <h4 id="runnable-branch">RunnableBranch — Conditional Routing</h4>
+
+                    <p><code>RunnableBranch</code> routes input to different chains based on conditions — it's the <code>if/elif/else</code> of LCEL. This enables <strong>dynamic workflows</strong> where the path through your chain depends on the input content. For example, routing coding questions to a code-specialized prompt, math questions to a math-focused prompt, and everything else to a general-purpose prompt. Each branch is a tuple of <code>(condition_function, runnable)</code>, with a fallback runnable as the final argument.</p>
+
+                    <pre><code class="language-python">import os
+import re
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnableBranch, RunnableLambda
+
+os.environ.setdefault("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+parser = StrOutputParser()
+
+# --- Define specialized chains for different question types ---
+code_chain = (
+    ChatPromptTemplate.from_template(
+        "You are a senior software engineer. Answer this coding question with code examples "
+        "and best practices:\n\n{question}")
+    | model | parser
+)
+
+math_chain = (
+    ChatPromptTemplate.from_template(
+        "You are a mathematics professor. Solve this problem step-by-step, "
+        "showing all work:\n\n{question}")
+    | model | parser
+)
+
+creative_chain = (
+    ChatPromptTemplate.from_template(
+        "You are a creative writing expert. Help with this creative request "
+        "with vivid, engaging language:\n\n{question}")
+    | model | parser
+)
+
+general_chain = (
+    ChatPromptTemplate.from_template(
+        "Answer this question clearly and concisely:\n\n{question}")
+    | model | parser
+)
+
+# --- Helper: match whole words only (avoids substring false positives) ---
+# IMPORTANT: Plain "kw in text" does substring matching, which causes bugs.
+# For example, "api" matches inside "capital", routing "What is the capital
+# of France?" to the code chain! Use \b word boundaries to match whole words.
+def has_keyword(text: str, keywords: list[str]) -> bool:
+    """Check if any keyword appears as a whole word in text."""
+    pattern = r'\b(' + '|'.join(re.escape(kw) for kw in keywords) + r')\b'
+    return bool(re.search(pattern, text, re.IGNORECASE))
+
+# --- RunnableBranch: route to the right chain based on input ---
+# Each tuple is (condition_function, chain_to_run)
+# The last argument (no tuple) is the default fallback
+branch = RunnableBranch(
+    # Condition 1: coding questions
+    (lambda x: has_keyword(x["question"],
+        ["code", "function", "python", "javascript", "bug", "api", "programming"]),
+     code_chain),
+
+    # Condition 2: math questions
+    (lambda x: has_keyword(x["question"],
+        ["calculate", "solve", "equation", "integral", "derivative"]),
+     math_chain),
+
+    # Condition 3: creative requests
+    (lambda x: has_keyword(x["question"],
+        ["write", "story", "poem", "creative", "imagine"]),
+     creative_chain),
+
+    # Default fallback: general questions
+    general_chain,
+)
+
+# Test with different questions
+questions = [
+    "Write a Python function for binary search with type hints",
+    "Solve the integral of x^2 * sin(x) dx",
+    "Write a short poem about machine learning",
+    "What is the capital of France?",
+]
+
+for q in questions:
+    result = branch.invoke({"question": q})
+    print(f"Q: {q[:50]}...")
+    print(f"A: {result[:100]}...\n")</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Substring Trap:</strong> Never use <code>kw in text</code> for keyword matching — it does <strong>substring</strong> matching, not whole-word matching. For example, <code>"api" in "capital"</code> is <code>True</code> because "c<strong>api</strong>tal" contains "api". Similarly, <code>"code" in "barcode"</code> or <code>"function" in "malfunction"</code> would cause false positives. Always use <code>re.search(r'\bkeyword\b', text)</code> with word boundaries for reliable routing.
+                    </div>
+
+                    <p>For more sophisticated routing, you can use an <strong>LLM-based classifier</strong> to determine the route instead of keyword matching. This is more robust because the LLM understands intent, not just keywords:</p>
+
+                    <pre><code class="language-python">import os
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnableBranch, RunnableLambda
+
+os.environ.setdefault("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+parser = StrOutputParser()
+
+# --- LLM-based classification for smarter routing ---
+classify_prompt = ChatPromptTemplate.from_template(
+    "Classify this question into exactly one category: "
+    "TECHNICAL, MATHEMATICAL, CREATIVE, or GENERAL.\n\n"
+    "Question: {question}\n\n"
+    "Reply with only the category name, nothing else."
+)
+
+# Specialized chains (same as before)
+technical_chain = (
+    ChatPromptTemplate.from_template(
+        "As a senior engineer, answer technically:\n\n{question}")
+    | model | parser
+)
+math_chain = (
+    ChatPromptTemplate.from_template(
+        "As a math professor, solve step-by-step:\n\n{question}")
+    | model | parser
+)
+creative_chain = (
+    ChatPromptTemplate.from_template(
+        "As a creative writer, respond with flair:\n\n{question}")
+    | model | parser
+)
+general_chain = (
+    ChatPromptTemplate.from_template("Answer concisely:\n\n{question}")
+    | model | parser
+)
+
+# --- Smart router: classify first, then route ---
+def classify_and_route(input_dict: dict) -> str:
+    """Use LLM to classify, then route to the right chain."""
+    # Step 1: Classify the question
+    classification = (classify_prompt | model | parser).invoke(input_dict)
+    category = classification.strip().upper()
+    print(f"  [Router] Classified as: {category}")
+
+    # Step 2: Route to the appropriate chain
+    if "TECHNICAL" in category:
+        return technical_chain.invoke(input_dict)
+    elif "MATHEMATICAL" in category:
+        return math_chain.invoke(input_dict)
+    elif "CREATIVE" in category:
+        return creative_chain.invoke(input_dict)
+    else:
+        return general_chain.invoke(input_dict)
+
+# Wrap as a Runnable so it works in LCEL chains
+smart_router = RunnableLambda(classify_and_route)
+
+# Test: the LLM decides the route, not keyword matching
+result = smart_router.invoke({"question": "How do transformers handle long sequences?"})
+# [Router] Classified as: TECHNICAL
+print(result[:200])</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>RunnableBranch vs RunnableLambda for Routing:</strong> <code>RunnableBranch</code> is declarative and works well for simple keyword-based conditions. For complex routing (LLM classification, multi-step logic, external API lookups), use <code>RunnableLambda</code> with a custom routing function instead — it gives you full Python control and is easier to debug.
+                    </div>
+
+                    <h4 id="combining-primitives">Combining Primitives — Real-World Pattern</h4>
+
+                    <p>In practice, you'll combine all four primitives in a single chain. Here's a realistic example that preprocesses input, fetches context in parallel, routes to a specialized handler, and post-processes the output:</p>
+
+                    <pre><code class="language-python">import os
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import (
@@ -589,62 +1118,69 @@ from langchain_core.runnables import (
     RunnableBranch,
 )
 
-model = ChatOpenAI(model="gpt-4o", temperature=0.7)
+os.environ.setdefault("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 parser = StrOutputParser()
 
-# --- RunnablePassthrough: passes input through unchanged ---
-# Useful for combining retrieved context with user input in RAG
-prompt = ChatPromptTemplate.from_template(
-    "Context: {context}\n\nQuestion: {question}"
+# --- Step 1: RunnableLambda for preprocessing ---
+def preprocess(input_dict: dict) -> dict:
+    """Clean and normalize the query."""
+    query = input_dict["query"].strip()
+    return {
+        "query": query,
+        "query_type": "technical" if any(
+            kw in query.lower() for kw in ["code", "api", "function", "error"]
+        ) else "general",
+    }
+
+# --- Step 2: RunnablePassthrough.assign() to add context ---
+def fetch_docs(input_dict: dict) -> str:
+    """Simulate document retrieval."""
+    return f"Relevant documentation for: {input_dict['query']}"
+
+def fetch_examples(input_dict: dict) -> str:
+    """Simulate example retrieval."""
+    return f"Code examples related to: {input_dict['query']}"
+
+# --- Step 3: RunnableBranch for routing ---
+technical_prompt = ChatPromptTemplate.from_template(
+    "Context: {docs}\nExamples: {examples}\n\n"
+    "As a senior engineer, answer: {query}"
 )
-# Example pattern (retriever would be a real vector store retriever):
-# chain = RunnableParallel(
-#     context=retriever,             # Fetches context from a vector store
-#     question=RunnablePassthrough() # Passes the question through as-is
-# ) | prompt | model | parser
-
-# --- RunnableParallel: runs multiple runnables in parallel ---
-summary_chain = ChatPromptTemplate.from_template(
-    "Summarize: {text}") | model | parser
-sentiment_chain = ChatPromptTemplate.from_template(
-    "What is the sentiment of: {text}") | model | parser
-keyword_chain = ChatPromptTemplate.from_template(
-    "Extract keywords from: {text}") | model | parser
-
-parallel = RunnableParallel(
-    summary=summary_chain,
-    sentiment=sentiment_chain,
-    keywords=keyword_chain,
+general_prompt = ChatPromptTemplate.from_template(
+    "Context: {docs}\n\nAnswer clearly: {query}"
 )
-# All three chains run simultaneously on the same input
-result = parallel.invoke({"text": "LangChain is a powerful framework..."})
-# result = {"summary": "...", "sentiment": "...", "keywords": "..."}
 
-# --- RunnableLambda: wraps any Python function as a Runnable ---
-def word_count(text: str) -> dict:
-    """Count words in the output text."""
-    return {"text": text, "word_count": len(text.split())}
+# --- Step 4: RunnableLambda for post-processing ---
+def format_response(text: str) -> dict:
+    return {"answer": text, "status": "success", "char_count": len(text)}
 
-simple_prompt = ChatPromptTemplate.from_template("Explain {topic} briefly.")
-chain = simple_prompt | model | parser | RunnableLambda(word_count)
+# --- Compose the full pipeline ---
+full_chain = (
+    # Preprocess input
+    RunnableLambda(preprocess)
+    # Add context in parallel (both run simultaneously)
+    | RunnablePassthrough.assign(
+        docs=RunnableLambda(fetch_docs),
+        examples=RunnableLambda(fetch_examples),
+    )
+    # Route based on query type
+    | RunnableBranch(
+        (lambda x: x["query_type"] == "technical", technical_prompt | model | parser),
+        general_prompt | model | parser,  # Default
+    )
+    # Post-process
+    | RunnableLambda(format_response)
+)
 
-# --- RunnableBranch: conditional routing ---
-code_chain = ChatPromptTemplate.from_template(
-    "Answer this coding question: {question}") | model | parser
-math_chain = ChatPromptTemplate.from_template(
-    "Solve this math problem: {question}") | model | parser
-default_chain = ChatPromptTemplate.from_template(
-    "Answer: {question}") | model | parser
-
-branch = RunnableBranch(
-    (lambda x: "code" in x["question"].lower(), code_chain),
-    (lambda x: "math" in x["question"].lower(), math_chain),
-    default_chain  # Fallback if no condition matches
-)</code></pre>
+result = full_chain.invoke({"query": "How do I handle API rate limits in Python?"})
+print(f"Status: {result['status']}")
+print(f"Answer ({result['char_count']} chars): {result['answer'][:200]}...")</code></pre>
 
                     <div class="highlight-box teal">
                         <i class="fas fa-code me-2"></i>
-                        <strong>Pro Tip:</strong> Use <code>RunnableParallel</code> to fetch data from multiple sources simultaneously. For example, in a RAG pipeline, you can retrieve documents from multiple vector stores in parallel and then merge the results before passing to the LLM.
+                        <strong>Pro Tip:</strong> Use <code>RunnableParallel</code> to fetch data from multiple sources simultaneously. For example, in a RAG pipeline, you can retrieve documents from multiple vector stores in parallel and then merge the results before passing to the LLM. The dict shorthand <code>{"key1": chain1, "key2": chain2}</code> is automatically wrapped as <code>RunnableParallel</code> by LCEL, so you can use either syntax interchangeably.
                     </div>
                 </div>
 
@@ -753,7 +1289,8 @@ transform_chain = (
     | RunnableLambda(parse_analysis)
 )
 
-result = transform_chain.invoke("Your raw document text goes here...")</code></pre>
+result = transform_chain.invoke("Retrieval-Augmented Generation (RAG) is an AI framework that improves Large Language Model (LLM) accuracy by retrieving data from external, trusted sources before generating a response. It reduces hallucinations and provides up-to-date information by grounding AI in specific documents, databases, or live web searches, rather than relying solely on static training data")
+print(result)</code></pre>
 
                     <h3 id="router-chains">2.3 Router Chains</h3>
 
@@ -1006,14 +1543,14 @@ def search_documentation(query: str) -> str:
 @tool
 def calculate_token_cost(
     input_tokens: int,
-    output_tokens: int,
+    output_tokens: int = 0,
     model: str = "gpt-4o"
 ) -> str:
     """Calculate the cost of an LLM API call based on token usage.
 
     Args:
         input_tokens: Number of input/prompt tokens.
-        output_tokens: Number of output/completion tokens.
+        output_tokens: Number of output/completion tokens. Defaults to 0.
         model: The model name for pricing lookup.
     """
     pricing = {
@@ -1438,20 +1975,29 @@ def process_query(query: str) -> str:
                         <strong>Choose Haystack when:</strong> You want a clean, production-focused pipeline framework with strong typing and explicit data flow. Haystack excels at traditional NLP + LLM hybrid pipelines and has excellent documentation. Best for teams that value explicit over implicit behavior.
                     </div>
 
-                    <pre><code class="language-python"># Side-by-side: The same RAG pipeline in all three frameworks
-# pip install langchain langchain-openai llama-index haystack-ai
+                    <h4>LangChain RAG Pipeline</h4>
 
-# === LangChain ===
-# pip install langchain langchain-openai chromadb
+                    <pre><code class="language-python"># pip install langchain langchain-openai langchain-chroma chromadb
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.documents import Document
 
 embeddings = OpenAIEmbeddings()
-vectorstore = Chroma(embedding_function=embeddings, persist_directory="./db")
-retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+
+# Create vectorstore with sample documents so the retriever has content
+sample_docs = [
+    Document(page_content="LCEL (LangChain Expression Language) is a declarative way to compose "
+             "chains using the pipe operator (|). It connects prompts, models, and parsers."),
+    Document(page_content="LangChain is a framework for building LLM-powered applications with "
+             "tools for prompt management, memory, retrieval, and agent orchestration."),
+    Document(page_content="RAG (Retrieval-Augmented Generation) retrieves relevant documents "
+             "from a vector store and passes them as context to an LLM for grounded answers."),
+]
+vectorstore = Chroma.from_documents(sample_docs, embeddings)
+retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
 prompt = ChatPromptTemplate.from_template(
     "Answer based on context:\n{context}\n\nQuestion: {question}"
@@ -1460,39 +2006,62 @@ langchain_rag = (
     {"context": retriever, "question": RunnablePassthrough()}
     | prompt | ChatOpenAI(model="gpt-4o") | StrOutputParser()
 )
-# result = langchain_rag.invoke("What is LCEL?")
+result = langchain_rag.invoke("What is LCEL?")
+print(result)</code></pre>
 
+                    <h4>LlamaIndex RAG Pipeline</h4>
 
-# === LlamaIndex ===
-# pip install llama-index
+                    <pre><code class="language-python"># pip install llama-index
+import tempfile, os
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
 
-documents = SimpleDirectoryReader("./data").load_data()
+# Create a temporary directory with sample documents
+tmp_dir = tempfile.mkdtemp()
+for i, text in enumerate([
+    "LCEL is a declarative way to compose chains using the pipe operator.",
+    "LangChain is a framework for building LLM-powered applications.",
+    "RAG retrieves relevant documents and passes them as context to an LLM.",
+]):
+    with open(os.path.join(tmp_dir, f"doc{i}.txt"), "w") as f:
+        f.write(text)
+
+documents = SimpleDirectoryReader(tmp_dir).load_data()
 index = VectorStoreIndex.from_documents(documents)
-llamaindex_rag = index.as_query_engine(similarity_top_k=5)
-# result = llamaindex_rag.query("What is LCEL?")
+llamaindex_rag = index.as_query_engine(similarity_top_k=3)
+result = llamaindex_rag.query("What is LCEL?")
+print(result)</code></pre>
 
+                    <h4>Haystack RAG Pipeline</h4>
 
-# === Haystack ===
-# pip install haystack-ai
-from haystack import Pipeline
+                    <pre><code class="language-python"># pip install haystack-ai
+from haystack import Pipeline, Document
 from haystack.components.retrievers.in_memory import InMemoryBM25Retriever
 from haystack.components.generators import OpenAIGenerator
 from haystack.components.builders import PromptBuilder
 from haystack.document_stores.in_memory import InMemoryDocumentStore
 
-# Initialize Haystack document store (equivalent to vector store)
+# Initialize document store with sample documents
 doc_store = InMemoryDocumentStore()
+doc_store.write_documents([
+    Document(content="LCEL is a declarative way to compose chains using the pipe operator."),
+    Document(content="LangChain is a framework for building LLM-powered applications."),
+    Document(content="RAG retrieves relevant documents and passes them as context to an LLM."),
+])
 
 haystack_rag = Pipeline()
 haystack_rag.add_component("retriever", InMemoryBM25Retriever(document_store=doc_store))
 haystack_rag.add_component("prompt", PromptBuilder(
-    template="Context: {{documents}}\nQuestion: {{question}}"
+    template="Context: {{documents}}\nQuestion: {{question}}",
+    required_variables=["question", "documents"],
 ))
 haystack_rag.add_component("llm", OpenAIGenerator(model="gpt-4o"))
-haystack_rag.connect("retriever", "prompt")
+haystack_rag.connect("retriever", "prompt.documents")
 haystack_rag.connect("prompt", "llm")
-# result = haystack_rag.run({"retriever": {"query": "What is LCEL?"}})</code></pre>
+result = haystack_rag.run({
+    "retriever": {"query": "What is LCEL?"},
+    "prompt": {"question": "What is LCEL?"},
+})
+print(result["llm"]["replies"][0])</code></pre>
 
                     <p>Notice how LlamaIndex requires the fewest lines for a basic RAG pipeline — that is its sweet spot. LangChain offers maximum composability with the pipe operator. Haystack provides the most explicit data flow with named connections.</p>
                 </div>

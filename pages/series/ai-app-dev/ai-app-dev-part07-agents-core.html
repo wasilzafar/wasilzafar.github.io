@@ -576,18 +576,18 @@ def agent_loop(llm, user_input, tools, max_iterations=10):
 
                     <p>API tools connect agents to external services — weather data, search engines, financial data, and any REST or GraphQL endpoint.</p>
 
-                    <pre><code class="language-python"># pip install langchain-core langchain-community tavily-python requests
+                    <pre><code class="language-python"># pip install langchain-core langchain-tavily requests
 import os
 import requests
 from langchain_core.tools import tool
-from langchain_community.tools import TavilySearchResults
+from langchain_tavily import TavilySearch
 
 # API keys via environment variables
 # export TAVILY_API_KEY="tvly-..."
 # export WEATHER_API_KEY="your-openweathermap-key"
 
 # Built-in search tool (requires TAVILY_API_KEY env var)
-search_tool = TavilySearchResults(
+search_tool = TavilySearch(
     max_results=3,
     search_depth="advanced",
     include_answer=True
@@ -625,7 +625,7 @@ def get_stock_price(symbol: str) -> str:
 # Inspect tool metadata (LangChain uses this to tell the LLM about tools)
 print(get_weather.name)         # "get_weather"
 print(get_weather.description)  # "Get the current weather..."
-print(get_weather.args_schema.schema())  # JSON schema for arguments</code></pre>
+print(get_weather.args_schema.model_json_schema())  # JSON schema for arguments</code></pre>
 
                     <h3 id="database-tools">2.2 Database Tools</h3>
 
@@ -634,8 +634,8 @@ print(get_weather.args_schema.schema())  # JSON schema for arguments</code></pre
                     <pre><code class="language-python"># pip install langchain-community
 from langchain_core.tools import tool
 from langchain_community.utilities import SQLDatabase
-from langchain_community.tools.sql_database.tool import (
-    QuerySQLDataBaseTool,
+from langchain_community.tools import (
+    QuerySQLDatabaseTool,
     InfoSQLDatabaseTool,
     ListSQLDatabaseTool
 )
@@ -650,7 +650,7 @@ list_tables = ListSQLDatabaseTool(db=db)
 table_info = InfoSQLDatabaseTool(db=db)
 
 # Tool to execute SQL queries
-query_tool = QuerySQLDataBaseTool(db=db)
+query_tool = QuerySQLDatabaseTool(db=db)
 
 # Custom safe query tool with guardrails
 @tool
@@ -923,18 +923,32 @@ for tc in response.tool_calls:
 
                     <p>Tool-calling is the modern, provider-agnostic approach that works with OpenAI, Anthropic, Google, and other LLM providers. It supersedes the older "function-calling" terminology.</p>
 
-                    <pre><code class="language-python"># pip install langchain-anthropic langchain-google-genai
-# Assumes get_weather, calculator are defined above (Section 2)
+                    <pre><code class="language-python"># pip install langchain-anthropic langchain-google-genai langchain-core
 # Requires environment variables:
 #   export ANTHROPIC_API_KEY="sk-ant-..."
 #   export GOOGLE_API_KEY="AIza..."
+import math
 from langchain_core.tools import tool
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+# Define tools inline so this block is self-contained
+@tool
+def get_weather(city: str) -> str:
+    """Get the current weather for a city."""
+    return f"Weather in {city}: 22°C, partly cloudy"
+
+@tool
+def calculator(expression: str) -> str:
+    """Evaluate a mathematical expression."""
+    allowed = {k: v for k, v in math.__dict__.items() if not k.startswith("__")}
+    allowed.update({"abs": abs, "round": round, "min": min, "max": max})
+    result = eval(expression, {"__builtins__": {}}, allowed)
+    return f"{expression} = {result}"
+
 # Tool-calling works across providers — same interface, different models
 # Anthropic Claude
-claude = ChatAnthropic(model="claude-3-5-sonnet-20241022")
+claude = ChatAnthropic(model="claude-sonnet-4-20250514")
 claude_with_tools = claude.bind_tools([get_weather, calculator])
 
 # Google Gemini
@@ -943,7 +957,8 @@ gemini_with_tools = gemini.bind_tools([get_weather, calculator])
 
 # The interface is identical regardless of provider
 response = claude_with_tools.invoke("What's 2^10?")
-# response.tool_calls = [{"name": "calculator", "args": {"expression": "2**10"}, "id": "..."}]
+for tc in response.tool_calls:
+    print(f"Tool: {tc['name']}, Args: {tc['args']}")
 
 # Comparison: ReAct vs Function-Calling vs Tool-Calling
 comparison = {
@@ -981,11 +996,11 @@ for name, details in comparison.items():
 
                     <h3 id="create-react-agent">4.1 create_react_agent</h3>
 
-                    <pre><code class="language-python"># pip install langchain langchain-openai langchainhub
+                    <pre><code class="language-python"># pip install langchain-classic langchain-openai
 # Assumes search_tool, calculator, get_weather are defined above (Section 2)
-from langchain.agents import create_react_agent, AgentExecutor
+from langchain_classic.agents import create_react_agent, AgentExecutor
 from langchain_openai import ChatOpenAI
-from langchain import hub
+from langchain_classic import hub
 
 # Pull the standard ReAct prompt from LangChain Hub
 prompt = hub.pull("hwchase17/react")
@@ -1027,9 +1042,9 @@ print(result["output"])
 
                     <p>The <code>AgentExecutor</code> is the runtime that manages the agent loop. Understanding its configuration options is crucial for building reliable agents.</p>
 
-                    <pre><code class="language-python"># pip install langchain langchain-openai
+                    <pre><code class="language-python"># pip install langchain-classic langchain-openai
 # Assumes search_tool, calculator, safe_sql_query, get_weather from Sections 2.1-2.2
-from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
@@ -1088,21 +1103,21 @@ for step in result["intermediate_steps"]:
 
                     <p>Let us build a complete research assistant agent that combines search, calculation, and code execution.</p>
 
-                    <pre><code class="language-python"># pip install langchain langchain-openai langchain-community tavily-python
+                    <pre><code class="language-python"># pip install langchain-classic langchain-openai langchain-tavily
 # Full standalone example — copy-paste and run
 import os
-from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import tool
-from langchain_community.tools import TavilySearchResults
+from langchain_tavily import TavilySearch
 
 # API keys via environment variables
 # export OPENAI_API_KEY="sk-..."
 # export TAVILY_API_KEY="tvly-..."
 
 # --- Define Tools ---
-search = TavilySearchResults(max_results=5, search_depth="advanced")
+search = TavilySearch(max_results=5, search_depth="advanced")
 
 @tool
 def calculate(expression: str) -> str:
@@ -1201,9 +1216,9 @@ print(result["output"])</code></pre>
 
                     <h3 id="conversational-agents">5.1 Conversational Agents</h3>
 
-                    <pre><code class="language-python"># pip install langchain langchain-openai langchain-community tavily-python
+                    <pre><code class="language-python"># pip install langchain-classic langchain-openai
 # Assumes search_tool, calculator are defined above (Sections 2.1, 2.3)
-from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
