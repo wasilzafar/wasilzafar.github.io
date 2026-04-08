@@ -425,7 +425,11 @@
                 <div id="fastapi-llm" class="blog-content mt-5">
                     <h2><i class="fas fa-server me-2 text-teal"></i>1. FastAPI for LLM APIs</h2>
 
+                    <p>FastAPI is the framework of choice for building production LLM APIs due to its native async support, automatic OpenAPI documentation, Pydantic-based validation, and streaming response capabilities. This section covers the essential patterns for building LLM-serving APIs: request/response schema design, error handling, authentication, and rate limiting — all tailored to the unique requirements of LLM applications where requests are long-running and token-intensive.</p>
+
                     <h3 id="api-design">1.1 API Design Patterns</h3>
+
+                    <p>A well-designed LLM API starts with clear Pydantic request/response models, supports both synchronous and streaming responses, and includes health check endpoints for load balancer probes. The implementation below demonstrates a production-ready FastAPI service with typed schemas, CORS middleware, and a streaming chat endpoint that yields tokens as they’re generated.</p>
 
                     <pre><code class="language-python"># Production FastAPI service for LLM applications
 # pip install fastapi uvicorn openai pydantic
@@ -568,6 +572,8 @@ if __name__ == "__main__":
 
                     <h3 id="request-validation">1.2 Request Validation & Error Handling</h3>
 
+                    <p>LLM API errors require special handling because failures can occur at multiple levels — input validation, model loading, inference timeouts, and rate limit exhaustion. A production error handling layer needs custom exception classes, structured error responses with request IDs for debugging, and graceful degradation that returns useful error messages rather than raw stack traces.</p>
+
                     <pre><code class="language-python"># Production error handling and request validation
 # Extends the FastAPI app defined above
 
@@ -613,6 +619,8 @@ async def llm_error_handler(request: Request, exc: LLMError):
     )</code></pre>
 
                     <h3 id="middleware-auth">1.3 Middleware, Auth & Rate Limiting</h3>
+
+                    <p>Production LLM APIs need three layers of middleware: <strong>authentication</strong> (API key or JWT validation), <strong>rate limiting</strong> (preventing individual users from monopolizing expensive GPU resources), and <strong>observability</strong> (logging request latency and token usage for every call). The middleware stack below implements all three using FastAPI’s dependency injection and middleware hooks.</p>
 
                     <pre><code class="language-python"># API key authentication and rate limiting middleware
 # Extends the FastAPI app defined above
@@ -676,6 +684,8 @@ async def track_latency(request: Request, call_next):
                 <div id="async-streaming" class="blog-content mt-5">
                     <h2><i class="fas fa-bolt me-2 text-teal"></i>2. Async & Streaming</h2>
 
+                    <p>LLM inference is inherently slow (seconds per response), making asynchronous programming and streaming essential for production UX. Streaming delivers tokens to the user as they’re generated (reducing perceived latency from seconds to milliseconds), while async patterns let your server handle thousands of concurrent LLM requests without blocking. This section covers the three primary streaming protocols and async patterns for LLM applications.</p>
+
                     <h3 id="sse-streaming">2.1 Server-Sent Events (SSE)</h3>
 
                     <p>SSE is the standard protocol for streaming LLM responses to web clients. It uses a single HTTP connection where the server pushes data events. This is the same protocol used by ChatGPT, Claude, and every major LLM chat interface.</p>
@@ -735,6 +745,8 @@ async def rag_stream_endpoint(request: ChatRequest):
     )</code></pre>
 
                     <h3 id="websocket-streaming">2.2 WebSocket Streaming</h3>
+
+                    <p>While SSE is unidirectional (server to client), WebSockets provide full-duplex communication — enabling interactive chat interfaces where the user can send new messages while the model is still generating a response. The implementation below manages multiple concurrent WebSocket connections, broadcasts tokens in real-time, and handles connection lifecycle events (join, disconnect, errors) gracefully.</p>
 
                     <pre><code class="language-python"># WebSocket endpoint for bidirectional LLM communication
 # Extends the FastAPI app defined above
@@ -803,6 +815,8 @@ async def websocket_chat(websocket: WebSocket, client_id: str):
 
                     <h3 id="async-patterns">2.3 Async Patterns for LLMs</h3>
 
+                    <p>When your application needs to make multiple LLM calls for a single request (e.g., generating summaries for several documents), sequential execution wastes time. Async patterns with <code>asyncio.gather()</code> let you run multiple LLM calls in parallel, while semaphores prevent overwhelming the API with too many concurrent requests. The combination of parallelism and rate limiting is essential for production throughput optimization.</p>
+
                     <pre><code class="language-python"># Parallel LLM calls with asyncio
 # pip install openai
 
@@ -858,6 +872,8 @@ async def rate_limited_calls(
                 <!-- Section 3: Queuing & Background Tasks -->
                 <div id="queuing" class="blog-content mt-5">
                     <h2><i class="fas fa-tasks me-2 text-teal"></i>3. Queuing & Background Tasks</h2>
+
+                    <p>Some LLM workloads — batch document processing, long-form content generation, multi-step agent workflows — take too long for synchronous HTTP requests. Task queuing with Celery and Redis lets you accept requests immediately, process them asynchronously in background workers, and notify clients when results are ready. This pattern also enables retry logic, priority queues, and horizontal scaling by adding more workers.</p>
 
                     <h3 id="celery-redis">3.1 Celery & Redis</h3>
 
@@ -994,6 +1010,8 @@ async def get_task_status(task_id: str):
                 <!-- Section 4: Caching Strategies -->
                 <div id="caching" class="blog-content mt-5">
                     <h2><i class="fas fa-database me-2 text-teal"></i>4. Caching Strategies</h2>
+
+                    <p>LLM API calls are expensive (both in latency and cost), making caching one of the highest-impact optimizations for production systems. Unlike traditional caching where keys must match exactly, <strong>semantic caching</strong> uses embedding similarity to return cached responses for queries that are semantically similar (but not identical) to previous requests. This can reduce API costs by 30–70% while improving response times from seconds to milliseconds for cached queries.</p>
 
                     <h3 id="semantic-cache">4.1 Semantic Caching</h3>
 
@@ -1159,6 +1177,8 @@ async def chat_cached(request: ChatRequest):
                 <div id="scaling" class="blog-content mt-5">
                     <h2><i class="fas fa-expand-arrows-alt me-2 text-teal"></i>5. Scaling LLM Inference</h2>
 
+                    <p>Scaling LLM inference is fundamentally different from scaling traditional web services because GPU memory, not CPU, is the bottleneck. Specialized serving frameworks like vLLM and TGI implement GPU-optimized techniques — continuous batching, PagedAttention, tensor parallelism, and speculative decoding — that maximize throughput while minimizing latency. This section covers the two leading open-source inference servers and how to deploy them.</p>
+
                     <h3 id="vllm">5.1 vLLM</h3>
 
                     <p><strong>vLLM</strong> is the leading open-source inference engine for serving LLMs. It uses <strong>PagedAttention</strong> to efficiently manage GPU memory, achieving 2-24x higher throughput than naive HuggingFace inference.</p>
@@ -1203,6 +1223,8 @@ response = vllm_client.chat.completions.create(
 print(response.choices[0].message.content)</code></pre>
 
                     <h3 id="tgi">5.2 Text Generation Inference (TGI)</h3>
+
+                    <p>HuggingFace’s Text Generation Inference (TGI) is a production-ready serving solution optimized for HuggingFace models. It supports GPTQ/AWQ quantization for fitting large models on smaller GPUs, tensor parallelism for multi-GPU setups, and a streaming API compatible with the OpenAI format. The Docker-based deployment below shows how to serve a quantized model with sharding across GPUs.</p>
 
                     <pre><code class="language-bash"># Deploy with HuggingFace TGI (Docker)
 docker run --gpus all --shm-size 1g -p 8002:80 \
@@ -1262,6 +1284,8 @@ docker run --gpus all --shm-size 1g -p 8002:80 \
                 <!-- Section 6: Cost Optimization -->
                 <div id="cost-optimization" class="blog-content mt-5">
                     <h2><i class="fas fa-coins me-2 text-teal"></i>6. Cost Optimization</h2>
+
+                    <p>LLM API costs scale linearly with token usage, so cost optimization is critical for any production application. The two most impactful strategies are <strong>intelligent model routing</strong> (sending simple queries to cheap models and complex queries to expensive ones) and <strong>token efficiency</strong> (compressing prompts, trimming context, and dynamically adjusting <code>max_tokens</code>). Together, these techniques can reduce API costs by 50–80% without measurable quality degradation.</p>
 
                     <h3 id="model-routing">6.1 Intelligent Model Routing</h3>
 
@@ -1359,6 +1383,8 @@ class ModelRouter:
 
                     <h3 id="token-efficiency">6.2 Token Efficiency</h3>
 
+                    <p>Token efficiency optimizations reduce the number of tokens consumed per request without sacrificing output quality. Key techniques include <strong>prompt compression</strong> (removing redundant phrasing), <strong>context trimming</strong> (intelligently truncating retrieved documents), and <strong>adaptive max_tokens</strong> (setting response length limits based on query complexity). The <code>TokenOptimizer</code> below combines all three approaches into a reusable pipeline.</p>
+
                     <pre><code class="language-python"># Token optimization strategies
 # No external dependencies required — standalone utility class
 
@@ -1412,7 +1438,11 @@ class TokenOptimizer:
                 <div id="infrastructure" class="blog-content mt-5">
                     <h2><i class="fas fa-cloud me-2 text-teal"></i>7. Infrastructure</h2>
 
+                    <p>Deploying LLM applications requires infrastructure that handles GPU scheduling, memory-intensive containers, and model artifact management. This section covers containerization with Docker, orchestration with Kubernetes (including GPU-aware scheduling and horizontal pod autoscaling), and multi-cloud provider abstractions that enable failover between OpenAI, AWS Bedrock, and Azure OpenAI.</p>
+
                     <h3 id="docker-k8s">7.1 Docker & Kubernetes</h3>
+
+                    <p>A production LLM deployment starts with a well-structured Dockerfile (multi-stage build, non-root user, health checks) and Kubernetes manifests for deployment, service, and autoscaling. The configurations below demonstrate GPU-aware scheduling with <code>nvidia.com/gpu</code> resource requests, horizontal pod autoscaling based on custom metrics, and proper liveness/readiness probes for LLM services that have slow startup times.</p>
 
                     <pre><code class="language-bash"># Dockerfile for production LLM API
 FROM python:3.11-slim
@@ -1518,6 +1548,8 @@ spec:
         averageValue: "50"</code></pre>
 
                     <h3 id="cloud-providers">7.2 AWS Bedrock & Azure OpenAI</h3>
+
+                    <p>Production applications should never depend on a single LLM provider. A multi-cloud abstraction layer lets you route requests to the cheapest available provider, fail over automatically when one provider has an outage, and comply with data residency requirements by using region-specific endpoints. The implementation below wraps OpenAI, AWS Bedrock, and Azure OpenAI behind a unified interface with automatic failover and retry logic.</p>
 
                     <pre><code class="language-python"># Multi-cloud LLM provider abstraction
 # pip install openai boto3
@@ -1661,6 +1693,8 @@ class LLMProviderFactory:
                 <div id="monitoring" class="blog-content mt-5">
                     <h2><i class="fas fa-chart-line me-2 text-teal"></i>8. Production Monitoring</h2>
 
+                    <p>LLM systems require monitoring beyond traditional web metrics. In addition to request latency and error rates, you need to track token usage per request, cache hit rates, model drift indicators, and cost per query. This section covers latency percentile tracking (P50/P95/P99) and Prometheus-based dashboards that give operations teams real-time visibility into LLM service health and costs.</p>
+
                     <h3 id="latency-monitoring">8.1 Latency P50/P95/P99</h3>
 
                     <p>Monitoring average latency is misleading. The <strong>tail latencies</strong> (P95, P99) reveal the experience of your worst-served users. A system with 200ms average but 5s P99 has 1% of users waiting 25x longer than typical.</p>
@@ -1740,6 +1774,8 @@ SLOS = {
 }</code></pre>
 
                     <h3 id="dashboards">8.2 Monitoring Dashboards</h3>
+
+                    <p>A comprehensive monitoring dashboard for LLM applications exposes Prometheus metrics for the key operational signals: request latency histograms, token usage counters, cache hit/miss ratios, active request gauges, and estimated cost per request. The instrumentation below defines the core metrics and creates a monitoring middleware that automatically tracks every API call. These metrics feed into Grafana dashboards for real-time visualization and alerting.</p>
 
                     <pre><code class="language-python"># Prometheus metrics for LLM monitoring
 # pip install prometheus-client fastapi
