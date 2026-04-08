@@ -407,7 +407,11 @@
                 <div id="why-langgraph" class="blog-content mt-5">
                     <h2><i class="fas fa-question-circle me-2 text-teal"></i>1. Why LangGraph</h2>
 
+                    <p>LangChain's <code>AgentExecutor</code> was a great starting point for building autonomous agents, but production applications quickly expose its limitations. LangGraph was created specifically to address these gaps — providing a graph-based framework where you model workflows as <strong>nodes</strong> (functions), <strong>edges</strong> (transitions), and <strong>state</strong> (shared data). This section explores what breaks in AgentExecutor and how the graph paradigm solves it.</p>
+
                     <h3 id="agent-executor-limits">1.1 AgentExecutor Limitations</h3>
+
+                    <p><code>AgentExecutor</code> implements a single <strong>think → act → observe</strong> loop that repeats until the LLM decides it has a final answer. This works well for simple tool-calling agents, but falls apart when you need branching logic, parallel execution, or durable state. The code below enumerates the six key limitations that motivate the transition to LangGraph.</p>
 
                     <pre><code class="language-python"># What AgentExecutor CANNOT do (motivating LangGraph):
 
@@ -433,6 +437,10 @@
 # LangGraph is what you need for production workflows.</code></pre>
 
                     <h3 id="graph-paradigm">1.2 The Graph Paradigm</h3>
+
+                    <p>LangGraph replaces AgentExecutor's single loop with a <strong>directed graph</strong> where each node is a Python function and each edge defines when and where to transition next. State — a <code>TypedDict</code> — flows through the graph and is transformed by every node it passes through. Conditional edges let you branch dynamically (e.g., route billing vs. technical queries to different handlers), while cycles enable revision loops that AgentExecutor cannot express.</p>
+
+                    <p>The following example builds a customer-support ticket router from scratch. A <code>classify</code> node inspects the query and sets a category, <code>conditional_edges</code> route to the appropriate handler, and a <code>respond</code> node formats the final resolution.</p>
 
                     <div class="mermaid-container">
                         <span class="mermaid-label"><i class="fas fa-project-diagram me-1"></i>Ticket Routing Graph</span>
@@ -546,6 +554,8 @@ print(f"Response: {result['response']}")</code></pre>
 
                     <h3 id="state-definition">2.1 State Definition</h3>
 
+                    <p>In LangGraph, <strong>state</strong> is the data structure that flows through every node in the graph. You define it as a Python <code>TypedDict</code>, where each key represents a <strong>channel</strong> — a named slot that nodes can read from and write to. By default, when a node returns a value for a channel, it <em>overwrites</em> the existing value. But LangGraph's killer feature is <strong>reducers</strong>: annotate a channel with a function like <code>operator.add</code> and new values are <em>appended</em> instead of replaced. This distinction — overwrite vs. reduce — is fundamental to building correct state machines.</p>
+
                     <pre><code class="language-python"># pip install langgraph langchain-core
 from typing import TypedDict, Annotated, Sequence
 from operator import add
@@ -581,6 +591,8 @@ class ManagedState(TypedDict):
     final_answer: str</code></pre>
 
                     <h3 id="nodes-and-edges">2.2 Nodes & Edges</h3>
+
+                    <p><strong>Nodes</strong> are Python functions that accept state and return a partial update dictionary. <strong>Edges</strong> define the execution order — which node runs after which. Together, they form a directed acyclic graph (DAG) or a cyclic graph if revision loops are needed. The example below builds a four-node <em>research → write → review → finalize</em> pipeline where each node calls an LLM and passes its output downstream through state.</p>
 
                     <div class="mermaid-container">
                         <span class="mermaid-label"><i class="fas fa-project-diagram me-1"></i>Research-Write-Review Pipeline</span>
@@ -684,6 +696,10 @@ print("=== Final Article (first 300 chars) ===")
 print(result["final_article"][:300] + "...")</code></pre>
 
                     <h3 id="conditional-edges">2.3 Conditional Edges</h3>
+
+                    <p><strong>Conditional edges</strong> are what make LangGraph strictly more powerful than linear chains. Instead of hardcoding the next node, you provide a <em>routing function</em> that inspects the current state and returns the name of the next node to execute. This enables dynamic branching: a classifier node can route factual questions to a search path and conversational questions directly to an answer node, all within the same compiled graph.</p>
+
+                    <p><code>add_conditional_edges(source, router_fn, path_map)</code> takes the source node, a function that returns a string key, and a dictionary mapping those keys to destination nodes. The graph below routes questions through either a web search path or a direct-answer path based on the classifier's decision.</p>
 
                     <div class="mermaid-container">
                         <span class="mermaid-label"><i class="fas fa-project-diagram me-1"></i>Q&A Routing Graph</span>
@@ -859,44 +875,170 @@ print(result["messages"][-1].content)</code></pre>
                 <div id="state-management" class="blog-content mt-5">
                     <h2><i class="fas fa-database me-2 text-teal"></i>3. State Management</h2>
 
+                    <p>State management is the backbone of LangGraph. Every graph has a <code>TypedDict</code> schema that defines the data channels flowing through nodes. How those channels are <strong>updated</strong> — overwritten, appended, or transformed by a custom function — is controlled by <strong>reducers</strong>. Getting reducers right is essential: the wrong strategy leads to lost data (overwriting a message list) or unbounded growth (appending without limits). This section deep-dives into the three reducer patterns and shows how to compose complex state schemas for real-world agents.</p>
+
                     <h3 id="reducers">3.1 Reducers & State Updates</h3>
 
-                    <pre><code class="language-python"># Reducers control how state updates are merged
+                    <p>A <strong>reducer</strong> is a function attached to a state channel via <code>Annotated[type, reducer_fn]</code>. It controls <em>how</em> a new value from a node is merged with the existing value. LangGraph supports three strategies:</p>
+
+                    <ul>
+                        <li><strong>Replace (no reducer)</strong> — The node's returned value completely overwrites the channel. Best for scalar fields like <code>status</code> or <code>counter</code>.</li>
+                        <li><strong>Append (<code>operator.add</code>)</strong> — New items are concatenated to the existing list. Essential for message histories where every node contributes messages.</li>
+                        <li><strong>Custom function</strong> — A user-defined function receives <code>(old_value, new_value)</code> and returns the merged result. Useful for running aggregations like max, mean, or bounded queues.</li>
+                    </ul>
+
+                    <p>The code below demonstrates all three strategies as independent, runnable examples.</p>
+
+                    <div class="mermaid-container">
+                        <span class="mermaid-label"><i class="fas fa-project-diagram me-1"></i>Three Reducer Strategies</span>
+                        <pre class="mermaid">
+flowchart LR
+    subgraph replace["Replace — No Reducer"]
+        direction LR
+        R1["step_a\ncounter=5"] --> R2["step_b\ncounter=10"]
+    end
+
+    subgraph append["Append — add Reducer"]
+        direction LR
+        A1["greet\n+ hello"] --> A2["respond\n+ world"]
+    end
+
+    subgraph custom["Custom — running_max"]
+        direction LR
+        C1["round1\n72.5"] --> C2["round2\n91.0"] --> C3["round3\n85.3"]
+    end
+
+    style R1 fill:#f0f4f8,stroke:#16476A,color:#132440
+    style R2 fill:#f0f4f8,stroke:#16476A,color:#132440
+    style A1 fill:#e8f4f4,stroke:#3B9797,color:#132440
+    style A2 fill:#e8f4f4,stroke:#3B9797,color:#132440
+    style C1 fill:#fff5f5,stroke:#BF092F,color:#132440
+    style C2 fill:#fff5f5,stroke:#BF092F,color:#132440
+    style C3 fill:#fff5f5,stroke:#BF092F,color:#132440
+                        </pre>
+                    </div>
+
+                    <pre><code class="language-python"># Reducers control how state updates are merged in LangGraph
 from typing import TypedDict, Annotated
 from operator import add
+from langgraph.graph import StateGraph, START, END
 
-# WITHOUT reducer: value is REPLACED
+# --- Demo 1: WITHOUT reducer — values are REPLACED ---
 class ReplaceState(TypedDict):
     counter: int  # Each update replaces the value
-# Node returns {"counter": 5} → state["counter"] = 5
-# Next node returns {"counter": 10} → state["counter"] = 10
 
-# WITH 'add' reducer: values are APPENDED
+def step_a(state: ReplaceState) -> dict:
+    return {"counter": 5}
+
+def step_b(state: ReplaceState) -> dict:
+    return {"counter": 10}
+
+graph = StateGraph(ReplaceState)
+graph.add_node("step_a", step_a)
+graph.add_node("step_b", step_b)
+graph.add_edge(START, "step_a")
+graph.add_edge("step_a", "step_b")
+graph.add_edge("step_b", END)
+
+app = graph.compile()
+result = app.invoke({"counter": 0})
+print("=== Replace (no reducer) ===")
+print(f"counter = {result['counter']}")  # 10 — step_b replaced step_a's value
+print()
+
+# --- Demo 2: WITH 'add' reducer — lists are APPENDED ---
 class AppendState(TypedDict):
     messages: Annotated[list, add]
-# Node returns {"messages": ["hello"]} → state = ["hello"]
-# Next node returns {"messages": ["world"]} → state = ["hello", "world"]
 
-# Custom reducer: running maximum
+def greet(state: AppendState) -> dict:
+    return {"messages": ["hello"]}
+
+def respond(state: AppendState) -> dict:
+    return {"messages": ["world"]}
+
+graph2 = StateGraph(AppendState)
+graph2.add_node("greet", greet)
+graph2.add_node("respond", respond)
+graph2.add_edge(START, "greet")
+graph2.add_edge("greet", "respond")
+graph2.add_edge("respond", END)
+
+app2 = graph2.compile()
+result2 = app2.invoke({"messages": []})
+print("=== Append (add reducer) ===")
+print(f"messages = {result2['messages']}")  # ["hello", "world"] — appended, not replaced
+print()
+
+# --- Demo 3: Custom reducer — running maximum ---
 def running_max(current: float, new: float) -> float:
     return max(current, new) if current else new
 
 class ScoredState(TypedDict):
     scores: Annotated[list, add]
     best_score: Annotated[float, running_max]
-    attempts: Annotated[int, lambda a, b: a + b]  # Running sum</code></pre>
+
+def score_round_1(state: ScoredState) -> dict:
+    return {"scores": [72.5], "best_score": 72.5}
+
+def score_round_2(state: ScoredState) -> dict:
+    return {"scores": [91.0], "best_score": 91.0}
+
+def score_round_3(state: ScoredState) -> dict:
+    return {"scores": [85.3], "best_score": 85.3}
+
+graph3 = StateGraph(ScoredState)
+graph3.add_node("round1", score_round_1)
+graph3.add_node("round2", score_round_2)
+graph3.add_node("round3", score_round_3)
+graph3.add_edge(START, "round1")
+graph3.add_edge("round1", "round2")
+graph3.add_edge("round2", "round3")
+graph3.add_edge("round3", END)
+
+app3 = graph3.compile()
+result3 = app3.invoke({"scores": [], "best_score": 0.0})
+print("=== Custom reducer (running max) ===")
+print(f"All scores: {result3['scores']}")       # [72.5, 91.0, 85.3]
+print(f"Best score: {result3['best_score']}")    # 91.0 — max across all rounds</code></pre>
 
                     <h3 id="complex-state">3.2 Complex State Schemas</h3>
 
-                    <pre><code class="language-python"># Production-grade state schema example
+                    <p>Real-world agents need more than a flat list of messages. A production coding agent, for example, tracks the current code, test results, review feedback, a revision counter, and the overall status. LangGraph handles this naturally: each field in the <code>TypedDict</code> gets its own reducer strategy. Lists of feedback items append via <code>operator.add</code>; scalar fields like <code>iteration</code> and <code>status</code> overwrite; and conditionals on <code>iteration</code> enforce maximum revision limits.</p>
+
+                    <p>The example below builds a full <strong>plan → code → test → review → revise</strong> loop with a simulated quality gate. The review node routes back to revision when the iteration count is below the threshold, creating the cyclic graph that only LangGraph can express.</p>
+
+                    <div class="mermaid-container">
+                        <span class="mermaid-label"><i class="fas fa-project-diagram me-1"></i>Coding Agent — Revision Loop</span>
+                        <pre class="mermaid">
+flowchart TD
+    S((START)) --> plan[plan]
+    plan --> code[code]
+    code --> test[test]
+    test --> review[review]
+    review -->|LGTM or max reached| finalize[finalize]
+    review -->|needs work| revise[revise]
+    revise --> code
+    finalize --> E((END))
+
+    style S fill:#3B9797,stroke:#3B9797,color:#fff
+    style E fill:#132440,stroke:#132440,color:#fff
+    style plan fill:#e8f4f4,stroke:#3B9797,color:#132440
+    style code fill:#f0f4f8,stroke:#16476A,color:#132440
+    style test fill:#f0f4f8,stroke:#16476A,color:#132440
+    style review fill:#fff5f5,stroke:#BF092F,color:#132440
+    style revise fill:#fff0e0,stroke:#e67e22,color:#132440
+    style finalize fill:#e8f9e8,stroke:#28a745,color:#132440
+                        </pre>
+                    </div>
+
+                    <pre><code class="language-python"># Production-grade state schema with conditional routing
 from typing import TypedDict, Annotated, Optional
 from operator import add
-from langchain_core.messages import BaseMessage
+from langgraph.graph import StateGraph, START, END
 
 # Production-grade state schema for a coding agent
 class CodingAgentState(TypedDict):
     task_description: str
-    messages: Annotated[list[BaseMessage], add]
     plan: list[str]
     current_step: int
     code: str
@@ -906,7 +1048,6 @@ class CodingAgentState(TypedDict):
     revision_count: int
     max_revisions: int
     status: str   # "planning", "coding", "testing", "reviewing", "done"
-    error: Optional[str]
 
 # Conditional routing based on complex state
 def should_revise(state: CodingAgentState) -> str:
@@ -917,7 +1058,66 @@ def should_revise(state: CodingAgentState) -> str:
         return "finalize"  # Reviewer approved
     return "revise"        # Need more work
 
-# This drives a cycle: code → test → review → revise → code → test → ...</code></pre>
+# Simulated nodes for the coding agent cycle
+def plan_task(state: CodingAgentState) -> dict:
+    plan = ["Parse input", "Implement logic", "Add error handling"]
+    print(f"[Plan] Created {len(plan)}-step plan")
+    return {"plan": plan, "status": "coding"}
+
+def write_code(state: CodingAgentState) -> dict:
+    code = f"def solve():\n    # Step: {state['plan'][state['current_step']]}\n    return 42"
+    print(f"[Code] Writing {state['language']} — revision #{state['revision_count']}")
+    return {"code": code, "status": "testing"}
+
+def run_tests(state: CodingAgentState) -> dict:
+    passed = state["revision_count"] >= 1  # Passes on 2nd attempt
+    result = "All 3 tests passed" if passed else "FAILED: test_edge_case"
+    print(f"[Test] {'✅ Passed' if passed else '❌ Failed'}: {result}")
+    return {"test_results": result, "status": "reviewing"}
+
+def review_code(state: CodingAgentState) -> dict:
+    feedback = "LGTM — clean and well-tested" if "passed" in state["test_results"] else "Needs revision: handle edge cases"
+    print(f"[Review] {feedback}")
+    return {"review_feedback": feedback, "status": "reviewing"}
+
+def revise_code(state: CodingAgentState) -> dict:
+    print(f"[Revise] Applying feedback, attempt {state['revision_count'] + 1}")
+    return {"revision_count": state["revision_count"] + 1, "status": "coding"}
+
+def finalize_code(state: CodingAgentState) -> dict:
+    print(f"[Done] Finalized after {state['revision_count']} revision(s)")
+    return {"status": "done"}
+
+# Build the graph: plan → code → test → review → revise/finalize
+graph = StateGraph(CodingAgentState)
+graph.add_node("plan", plan_task)
+graph.add_node("code", write_code)
+graph.add_node("test", run_tests)
+graph.add_node("review", review_code)
+graph.add_node("revise", revise_code)
+graph.add_node("finalize", finalize_code)
+
+graph.add_edge(START, "plan")
+graph.add_edge("plan", "code")
+graph.add_edge("code", "test")
+graph.add_edge("test", "review")
+graph.add_conditional_edges("review", should_revise, {
+    "revise": "revise", "finalize": "finalize"
+})
+graph.add_edge("revise", "code")  # Loop back: revise → code → test → review
+graph.add_edge("finalize", END)
+
+app = graph.compile()
+result = app.invoke({
+    "task_description": "Write a function to find prime numbers",
+    "plan": [], "current_step": 0, "code": "", "language": "python",
+    "test_results": "", "review_feedback": "",
+    "revision_count": 0, "max_revisions": 3, "status": "planning"
+})
+
+print(f"\nFinal status: {result['status']}")
+print(f"Total revisions: {result['revision_count']}")
+print(f"Last review: {result['review_feedback']}")</code></pre>
 
                     <div class="highlight-box">
                         <i class="fas fa-lightbulb"></i>
@@ -981,6 +1181,8 @@ def should_revise(state: CodingAgentState) -> str:
                     </div>
 
                     <h3 id="decision-framework">4.3 Decision Framework</h3>
+
+                    <p>Choosing between LangGraph, LangChain agents, n8n, and Zapier is not about which tool is "best" — it depends on your requirements. The decision tree below encodes the key criteria: Does the workflow need agent reasoning (think-act-observe loops)? Does it need cycles, persistence, or human approval? Can the team write code, or do they need a visual builder? Run it with your own requirements to get a concrete recommendation.</p>
 
                     <pre><code class="language-python"># Decision helper function — run with different requirement dicts to get a recommendation
 def choose_orchestration(requirements: dict) -> str:
@@ -1047,6 +1249,15 @@ print(choose_orchestration({
 
                     <h3 id="memory-saver">5.1 MemorySaver (Development)</h3>
 
+                    <p><code>MemorySaver</code> is LangGraph's built-in, in-memory checkpointer designed for development and testing. Every time the graph executes a step, MemorySaver snapshots the entire state and stores it in a Python dictionary keyed by <code>thread_id</code>. This means you can invoke the graph multiple times with the same thread and the conversation history accumulates automatically — no database required.</p>
+
+                    <p>The tradeoff is clear: <strong>MemorySaver is volatile</strong>. All state is lost when the Python process exits. It is not suitable for production, but it is the fastest way to prototype multi-turn conversations and test state persistence logic before introducing a database.</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Jupyter Compatibility:</strong> MemorySaver uses <code>asyncio</code> internally. In Jupyter notebooks, this conflicts with the notebook's own event loop unless you use the async API (<code>ainvoke</code>, <code>aget_state_history</code>) and <code>await</code> at the top level. The example below uses this async pattern to avoid <code>RuntimeWarning</code> messages.
+                    </div>
+
                     <pre><code class="language-python"># pip install langgraph
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, START, END
@@ -1071,58 +1282,167 @@ graph.add_edge("chatbot", END)
 memory = MemorySaver()
 app = graph.compile(checkpointer=memory)
 
-# Each invocation needs a thread_id
-config = {"configurable": {"thread_id": "user-123-session-1"}}
+# Use async to avoid event-loop warnings in Jupyter notebooks
+async def main():
+    config = {"configurable": {"thread_id": "user-123-session-1"}}
 
-# First message
-result = app.invoke({"messages": ["Hello!"], "user_id": "user-123"}, config=config)
-# state: {"messages": ["Hello!", "Echo: Hello!"], "user_id": "user-123"}
+    # First message
+    result = await app.ainvoke(
+        {"messages": ["Hello!"], "user_id": "user-123"}, config=config
+    )
+    print(f"After msg 1: {result['messages']}")
 
-# Second message — state is preserved!
-result = app.invoke({"messages": ["How are you?"]}, config=config)
-# state: {"messages": ["Hello!", "Echo: Hello!", "How are you?", "Echo: How are you?"]}
+    # Second message — state is preserved!
+    result = await app.ainvoke(
+        {"messages": ["How are you?"]}, config=config
+    )
+    print(f"After msg 2: {result['messages']}")
 
-# Retrieve full state history
-for snapshot in app.get_state_history(config):
-    print(f"Messages: {len(snapshot.values['messages'])}")</code></pre>
+    # Retrieve full state history
+    async for snapshot in app.aget_state_history(config):
+        print(f"Messages: {len(snapshot.values['messages'])}")
+
+await main()</code></pre>
 
                     <h3 id="postgres-saver">5.2 PostgresSaver (Production)</h3>
 
-                    <pre><code class="language-python"># pip install langgraph psycopg[binary] asyncpg
-import os
+                    <p><code>PostgresSaver</code> is LangGraph's production-grade checkpointer that persists graph state to a PostgreSQL database. Unlike MemorySaver, state survives process restarts, server crashes, and deployments — your agent can resume a conversation exactly where it left off, even days later.</p>
+
+                    <p>Internally, PostgresSaver uses the <code>psycopg3</code> driver and manages state across four tables:</p>
+
+                    <ul>
+                        <li><strong>checkpoints</strong> — Snapshots of the graph's state at each super-step, enabling replay, debugging, and resumption at any point in time.</li>
+                        <li><strong>checkpoint_blobs</strong> — Stores large serialized state data (node outputs, channel values) separately from metadata for performance.</li>
+                        <li><strong>checkpoint_migrations</strong> — Tracks schema versions so PostgresSaver can evolve with newer LangGraph releases without breaking existing data.</li>
+                        <li><strong>checkpoint_writes</strong> — Records intermediate writes during graph execution for fault tolerance. If some nodes complete but others fail mid-step, the partial progress is preserved.</li>
+                    </ul>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Critical Setup:</strong> PostgresSaver requires the separate <code>langgraph-checkpoint-postgres</code> pip package — it is not included in the base <code>langgraph</code> install. Always use <code>PostgresSaver.from_conn_string()</code> instead of raw <code>psycopg.connect()</code>, because it sets <code>autocommit=True</code> which is required for the <code>CREATE INDEX CONCURRENTLY</code> statements in <code>setup()</code>.
+                    </div>
+
+                    <pre><code class="language-python"># pip install langgraph-checkpoint-postgres psycopg[binary]
 from langgraph.checkpoint.postgres import PostgresSaver
-import psycopg
+from langgraph.graph import StateGraph, START, END
+from typing import TypedDict, Annotated
+from operator import add
+import os
 
-# Use environment variable for database connection string
+class ConversationState(TypedDict):
+    messages: Annotated[list, add]
+    user_id: str
+
+def chatbot(state: ConversationState) -> dict:
+    last_msg = state["messages"][-1]
+    return {"messages": [f"Echo: {last_msg}"]}
+
+def build_graph():
+    graph = StateGraph(ConversationState)
+    graph.add_node("chatbot", chatbot)
+    graph.add_edge(START, "chatbot")
+    graph.add_edge("chatbot", END)
+    return graph
+
 DB_URI = os.getenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/langgraph_db")
+THREAD = {"configurable": {"thread_id": "production-thread-42"}}
 
-# Synchronous setup
-with psycopg.connect(DB_URI) as conn:
-    checkpointer = PostgresSaver(conn)
-    checkpointer.setup()  # Creates necessary tables
+# ── Session 1: Initial conversation ──
+print("SESSION 1 — Initial conversation")
+with PostgresSaver.from_conn_string(DB_URI) as checkpointer:
+    checkpointer.setup()  # Creates checkpoint tables on first run
+    checkpointer.delete_thread("production-thread-42")  # Clean slate for demo
+    app = build_graph().compile(checkpointer=checkpointer)
 
-app = graph.compile(checkpointer=checkpointer)
+    result = app.invoke(
+        {"messages": ["Hello, I need help with billing"], "user_id": "user-42"},
+        config=THREAD,
+    )
+    print(f"Messages: {result['messages']}")
 
-# State survives process restarts!
-config = {"configurable": {"thread_id": "production-thread-42"}}
-result = app.invoke({"messages": ["Continue our conversation"]}, config=config)
+    result = app.invoke({"messages": ["I was charged twice"]}, config=THREAD)
+    print(f"Messages: {result['messages']}")
 
-# Async version for production web servers
+# ── Connection closed — simulates a crash / server restart ──
+print("\n⚡ Server crashed! Process restarted...\n")
+
+# ── Session 2: NEW connection, same thread_id — state survives! ──
+print("SESSION 2 — After restart (new connection)")
+with PostgresSaver.from_conn_string(DB_URI) as checkpointer:
+    app = build_graph().compile(checkpointer=checkpointer)
+
+    # State is restored from PostgreSQL — all previous messages are here
+    state = app.get_state(THREAD)
+    print(f"Restored {len(state.values['messages'])} messages from database:")
+    for i, msg in enumerate(state.values['messages']):
+        print(f"  [{i}] {msg}")
+
+    # Continue the conversation seamlessly
+    result = app.invoke(
+        {"messages": ["Can you process a refund?"]}, config=THREAD
+    )
+    print(f"\nAfter new message: {len(result['messages'])} total messages")
+    print(f"Latest: {result['messages'][-1]}")
+
+    # Cleanup demo data so re-runs start fresh
+    checkpointer.delete_thread("production-thread-42")
+    print("\n✓ Demo data cleaned up")</code></pre>
+
+                    <pre><code class="language-python"># Async version — use in Jupyter notebooks or async web servers
+# pip install langgraph-checkpoint-postgres psycopg[binary]
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-import asyncpg
+from langgraph.graph import StateGraph, START, END
+from typing import TypedDict, Annotated
+from operator import add
+import os
 
-async def setup_async():
-    pool = await asyncpg.create_pool(DB_URI)
-    checkpointer = AsyncPostgresSaver(pool)
-    await checkpointer.setup()
-    return graph.compile(checkpointer=checkpointer)
+class ConversationState(TypedDict):
+    messages: Annotated[list, add]
+    user_id: str
 
-# Benefits of PostgreSQL persistence:
-# 1. State survives crashes and restarts
-# 2. Multiple workers share state (horizontal scaling)
-# 3. Full history queryable via SQL
-# 4. Integrates with existing DB infrastructure
-# 5. Supports long-running workflows (hours, days, weeks)</code></pre>
+def chatbot(state: ConversationState) -> dict:
+    last_msg = state["messages"][-1]
+    return {"messages": [f"Echo: {last_msg}"]}
+
+def build_graph():
+    graph = StateGraph(ConversationState)
+    graph.add_node("chatbot", chatbot)
+    graph.add_edge(START, "chatbot")
+    graph.add_edge("chatbot", END)
+    return graph
+
+DB_URI = os.getenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/langgraph_db")
+THREAD = {"configurable": {"thread_id": "async-demo-42"}}
+
+async def main():
+    # ── Session 1 ──
+    print("SESSION 1 — Async conversation")
+    async with AsyncPostgresSaver.from_conn_string(DB_URI) as checkpointer:
+        await checkpointer.setup()
+        await checkpointer.adelete_thread("async-demo-42")  # Clean slate for demo
+        app = build_graph().compile(checkpointer=checkpointer)
+        result = await app.ainvoke(
+            {"messages": ["Hello from async!"], "user_id": "user-42"},
+            config=THREAD,
+        )
+        print(f"Messages: {result['messages']}")
+
+    print("\n⚡ Server crashed! Process restarted...\n")
+
+    # ── Session 2 — state survives ──
+    print("SESSION 2 — Async after restart")
+    async with AsyncPostgresSaver.from_conn_string(DB_URI) as checkpointer:
+        app = build_graph().compile(checkpointer=checkpointer)
+        state = await app.aget_state(THREAD)
+        print(f"Restored {len(state.values['messages'])} messages")
+        for i, msg in enumerate(state.values['messages']):
+            print(f"  [{i}] {msg}")
+
+        # Cleanup demo data so re-runs start fresh
+        await checkpointer.adelete_thread("async-demo-42")
+        print("\n✓ Demo data cleaned up")
+
+await main()</code></pre>
 
                     <div class="experiment-card">
                         <div class="card-meta mb-2">
@@ -1148,7 +1468,11 @@ async def setup_async():
                 <div id="subgraphs" class="blog-content mt-5">
                     <h2><i class="fas fa-sitemap me-2 text-teal"></i>6. Subgraphs</h2>
 
+                    <p>As workflows grow beyond 10–15 nodes, a flat graph becomes hard to maintain and reason about. LangGraph's <strong>subgraph</strong> pattern solves this by letting you compose smaller, self-contained graphs into a larger orchestration graph. Each subgraph has its own state schema, its own nodes and edges, and compiles into a standalone <code>CompiledGraph</code>. The parent graph then invokes it as a single node, mapping data in and out through a shared interface. This is the same principle as function composition in programming: build small, tested units and compose them.</p>
+
                     <h3 id="composing-graphs">6.1 Composing Graphs</h3>
+
+                    <p>A subgraph is just a regular <code>StateGraph</code> that is compiled separately. You build it with its own state schema, add nodes and edges, call <code>.compile()</code>, and then invoke the compiled subgraph from within a parent node. The parent node maps its state into the subgraph's expected inputs, runs the subgraph, and maps the outputs back. This keeps each subgraph independent and reusable — the research subgraph below can be used in any parent workflow that needs a search-and-summarize step.</p>
 
                     <pre><code class="language-python"># pip install langgraph
 # Subgraphs: compose complex workflows from smaller, reusable pieces
@@ -1196,6 +1520,8 @@ writing_graph.add_edge("polish", END)
 writing_sub = writing_graph.compile()</code></pre>
 
                     <h3 id="nested-workflows">6.2 Nested Workflows</h3>
+
+                    <p>Nested workflows take composition one step further: the parent graph orchestrates multiple subgraphs <em>and</em> adds its own control flow on top — conditional routing, quality gates, and revision loops that span across subgraph boundaries. In the example below, a master graph calls a research subgraph, then a writing subgraph, then a quality gate that either accepts the article or loops back to the writing subgraph for revision. This "orchestrator" pattern is foundational for multi-agent systems covered in Part 10.</p>
 
                     <div class="mermaid-container">
                         <span class="mermaid-label"><i class="fas fa-project-diagram me-1"></i>Master Graph with Subgraphs</span>
@@ -1271,6 +1597,10 @@ print(f"Article: {result['article'][:200]}...")</code></pre>
 
                     <h3 id="interrupt-patterns">7.1 Interrupt Patterns</h3>
 
+                    <p>LangGraph implements human-in-the-loop via <strong>interrupts</strong> — explicit pause points in the graph where execution stops and waits for human input. The key API is <code>interrupt_before=["node_name"]</code> passed to <code>graph.compile()</code>. When the graph reaches the specified node, it serializes its entire state to the checkpointer and halts. A human can then inspect the state via <code>app.get_state(config)</code>, modify it with <code>app.update_state(config, updates)</code>, and resume execution by calling <code>app.invoke(None, config)</code>.</p>
+
+                    <p>This pattern requires a <strong>checkpointer</strong> (MemorySaver or PostgresSaver) because the state must be persisted between the pause and resume calls. The example below implements an email approval workflow where the agent drafts an email but waits for human approval before sending it.</p>
+
                     <div class="mermaid-container">
                         <span class="mermaid-label"><i class="fas fa-project-diagram me-1"></i>Email Approval — interrupt_before</span>
                         <pre class="mermaid">
@@ -1288,7 +1618,8 @@ flowchart LR
                         </pre>
                     </div>
 
-                    <pre><code class="language-python"># pip install langgraph
+                    <pre><code class="language-python">
+                        # pip install langgraph
 # Human-in-the-loop: pause workflow, get human approval, then resume
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
@@ -1302,7 +1633,7 @@ class EmailState(TypedDict):
     sent: bool
 
 def draft_email(state: EmailState) -> dict:
-    body = f"Dear {state['recipient']},\n\n{state.get('body', 'Auto-generated content.')}\n\nBest regards"
+    body = f"========\n\nDear {state['recipient']},\n\nsubject: {state.get('subject','Proposed')},\n\n{state.get('body', 'Auto-generated content.')}\n\nBest regards\n\n========"
     return {"body": body, "approved": False}
 
 def send_email(state: EmailState) -> dict:
@@ -1338,9 +1669,12 @@ print("Draft:", state.values["body"])
 # Step 3: Human approves → update state and resume
 app.update_state(config, {"approved": True})
 result = app.invoke(None, config=config)  # Resume
-print(f"Sent: {result['sent']}")</code></pre>
+print(f"Sent: {result['sent']}")
+                    </code></pre>
 
                     <h3 id="approval-workflows">7.2 Approval Workflows</h3>
+
+                    <p>Production systems rarely have a single approval step. A financial transaction might need no approval for small amounts, a manager's sign-off for medium amounts, and VP-level review for large amounts. LangGraph handles <strong>risk-based approval routing</strong> by combining conditional edges with interrupts: a risk assessor node classifies the transaction, conditional edges route to the appropriate approval tier, and <code>interrupt_before</code> pauses at whichever review node requires human input. Low-risk transactions skip human review entirely and proceed to execution automatically.</p>
 
                     <div class="mermaid-container">
                         <span class="mermaid-label"><i class="fas fa-project-diagram me-1"></i>Risk-Based Approval Routing</span>

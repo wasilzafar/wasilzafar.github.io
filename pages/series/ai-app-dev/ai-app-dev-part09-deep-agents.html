@@ -358,6 +358,8 @@
 
                     <h3 id="planning-phase">1.1 The Planning Phase</h3>
 
+                    <p>The planning phase is where a deep agent decomposes a complex, open-ended goal into a sequence of concrete steps. The planner receives the user’s objective and generates a structured plan — typically a numbered list of actions — that the executor can follow. This separation of planning from execution lets the agent reason about strategy before committing to actions, much like how a human outlines an approach before diving into implementation.</p>
+
                     <pre><code class="language-python"># pip install langchain-openai langgraph
 import os
 from langchain_openai import ChatOpenAI
@@ -399,6 +401,8 @@ def planner(state: DeepAgentState) -> dict:
 
                     <h3 id="execution-phase">1.2 The Execution Phase</h3>
 
+                    <p>The executor takes the plan generated in the planning phase and works through it step by step, using tools and LLM reasoning to complete each action. After each step, a routing function checks whether all steps are complete or whether to continue execution. This incremental approach allows the agent to accumulate results progressively and adapt its behavior based on intermediate outcomes.</p>
+
                     <pre><code class="language-python"># Executor and routing logic (uses DeepAgentState and llm from above)
 def executor(state: DeepAgentState) -> dict:
     """Execute the current step of the plan."""
@@ -432,6 +436,8 @@ def should_continue_executing(state: DeepAgentState) -> str:
     return "critique"</code></pre>
 
                     <h3 id="critic-phase">1.3 The Critic Phase</h3>
+
+                    <p>The critic closes the loop in a deep agent architecture by evaluating the executor’s combined results against the original objective. If the output is satisfactory, the agent terminates. If not, the critic provides feedback that triggers re-planning — creating a self-improving cycle where each iteration refines the approach. This evaluate-and-revise pattern is what distinguishes deep agents from simple sequential pipelines: they can recover from partial failures and iteratively converge on better solutions.</p>
 
                     <pre><code class="language-python"># Critic, routing, and full graph assembly (uses DeepAgentState, llm, planner, executor from above)
 def critic(state: DeepAgentState) -> dict:
@@ -522,7 +528,11 @@ print(f"Result: {result['final_result'][:200]}...")</code></pre>
                 <div id="plan-and-execute" class="blog-content mt-5">
                     <h2><i class="fas fa-clipboard-list me-2 text-teal"></i>2. Plan-and-Execute Agents</h2>
 
+                    <p>Plan-and-Execute agents formalize the deep agent pattern into a two-stage pipeline: first generate a complete plan, then execute each step with a tool-equipped agent. This architecture is especially effective for multi-step tasks where the solution requires coordinating several tools in sequence. The key advantage over reactive agents is that the planner can reason about the entire task before any action is taken, leading to more coherent and efficient execution paths.</p>
+
                     <h3 id="langchain-plan-execute">2.1 LangChain Implementation</h3>
+
+                    <p>LangChain provides a built-in Plan-and-Execute pipeline that separates a planner LLM (which generates the step-by-step plan) from an executor agent (which carries out each step using available tools). The planner typically uses a more capable model for strategic reasoning, while the executor can use a faster, cheaper model for tool invocation. This division of labor optimizes both quality and cost.</p>
 
                     <pre><code class="language-python"># pip install langchain langchain-openai
 # Plan-and-Execute: Plan first, then execute each step with tools
@@ -531,7 +541,7 @@ print(f"Result: {result['final_result'][:200]}...")</code></pre>
 import os
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
-from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain_classic.agents import create_react_agent, AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 @tool
@@ -602,6 +612,8 @@ print(output)</code></pre>
 
                     <h3 id="adaptive-replanning">2.2 Adaptive Re-Planning</h3>
 
+                    <p>Static plans break down when execution reveals unexpected information or when a step fails. Adaptive re-planning addresses this by checking after each execution step whether the remaining plan still makes sense given the results so far. If the plan needs updating — perhaps because a search returned unexpected data or a tool failed — the planner generates a revised plan that incorporates what was learned. This makes the agent resilient to the unpredictable nature of real-world tool interactions.</p>
+
                     <pre><code class="language-python"># Adaptive re-planning: update the plan based on execution results
 # Uses create_plan and executor from the block above
 
@@ -650,6 +662,8 @@ def adaptive_plan_and_execute(task: str, max_replans: int = 3) -> str:
                     <p>Reflexion (Shinn et al., 2023) introduces <strong>verbal self-reflection</strong> as a form of learning. Instead of updating model weights, the agent reflects on its failures and stores the reflections in memory, which improves future attempts.</p>
 
                     <h3 id="reflexion-architecture">3.1 Reflexion Architecture</h3>
+
+                    <p>Reflexion is a self-improvement architecture where an agent attempts a task, evaluates its own output, and — if unsuccessful — writes a natural-language <strong>reflection</strong> analyzing what went wrong. These reflections are accumulated and included in subsequent attempts, giving the agent an explicit memory of past mistakes. Research shows that Reflexion agents can match or exceed few-shot performance on coding and reasoning tasks by learning from their own trial history, without any weight updates to the underlying model.</p>
 
                     <pre><code class="language-python"># pip install langgraph langchain-openai
 # Reflexion: Learn from failures through verbal self-reflection
@@ -753,6 +767,8 @@ reflexion_agent = graph.compile()</code></pre>
 
                     <h3 id="self-reflection-loop">3.2 Self-Reflection Loop</h3>
 
+                    <p>The power of Reflexion becomes visible when you run the graph multiple times on the same problem. Each trial produces a reflection that feeds into the next attempt, creating a compounding learning effect. The agent doesn’t just retry — it <em>reasons about why</em> the previous attempt failed and adjusts its strategy accordingly. The following invocation demonstrates this iterative improvement, where accumulated reflections guide increasingly sophisticated solutions.</p>
+
                     <pre><code class="language-python"># The power of Reflexion: each trial gets BETTER because of accumulated reflections
 # Uses reflexion_agent compiled in the block above
 
@@ -786,6 +802,8 @@ print(f"Reflections accumulated: {len(result['reflections'])}")</code></pre>
                     <p>LATS (Zhou et al., 2023) combines LLM reasoning with Monte Carlo Tree Search (MCTS). Instead of following a single path, the agent explores a <strong>tree of possible action sequences</strong>, evaluates promising branches, and backtracks from dead ends.</p>
 
                     <h3 id="tree-search-concept">4.1 Tree Search for Agents</h3>
+
+                    <p>Language Agent Tree Search (LATS) applies Monte Carlo Tree Search — the same algorithm behind AlphaGo — to LLM-powered agents. Instead of committing to a single plan, LATS explores <em>multiple solution paths simultaneously</em>, evaluating and expanding the most promising branches. Each node in the search tree represents an agent state, and UCB1 (Upper Confidence Bound) scoring balances <strong>exploitation</strong> (pursuing high-scoring paths) with <strong>exploration</strong> (trying under-explored alternatives).</p>
 
                     <pre><code class="language-python"># LATS (Language Agent Tree Search): Explore multiple solution paths simultaneously
 #
@@ -836,6 +854,8 @@ class TreeNode:
         return exploitation + exploration</code></pre>
 
                     <h3 id="lats-implementation">4.2 LATS Implementation</h3>
+
+                    <p>The full LATS agent wraps the tree search data structure with an LLM-powered expand-evaluate-backpropagate loop. At each iteration, the agent selects the most promising node (via UCB1), generates candidate next steps (expansion), scores them with the LLM (evaluation), and propagates scores back up the tree (backpropagation). After a configurable number of iterations, the best complete solution path is returned. This approach dramatically outperforms single-path agents on complex reasoning tasks.</p>
 
                     <pre><code class="language-python"># Uses TreeNode class from the block above
 class LATSAgent:
@@ -965,7 +985,11 @@ class LATSAgent:
                 <div id="tool-orchestration-memory" class="blog-content mt-5">
                     <h2><i class="fas fa-cogs me-2 text-teal"></i>5. Tool Orchestration & Memory</h2>
 
+                    <p>As agents grow more capable, they need sophisticated strategies for selecting the right tool from a large toolbox and maintaining memory across long-running tasks. Simple agents hard-code tool lists, but deep agents dynamically select tools based on the current task, route complex queries through tool chains, and remember what worked (and what didn’t) across sessions. This section covers the orchestration and memory patterns that enable truly autonomous agent behavior.</p>
+
                     <h3 id="dynamic-tool-selection">5.1 Dynamic Tool Selection</h3>
+
+                    <p>When an agent has access to dozens or hundreds of tools, sending all tool descriptions to the LLM wastes context and confuses tool selection. A <code>ToolOrchestrator</code> solves this by categorizing tools, selecting only the relevant subset for each query, and implementing fallback execution when the primary tool fails. This pattern also enables tool chaining — piping the output of one tool into another — and graceful degradation when tools are unavailable.</p>
 
                     <pre><code class="language-python"># Deep agents need sophisticated tool orchestration:
 # selecting tools dynamically, chaining tool outputs, and handling failures
@@ -1019,6 +1043,8 @@ class ToolOrchestrator:
         return f"All tools failed for: {args}"</code></pre>
 
                     <h3 id="memory-integration">5.2 Memory Integration</h3>
+
+                    <p>Deep agents benefit from multi-layered memory that mirrors cognitive science: <strong>working memory</strong> (the current task context), <strong>episodic memory</strong> (past experiences stored as vector embeddings), <strong>semantic memory</strong> (structured facts and preferences), and <strong>procedural memory</strong> (learned strategies for recurring tasks). The implementation below integrates all four layers into a unified <code>DeepAgentMemory</code> class that agents can query and update throughout their execution.</p>
 
                     <pre><code class="language-python"># pip install langchain-community langchain-openai chromadb
 # Deep agents need multiple memory systems working together
@@ -1080,6 +1106,8 @@ class DeepAgentMemory:
                 <!-- Section 6: Autonomy Levels -->
                 <div id="autonomy-levels" class="blog-content mt-5">
                     <h2><i class="fas fa-layer-group me-2 text-teal"></i>6. Autonomy Levels</h2>
+
+                    <p>Not all agent tasks require the same level of independence. Autonomy levels (L1 through L4) provide a framework for calibrating how much freedom an agent has to act without human approval. Lower levels require confirmation for every action, while higher levels let the agent plan and execute entire workflows independently. Choosing the right autonomy level for each use case is critical for balancing efficiency with safety — especially when agents interact with production systems, external APIs, or sensitive data.</p>
 
                     <h3 id="l1-to-l4">6.1 L1 through L4</h3>
 
@@ -1186,6 +1214,8 @@ print(f"Interrupt for delete? {config.should_interrupt('delete_file', is_destruc
 
                     <h3 id="safety-bounds">6.2 Safety Bounds</h3>
 
+                    <p>As agents gain autonomy, they need explicit safety constraints that prevent dangerous or unauthorized actions. A <code>SafetyBounds</code> class defines what an agent <em>can</em> and <em>cannot</em> do: action allow/deny lists, budget limits (API costs, compute time), rate limiting, and forbidden operations. Every action the agent attempts passes through this safety layer before execution, providing a hard boundary that the LLM’s reasoning cannot override.</p>
+
                     <pre><code class="language-python"># Safety bounds constrain what an autonomous agent can do
 # Use this class to enforce cost limits, action restrictions, and domain allow-lists
 
@@ -1253,6 +1283,8 @@ print(f"Budget OK: {allowed}, Message: {msg}")
                 <!-- Section 7: Research Frontier -->
                 <div id="research-frontier" class="blog-content mt-5">
                     <h2><i class="fas fa-flask me-2 text-teal"></i>7. Research Frontier</h2>
+
+                    <p>The field of autonomous AI agents is evolving rapidly, with new architectures and frameworks emerging from both academia and industry. This section surveys the most promising research directions — from open-source AGI platforms to standardized benchmarks — that are shaping the next generation of deep agent capabilities. Understanding these frontiers helps developers anticipate which patterns will mature into production-ready tools.</p>
 
                     <h3 id="openagi">7.1 OpenAGI</h3>
 
