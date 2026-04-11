@@ -835,10 +835,41 @@ function initPrismThemeSwitcher() {
     });
 }
 
+/* ============================================
+   Mermaid Diagram Auto-Initialization
+   ============================================ */
+
+function initMermaidDiagrams() {
+    if (typeof mermaid === 'undefined') return;
+    if (!document.querySelector('.mermaid')) return;
+
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#e8f4f4',
+            primaryTextColor: '#132440',
+            primaryBorderColor: '#3B9797',
+            lineColor: '#3B9797',
+            secondaryColor: '#f0f4f8',
+            tertiaryColor: '#fff5f5',
+            fontFamily: 'DM Sans, sans-serif',
+            fontSize: '14px',
+            nodeBorder: '#3B9797',
+            mainBkg: '#e8f4f4',
+            clusterBkg: '#f0f4f8',
+            clusterBorder: '#16476A',
+            edgeLabelBackground: '#ffffff'
+        },
+        flowchart: { curve: 'basis', padding: 15 }
+    });
+}
+
 // Initialize blog features when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
     initBlogScrollFeatures();
     initSideNavTOC();
     initPrismThemeSwitcher();
+    initMermaidDiagrams();
 });
 
