@@ -5,9 +5,9 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="robots" content="index, follow" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Master every AI application design pattern — from simple prompt-response to complex multi-agent orchestration. Learn which framework (LangChain, LangGraph, CrewAI, n8n, Zapier) best implements each pattern, and how to avoid common anti-patterns." />
+    <meta name="description" content="Master every AI application design pattern — from simple prompt-response to complex multi-agent orchestration and frontend patterns. Learn useStream hooks, tool-calling UI, streaming integration, and how to avoid common anti-patterns." />
     <meta name="author" content="Wasil Zafar" />
-    <meta name="keywords" content="AI design patterns, RAG pattern, agent loop pattern, workflow automation, chat with memory, document QA, prompt-response, tool use pattern, multi-agent orchestration, LangChain patterns, LangGraph patterns, AI anti-patterns" />
+    <meta name="keywords" content="AI design patterns, RAG pattern, agent loop pattern, workflow automation, chat with memory, document QA, prompt-response, tool use pattern, multi-agent orchestration, frontend patterns, useStream, tool calling UI, streaming, LangChain patterns, LangGraph patterns, AI anti-patterns" />
     <meta property="og:title" content="AI Application Development Mastery Part 11: AI Application Design Patterns" />
     <meta property="og:description" content="Complete catalog of AI design patterns — core, intermediate, and advanced. Pattern selection guide for choosing the right framework." />
     <meta property="og:type" content="article" />
@@ -273,6 +273,14 @@
                 <ul>
                     <li><a href="#common-mistakes" onclick="closeNav()">Common Mistakes</a></li>
                     <li><a href="#pattern-smell" onclick="closeNav()">Pattern Smells</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#frontend-patterns" onclick="closeNav()">Frontend Patterns</a>
+                <ul>
+                    <li><a href="#usestream-hook" onclick="closeNav()">useStream Hook</a></li>
+                    <li><a href="#tool-calling-ui" onclick="closeNav()">Tool Calling UI</a></li>
+                    <li><a href="#frontend-integrations" onclick="closeNav()">Integrations & Libraries</a></li>
                 </ul>
             </li>
             <li><a href="#exercises" onclick="closeNav()">Exercises & Self-Assessment</a></li>
@@ -1271,9 +1279,226 @@ PATTERN_SMELLS = {
                     </div>
                 </div>
 
-                <!-- Section 6: Exercises & Self-Assessment -->
+                <!-- Section 6: Frontend Patterns -->
+                <div id="frontend-patterns" class="blog-content mt-5">
+                    <h2><i class="fas fa-desktop me-2 text-teal"></i>6. Frontend Patterns</h2>
+
+                    <p>Building AI-powered UIs requires specialized frontend patterns for handling streaming data, rendering tool calls, and managing complex chat state. The LangChain ecosystem provides framework-specific hooks that abstract the complexity of real-time LLM communication into declarative, reactive components.</p>
+
+                    <h3 id="usestream-hook">6.1 The useStream Hook</h3>
+
+                    <p>The <code>useStream</code> hook is the core building block for connecting a frontend to a LangGraph backend. Available for all major frameworks, it manages the WebSocket/SSE connection, handles streaming state updates, and exposes a reactive API for rendering messages as they arrive:</p>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-dark">
+                                <tr><th>Framework</th><th>Package</th><th>Hook/Function</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>React</td><td><code>@langchain/react</code></td><td><code>useStream()</code></td></tr>
+                                <tr><td>Vue</td><td><code>@langchain/vue</code></td><td><code>useStream()</code></td></tr>
+                                <tr><td>Svelte</td><td><code>@langchain/svelte</code></td><td><code>useStream()</code></td></tr>
+                                <tr><td>Angular</td><td><code>@langchain/angular</code></td><td><code>useStream()</code></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+<pre><code class="language-javascript">import { useStream } from "@langchain/react";
+
+function ChatApp() {
+    const {
+        messages,     // Reactive message list
+        submit,       // Send a message
+        isStreaming,  // Whether a response is in progress
+        stop,         // Cancel the current stream
+        error,        // Error state
+    } = useStream({
+        apiUrl: "http://localhost:8000",
+        assistantId: "agent",
+        threadId: "thread-001",
+    });
+
+    const handleSend = (text) => {
+        submit({ messages: [{ role: "user", content: text }] });
+    };
+
+    return (
+        <div>
+            {messages.map((msg, i) => (
+                <div key={i} className={msg.role}>
+                    {msg.content}
+                </div>
+            ))}
+            {isStreaming && <div className="typing-indicator">Thinking...</div>}
+            <input onKeyDown={(e) => {
+                if (e.key === "Enter") handleSend(e.target.value);
+            }} />
+        </div>
+    );
+}</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Key Insight:</strong> The <code>useStream</code> hook manages the full lifecycle — connection, reconnection, state synchronization, and cleanup. It handles optimistic updates (showing user messages immediately) and server reconciliation (replacing optimistic state with confirmed server state) automatically.
+                    </div>
+
+                    <p>For <strong>branching conversations</strong> (allowing users to edit previous messages and explore alternative paths), <code>useStream</code> supports a <code>branch</code> option that creates a new conversation fork from any checkpoint:</p>
+
+<pre><code class="language-javascript">import { useStream } from "@langchain/react";
+
+function BranchingChat() {
+    const { messages, submit, branch } = useStream({
+        apiUrl: "http://localhost:8000",
+        assistantId: "agent",
+    });
+
+    const handleEdit = (messageIndex, newContent) => {
+        // Branch from this message — creates a new thread fork
+        branch({
+            messages: [{ role: "user", content: newContent }],
+            checkpoint: messages[messageIndex].checkpoint_id,
+        });
+    };
+
+    return (
+        <div>
+            {messages.map((msg, i) => (
+                <div key={i}>
+                    <p>{msg.content}</p>
+                    {msg.role === "user" && (
+                        <button onClick={() => handleEdit(i, "edited text")}>
+                            Edit & Regenerate
+                        </button>
+                    )}
+                </div>
+            ))}
+        </div>
+    );
+}</code></pre>
+
+                    <h3 id="tool-calling-ui">6.2 Tool Calling UI</h3>
+
+                    <p>When agents use tools, the frontend needs to render tool calls and their results as distinct UI elements — not just plain text. The <code>useStream</code> hook exposes tool call state through the messages array, where each tool call includes a <code>name</code>, <code>args</code>, and <code>result</code> with a state indicator (<code>pending</code>, <code>completed</code>, or <code>error</code>):</p>
+
+<pre><code class="language-javascript">import { useStream } from "@langchain/react";
+
+function ToolCallCard({ toolCall }) {
+    const { name, args, result, state } = toolCall;
+
+    return (
+        <div className={`tool-call-card ${state}`}>
+            <div className="tool-header">
+                <span className="tool-icon">
+                    {state === "pending" ? "⏳" : state === "completed" ? "✅" : "❌"}
+                </span>
+                <strong>{name}</strong>
+            </div>
+            <pre className="tool-args">{JSON.stringify(args, null, 2)}</pre>
+            {result && (
+                <div className="tool-result">
+                    <strong>Result:</strong> {result}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function AgentChat() {
+    const { messages, submit } = useStream({
+        apiUrl: "http://localhost:8000",
+        assistantId: "agent",
+    });
+
+    return (
+        <div>
+            {messages.map((msg, i) => (
+                <div key={i}>
+                    {msg.content && <p>{msg.content}</p>}
+                    {msg.tool_calls?.map((tc) => (
+                        <ToolCallCard key={tc.id} toolCall={tc} />
+                    ))}
+                </div>
+            ))}
+        </div>
+    );
+}</code></pre>
+
+                    <p>For <strong>human-in-the-loop</strong> patterns, the frontend can render approval UI when the agent requests permission. The <code>useStream</code> hook pauses on interrupt events, and you resume execution by calling <code>submit</code> with a <code>Command</code>:</p>
+
+<pre><code class="language-javascript">import { useStream } from "@langchain/react";
+
+function ApprovalChat() {
+    const { messages, submit, interrupt } = useStream({
+        apiUrl: "http://localhost:8000",
+        assistantId: "agent",
+    });
+
+    // When interrupt is set, agent is waiting for approval
+    if (interrupt) {
+        return (
+            <div className="approval-card">
+                <h3>Agent needs approval</h3>
+                <p>{interrupt.value}</p>
+                <button onClick={() => submit({ command: { resume: "approved" } })}>
+                    Approve
+                </button>
+                <button onClick={() => submit({ command: { resume: "denied" } })}>
+                    Deny
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            {messages.map((msg, i) => (
+                <div key={i}>{msg.content}</div>
+            ))}
+        </div>
+    );
+}</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Security Note:</strong> Never execute tool call results as code on the frontend. Tool results from the agent should be treated as untrusted data — always sanitize and escape before rendering in the DOM. Use <code>textContent</code> or a sanitization library, never <code>innerHTML</code> with raw agent output.
+                    </div>
+
+                    <h3 id="frontend-integrations">6.3 Integrations & Libraries</h3>
+
+                    <p>The LangChain frontend ecosystem integrates with popular UI component libraries for production-ready chat interfaces:</p>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-dark">
+                                <tr><th>Library</th><th>Type</th><th>Best For</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><strong>assistant-ui</strong></td><td>React component library</td><td>Full-featured chat UI with tool rendering, branching, markdown</td></tr>
+                                <tr><td><strong>AI Elements / shadcn/ui</strong></td><td>Headless components</td><td>Custom-styled chat with Tailwind CSS, full design control</td></tr>
+                                <tr><td><strong>CopilotKit</strong></td><td>React framework</td><td>Copilot-style sidebars and embedded AI assistants</td></tr>
+                                <tr><td><strong>OpenUI</strong></td><td>Web components</td><td>Framework-agnostic AI chat widgets</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="card-meta mb-2">
+                            <span class="badge bg-teal text-white"><i class="fas fa-puzzle-piece me-1"></i>Integration</span>
+                        </div>
+                        <h4>Generative UI Pattern</h4>
+                        <p>The <strong>Generative UI</strong> pattern lets the agent return structured data that the frontend renders as rich components — charts, forms, tables, maps — instead of plain text. This requires:</p>
+                        <ol>
+                            <li><strong>Structured output</strong> from the agent (JSON schema defining UI component type and data)</li>
+                            <li><strong>Component registry</strong> on the frontend mapping component types to React/Vue/Svelte components</li>
+                            <li><strong>Streaming support</strong> to progressively render complex UIs as data arrives</li>
+                        </ol>
+                        <p>This pattern powers applications like data dashboards, interactive reports, and visual workflow builders where plain text responses are insufficient.</p>
+                    </div>
+                </div>
+
+                <!-- Section 7: Exercises & Self-Assessment -->
                 <div id="exercises" class="blog-content mt-5">
-                    <h2><i class="fas fa-dumbbell me-2 text-teal"></i>6. Exercises & Self-Assessment</h2>
+                    <h2><i class="fas fa-dumbbell me-2 text-teal"></i>7. Exercises & Self-Assessment</h2>
 
                     <div class="experiment-card">
                         <div class="experiment-meta">
