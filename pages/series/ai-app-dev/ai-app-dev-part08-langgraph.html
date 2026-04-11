@@ -5,9 +5,9 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="robots" content="index, follow" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Master LangGraph for building stateful agent workflows with graph-based architectures. Learn StateGraph, nodes, edges, conditional routing, state management, persistence with MemorySaver and PostgresSaver, subgraphs, human-in-the-loop, and compare LangGraph vs LangChain agents vs n8n vs Zapier." />
+    <meta name="description" content="Master LangGraph for building stateful agent workflows with graph-based architectures. Learn StateGraph, conditional routing, state management, persistence, subgraphs, human-in-the-loop, streaming modes, durable execution with checkpointers, and application structure with langgraph.json." />
     <meta name="author" content="Wasil Zafar" />
-    <meta name="keywords" content="LangGraph, StateGraph, stateful agents, agent workflows, graph-based AI, nodes edges, conditional routing, MemorySaver, PostgresSaver, human-in-the-loop, subgraphs, LangChain vs n8n vs Zapier, workflow orchestration" />
+    <meta name="keywords" content="LangGraph, StateGraph, stateful agents, agent workflows, graph-based AI, nodes edges, conditional routing, MemorySaver, PostgresSaver, human-in-the-loop, subgraphs, streaming, durable execution, langgraph.json, application structure, LangChain, workflow orchestration" />
     <meta property="og:title" content="AI Application Development Mastery Part 8: LangGraph — Stateful Agent Workflows" />
     <meta property="og:description" content="Build stateful, cyclic agent workflows with LangGraph. Master StateGraph, conditional edges, persistence, subgraphs, and human-in-the-loop patterns." />
     <meta property="og:type" content="article" />
@@ -205,7 +205,7 @@
                 <div class="blog-meta">
                     <span><i class="fas fa-calendar me-2"></i>April 1, 2026</span>
                     <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
-                    <span class="reading-time"><i class="fas fa-clock me-1"></i>44 min read</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>55 min read</span>
                     <button onclick="window.print()" class="print-btn" title="Print this article">
                         <i class="fas fa-print"></i> Print
                     </button>
@@ -276,6 +276,30 @@
                 <ul>
                     <li><a href="#interrupt-patterns" onclick="closeNav()">Interrupt Patterns</a></li>
                     <li><a href="#approval-workflows" onclick="closeNav()">Approval Workflows</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#streaming" onclick="closeNav()">Streaming</a>
+                <ul>
+                    <li><a href="#stream-modes" onclick="closeNav()">Stream Modes</a></li>
+                    <li><a href="#custom-streaming" onclick="closeNav()">Custom Streaming Data</a></li>
+                    <li><a href="#subgraph-streaming" onclick="closeNav()">Subgraph Streaming</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#durable-execution" onclick="closeNav()">Durable Execution</a>
+                <ul>
+                    <li><a href="#enabling-durability" onclick="closeNav()">Enabling Durability</a></li>
+                    <li><a href="#durability-modes" onclick="closeNav()">Durability Modes</a></li>
+                    <li><a href="#determinism-replay" onclick="closeNav()">Determinism & Replay</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#application-structure" onclick="closeNav()">Application Structure</a>
+                <ul>
+                    <li><a href="#langgraph-json" onclick="closeNav()">langgraph.json Config</a></li>
+                    <li><a href="#directory-layout" onclick="closeNav()">Directory Layout</a></li>
+                    <li><a href="#deployment" onclick="closeNav()">Deployment</a></li>
                 </ul>
             </li>
             <li><a href="#exercises" onclick="closeNav()">Exercises & Self-Assessment</a></li>
@@ -1765,7 +1789,477 @@ app = graph.compile(
                     </div>
                 </div>
 
-                <!-- Section 8: Exercises -->
+                <!-- Section 8: Streaming -->
+                <div id="streaming" class="blog-content mt-5">
+                    <h2><i class="fas fa-stream me-2 text-teal"></i>8. Streaming</h2>
+
+                    <p>LangGraph supports real-time streaming of graph execution, letting you surface intermediate results — LLM tokens, node outputs, tool calls — to users as they happen rather than waiting for the entire graph to finish. Streaming is essential for responsive UIs and long-running workflows.</p>
+
+                    <h3 id="stream-modes">8.1 Stream Modes</h3>
+
+                    <p>LangGraph offers seven <strong>stream modes</strong> that control what data you receive during execution. You can combine multiple modes in a single call to receive different types of updates simultaneously:</p>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-dark">
+                                <tr><th>Mode</th><th>Yields</th><th>Use Case</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>values</code></td><td>Full state after each super-step</td><td>Debugging, state inspection</td></tr>
+                                <tr><td><code>updates</code></td><td>Partial state update from each node</td><td>Tracking per-node changes</td></tr>
+                                <tr><td><code>messages</code></td><td>LLM token-by-token output</td><td>Chat UIs, real-time typing</td></tr>
+                                <tr><td><code>custom</code></td><td>User-defined events via <code>get_stream_writer()</code></td><td>Progress bars, status updates</td></tr>
+                                <tr><td><code>debug</code></td><td>Detailed execution trace</td><td>Development, troubleshooting</td></tr>
+                                <tr><td><code>checkpoints</code></td><td>Checkpoint metadata after each step</td><td>Durable execution monitoring</td></tr>
+                                <tr><td><code>tasks</code></td><td>Task-level execution info</td><td>Parallel node monitoring</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+<pre><code class="language-python">from langgraph.graph import StateGraph, START, END
+from langchain_openai import ChatOpenAI
+from typing import TypedDict, Annotated
+from langgraph.graph.message import add_messages
+
+class ChatState(TypedDict):
+    messages: Annotated[list, add_messages]
+
+# Build a simple graph
+graph_builder = StateGraph(ChatState)
+
+def chatbot(state: ChatState):
+    llm = ChatOpenAI(model="gpt-4o", streaming=True)
+    return {"messages": [llm.invoke(state["messages"])]}
+
+graph_builder.add_node("chatbot", chatbot)
+graph_builder.add_edge(START, "chatbot")
+graph_builder.add_edge("chatbot", END)
+graph = graph_builder.compile()
+
+# Stream with "updates" mode — see per-node state changes
+for chunk in graph.stream(
+    {"messages": [{"role": "user", "content": "Explain streaming"}]},
+    stream_mode="updates"
+):
+    print(chunk)
+
+# Stream with "messages" mode — token-by-token LLM output
+for msg, metadata in graph.stream(
+    {"messages": [{"role": "user", "content": "Explain streaming"}]},
+    stream_mode="messages"
+):
+    if hasattr(msg, "content"):
+        print(msg.content, end="", flush=True)</code></pre>
+
+                    <p>You can combine multiple stream modes by passing a list. Each event is then returned as a tuple of <code>(stream_mode, data)</code>:</p>
+
+<pre><code class="language-python">from langgraph.graph import StateGraph, START, END
+from langchain_openai import ChatOpenAI
+from typing import TypedDict, Annotated
+from langgraph.graph.message import add_messages
+
+class ChatState(TypedDict):
+    messages: Annotated[list, add_messages]
+
+graph_builder = StateGraph(ChatState)
+
+def chatbot(state: ChatState):
+    llm = ChatOpenAI(model="gpt-4o", streaming=True)
+    return {"messages": [llm.invoke(state["messages"])]}
+
+graph_builder.add_node("chatbot", chatbot)
+graph_builder.add_edge(START, "chatbot")
+graph_builder.add_edge("chatbot", END)
+graph = graph_builder.compile()
+
+# Multiple modes — each event is (mode, data)
+for mode, data in graph.stream(
+    {"messages": [{"role": "user", "content": "Hello"}]},
+    stream_mode=["updates", "messages"]
+):
+    if mode == "updates":
+        print(f"[Node Update] {data}")
+    elif mode == "messages":
+        msg, meta = data
+        if hasattr(msg, "content"):
+            print(f"[Token] {msg.content}", end="")</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Pro Tip:</strong> The <code>v2</code> stream format (pass <code>version="v2"</code>) returns each event as a <code>StreamPart</code> dict with <code>type</code>, <code>ns</code> (namespace), and <code>data</code> fields — making it easier to build consistent event handlers regardless of the stream mode used.
+                    </div>
+
+                    <h3 id="custom-streaming">8.2 Custom Streaming Data</h3>
+
+                    <p>Use <code>get_stream_writer()</code> to emit custom events from any node. This is ideal for progress bars, intermediate status updates, or any application-specific data you want to surface during execution without modifying the graph state:</p>
+
+<pre><code class="language-python">from langgraph.graph import StateGraph, START, END
+from langgraph.config import get_stream_writer
+from typing import TypedDict
+
+class ResearchState(TypedDict):
+    query: str
+    results: list
+
+def research_node(state: ResearchState):
+    writer = get_stream_writer()
+
+    writer({"status": "Starting research...", "progress": 0})
+
+    # Simulate multi-step research
+    sources = ["arxiv", "google_scholar", "semantic_scholar"]
+    results = []
+    for i, source in enumerate(sources):
+        writer({
+            "status": f"Searching {source}...",
+            "progress": (i + 1) / len(sources) * 100
+        })
+        results.append(f"Result from {source}")
+
+    writer({"status": "Research complete", "progress": 100})
+    return {"results": results}
+
+graph = StateGraph(ResearchState)
+graph.add_node("research", research_node)
+graph.add_edge(START, "research")
+graph.add_edge("research", END)
+app = graph.compile()
+
+# Receive custom events with stream_mode="custom"
+for chunk in app.stream(
+    {"query": "LLM architectures", "results": []},
+    stream_mode="custom"
+):
+    print(f"Progress: {chunk['progress']}% — {chunk['status']}")</code></pre>
+
+                    <h3 id="subgraph-streaming">8.3 Subgraph Streaming</h3>
+
+                    <p>When your graph contains subgraphs (nested workflows), enable <code>subgraphs=True</code> to stream events from inner graphs. Each event includes a <strong>namespace</strong> that identifies its source — the main graph namespace is empty, and subgraph events use a colon-delimited format like <code>"subgraph_name:node_id"</code>:</p>
+
+<pre><code class="language-python">from langgraph.graph import StateGraph, START, END
+from typing import TypedDict
+
+class InnerState(TypedDict):
+    data: str
+
+class OuterState(TypedDict):
+    input: str
+    output: str
+
+# Build inner subgraph
+inner_builder = StateGraph(InnerState)
+
+def process(state: InnerState):
+    return {"data": state["data"].upper()}
+
+inner_builder.add_node("process", process)
+inner_builder.add_edge(START, "process")
+inner_builder.add_edge("process", END)
+inner_graph = inner_builder.compile()
+
+# Build outer graph with subgraph
+outer_builder = StateGraph(OuterState)
+
+def prepare(state: OuterState):
+    return {"input": state["input"]}
+
+def call_subgraph(state: OuterState):
+    result = inner_graph.invoke({"data": state["input"]})
+    return {"output": result["data"]}
+
+outer_builder.add_node("prepare", prepare)
+outer_builder.add_node("sub", call_subgraph)
+outer_builder.add_edge(START, "prepare")
+outer_builder.add_edge("prepare", "sub")
+outer_builder.add_edge("sub", END)
+outer_graph = outer_builder.compile()
+
+# Stream with subgraph events — namespace identifies source
+for chunk in outer_graph.stream(
+    {"input": "hello world", "output": ""},
+    stream_mode="updates",
+    subgraphs=True
+):
+    # chunk is (namespace_tuple, data)
+    ns, data = chunk
+    source = "main" if not ns else ".".join(str(n) for n in ns)
+    print(f"[{source}] {data}")</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Important:</strong> By default, subgraph events are <em>not</em> streamed. You must explicitly pass <code>subgraphs=True</code> to <code>.stream()</code> to receive them. Without this flag, you'll only see events from the top-level graph nodes.
+                    </div>
+                </div>
+
+                <!-- Section 9: Durable Execution -->
+                <div id="durable-execution" class="blog-content mt-5">
+                    <h2><i class="fas fa-shield-alt me-2 text-teal"></i>9. Durable Execution</h2>
+
+                    <p>Durable execution ensures your graph can survive failures, restarts, and interruptions by automatically checkpointing state and replaying from the last saved point. Combined with <strong>tasks</strong>, this gives LangGraph workflows production-grade reliability — a critical requirement for long-running agent processes.</p>
+
+                    <h3 id="enabling-durability">9.1 Enabling Durability</h3>
+
+                    <p>Durable execution requires two things: a <strong>checkpointer</strong> (to persist state) and a <strong>thread identifier</strong> (to associate runs). When the graph resumes, it replays deterministic operations from the checkpoint and re-executes only the non-deterministic operations wrapped in <code>task()</code>:</p>
+
+<pre><code class="language-python">from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import task
+from langchain_openai import ChatOpenAI
+from typing import TypedDict, Annotated
+from langgraph.graph.message import add_messages
+
+class AgentState(TypedDict):
+    messages: Annotated[list, add_messages]
+    step_count: int
+
+# Wrap non-deterministic operations in task()
+@task
+def call_llm(messages):
+    """Non-deterministic: LLM call is wrapped in task for durable replay."""
+    llm = ChatOpenAI(model="gpt-4o")
+    return llm.invoke(messages)
+
+def agent_node(state: AgentState):
+    # call_llm is a task — will be replayed from cache on resume
+    response = call_llm(state["messages"])
+    return {
+        "messages": [response],
+        "step_count": state.get("step_count", 0) + 1
+    }
+
+graph = StateGraph(AgentState)
+graph.add_node("agent", agent_node)
+graph.add_edge(START, "agent")
+graph.add_edge("agent", END)
+
+# Compile with checkpointer for durability
+checkpointer = MemorySaver()
+app = graph.compile(checkpointer=checkpointer)
+
+# Execute with a thread_id — enables resume on failure
+config = {"configurable": {"thread_id": "durable-001"}}
+result = app.invoke(
+    {"messages": [{"role": "user", "content": "Hello"}], "step_count": 0},
+    config=config
+)
+print(f"Steps: {result['step_count']}")</code></pre>
+
+                    <h3 id="durability-modes">9.2 Durability Modes</h3>
+
+                    <p>LangGraph tasks support three durability modes that control how execution is persisted:</p>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-dark">
+                                <tr><th>Mode</th><th>Behavior</th><th>Use Case</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><strong>Exit</strong> (default)</td><td>Graph exits after task completion, can be resumed later</td><td>Human-in-the-loop, long pauses</td></tr>
+                                <tr><td><strong>Async</strong></td><td>Task runs in background, graph continues; result fetched when needed</td><td>Parallel API calls, fire-and-forget</td></tr>
+                                <tr><td><strong>Sync</strong></td><td>Task runs synchronously but is checkpointed; on replay, result is returned from cache</td><td>LLM calls, external API calls</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+<pre><code class="language-python">from langgraph.types import task, interrupt, Command
+from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
+from typing import TypedDict
+
+class ReviewState(TypedDict):
+    document: str
+    approved: bool
+
+@task
+def external_review(document: str) -> str:
+    """Task wraps non-deterministic ops for durable replay."""
+    # Simulate an external API call
+    return f"Review of: {document[:50]}..."
+
+def review_node(state: ReviewState):
+    review = external_review(state["document"])
+    return {"document": review}
+
+def approval_node(state: ReviewState):
+    # interrupt pauses execution until human resumes
+    decision = interrupt("Approve this document?")
+    return {"approved": decision == "yes"}
+
+graph = StateGraph(ReviewState)
+graph.add_node("review", review_node)
+graph.add_node("approval", approval_node)
+graph.add_edge(START, "review")
+graph.add_edge("review", "approval")
+graph.add_edge("approval", END)
+
+app = graph.compile(checkpointer=MemorySaver())
+config = {"configurable": {"thread_id": "review-001"}}
+
+# First invocation — runs review, pauses at interrupt
+result = app.invoke(
+    {"document": "Q4 Financial Report...", "approved": False},
+    config=config
+)
+print("Paused for approval")
+
+# Resume with human decision — review task replays from cache
+result = app.invoke(
+    Command(resume="yes"),
+    config=config
+)
+print(f"Approved: {result['approved']}")</code></pre>
+
+                    <h3 id="determinism-replay">9.3 Determinism & Replay</h3>
+
+                    <p>For durable execution to work correctly, your graph must follow key rules that ensure consistent replay:</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Determinism Rules:</strong>
+                        <ul class="mt-2 mb-0">
+                            <li><strong>Wrap non-deterministic operations in <code>task()</code></strong> — LLM calls, API requests, random number generation, time-dependent logic</li>
+                            <li><strong>Keep node logic deterministic</strong> — given the same state input and task results, a node should always produce the same output</li>
+                            <li><strong>Make operations idempotent</strong> — if a task result is replayed, downstream logic should handle it identically</li>
+                            <li><strong>Don't rely on external mutable state</strong> — use the graph state as your source of truth, not global variables or databases</li>
+                        </ul>
+                    </div>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Common Mistake:</strong> Calling an LLM directly in a node function without wrapping it in <code>task()</code>. On replay, the LLM will be called again (spending tokens and getting a potentially different response) instead of using the cached result. Always wrap non-deterministic calls in <code>@task</code>.
+                    </div>
+                </div>
+
+                <!-- Section 10: Application Structure -->
+                <div id="application-structure" class="blog-content mt-5">
+                    <h2><i class="fas fa-folder-open me-2 text-teal"></i>10. Application Structure</h2>
+
+                    <p>LangGraph provides a standard project structure and configuration file (<code>langgraph.json</code>) that makes applications deployable to LangGraph Cloud (LangSmith Deployments) or any container-based hosting. Following this structure ensures your LangGraph apps are production-ready from day one.</p>
+
+                    <h3 id="langgraph-json">10.1 langgraph.json Config</h3>
+
+                    <p>The <code>langgraph.json</code> file sits at the project root and tells the deployment platform which graphs to serve, what dependencies to install, and what environment variables to set:</p>
+
+<pre><code class="language-json">{
+    "graphs": {
+        "agent": "./my_agent/agent.py:graph",
+        "chatbot": "./my_agent/chatbot.py:graph"
+    },
+    "dependencies": ["./requirements.txt"],
+    "env": ".env"
+}</code></pre>
+
+                    <p>The <code>graphs</code> field maps endpoint names to Python module paths using the format <code>"./path/to/module.py:variable_name"</code>. Each value must point to a compiled <code>CompiledStateGraph</code> object. You can serve multiple graphs from a single deployment:</p>
+
+<pre><code class="language-python"># my_agent/agent.py
+from langgraph.graph import StateGraph, START, END
+from typing import TypedDict, Annotated
+from langgraph.graph.message import add_messages
+from langchain_openai import ChatOpenAI
+
+class AgentState(TypedDict):
+    messages: Annotated[list, add_messages]
+
+def agent_node(state: AgentState):
+    llm = ChatOpenAI(model="gpt-4o")
+    response = llm.invoke(state["messages"])
+    return {"messages": [response]}
+
+builder = StateGraph(AgentState)
+builder.add_node("agent", agent_node)
+builder.add_edge(START, "agent")
+builder.add_edge("agent", END)
+
+# This is the variable referenced in langgraph.json
+graph = builder.compile()</code></pre>
+
+                    <h3 id="directory-layout">10.2 Directory Layout</h3>
+
+                    <p>The recommended project structure separates concerns into distinct modules for maintainability:</p>
+
+<pre><code class="language-bash">my-app/
+├── langgraph.json         # Deployment config
+├── requirements.txt       # Python dependencies
+├── .env                   # Environment variables (API keys)
+└── my_agent/
+    ├── __init__.py
+    ├── agent.py           # Graph definition (compiled graph)
+    └── utils/
+        ├── __init__.py
+        ├── tools.py       # Tool definitions
+        ├── nodes.py       # Node functions
+        └── state.py       # State schema definitions</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Best Practice:</strong> Keep your graph definition in <code>agent.py</code> focused on the graph topology (nodes, edges, conditions). Extract node functions into <code>utils/nodes.py</code>, tool definitions into <code>utils/tools.py</code>, and state schemas into <code>utils/state.py</code>. This makes testing and refactoring much easier.
+                    </div>
+
+<pre><code class="language-python"># my_agent/utils/state.py
+from typing import TypedDict, Annotated
+from langgraph.graph.message import add_messages
+
+class AgentState(TypedDict):
+    """Shared state for the agent workflow."""
+    messages: Annotated[list, add_messages]
+    tool_calls: list
+    final_answer: str</code></pre>
+
+<pre><code class="language-python"># my_agent/utils/tools.py
+from langchain_core.tools import tool
+
+@tool
+def search_web(query: str) -> str:
+    """Search the web for information."""
+    # Implement web search
+    return f"Results for: {query}"
+
+@tool
+def calculate(expression: str) -> str:
+    """Evaluate a math expression."""
+    try:
+        result = eval(expression)  # Use a safe evaluator in production
+        return str(result)
+    except Exception as e:
+        return f"Error: {e}"
+
+tools = [search_web, calculate]</code></pre>
+
+                    <h3 id="deployment">10.3 Deployment</h3>
+
+                    <p>Once your application follows the standard structure, deployment options include LangGraph Cloud (via LangSmith) and container-based hosting:</p>
+
+<pre><code class="language-bash"># Install the LangGraph CLI
+pip install langgraph-cli
+
+# Test locally — starts a local API server
+langgraph dev
+
+# Build a Docker image for container deployment
+langgraph build -t my-agent:latest
+
+# Run the container
+docker run -p 8000:8000 \
+    -e OPENAI_API_KEY=$OPENAI_API_KEY \
+    my-agent:latest</code></pre>
+
+                    <div class="experiment-card">
+                        <div class="card-meta mb-2">
+                            <span class="badge bg-teal text-white"><i class="fas fa-check-circle me-1"></i>Deployment Checklist</span>
+                        </div>
+                        <h4>Production Readiness</h4>
+                        <ul>
+                            <li><strong>langgraph.json</strong> — graphs, dependencies, and env configured</li>
+                            <li><strong>Checkpointer</strong> — PostgresSaver for production (not MemorySaver)</li>
+                            <li><strong>Environment variables</strong> — API keys in <code>.env</code>, never hardcoded</li>
+                            <li><strong>Error handling</strong> — nodes handle exceptions gracefully</li>
+                            <li><strong>Testing</strong> — unit tests for nodes, integration tests for full graph</li>
+                            <li><strong>Monitoring</strong> — LangSmith tracing enabled for observability</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Section 11: Exercises -->
                 <div id="exercises" class="blog-content mt-5">
                     <h2><i class="fas fa-pencil-alt me-2 text-teal"></i>Exercises & Self-Assessment</h2>
 
