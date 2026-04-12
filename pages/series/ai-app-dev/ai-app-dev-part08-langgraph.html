@@ -2003,11 +2003,10 @@ for chunk in outer_graph.stream(
 
                     <h3 id="enabling-durability">9.1 Enabling Durability</h3>
 
-                    <p>Durable execution requires two things: a <strong>checkpointer</strong> (to persist state) and a <strong>thread identifier</strong> (to associate runs). When the graph resumes, it replays deterministic operations from the checkpoint and re-executes only the non-deterministic operations wrapped in <code>task()</code>:</p>
+                    <p>Durable execution requires two things: a <strong>checkpointer</strong> (to persist state) and a <strong>thread identifier</strong> (to associate runs). The checkpointer saves the graph's state after each node executes, so execution can resume from exactly where it left off:</p>
 
 <pre><code class="language-python">from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.types import task
 from langchain_openai import ChatOpenAI
 from typing import TypedDict, Annotated
 from langgraph.graph.message import add_messages
@@ -2016,16 +2015,9 @@ class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
     step_count: int
 
-# Wrap non-deterministic operations in task()
-@task
-def call_llm(messages):
-    """Non-deterministic: LLM call is wrapped in task for durable replay."""
-    llm = ChatOpenAI(model="gpt-4o")
-    return llm.invoke(messages)
-
 def agent_node(state: AgentState):
-    # call_llm is a task — will be replayed from cache on resume
-    response = call_llm(state["messages"])
+    llm = ChatOpenAI(model="gpt-4o")
+    response = llm.invoke(state["messages"])
     return {
         "messages": [response],
         "step_count": state.get("step_count", 0) + 1
@@ -2040,52 +2032,43 @@ graph.add_edge("agent", END)
 checkpointer = MemorySaver()
 app = graph.compile(checkpointer=checkpointer)
 
-# Execute with a thread_id — enables resume on failure
+# Execute with a thread_id — enables resume and conversation continuity
 config = {"configurable": {"thread_id": "durable-001"}}
 result = app.invoke(
     {"messages": [{"role": "user", "content": "Hello"}], "step_count": 0},
     config=config
 )
-print(f"Steps: {result['step_count']}")</code></pre>
+print(f"Steps: {result['step_count']}")
+
+# Resume the same thread — state is restored from checkpoint
+result2 = app.invoke(
+    {"messages": [{"role": "user", "content": "Follow up question"}]},
+    config=config
+)
+print(f"Steps: {result2['step_count']}")
+print(f"Message count: {len(result2['messages'])}")</code></pre>
 
                     <h3 id="durability-modes">9.2 Durability Modes</h3>
 
-                    <p>LangGraph tasks support three durability modes that control how execution is persisted:</p>
+                    <p>The real power of durable execution emerges when combined with <code>interrupt()</code> for human-in-the-loop workflows. The graph pauses, saves state, and can be resumed hours or days later with a human decision — all without losing any progress:</p>
 
-                    <div class="table-responsive">
-                        <table class="table table-bordered table-striped">
-                            <thead class="table-dark">
-                                <tr><th>Mode</th><th>Behavior</th><th>Use Case</th></tr>
-                            </thead>
-                            <tbody>
-                                <tr><td><strong>Exit</strong> (default)</td><td>Graph exits after task completion, can be resumed later</td><td>Human-in-the-loop, long pauses</td></tr>
-                                <tr><td><strong>Async</strong></td><td>Task runs in background, graph continues; result fetched when needed</td><td>Parallel API calls, fire-and-forget</td></tr>
-                                <tr><td><strong>Sync</strong></td><td>Task runs synchronously but is checkpointed; on replay, result is returned from cache</td><td>LLM calls, external API calls</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-<pre><code class="language-python">from langgraph.types import task, interrupt, Command
+<pre><code class="language-python">from langgraph.types import interrupt, Command
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 from typing import TypedDict
 
 class ReviewState(TypedDict):
     document: str
+    review_summary: str
     approved: bool
 
-@task
-def external_review(document: str) -> str:
-    """Task wraps non-deterministic ops for durable replay."""
-    # Simulate an external API call
-    return f"Review of: {document[:50]}..."
-
 def review_node(state: ReviewState):
-    review = external_review(state["document"])
-    return {"document": review}
+    # Simulate document review
+    summary = f"Review of: {state['document'][:50]}..."
+    return {"review_summary": summary}
 
 def approval_node(state: ReviewState):
-    # interrupt pauses execution until human resumes
+    # interrupt() pauses execution and saves state via checkpointer
     decision = interrupt("Approve this document?")
     return {"approved": decision == "yes"}
 
@@ -2099,14 +2082,14 @@ graph.add_edge("approval", END)
 app = graph.compile(checkpointer=MemorySaver())
 config = {"configurable": {"thread_id": "review-001"}}
 
-# First invocation — runs review, pauses at interrupt
+# First invocation — runs review node, pauses at interrupt in approval
 result = app.invoke(
-    {"document": "Q4 Financial Report...", "approved": False},
+    {"document": "Q4 Financial Report...", "review_summary": "", "approved": False},
     config=config
 )
 print("Paused for approval")
 
-# Resume with human decision — review task replays from cache
+# Resume later — state is fully restored from checkpoint
 result = app.invoke(
     Command(resume="yes"),
     config=config
@@ -2121,16 +2104,16 @@ print(f"Approved: {result['approved']}")</code></pre>
                         <i class="fas fa-lightbulb"></i>
                         <strong>Determinism Rules:</strong>
                         <ul class="mt-2 mb-0">
-                            <li><strong>Wrap non-deterministic operations in <code>task()</code></strong> — LLM calls, API requests, random number generation, time-dependent logic</li>
-                            <li><strong>Keep node logic deterministic</strong> — given the same state input and task results, a node should always produce the same output</li>
-                            <li><strong>Make operations idempotent</strong> — if a task result is replayed, downstream logic should handle it identically</li>
-                            <li><strong>Don't rely on external mutable state</strong> — use the graph state as your source of truth, not global variables or databases</li>
+                            <li><strong>Use checkpointers for all stateful workflows</strong> — without a checkpointer, <code>interrupt()</code> silently does nothing and state is lost between invocations</li>
+                            <li><strong>Keep node logic idempotent</strong> — if a node runs twice with the same input state, it should produce the same result</li>
+                            <li><strong>Avoid side effects outside of state</strong> — use the graph state as your source of truth, not global variables or databases</li>
+                            <li><strong>Use thread IDs to isolate conversations</strong> — each thread maintains its own checkpoint history, preventing cross-contamination</li>
                         </ul>
                     </div>
 
                     <div class="highlight-box highlight-crimson">
                         <i class="fas fa-exclamation-triangle me-2"></i>
-                        <strong>Common Mistake:</strong> Calling an LLM directly in a node function without wrapping it in <code>task()</code>. On replay, the LLM will be called again (spending tokens and getting a potentially different response) instead of using the cached result. Always wrap non-deterministic calls in <code>@task</code>.
+                        <strong>Common Mistake:</strong> Using <code>interrupt()</code> without a checkpointer. The graph will silently skip the interrupt and continue execution. Always compile with <code>checkpointer=MemorySaver()</code> (development) or <code>checkpointer=PostgresSaver(...)</code> (production) when using interrupts.
                     </div>
                 </div>
 
