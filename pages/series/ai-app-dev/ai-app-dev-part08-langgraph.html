@@ -1837,6 +1837,7 @@ graph_builder.add_edge("chatbot", END)
 graph = graph_builder.compile()
 
 # Stream with "updates" mode — see per-node state changes
+print("\nStreaming with 'updates' mode:\n")
 for chunk in graph.stream(
     {"messages": [{"role": "user", "content": "Explain streaming"}]},
     stream_mode="updates"
@@ -1844,6 +1845,7 @@ for chunk in graph.stream(
     print(chunk)
 
 # Stream with "messages" mode — token-by-token LLM output
+print("\nStreaming with 'messages' mode:\n")
 for msg, metadata in graph.stream(
     {"messages": [{"role": "user", "content": "Explain streaming"}]},
     stream_mode="messages"
@@ -1939,17 +1941,13 @@ for chunk in app.stream(
 <pre><code class="language-python">from langgraph.graph import StateGraph, START, END
 from typing import TypedDict
 
-class InnerState(TypedDict):
+class SubgraphState(TypedDict):
     data: str
 
-class OuterState(TypedDict):
-    input: str
-    output: str
-
 # Build inner subgraph
-inner_builder = StateGraph(InnerState)
+inner_builder = StateGraph(SubgraphState)
 
-def process(state: InnerState):
+def process(state: SubgraphState):
     return {"data": state["data"].upper()}
 
 inner_builder.add_node("process", process)
@@ -1957,26 +1955,32 @@ inner_builder.add_edge(START, "process")
 inner_builder.add_edge("process", END)
 inner_graph = inner_builder.compile()
 
-# Build outer graph with subgraph
+# Build outer graph — add compiled graph directly as a node
+class OuterState(TypedDict):
+    data: str    # shared key lets state flow into subgraph
+    output: str
+
 outer_builder = StateGraph(OuterState)
 
 def prepare(state: OuterState):
-    return {"input": state["input"]}
+    return {"data": state["data"]}
 
-def call_subgraph(state: OuterState):
-    result = inner_graph.invoke({"data": state["input"]})
-    return {"output": result["data"]}
+def collect(state: OuterState):
+    return {"output": state["data"]}
 
 outer_builder.add_node("prepare", prepare)
-outer_builder.add_node("sub", call_subgraph)
+# Pass the compiled graph directly — enables native subgraph streaming
+outer_builder.add_node("sub", inner_graph)
+outer_builder.add_node("collect", collect)
 outer_builder.add_edge(START, "prepare")
 outer_builder.add_edge("prepare", "sub")
-outer_builder.add_edge("sub", END)
+outer_builder.add_edge("sub", "collect")
+outer_builder.add_edge("collect", END)
 outer_graph = outer_builder.compile()
 
 # Stream with subgraph events — namespace identifies source
 for chunk in outer_graph.stream(
-    {"input": "hello world", "output": ""},
+    {"data": "hello world", "output": ""},
     stream_mode="updates",
     subgraphs=True
 ):
