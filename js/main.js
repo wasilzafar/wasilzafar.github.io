@@ -186,6 +186,9 @@ function updateNavOnScroll() {
 function initSmoothScroll() {
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function(e) {
+            // Skip links handled by mega dropdown
+            if (this.hasAttribute('data-mega-trigger')) return;
+
             const href = this.getAttribute('href');
             
             // Skip if it's just '#'
@@ -411,6 +414,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize cookie banner if present
     initCookieBanner();
+
+    // Initialize interests mega dropdown (before smooth scroll so it can mark its trigger)
+    initInterestsMegaDropdown();
     
     // Initialize smooth scroll navigation
     initSmoothScroll();
@@ -896,5 +902,107 @@ document.addEventListener('DOMContentLoaded', function() {
     initSideNavTOC();
     initPrismThemeSwitcher();
     initMermaidDiagrams();
+    initInterestsMegaDropdown();
 });
+
+// ============================================================
+// Interests Mega Dropdown — dynamic injection
+// ============================================================
+function initInterestsMegaDropdown() {
+    // Guard against double initialization
+    if (document.getElementById('megaDropdown')) return;
+    // Skip on pages that have an #interests section (homepage)
+    if (document.getElementById('interests')) return;
+
+    // Find the Interests nav link by text content
+    var interestsLink = null;
+    var navLinks = document.querySelectorAll('.nav-v16 .link-3d');
+    for (var i = 0; i < navLinks.length; i++) {
+        if (navLinks[i].textContent.trim().replace(/\s+/g, ' ').indexOf('Interests') !== -1) {
+            interestsLink = navLinks[i];
+            break;
+        }
+    }
+    if (!interestsLink) return;
+
+    // Mark link so smooth scroll handler skips it
+    interestsLink.setAttribute('data-mega-trigger', 'true');
+
+    // Category data
+    var categories = [
+        { name: 'Faith', slug: 'faith', icon: 'fa-heart', desc: 'Spirituality & belief' },
+        { name: 'Philosophy', slug: 'philosophy', icon: 'fa-book', desc: 'Questions & ideas' },
+        { name: 'Psychology', slug: 'psychology', icon: 'fa-brain', desc: 'Human behavior' },
+        { name: 'Gaming', slug: 'gaming', icon: 'fa-gamepad', desc: 'Entertainment & strategy' },
+        { name: 'Poetry', slug: 'poetry', icon: 'fa-feather-alt', desc: 'Words & rhythm' },
+        { name: 'Business', slug: 'business', icon: 'fa-briefcase', desc: 'Strategy & marketing' },
+        { name: 'Technology', slug: 'technology', icon: 'fa-rocket', desc: 'Innovation & frontiers' },
+        { name: 'Science', slug: 'science', icon: 'fa-flask', desc: 'Discovery & research' },
+        { name: 'Engineering', slug: 'engineering', icon: 'fa-cogs', desc: 'Design & build' },
+        { name: 'Mathematics', slug: 'mathematics', icon: 'fa-square-root-variable', desc: 'Patterns & proofs' },
+        { name: 'Life Sciences', slug: 'life-sciences', icon: 'fa-dna', desc: 'Biology & genetics' },
+        { name: 'History', slug: 'history', icon: 'fa-landmark', desc: 'Civilizations & events' }
+    ];
+
+    // Build grid items
+    var gridHTML = '';
+    for (var j = 0; j < categories.length; j++) {
+        var c = categories[j];
+        gridHTML += '<a href="/pages/categories/' + c.slug + '.html" class="mega-item">' +
+            '<div class="mega-item-icon icon-' + c.slug + '"><i class="fas ' + c.icon + '"></i></div>' +
+            '<div class="mega-item-text"><h5>' + c.name + '</h5><p>' + c.desc + '</p></div></a>';
+    }
+
+    // Inject backdrop + dropdown after nav-v16-wrapper
+    var wrapper = document.querySelector('.nav-v16-wrapper');
+    if (!wrapper) return;
+
+    var backdrop = document.createElement('div');
+    backdrop.className = 'mega-dropdown-backdrop';
+    backdrop.id = 'megaBackdrop';
+    wrapper.parentNode.insertBefore(backdrop, wrapper.nextSibling);
+
+    var dropdown = document.createElement('div');
+    dropdown.className = 'mega-dropdown';
+    dropdown.id = 'megaDropdown';
+    dropdown.innerHTML =
+        '<div class="mega-dropdown-header">' +
+            '<h3><i class="fas fa-compass"></i>Explore Interests</h3>' +
+            '<button class="mega-dropdown-close" id="megaClose">&times;</button>' +
+        '</div>' +
+        '<div class="mega-dropdown-grid">' + gridHTML + '</div>';
+    backdrop.parentNode.insertBefore(dropdown, backdrop.nextSibling);
+
+    // Open / close helpers
+    function openMega() {
+        dropdown.classList.add('open');
+        backdrop.classList.add('open');
+    }
+
+    function closeMega() {
+        dropdown.classList.remove('open');
+        backdrop.classList.remove('open');
+    }
+
+    // Trigger: Interests link opens mega dropdown
+    interestsLink.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (dropdown.classList.contains('open')) {
+            closeMega();
+        } else {
+            openMega();
+        }
+    });
+
+    // Close: backdrop click
+    backdrop.addEventListener('click', closeMega);
+
+    // Close: × button
+    document.getElementById('megaClose').addEventListener('click', closeMega);
+
+    // Close: ESC key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeMega();
+    });
+}
 
