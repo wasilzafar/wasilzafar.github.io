@@ -156,7 +156,7 @@ let scrollTimeout;
 
 function updateNavOnScroll() {
     const sections = document.querySelectorAll('section[id]');
-    const navLinks = document.querySelectorAll('.nav-link');
+    const navLinks = document.querySelectorAll('.nav-v16 .link-3d');
     
     let current = '';
     
@@ -172,9 +172,9 @@ function updateNavOnScroll() {
     
     // Update active links
     navLinks.forEach(link => {
-        link.classList.remove('active');
+        link.classList.remove('is-active');
         if (link.getAttribute('href') === '#' + current) {
-            link.classList.add('active');
+            link.classList.add('is-active');
         }
     });
 }
@@ -343,20 +343,24 @@ function initParallaxTextAnimation() {
 
 function initKeyboardNavigation() {
     document.addEventListener('keydown', function(e) {
-        const navLinks = document.querySelectorAll('.nav-link');
-        const activeLink = document.querySelector('.nav-link.active');
+        const navLinks = document.querySelectorAll('.nav-v16 .link-3d');
+        const activeLink = document.querySelector('.nav-v16 .link-3d.is-active');
+        
+        if (!navLinks.length) return;
+        
+        var currentIndex = Array.prototype.indexOf.call(navLinks, activeLink);
         
         if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-            const nextLink = activeLink?.nextElementSibling?.querySelector('.nav-link') || navLinks[0];
-            if (nextLink) {
-                nextLink.focus();
-                nextLink.click();
+            var nextIndex = (currentIndex + 1) % navLinks.length;
+            if (navLinks[nextIndex]) {
+                navLinks[nextIndex].focus();
+                navLinks[nextIndex].click();
             }
         } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-            const prevLink = activeLink?.previousElementSibling?.querySelector('.nav-link') || navLinks[navLinks.length - 1];
-            if (prevLink) {
-                prevLink.focus();
-                prevLink.click();
+            var prevIndex = currentIndex <= 0 ? navLinks.length - 1 : currentIndex - 1;
+            if (navLinks[prevIndex]) {
+                navLinks[prevIndex].focus();
+                navLinks[prevIndex].click();
             }
         }
     });
@@ -442,6 +446,27 @@ window.addEventListener('scroll', function() {
         window.cancelAnimationFrame(scrollTimeout);
     }
     scrollTimeout = window.requestAnimationFrame(updateNavOnScroll);
+});
+
+/* ============================================
+   Design 16 Navbar — Mobile Toggle
+   ============================================ */
+
+function toggleNav16() {
+    var nav = document.querySelector('.nav-v16');
+    if (nav) {
+        nav.classList.toggle('nav-open');
+    }
+}
+
+// Close mobile menu when a nav link is clicked
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.nav-v16 .link-3d').forEach(function(link) {
+        link.addEventListener('click', function() {
+            var nav = document.querySelector('.nav-v16');
+            if (nav) nav.classList.remove('nav-open');
+        });
+    });
 });
 
 /* ============================================
