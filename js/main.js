@@ -903,7 +903,20 @@ document.addEventListener('DOMContentLoaded', function() {
     initPrismThemeSwitcher();
     initMermaidDiagrams();
     initInterestsMegaDropdown();
+    initCategoryNewTab();
 });
+
+// ============================================================
+// Category Pages — open article links in new tab
+// ============================================================
+function initCategoryNewTab() {
+    var links = document.querySelectorAll('.caption-cta, .cta-read-article');
+    if (!links.length) return;
+    for (var i = 0; i < links.length; i++) {
+        links[i].setAttribute('target', '_blank');
+        links[i].setAttribute('rel', 'noopener');
+    }
+}
 
 // ============================================================
 // Interests Mega Dropdown — dynamic injection
