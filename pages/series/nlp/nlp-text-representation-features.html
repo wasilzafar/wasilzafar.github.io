@@ -96,7 +96,12 @@
         </div>
         <ol>
             <li><a href="#introduction" onclick="closeNav()">Introduction to Text Representation</a></li>
-            <li><a href="#one-hot" onclick="closeNav()">One-Hot Encoding</a></li>
+            <li><a href="#one-hot" onclick="closeNav()">One-Hot Encoding</a>
+                <ul>
+                    <li><a href="#one-hot-limitations" onclick="closeNav()">Dimensionality Explosion</a></li>
+                    <li><a href="#one-hot-no-meaning" onclick="closeNav()">No Semantic Relationships</a></li>
+                </ul>
+            </li>
             <li><a href="#bow" onclick="closeNav()">Bag of Words (BoW)</a>
                 <ul>
                     <li><a href="#bow-implementation" onclick="closeNav()">Implementation</a></li>
@@ -254,7 +259,120 @@ for word, vector in zip(vocabulary, onehot_encoded):
 # elderberry   -> [0. 0. 0. 0. 1.]
 </code></pre>
 
-                        <p>The primary limitation of one-hot encoding is <strong>dimensionality explosion</strong>. A vocabulary of 50,000 words requires 50,000-dimensional vectors, making storage and computation extremely expensive. Additionally, these sparse, high-dimensional vectors don't capture any semantic relationships between words. The sentence "The cat sat on the mat" would require six 50,000-dimensional vectors just for representation.</p>
+                        <h3 id="one-hot-limitations">The Dimensionality Explosion Problem</h3>
+
+                        <p>The primary limitation of one-hot encoding is <strong>dimensionality explosion</strong>. To understand why, start small. With a 5-word vocabulary, each word becomes a 5-number vector with exactly one <code>1</code> and the rest <code>0</code>:</p>
+
+<pre><code class="language-python">import numpy as np
+
+# Tiny vocabulary of 5 words
+vocab = ["cat", "dog", "mat", "sat", "the"]
+vocab_size = len(vocab)
+word_to_idx = {word: idx for idx, word in enumerate(vocab)}
+
+# Build one-hot vectors
+one_hot = np.eye(vocab_size, dtype=int)
+
+for word, idx in word_to_idx.items():
+    print(f'"{word}" → {one_hot[idx].tolist()}')
+
+# Each vector: 5 numbers, 4 are wasted zeros
+total_numbers = vocab_size * vocab_size
+zeros = total_numbers - vocab_size
+print(f"\nTotal numbers stored: {total_numbers}")
+print(f"Zeros (wasted): {zeros}  ({zeros/total_numbers*100:.0f}% of storage)")
+</code></pre>
+
+                        <p>Now scale that to a real English vocabulary of 50,000 words. Every single word becomes a 50,000-number vector where <strong>49,999 of those numbers are zero</strong> — 99.998% of the storage is wasted:</p>
+
+<pre><code class="language-python">import numpy as np
+
+# Compare vector sizes at different vocabulary scales
+vocab_sizes = [5, 1_000, 50_000]
+
+print(f"{'Vocabulary':>12}  {'Vector size':>12}  {'Zeros per vector':>18}  {'Wasted %':>10}")
+print("-" * 60)
+for v in vocab_sizes:
+    zeros = v - 1
+    pct = zeros / v * 100
+    print(f"{v:>12,}  {v:>12,}  {zeros:>18,}  {pct:>9.3f}%")
+</code></pre>
+
+                        <div class="highlight-box">
+                            <h4><i class="fas fa-calculator me-2"></i>Storage Cost: One Six-Word Sentence</h4>
+                            <p>The sentence <em>"The cat sat on the mat"</em> is just <strong>6 words</strong>. With a 50,000-word vocabulary:</p>
+                            <ul>
+                                <li>Each word → 50,000 numbers</li>
+                                <li>6 words → 6 × 50,000 = <strong>300,000 numbers</strong></li>
+                                <li>At 4 bytes per float → <strong>~1.2 MB for one sentence</strong></li>
+                                <li>A dataset of 1 million sentences → <strong>~1.2 TB</strong> of mostly zeros</li>
+                            </ul>
+                        </div>
+
+<pre><code class="language-python"># Storage calculation for one-hot encoding
+vocab_size = 50_000
+sentence = ["the", "cat", "sat", "on", "the", "mat"]
+num_words = len(sentence)
+bytes_per_float = 4  # 32-bit float
+
+numbers_stored = num_words * vocab_size
+bytes_used = numbers_stored * bytes_per_float
+mb_used = bytes_used / (1024 ** 2)
+
+print(f"Sentence: {' '.join(sentence)!r}")
+print(f"Words: {num_words}")
+print(f"Numbers stored: {numbers_stored:,}  ({num_words} × {vocab_size:,})")
+print(f"Storage: {bytes_used:,} bytes = {mb_used:.2f} MB")
+
+# Scale to a dataset
+num_sentences = 1_000_000
+total_gb = (mb_used * num_sentences) / 1024
+print(f"\n1 million such sentences: {total_gb:,.0f} GB = {total_gb/1024:.1f} TB")
+print(f"(Almost entirely zeros — {(vocab_size - 1) / vocab_size * 100:.3f}% of each vector)")
+</code></pre>
+
+                        <h3 id="one-hot-no-meaning">No Semantic Relationships</h3>
+
+                        <p>Beyond the storage problem, one-hot vectors are <strong>semantically blind</strong>. Every word is equally distant from every other word. The model has no way to know that "cat" and "dog" are both animals, or that "sat" and "ran" are both verbs:</p>
+
+<pre><code class="language-python">import numpy as np
+
+# One-hot vectors for 5 words
+vocab = ["cat", "dog", "mat", "sat", "the"]
+word_to_idx = {word: idx for idx, word in enumerate(vocab)}
+one_hot = np.eye(len(vocab))
+
+def cosine_similarity(a, b):
+    """Cosine similarity: 1.0 = identical, 0.0 = completely different."""
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+cat = one_hot[word_to_idx["cat"]]
+dog = one_hot[word_to_idx["dog"]]
+mat = one_hot[word_to_idx["mat"]]
+
+sim_cat_dog = cosine_similarity(cat, dog)
+sim_cat_mat = cosine_similarity(cat, mat)
+
+print(f"Similarity(cat, dog) = {sim_cat_dog:.1f}  ← both animals, but model sees 0")
+print(f"Similarity(cat, mat) = {sim_cat_mat:.1f}  ← completely unrelated, also 0")
+print("\nOne-hot encoding treats every word as equally different from every other word.")
+print("'cat'/'dog' distance == 'cat'/'mat' distance — semantics are invisible.")
+</code></pre>
+
+                        <div class="highlight-box highlight-navy">
+                            <h4><i class="fas fa-compress-arrows-alt me-2"></i>The Fix: Word Embeddings</h4>
+                            <p>Instead of 50,000-dimensional sparse vectors, word embeddings map each word to a <strong>small dense vector</strong> (~300 numbers) where all values are meaningful — and similar words end up with similar vectors:</p>
+                            <table class="table table-sm mt-3 mb-0">
+                                <thead><tr><th></th><th>One-hot</th><th>Word embedding</th></tr></thead>
+                                <tbody>
+                                    <tr><td>Vector size</td><td>50,000</td><td>300</td></tr>
+                                    <tr><td>Zeros per vector</td><td>49,999</td><td>0</td></tr>
+                                    <tr><td>Captures meaning</td><td>✗</td><td>✓</td></tr>
+                                    <tr><td>Storage (1M sentences)</td><td>~1.2 TB</td><td>~7 GB</td></tr>
+                                    <tr><td>Compression ratio</td><td>—</td><td><strong>~167× smaller</strong></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
 
                         <div class="experiment-card">
                             <h4><i class="fas fa-flask me-2"></i>One-Hot Encoding for Sentences</h4>
