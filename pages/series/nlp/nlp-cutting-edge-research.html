@@ -1291,6 +1291,404 @@ print(f"   Retrieved {len(all_results)} documents from {len(queries[:3])} querie
                             </div>
                         </div>
 
+                        <h2 id="rlhf-instruction-tuning"><i class="fas fa-chalkboard-teacher me-2"></i>RLHF & Instruction Tuning</h2>
+
+                        <p>Raw language models — pretrained on internet text — are surprisingly unhelpful. They can complete sentences, but they don't naturally answer questions, follow instructions, or refuse harmful requests. <strong>Instruction tuning</strong> and <strong>Reinforcement Learning from Human Feedback (RLHF)</strong> are the techniques that transform a text-completion engine into an AI assistant. ChatGPT, Claude, Gemini, and every major conversational AI use some variant of these methods.</p>
+
+                        <div class="highlight-box">
+                            <h4><i class="fas fa-dog me-2"></i>Analogy: Training a Dog vs. Training a Model</h4>
+                            <p>Imagine training a dog (the base model) that already knows how to run, sit, and fetch. Without training, it chases anything that moves — unhelpful and unpredictable. <strong>Instruction tuning</strong> is like teaching it basic commands using demonstrations (SFT). <strong>RLHF</strong> is like refining its behaviour by rewarding good behaviour and discouraging bad — not by writing rules, but by learning what you <em>prefer</em> from pairs of behaviours you compare. The result: a dog that does what you actually want, not just what it was predisposed to do.</p>
+                        </div>
+
+                        <h3 id="instruction-tuning">Instruction Tuning (Supervised Fine-Tuning)</h3>
+
+                        <p>The first step is <strong>Supervised Fine-Tuning (SFT)</strong> on instruction-following demonstrations. Human annotators write (or curate) thousands of (instruction, ideal response) pairs, and the model is fine-tuned to predict those responses. This teaches the model the <em>format</em> of being an assistant — it learns to answer questions directly, use markdown, admit uncertainty, and follow multi-step instructions. Models trained with SFT alone include early InstructGPT, FLAN-T5, and Alpaca.</p>
+
+<pre><code class="language-python"># Understanding Instruction Tuning: SFT data format
+# This shows what the training data looks like for instruction tuning
+
+def format_instruction(instruction, input_text="", output=""):
+    """
+    Standard instruction tuning format (Alpaca-style).
+    The model learns to complete this template.
+    """
+    if input_text:
+        prompt = (
+            f"### Instruction:\n{instruction}\n\n"
+            f"### Input:\n{input_text}\n\n"
+            f"### Response:\n{output}"
+        )
+    else:
+        prompt = (
+            f"### Instruction:\n{instruction}\n\n"
+            f"### Response:\n{output}"
+        )
+    return prompt
+
+# Examples of SFT training data
+sft_examples = [
+    {
+        "instruction": "Summarize the following article in 2 sentences.",
+        "input": "Scientists have discovered a new exoplanet in the habitable zone of a nearby star...",
+        "output": "Scientists found an exoplanet orbiting a nearby star in the habitable zone, where liquid water could exist. The discovery increases the chances of finding life beyond Earth."
+    },
+    {
+        "instruction": "Translate the following English text to French.",
+        "input": "The weather today is beautiful.",
+        "output": "Le temps aujourd'hui est magnifique."
+    },
+    {
+        "instruction": "Write a Python function to reverse a string.",
+        "input": "",
+        "output": "def reverse_string(s):\n    return s[::-1]\n\n# Example usage\nprint(reverse_string('hello'))  # Output: 'olleh'"
+    },
+    {
+        "instruction": "Is the following statement true or false? Explain why.",
+        "input": "The Earth is the largest planet in our solar system.",
+        "output": "False. Jupiter is the largest planet in our solar system. The Earth is the fifth largest, with a diameter of about 12,742 km compared to Jupiter's 139,820 km."
+    },
+]
+
+print("Instruction Tuning (SFT) Training Examples")
+print("=" * 60)
+for i, ex in enumerate(sft_examples, 1):
+    print(f"\nExample {i}:")
+    formatted = format_instruction(ex["instruction"], ex["input"], ex["output"])
+    # Show first 200 characters
+    print(formatted[:220] + "..." if len(formatted) > 220 else formatted)
+    print()
+
+print(f"Total training examples: {len(sft_examples)} (real datasets have 50k-500k)")
+print("After SFT: model generates responses in the correct format.")
+print("Limitation: it doesn't learn which responses are PREFERRED by humans.")
+</code></pre>
+
+                        <h3 id="reward-modeling">Reward Model Training</h3>
+
+                        <p>SFT teaches format but not quality. The second stage trains a <strong>Reward Model (RM)</strong> — a separate neural network that scores responses on a scale from "bad" to "excellent". Human annotators compare pairs of model responses to the same prompt and indicate which they prefer. The RM learns to predict these preferences, effectively internalizing human quality judgement. This reward model will later serve as the "critic" in the RL stage, guiding the LLM toward better responses.</p>
+
+<pre><code class="language-python"># Reward Model: architecture and preference learning
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import Dataset, DataLoader
+
+class RewardModel(nn.Module):
+    """
+    Simplified reward model architecture.
+    In practice, this is an LM with a scalar head added.
+    E.g., take a 7B LLaMA, replace the token prediction head
+    with a single Linear(hidden_size, 1) layer.
+    """
+    def __init__(self, hidden_size=256, vocab_size=100):
+        super().__init__()
+        # Simplified: embedding + transformer layers + scalar output
+        self.embedding = nn.Embedding(vocab_size, hidden_size)
+        self.transformer = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(d_model=hidden_size, nhead=4, batch_first=True),
+            num_layers=2
+        )
+        # Scalar head: maps from hidden_size to 1 reward value
+        self.reward_head = nn.Linear(hidden_size, 1)
+    
+    def forward(self, input_ids):
+        # Embed tokens
+        x = self.embedding(input_ids)
+        # Apply transformer
+        x = self.transformer(x)
+        # Pool over sequence (mean pooling) and get reward
+        x = x.mean(dim=1)
+        reward = self.reward_head(x).squeeze(-1)
+        return reward
+
+def preference_loss(reward_chosen, reward_rejected):
+    """
+    Bradley-Terry loss for learning from preference pairs.
+    The model is trained to assign higher reward to the chosen response.
+    
+    L = -log(sigmoid(r_chosen - r_rejected))
+    """
+    return -F.logsigmoid(reward_chosen - reward_rejected).mean()
+
+# Simulate training on preference pairs
+reward_model = RewardModel(hidden_size=64, vocab_size=50)
+optimizer = torch.optim.Adam(reward_model.parameters(), lr=1e-4)
+
+print("Reward Model Training on Preference Pairs")
+print("=" * 50)
+print("Format: (prompt, chosen_response, rejected_response)")
+print("Goal: reward_model(chosen) > reward_model(rejected)")
+print()
+
+# Simulate 5 training steps
+losses = []
+for step in range(5):
+    # Fake token sequences: chosen responses (seq_len=8), rejected (seq_len=8)
+    chosen_ids = torch.randint(0, 50, (4, 8))    # batch=4 preferred responses
+    rejected_ids = torch.randint(0, 50, (4, 8))  # batch=4 rejected responses
+    
+    r_chosen = reward_model(chosen_ids)
+    r_rejected = reward_model(rejected_ids)
+    
+    loss = preference_loss(r_chosen, r_rejected)
+    
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    
+    accuracy = (r_chosen > r_rejected).float().mean().item()
+    losses.append(loss.item())
+    print(f"Step {step+1}: Loss={loss.item():.4f}, "
+          f"Accuracy={accuracy:.0%} (chosen scored higher than rejected)")
+
+print(f"\nFinal reward gap: {(r_chosen - r_rejected).mean().item():.4f}")
+print("A positive gap means the model learned to prefer the better responses.")
+</code></pre>
+
+                        <h3 id="ppo-rlhf">PPO: Optimizing the LLM with the Reward Signal</h3>
+
+                        <p>The third and most complex stage uses <strong>Proximal Policy Optimization (PPO)</strong> — a reinforcement learning algorithm — to update the LLM's weights using the reward model's scores as feedback. The LLM acts as the "policy" (it generates text), and the reward model acts as the "environment" (it scores the text). A <strong>KL divergence penalty</strong> prevents the LLM from drifting too far from the original SFT model, avoiding reward hacking where the model learns to exploit the reward model rather than genuinely improving.</p>
+
+<pre><code class="language-python"># PPO-RLHF: Conceptual implementation showing key components
+import torch
+import numpy as np
+
+class PPORLHFSimulator:
+    """
+    Demonstrates the PPO-RLHF training loop components.
+    Simplified for clarity — real implementations use TRL library.
+    """
+    
+    def __init__(self, kl_coefficient=0.02):
+        """
+        kl_coefficient: weight on KL divergence penalty
+        Higher = model stays closer to SFT baseline
+        Lower = model can diverge more to maximize reward
+        """
+        self.kl_coef = kl_coefficient
+        self.policy_rewards = []
+        
+    def compute_rlhf_reward(self, raw_reward, kl_divergence):
+        """
+        RLHF reward = reward_model_score - beta * KL(policy || reference)
+        
+        The KL term prevents reward hacking:
+        - Without it: model writes "I am helpful! I am safe!" repeatedly
+        - With it: model improves helpfulness while staying coherent
+        """
+        return raw_reward - self.kl_coef * kl_divergence
+    
+    def simulate_training_step(self, step):
+        """Simulate one PPO step."""
+        # Simulate improving reward model scores over training
+        raw_reward = 0.3 + 0.1 * step + np.random.normal(0, 0.05)
+        
+        # KL divergence increases as model drifts from SFT baseline
+        kl_divergence = 0.5 + 0.05 * step + np.random.normal(0, 0.02)
+        
+        # Combined RLHF reward
+        rlhf_reward = self.compute_rlhf_reward(raw_reward, kl_divergence)
+        
+        return {
+            'step': step,
+            'raw_reward': raw_reward,
+            'kl_divergence': kl_divergence,
+            'rlhf_reward': rlhf_reward
+        }
+
+# Run simulation
+trainer = PPORLHFSimulator(kl_coefficient=0.02)
+
+print("PPO-RLHF Training Simulation")
+print("=" * 60)
+print(f"{'Step':>5} | {'Raw Reward':>12} | {'KL Divergence':>14} | {'RLHF Reward':>12}")
+print("-" * 55)
+
+for step in range(1, 11):
+    metrics = trainer.simulate_training_step(step)
+    print(f"{metrics['step']:>5} | {metrics['raw_reward']:>12.4f} | "
+          f"{metrics['kl_divergence']:>14.4f} | {metrics['rlhf_reward']:>12.4f}")
+
+print("\nKey observations:")
+print("- Raw reward increases (model gets better at pleasing humans)")
+print("- KL divergence grows (model drifts from SFT baseline)")
+print("- KL penalty moderates the total RLHF reward")
+print("- Result: helpful model that stays coherent and safe")
+</code></pre>
+
+<pre><code class="language-python"># Using TRL library for RLHF training (production approach)
+# pip install trl transformers
+
+# This shows the real production RLHF setup using Hugging Face TRL
+# Run this to see the structure - models are lightweight for demo
+
+from trl import PPOConfig, PPOTrainer, AutoModelForCausalLMWithValueHead
+from transformers import AutoTokenizer
+import torch
+
+print("Production RLHF with TRL Library")
+print("=" * 50)
+print()
+
+# Step 1: Load SFT-trained model + reference model (frozen copy)
+model_name = "gpt2"  # Use your SFT-tuned model in practice
+print(f"1. Loading policy model: {model_name}")
+print("   - This is your SFT-tuned model (trainable)")
+print("   - AutoModelForCausalLMWithValueHead adds a scalar head for PPO")
+print()
+
+print("2. Loading reference model (frozen copy of SFT model)")
+print("   - Used to compute KL divergence penalty")
+print("   - Prevents catastrophic forgetting and reward hacking")
+print()
+
+# Step 2: PPO Configuration
+ppo_config = PPOConfig(
+    model_name=model_name,
+    learning_rate=1.41e-5,
+    batch_size=16,            # Rollout batch size
+    mini_batch_size=4,        # Mini-batch for PPO update
+    gradient_accumulation_steps=1,
+    optimize_cuda_cache=True,
+    early_stopping=False,
+    target_kl=6.0,            # Stop early if KL divergence exceeds this
+    kl_penalty="kl",          # Use full KL (vs 'abs', 'mse')
+    seed=42,
+    use_score_scaling=True,   # Normalize rewards for stability
+    use_score_norm=True,
+    score_clip=0.5,           # Clip rewards to [-0.5, 0.5]
+)
+
+print("3. PPO Configuration:")
+for key in ['learning_rate', 'batch_size', 'target_kl', 'score_clip']:
+    print(f"   {key}: {getattr(ppo_config, key)}")
+
+print()
+print("4. Training loop (pseudocode):")
+print("   for each batch:")
+print("     responses = policy.generate(prompts)")
+print("     rewards = reward_model.score(prompts, responses)")
+print("     ref_logprobs = reference_model.logprobs(responses)")
+print("     policy_logprobs = policy.logprobs(responses)")
+print("     kl = policy_logprobs - ref_logprobs")
+print("     rlhf_rewards = rewards - beta * kl")
+print("     ppo_trainer.step(prompts, responses, rlhf_rewards)")
+print()
+print("Result: Policy model that maximizes reward while staying")
+print("close to the SFT reference (controlled by KL penalty).")
+</code></pre>
+
+                        <h3 id="dpo-alternative">DPO: Simpler Alternative to PPO</h3>
+
+                        <p><strong>Direct Preference Optimization (DPO)</strong>, introduced in 2023, reformulates the RLHF objective into a supervised learning problem that trains the policy <em>directly</em> from preference data — no RL loop, no separate reward model, no complex PPO machinery. The key insight: the optimal policy under the RLHF objective has a closed-form relationship to the preference data, which DPO exploits. DPO has become popular for fine-tuning open-source models because it's stable, simple, and achieves competitive results.</p>
+
+<pre><code class="language-python"># DPO Training: Comparing preference pairs directly
+import torch
+import torch.nn.functional as F
+import numpy as np
+
+def dpo_loss(
+    policy_chosen_logps: torch.Tensor,
+    policy_rejected_logps: torch.Tensor,
+    reference_chosen_logps: torch.Tensor,
+    reference_rejected_logps: torch.Tensor,
+    beta: float = 0.1
+) -> torch.Tensor:
+    """
+    Direct Preference Optimization loss.
+    
+    Intuition: We want the policy to assign relatively MORE probability
+    to chosen responses vs rejected, compared to the reference model.
+    
+    L_DPO = -E[log sigmoid(beta * (log π(chosen)/π_ref(chosen) 
+                                  - log π(rejected)/π_ref(rejected)))]
+    
+    Args:
+        policy_chosen_logps: Log probs of chosen responses under policy
+        policy_rejected_logps: Log probs of rejected responses under policy
+        reference_chosen_logps: Log probs of chosen under reference model
+        reference_rejected_logps: Log probs of rejected under reference model
+        beta: Temperature (0.1-0.5 typical; lower = larger updates)
+    
+    Returns:
+        Scalar DPO loss
+    """
+    # Log-ratio for chosen: how much MORE likely is chosen under policy vs reference?
+    chosen_log_ratio = policy_chosen_logps - reference_chosen_logps
+    # Log-ratio for rejected: how much MORE likely is rejected under policy vs reference?
+    rejected_log_ratio = policy_rejected_logps - reference_rejected_logps
+    
+    # DPO loss: train policy to prefer chosen over rejected
+    logits = beta * (chosen_log_ratio - rejected_log_ratio)
+    loss = -F.logsigmoid(logits).mean()
+    
+    # Implicit reward: how much does policy prefer chosen over reference?
+    reward_chosen = beta * chosen_log_ratio.detach()
+    reward_rejected = beta * rejected_log_ratio.detach()
+    reward_accuracy = (reward_chosen > reward_rejected).float().mean()
+    
+    return loss, reward_accuracy
+
+print("DPO vs PPO-RLHF Comparison")
+print("=" * 60)
+
+# Simulate training dynamics
+print("\nSimulating training over 10 steps:")
+print(f"{'Step':>5} | {'DPO Loss':>10} | {'Reward Acc':>12} | {'Comment'}")
+print("-" * 55)
+
+for step in range(1, 11):
+    # Simulate improving policy probabilities
+    base_prob = -3.0 + 0.2 * step  # Chosen gets more probable
+    
+    policy_chosen = torch.tensor([base_prob + np.random.normal(0, 0.1)])
+    policy_rejected = torch.tensor([base_prob - 0.5 + np.random.normal(0, 0.1)])
+    reference_chosen = torch.tensor([-3.0])
+    reference_rejected = torch.tensor([-3.0])
+    
+    loss, acc = dpo_loss(policy_chosen, policy_rejected, reference_chosen, reference_rejected)
+    comment = "improving" if step > 5 else "learning"
+    print(f"{step:>5} | {loss.item():>10.4f} | {acc.item():>12.0%} | {comment}")
+
+print("\n✓ DPO advantages over PPO:")
+print("  - No separate reward model needed")
+print("  - No RL loop or rollout buffer")
+print("  - Stable supervised training signal")
+print("  - Same data format as SFT (prompt, chosen, rejected)")
+</code></pre>
+
+                        <div class="experiment-card">
+                            <h4><i class="fas fa-robot me-2"></i>Case Study: InstructGPT — The Paper That Started It All</h4>
+                            <div class="meta mb-2">
+                                <span class="badge bg-teal me-2">Case Study</span>
+                                <span class="badge bg-crimson">OpenAI Research</span>
+                            </div>
+                            <div class="content">
+                                <p><strong>The Problem (2021):</strong> GPT-3 was powerful but poorly aligned. It would complete prompts literally ("write a story that is harmful..." → proceeds to write harmful content), refuse benign requests arbitrarily, and generate confident misinformation.</p>
+                                <p><strong>The Solution — InstructGPT (2022):</strong> OpenAI applied three-stage RLHF: (1) 13K instruction-following demonstrations for SFT, (2) 33K preference comparisons for reward model training, (3) PPO optimization. The result: a 1.3B parameter InstructGPT model was preferred over the 175B GPT-3 in 85% of evaluations despite being 100× smaller.</p>
+                                <p><strong>Key finding:</strong> "Alignment tax" was small — RLHF models barely degraded on standard NLP benchmarks while dramatically improving instruction following. This demonstrated RLHF's practical viability for production systems.</p>
+                                <p><strong>Downstream impact:</strong> ChatGPT (GPT-3.5 + RLHF), GPT-4, Claude (Constitutional AI + RLHF), Gemini, LLaMA-Chat, Mistral-Instruct — all use variants of this pipeline.</p>
+                            </div>
+                        </div>
+
+                        <div class="experiment-card">
+                            <h4><i class="fas fa-dumbbell me-2"></i>RLHF & Instruction Tuning Exercises</h4>
+                            <div class="meta mb-2">
+                                <span class="badge bg-teal me-2">Beginner</span>
+                                <span class="badge bg-crimson">Advanced</span>
+                            </div>
+                            <div class="content">
+                                <ol>
+                                    <li><strong>[Beginner]</strong> Using the TRL library, fine-tune a small GPT-2 model with SFT on 100 (instruction, response) pairs from the Alpaca dataset. Compare outputs before and after fine-tuning.</li>
+                                    <li><strong>[Beginner]</strong> Implement the Bradley-Terry preference loss from scratch and train a simple reward model to distinguish "formal" from "informal" writing style.</li>
+                                    <li><strong>[Intermediate]</strong> Use TRL's <code>DPOTrainer</code> to fine-tune a small model on the <code>Anthropic/hh-rlhf</code> preference dataset. Compare DPO vs SFT on a set of test prompts.</li>
+                                    <li><strong>[Intermediate]</strong> Experiment with DPO's <code>beta</code> parameter (0.05, 0.1, 0.5). How does it affect the tradeoff between following preferences and maintaining the reference model's distribution?</li>
+                                    <li><strong>[Advanced]</strong> Implement a full mini-RLHF pipeline: (1) SFT a GPT-2 on instructions, (2) Train a reward model on synthetic preference pairs, (3) Run PPO using TRL. Log reward and KL divergence over training.</li>
+                                    <li><strong>[Advanced]</strong> Compare RLHF, DPO, and KTO (Kahneman-Tversky Optimization) on a text summarization task. Which produces summaries that humans prefer in a blind evaluation?</li>
+                                </ol>
+                            </div>
+                        </div>
+
                         <h2 id="alignment"><i class="fas fa-compass me-2"></i>Alignment & Constitutional AI</h2>
                         
                         <p>AI alignment ensures that AI systems behave in accordance with human intentions and values. As LLMs become more capable, alignment becomes critical—powerful models that don't align with human goals could cause significant harm. The field has developed several approaches: <strong>RLHF</strong> (Reinforcement Learning from Human Feedback), <strong>Constitutional AI</strong>, and <strong>Direct Preference Optimization</strong>. These methods transform raw pretrained models into helpful, harmless, and honest assistants.</p>

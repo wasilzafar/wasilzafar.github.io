@@ -1278,6 +1278,297 @@ for text in test_texts:
     print(f"  Routing: {result['routing']}")
     print(f"  Sentiment: {result['sentiment']} ({result['sentiment_score']:.1%})")</code></pre>
 
+                        <h2 id="building-multilingual-lms"><i class="fas fa-hammer me-2"></i>Building Multilingual Language Models</h2>
+
+                        <p>Understanding <em>how</em> multilingual models like mBERT and XLM-R are actually built gives you the insight to fine-tune, extend, and troubleshoot them. Training a multilingual LM from scratch requires careful decisions about vocabulary construction, language sampling, and training objectives. Even if you never train from scratch, understanding this process demystifies why these models behave the way they do — why they excel at some languages and struggle with others, why vocabulary size matters, and why zero-shot transfer works at all.</p>
+
+                        <div class="highlight-box">
+                            <h4><i class="fas fa-language me-2"></i>Analogy: The Universal Translator Problem</h4>
+                            <p>Building a multilingual LM is like training a universal translator who can understand 100 languages without being told which language is being spoken. The key insight: languages share deep structural similarities (subjects, verbs, objects; modification patterns; clause nesting). A shared <strong>multilingual vocabulary</strong> acts like phonemes — subword units common across languages — allowing the model to discover these cross-lingual patterns. The "curse of multilinguality" is the translator having to split study time 100 ways: each language gets less exposure, so performance per language is worse than a monolingual specialist.</p>
+                        </div>
+
+                        <h3 id="multilingual-vocab">Step 1: Building a Multilingual Vocabulary</h3>
+
+                        <p>The vocabulary is the foundation of any multilingual model. You need enough tokens for every language while keeping the total vocabulary size manageable (typically 32k–250k tokens). The challenge: a fair vocabulary should give proportional coverage to each language, not just the high-resource ones. mBERT uses a 119,547-token WordPiece vocabulary; XLM-R uses a 250,002-token SentencePiece vocabulary with better coverage of rare languages.</p>
+
+<pre><code class="language-python"># Building a multilingual vocabulary with SentencePiece
+# This shows the language sampling strategy for vocabulary construction
+import sentencepiece as spm
+import tempfile, os
+
+# Language sampling strategy (critical for vocabulary fairness)
+# Real multilingual models use exponential smoothing to upsample rare languages
+language_data = {
+    'en': {'sentences': 5000, 'weight': 1.0},   # English: most data
+    'de': {'sentences': 3000, 'weight': 1.0},   # German
+    'zh': {'sentences': 2000, 'weight': 1.0},   # Chinese
+    'ar': {'sentences': 1000, 'weight': 1.5},   # Arabic: upsampled (low-resource)
+    'sw': {'sentences': 200,  'weight': 5.0},   # Swahili: heavily upsampled
+}
+
+def compute_sampling_probability(sizes, alpha=0.7):
+    """
+    Exponential smoothing for language sampling.
+    p_i = (n_i^alpha) / sum(n_j^alpha)
+    
+    alpha=1.0: proportional to data size (high-resource dominates)
+    alpha=0.0: uniform (each language equally likely)
+    alpha=0.7: XLM-R's choice (balances coverage vs data quality)
+    """
+    smoothed = {lang: size['sentences'] ** alpha 
+                for lang, size in sizes.items()}
+    total = sum(smoothed.values())
+    return {lang: v / total for lang, v in smoothed.items()}
+
+# Compare sampling strategies
+print("Language Sampling Probabilities")
+print("=" * 60)
+print(f"{'Language':>12} | {'Raw %':>8} | {'α=1.0 %':>8} | {'α=0.7 %':>8} | {'α=0.3 %':>8}")
+print("-" * 60)
+
+total_sentences = sum(v['sentences'] for v in language_data.values())
+for lang, data in language_data.items():
+    raw = data['sentences'] / total_sentences * 100
+    p_1_0 = compute_sampling_probability(language_data, alpha=1.0)[lang] * 100
+    p_0_7 = compute_sampling_probability(language_data, alpha=0.7)[lang] * 100
+    p_0_3 = compute_sampling_probability(language_data, alpha=0.3)[lang] * 100
+    print(f"{lang:>12} | {raw:>7.1f}% | {p_1_0:>7.1f}% | {p_0_7:>7.1f}% | {p_0_3:>7.1f}%")
+
+print("\nXLM-R uses α=0.7 to balance:")
+print("  - High resource languages (English, German) still dominate")
+print("  - But low-resource languages (Swahili) get proportionally more")
+print("  - Result: better cross-lingual transfer for ALL languages")
+</code></pre>
+
+<pre><code class="language-python"># Training a multilingual tokenizer: handling multiple scripts
+import sentencepiece as spm
+import tempfile, os
+
+# Multilingual training data (mix of scripts)
+multilingual_corpus = [
+    # English
+    "Natural language processing enables machines to understand text.",
+    "The model learns shared representations across languages.",
+    # German (Latin script, different vocabulary)
+    "Maschinelles Lernen verändert die Technologielandschaft.",
+    "Sprachmodelle lernen Repräsentationen über Sprachen hinweg.",
+    # Spanish
+    "El procesamiento del lenguaje natural es fascinante.",
+    "Los modelos de lenguaje aprenden representaciones compartidas.",
+    # French
+    "Le traitement automatique du langage naturel est une discipline fascinante.",
+    "Les modèles multilingues apprennent des représentations partagées.",
+]
+
+# Write corpus to file
+with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+    for sentence in multilingual_corpus:
+        f.write(sentence + '\n')
+    corpus_file = f.name
+
+# Train multilingual SentencePiece tokenizer
+output_prefix = '/tmp/multilingual_tokenizer'
+spm.SentencePieceTrainer.train(
+    input=corpus_file,
+    model_prefix=output_prefix,
+    vocab_size=500,
+    model_type='bpe',
+    character_coverage=0.9999,  # Higher coverage for multilingual
+    pad_id=0, unk_id=1, bos_id=2, eos_id=3,
+)
+
+# Load and test
+sp = spm.SentencePieceProcessor()
+sp.Load(f'{output_prefix}.model')
+
+print("Multilingual Tokenizer — Cross-Script Tokenization")
+print("=" * 60)
+
+test_cases = [
+    ("en", "The model learns cross-lingual representations"),
+    ("de", "Das Modell lernt sprachübergreifende Darstellungen"),
+    ("es", "El modelo aprende representaciones multilingues"),
+    ("fr", "Le modèle apprend des représentations multilingues"),
+]
+
+for lang, text in test_cases:
+    pieces = sp.encode(text, out_type=str)
+    print(f"\n[{lang}] {text[:50]}")
+    print(f"  Tokens ({len(pieces)}): {pieces[:8]}{'...' if len(pieces) > 8 else ''}")
+
+print(f"\nVocabulary size: {sp.get_piece_size()} tokens covering 4 languages")
+os.unlink(corpus_file)
+</code></pre>
+
+                        <h3 id="xlm-r-training">How XLM-R Was Trained</h3>
+
+                        <p>XLM-R (Cross-lingual Language Model RoBERTa) is the gold standard multilingual encoder. It was trained by Facebook AI Research on <strong>2.5 TB of filtered Common Crawl data</strong> across 100 languages using the Masked Language Modeling (MLM) objective — the same as RoBERTa, but applied multilingually. The model has no language embeddings; it must learn language identity implicitly from the input tokens themselves. This design makes it robust and allows it to handle code-switching naturally.</p>
+
+<pre><code class="language-python"># Understanding XLM-R's cross-lingual capability
+from transformers import AutoTokenizer, AutoModel
+import torch
+import torch.nn.functional as F
+
+# Load XLM-R tokenizer (no full model download needed for tokenizer demo)
+tokenizer = AutoTokenizer.from_pretrained("xlm-roberta-base")
+
+print("XLM-R Tokenizer Analysis")
+print("=" * 60)
+print(f"Vocabulary size: {tokenizer.vocab_size:,} tokens")
+print(f"Special tokens: {tokenizer.all_special_tokens}")
+print()
+
+# XLM-R uses SentencePiece with ▁ (U+2581) for word boundaries
+test_sentences = [
+    ("en", "The transformer architecture revolutionized NLP."),
+    ("de", "Die Transformator-Architektur revolutionierte NLP."),
+    ("fr", "L'architecture transformer a révolutionné le NLP."),
+    ("ar", "غيرت بنية المحول مجال معالجة اللغة الطبيعية"),
+    ("zh", "变换器架构彻底改变了自然语言处理"),
+    ("ja", "トランスフォーマーアーキテクチャはNLPを革命的に変えた"),
+]
+
+print("Tokenization across scripts (same semantic content):")
+print("-" * 60)
+for lang, sentence in test_sentences:
+    tokens = tokenizer.tokenize(sentence)
+    ids = tokenizer.encode(sentence)
+    print(f"[{lang}] {sentence[:40]}...")
+    print(f"  Tokens ({len(tokens)}): {tokens[:6]}...")
+    print(f"  IDs: {ids[:6]}...")
+    print()
+
+print("Key insight: No language tag is needed — XLM-R infers")
+print("the language from the token patterns themselves.")
+</code></pre>
+
+                        <h3 id="fine-tuning-xlm-r">Fine-Tuning XLM-R for Multilingual Tasks</h3>
+
+                        <p>Fine-tuning XLM-R follows the same approach as fine-tuning BERT, but produces a model that works across all 100 languages. The most common strategy is <strong>zero-shot transfer</strong>: fine-tune only on English labeled data, then evaluate on other languages. Because XLM-R learned shared cross-lingual representations during pretraining, English task knowledge transfers to other languages automatically — typically achieving 70–90% of supervised performance without any target-language examples.</p>
+
+<pre><code class="language-python"># Fine-tuning XLM-R for zero-shot cross-lingual sentiment analysis
+import torch
+import torch.nn as nn
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from torch.optim import AdamW
+
+# This demonstrates the training setup — fine-tuning only on English
+# then evaluating in zero-shot on other languages
+
+class MultilingualSentimentTrainer:
+    """Zero-shot cross-lingual sentiment classification with XLM-R."""
+    
+    def __init__(self, model_name="xlm-roberta-base", num_labels=3):
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForSequenceClassification.from_pretrained(
+            model_name, num_labels=num_labels
+        )
+        self.label_names = ["negative", "neutral", "positive"]
+        
+    def prepare_inputs(self, texts, max_length=128):
+        """Tokenize texts for XLM-R."""
+        return self.tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors="pt"
+        )
+    
+    def zero_shot_evaluate(self, test_examples):
+        """
+        Evaluate without any fine-tuning (true zero-shot).
+        Note: results will be random without fine-tuning on English first.
+        """
+        self.model.eval()
+        results = []
+        
+        for lang, text in test_examples:
+            inputs = self.prepare_inputs([text])
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+                probs = torch.softmax(outputs.logits, dim=-1)[0]
+                pred = torch.argmax(probs).item()
+            
+            results.append({
+                'language': lang,
+                'text': text[:40] + '...' if len(text) > 40 else text,
+                'prediction': self.label_names[pred],
+                'confidence': probs[pred].item()
+            })
+        
+        return results
+
+# Initialize trainer
+trainer = MultilingualSentimentTrainer()
+
+print("XLM-R Zero-Shot Cross-Lingual Transfer")
+print("=" * 60)
+print("Training approach:")
+print("  1. Fine-tune on English labeled sentiment data")
+print("  2. Zero-shot evaluate on all other languages")
+print("  3. No target-language examples needed!")
+print()
+
+# Test data in multiple languages (same sentiment expressed differently)
+multilingual_test = [
+    ("en", "This product is absolutely fantastic! Highly recommended."),
+    ("de", "Dieses Produkt ist absolut fantastisch! Sehr empfehlenswert."),
+    ("fr", "Ce produit est absolument fantastique! Fortement recommandé."),
+    ("es", "¡Este producto es absolutamente fantástico! Muy recomendado."),
+    ("pt", "Este produto é absolutamente fantástico! Altamente recomendado."),
+    ("zh", "这个产品绝对太棒了！强烈推荐。"),
+    ("ar", "هذا المنتج رائع للغاية! أنصح به بشدة."),
+]
+
+# Evaluate (random without actual fine-tuning, but shows the pipeline)
+print("Zero-shot predictions (pipeline demonstration):")
+print("-" * 60)
+results = trainer.zero_shot_evaluate(multilingual_test)
+for r in results:
+    print(f"[{r['language']:>2}] {r['text']}")
+    print(f"     → {r['prediction']:>8} ({r['confidence']:.1%} confidence)")
+    print()
+
+print("With proper English fine-tuning, XLM-R achieves:")
+print("  ~89% accuracy on English (supervised)")
+print("  ~85% accuracy on German (zero-shot)")
+print("  ~80% accuracy on Chinese (zero-shot)")
+print("  ~70% accuracy on Swahili (zero-shot, low-resource)")
+</code></pre>
+
+                        <div class="experiment-card">
+                            <h4><i class="fas fa-headset me-2"></i>Case Study: Multilingual Customer Support Bot</h4>
+                            <div class="meta mb-2">
+                                <span class="badge bg-teal me-2">Case Study</span>
+                                <span class="badge bg-crimson">Production System</span>
+                            </div>
+                            <div class="content">
+                                <p><strong>Problem:</strong> An e-commerce company needed to classify customer support tickets in 15 languages (English, French, German, Spanish, Italian, Portuguese, Dutch, Polish, Russian, Arabic, Hindi, Japanese, Korean, Chinese, Turkish). Hiring annotators for 15 languages was prohibitively expensive.</p>
+                                <p><strong>Solution:</strong> XLM-R fine-tuned on 5,000 English-only labeled tickets (6 categories: shipping, billing, product, returns, technical, other). Deployed for zero-shot cross-lingual classification across all 15 languages.</p>
+                                <p><strong>Results:</strong> English F1: 92.3%. Average cross-lingual F1: 81.7% (range: 76.2% for Turkish to 88.1% for French). Cost: 95% reduction compared to building 15 separate classifiers with language-specific training data.</p>
+                                <p><strong>Lesson learned:</strong> Zero-shot transfer works best for related languages (Romance, Germanic families). For distant languages (Arabic, Japanese, Turkish), adding just 50–100 labeled examples per language improved F1 by 5–8 points.</p>
+                            </div>
+                        </div>
+
+                        <div class="experiment-card">
+                            <h4><i class="fas fa-dumbbell me-2"></i>Multilingual LM Building Exercises</h4>
+                            <div class="meta mb-2">
+                                <span class="badge bg-teal me-2">Beginner</span>
+                                <span class="badge bg-crimson">Advanced</span>
+                            </div>
+                            <div class="content">
+                                <ol>
+                                    <li><strong>[Beginner]</strong> Train a SentencePiece tokenizer on English and French Wikipedia text. Compare how it tokenizes shared words (names, technical terms) versus language-specific words.</li>
+                                    <li><strong>[Beginner]</strong> Load XLM-R and extract embeddings for the word "bank" in the sentences "She went to the bank to deposit money" (English) and "Elle est allée à la banque pour déposer de l'argent" (French). Use cosine similarity to confirm the embeddings are close.</li>
+                                    <li><strong>[Intermediate]</strong> Fine-tune XLM-R on English NER (e.g., CoNLL-2003). Evaluate zero-shot on German NER (e.g., GermEval). How does performance compare to a monolingual German BERT?</li>
+                                    <li><strong>[Intermediate]</strong> Experiment with language-adaptive fine-tuning (LAFT): continue MLM pretraining on target-language text before task fine-tuning. Measure the improvement for a low-resource language.</li>
+                                    <li><strong>[Advanced]</strong> Build a multilingual question-answering system using XLM-R fine-tuned on SQuAD (English). Test it on questions in 5 languages. Which language families transfer best?</li>
+                                    <li><strong>[Advanced]</strong> Implement cross-lingual data augmentation: translate 500 English examples to 5 target languages using a translation API, then fine-tune. Compare with zero-shot transfer.</li>
+                                </ol>
+                            </div>
+                        </div>
+
                         <h2 id="conclusion"><i class="fas fa-flag-checkered me-2"></i>Conclusion & Next Steps</h2>
 
                         <p>Multilingual and cross-lingual NLP represents one of the most impactful areas of modern NLP research, enabling technology to serve speakers of thousands of languages rather than just a handful. We've explored how multilingual embeddings create shared semantic spaces, how models like mBERT and XLM-R learn cross-lingual representations, and how zero-shot and few-shot transfer can extend NLP capabilities to new languages without extensive labeled data.</p>

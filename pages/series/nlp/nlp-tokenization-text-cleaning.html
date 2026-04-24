@@ -1095,6 +1095,280 @@ print("\nNote: '?' indicates the start of a new word in SentencePiece")
                             </div>
                         </div>
 
+                        <h2 id="training-tokenizers"><i class="fas fa-tools me-2"></i>Training Tokenizers from Scratch</h2>
+
+                        <p>Most tutorials teach you to <em>use</em> pre-built tokenizers like BERT's WordPiece or GPT-2's BPE. But what happens when you need to process a domain with specialized vocabulary — medical reports full of Latin terms, legal documents with archaic phrasing, or source code with identifiers and symbols? Off-the-shelf tokenizers waste precious vocabulary slots on irrelevant tokens and split your domain's keywords into awkward fragments. The solution: <strong>train your own tokenizer from scratch</strong>.</p>
+
+                        <div class="highlight-box">
+                            <h4><i class="fas fa-lightbulb me-2"></i>Analogy: Tokenizer as a Compression Algorithm</h4>
+                            <p>Think of tokenizer training as building a custom <strong>compression codec</strong> for your text. A general-purpose codec (like BERT's tokenizer) is designed for everyday English — it compresses common words efficiently but is wasteful with specialized jargon. A domain-specific codec (your custom tokenizer) learns the exact vocabulary patterns of your data, representing frequent medical terms like <code>fibromyalgia</code> as single tokens instead of 4–5 fragments. Just as you'd use FLAC for lossless audio rather than MP3, you use a custom tokenizer when fidelity to your domain matters.</p>
+                        </div>
+
+                        <h3 id="why-custom-tokenizers">Why Train a Custom Tokenizer?</h3>
+
+                        <div class="experiment-card">
+                            <h4><i class="fas fa-flask me-2"></i>Case Study: Medical NLP Tokenization Problem</h4>
+                            <div class="meta mb-2">
+                                <span class="badge bg-teal me-2">Case Study</span>
+                                <span class="badge bg-crimson">Domain Adaptation</span>
+                            </div>
+                            <div class="content">
+                                <p>A hospital deployed BERT for clinical note analysis. The team discovered that BERT's tokenizer was fragmenting critical medical terms: <code>pneumonoultramicroscopicsilicovolcanoconiosis</code> → 23 tokens, <code>acetylsalicylicacid</code> → 7 tokens, <code>fibromyalgia</code> → 4 tokens. This fragmentation lost clinical meaning and inflated sequence lengths by 3×. Training a custom BPE tokenizer on 10M clinical notes reduced average medical term fragmentation by 68% and improved downstream NER F1 by 11 points.</p>
+                                <p><strong>When to train custom tokenizers:</strong> Medical/legal/scientific text, code generation models, low-resource or non-English languages, multilingual models needing balanced script coverage, and any domain where a significant vocabulary is missing from general-purpose tokenizers.</p>
+                            </div>
+                        </div>
+
+                        <h3 id="hf-tokenizers-library">HuggingFace Tokenizers Library</h3>
+
+                        <p>The HuggingFace <code>tokenizers</code> library is a fast, production-ready tokenizer training framework written in Rust with Python bindings. It can train on gigabytes of text in minutes, handles Unicode properly, and produces tokenizers compatible with the entire Transformers ecosystem. The library uses a unified pipeline: <strong>Normalizer → PreTokenizer → Model → PostProcessor → Decoder</strong>.</p>
+
+<pre><code class="language-python"># Step 1: Understand the tokenizers pipeline components
+from tokenizers import Tokenizer
+from tokenizers.models import BPE, WordPiece, Unigram
+from tokenizers import normalizers, pre_tokenizers, decoders, trainers
+from tokenizers.normalizers import NFD, StripAccents, Lowercase
+from tokenizers.pre_tokenizers import Whitespace, ByteLevel, Metaspace
+
+# The tokenizers pipeline has 5 stages:
+# 1. Normalizer  - Unicode normalization, lowercasing, accent removal
+# 2. PreTokenizer - Split into initial chunks (by whitespace, bytes, etc.)
+# 3. Model        - The actual BPE / WordPiece / Unigram model
+# 4. PostProcessor - Add [CLS], [SEP] tokens, handle special tokens
+# 5. Decoder      - Convert token IDs back to readable text
+
+print("Tokenizers Pipeline:")
+print("  Input Text")
+print("      ↓")
+print("  Normalizer   → lowercase, strip accents, unicode normalization")
+print("      ↓")
+print("  PreTokenizer → split by whitespace / byte-level / word boundaries")
+print("      ↓")
+print("  Model (BPE/WordPiece/Unigram) → apply learned merges/vocab")
+print("      ↓")
+print("  PostProcessor → add [CLS], [SEP], handle padding")
+print("      ↓")
+print("  Token IDs → ready for neural network input")
+</code></pre>
+
+<pre><code class="language-python"># Step 2: Train a BPE tokenizer from scratch with HuggingFace tokenizers
+from tokenizers import Tokenizer
+from tokenizers.models import BPE
+from tokenizers.trainers import BpeTrainer
+from tokenizers.pre_tokenizers import Whitespace
+from tokenizers import normalizers
+from tokenizers.normalizers import NFD, Lowercase, StripAccents
+import tempfile, os
+
+# Create BPE tokenizer with normalizer pipeline
+tokenizer = Tokenizer(BPE(unk_token="[UNK]"))
+tokenizer.normalizer = normalizers.Sequence([NFD(), Lowercase(), StripAccents()])
+tokenizer.pre_tokenizer = Whitespace()
+
+# Configure the BPE trainer
+trainer = BpeTrainer(
+    vocab_size=5000,           # Target vocabulary size
+    min_frequency=2,           # Minimum token frequency to be included
+    special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"],
+    show_progress=True
+)
+
+# Sample training corpus (in practice: millions of sentences)
+domain_corpus = [
+    "the patient presented with acute myocardial infarction",
+    "electrocardiogram showed st-segment elevation in leads",
+    "administered aspirin and nitroglycerin immediately",
+    "cardiac catheterization revealed significant stenosis",
+    "echocardiogram confirmed reduced ejection fraction",
+    "prescribed beta-blockers and ace inhibitors for management",
+    "follow-up stress test scheduled in six weeks",
+    "blood pressure and cholesterol levels within normal range",
+    "patient tolerated the procedure without complications",
+    "discharge summary sent to primary care physician",
+]
+
+# Write to temp file for training
+with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+    for sentence in domain_corpus:
+        f.write(sentence + '\n')
+    tmp_path = f.name
+
+# Train on the corpus
+tokenizer.train(files=[tmp_path], trainer=trainer)
+
+# Test the trained tokenizer
+test_texts = ["myocardial infarction treatment", "electrocardiogram analysis"]
+print("Training complete! Testing tokenizer:")
+for text in test_texts:
+    encoding = tokenizer.encode(text)
+    print(f"\nText: '{text}'")
+    print(f"Tokens: {encoding.tokens}")
+    print(f"IDs: {encoding.ids}")
+
+os.unlink(tmp_path)
+print("\nTokenizer vocabulary size:", tokenizer.get_vocab_size())
+</code></pre>
+
+                        <h3 id="sentencepiece-training">SentencePiece Training</h3>
+
+                        <p>SentencePiece, developed by Google, takes a fundamentally different approach: it treats text as a raw Unicode character stream without any pre-tokenization. This makes it truly language-agnostic — it works identically for English, Japanese, Arabic, or any mix of scripts. SentencePiece is used by T5, ALBERT, LLaMA, Mistral, Gemma, and most modern LLMs. It supports BPE and Unigram Language Model algorithms and produces a self-contained <code>.model</code> + <code>.vocab</code> file that encapsulates everything needed for tokenization.</p>
+
+                        <div class="highlight-box highlight-navy">
+                            <h4><i class="fas fa-globe me-2"></i>Why LLMs Use SentencePiece</h4>
+                            <p>SentencePiece's <strong>language-agnostic design</strong> is critical for multilingual models. Since it doesn't rely on whitespace as word boundaries (Japanese, Chinese, and Thai have none), it can learn meaningful subword units across scripts simultaneously. LLaMA's tokenizer was trained on a 1.4TB multilingual corpus using SentencePiece BPE with 32,000 vocab tokens — balancing coverage across English, code, and 20 other languages.</p>
+                        </div>
+
+<pre><code class="language-python"># Training a SentencePiece tokenizer from scratch
+# Install: pip install sentencepiece
+
+import sentencepiece as spm
+import tempfile, os
+
+# Prepare training data
+training_sentences = [
+    "Natural language processing enables computers to understand text.",
+    "Tokenization is a fundamental preprocessing step for NLP models.",
+    "SentencePiece handles any language without word boundary assumptions.",
+    "The model learns subword units that balance coverage and efficiency.",
+    "Large language models use subword tokenization for open vocabulary.",
+    "BPE and unigram are the two algorithms supported by SentencePiece.",
+    "Training on diverse data produces better multilingual tokenizers.",
+    "Character coverage controls how rare characters are handled.",
+]
+
+# Write training data to file
+with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+    for sentence in training_sentences:
+        f.write(sentence + '\n')
+    input_file = f.name
+
+output_prefix = '/tmp/my_tokenizer'
+
+# Train SentencePiece BPE model
+spm.SentencePieceTrainer.train(
+    input=input_file,
+    model_prefix=output_prefix,
+    vocab_size=500,            # Small for demo; use 8000-32000 in practice
+    model_type='bpe',          # or 'unigram' for unigram LM
+    character_coverage=0.9995, # Cover 99.95% of unique characters
+    pad_id=0,                  # <pad> token id
+    unk_id=1,                  # <unk> token id
+    bos_id=2,                  # <s> (beginning of sentence) token id
+    eos_id=3,                  # </s> (end of sentence) token id
+    pad_piece='<pad>',
+    unk_piece='<unk>',
+    bos_piece='<s>',
+    eos_piece='</s>',
+)
+
+# Load and use the trained model
+sp = spm.SentencePieceProcessor()
+sp.Load(f'{output_prefix}.model')
+
+# Test tokenization
+test_texts = [
+    "tokenization splits text into subword units",
+    "NLP transformers use subword vocabularies",
+]
+
+print("SentencePiece Tokenization Results:")
+print("=" * 50)
+for text in test_texts:
+    pieces = sp.encode(text, out_type=str)
+    ids = sp.encode(text, out_type=int)
+    decoded = sp.decode(ids)
+    print(f"\nInput:   '{text}'")
+    print(f"Pieces:  {pieces}")
+    print(f"IDs:     {ids[:8]}...")
+    print(f"Decoded: '{decoded}'")
+
+print(f"\nVocab size: {sp.get_piece_size()}")
+print(f"Sample vocab: {[sp.id_to_piece(i) for i in range(10, 20)]}")
+
+# Cleanup
+os.unlink(input_file)
+</code></pre>
+
+<pre><code class="language-python"># Comparing tokenizers: general-purpose vs domain-specific
+# Shows why custom training matters for specialized domains
+
+import json
+
+# Simulate comparing two tokenizers on medical text
+# (using string operations to demonstrate the concept without loading real models)
+
+def simulate_tokenization(text, tokenizer_type="general"):
+    """Simulate tokenization to show fragmentation differences."""
+    medical_vocab = {
+        "general": {
+            # General tokenizer breaks medical terms into many pieces
+            "fibromyalgia": ["fi", "##bro", "##my", "##alg", "##ia"],
+            "pneumonia": ["pne", "##um", "##onia"],
+            "echocardiogram": ["echo", "##card", "##io", "##gram"],
+            "hypertension": ["hy", "##per", "##tens", "##ion"],
+            "acetylsalicylicacid": ["ac", "##ety", "##lsa", "##lic", "##yl", "##ic", "##acid"],
+        },
+        "medical": {
+            # Medical tokenizer keeps domain terms whole
+            "fibromyalgia": ["fibromyalgia"],
+            "pneumonia": ["pneumonia"],
+            "echocardiogram": ["echocardiogram"],
+            "hypertension": ["hypertension"],
+            "acetylsalicylicacid": ["acetylsalicylic", "##acid"],
+        }
+    }
+    
+    words = text.split()
+    tokens = []
+    for word in words:
+        word_lower = word.lower().rstrip('.,')
+        if word_lower in medical_vocab.get(tokenizer_type, {}):
+            tokens.extend(medical_vocab[tokenizer_type][word_lower])
+        else:
+            tokens.append(word_lower)
+    return tokens
+
+medical_sentence = "Patient has fibromyalgia and hypertension, echocardiogram scheduled"
+
+print("Tokenizer Comparison: Medical Domain")
+print("=" * 60)
+print(f"\nInput: '{medical_sentence}'")
+print()
+
+general_tokens = simulate_tokenization(medical_sentence, "general")
+medical_tokens = simulate_tokenization(medical_sentence, "medical")
+
+print(f"General-purpose tokenizer ({len(general_tokens)} tokens):")
+print(f"  {general_tokens}")
+print()
+print(f"Domain-specific tokenizer ({len(medical_tokens)} tokens):")
+print(f"  {medical_tokens}")
+print()
+print(f"Reduction: {len(general_tokens) - len(medical_tokens)} fewer tokens "
+      f"({(1 - len(medical_tokens)/len(general_tokens)):.0%} savings)")
+print("\nBenefit: More context fits in the model's window,")
+print("and medical terms retain their semantic unity.")
+</code></pre>
+
+                        <h3 id="tokenizer-exercises">Exercises: Tokenizer Training</h3>
+
+                        <div class="experiment-card">
+                            <h4><i class="fas fa-graduation-cap me-2"></i>Practice Exercises</h4>
+                            <div class="meta mb-2">
+                                <span class="badge bg-teal me-2">Beginner</span>
+                                <span class="badge bg-crimson">Advanced</span>
+                            </div>
+                            <div class="content">
+                                <ol>
+                                    <li><strong>[Beginner]</strong> Train a BPE tokenizer on a Python source code corpus. Compare how it tokenizes function names versus BERT's general-purpose tokenizer.</li>
+                                    <li><strong>[Beginner]</strong> Train SentencePiece models with <code>model_type='bpe'</code> and <code>model_type='unigram'</code> on the same dataset. Compare their vocabulary and tokenization of rare words.</li>
+                                    <li><strong>[Intermediate]</strong> Collect 1000 Wikipedia articles in two languages (e.g., English and French). Train a single SentencePiece model on both. Inspect the vocabulary — which fraction of tokens are shared vs language-specific?</li>
+                                    <li><strong>[Intermediate]</strong> Experiment with <code>vocab_size</code>: train three tokenizers with sizes 4000, 8000, and 16000 on the same corpus. Compare average tokens per sentence and out-of-vocabulary rates.</li>
+                                    <li><strong>[Advanced]</strong> Fine-tune a pretrained BERT model on a classification task using (a) BERT's original tokenizer and (b) a tokenizer you trained on domain-specific text. Compare validation accuracy.</li>
+                                    <li><strong>[Advanced]</strong> Implement a custom <code>Normalizer</code> that converts medical abbreviations (e.g., "Hx" → "history", "Dx" → "diagnosis") before tokenization. Measure the effect on downstream NER performance.</li>
+                                </ol>
+                            </div>
+                        </div>
+
                         <h2 id="character-tokenization"><i class="fas fa-keyboard me-2"></i>Character Tokenization</h2>
                         
                         <p>Character tokenization treats each character as a separate token. While this creates very small vocabularies (typically 100-300 characters for most languages), it results in much longer sequences that are computationally expensive to process. Character-level models must learn to compose characters into meaningful units, which requires more model capacity and training data.</p>
