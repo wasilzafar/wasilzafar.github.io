@@ -180,6 +180,7 @@
                     <li><a href="#saving" onclick="closeNav()">Saving & Loading Models</a></li>
                     <li><a href="#gpu" onclick="closeNav()">GPU Acceleration & Device Management</a></li>
                     <li><a href="#mixed-precision" onclick="closeNav()">Mixed Precision Training</a></li>
+                    <li><a href="#distributed-training" onclick="closeNav()">Distributed Training & Scaling</a></li>
                 </ul>
             </li>
             <li>
@@ -2846,6 +2847,461 @@ for epoch in range(5):
     print(f'Epoch {epoch+1}, Loss: {loss.item():.4f}')
 
 print('Mixed precision training complete - typically 2-3x faster!')</code></pre>
+                    </div>
+
+                    <div id="distributed-training" class="blog-content mt-5">
+                        <h2><i class="fas fa-network-wired me-2 text-teal"></i>Distributed Training & Scaling</h2>
+                        
+                        <p>When a model or dataset is too large for a single GPU, or training is simply taking too long, <strong>distributed training</strong> spreads the workload across multiple GPUs or machines. Modern LLMs (GPT-4, LLaMA, Mistral) are physically impossible to train on a single GPU — they require sophisticated distributed strategies just to fit in memory. Even smaller models train 4–8× faster on multi-GPU setups. This section covers the full spectrum from basic multi-GPU parallelism to production-grade frameworks used to train billion-parameter models.</p>
+
+                        <div class="highlight-box highlight-navy">
+                            <h4><i class="fas fa-lightbulb me-2"></i>Analogy: Building a House with a Team</h4>
+                            <p>Training a model alone is like one builder constructing a house. <strong>DataParallel</strong> is like photocopying the same blueprint for each builder — each works on a different section, but one supervisor (GPU 0) coordinates everything (bottleneck). <strong>DistributedDataParallel (DDP)</strong> is like giving each builder their own complete set of tools and authority — they work independently and synchronize only when needed (gradient averaging). <strong>FSDP</strong> is like each builder only holding the blueprints for their own section — no one person needs to hold the entire plan in memory at once.</p>
+                        </div>
+
+                        <h3>DataParallel vs DistributedDataParallel</h3>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+
+# =========================================================
+# Option 1: DataParallel (simple but limited)
+# - Splits input batch across GPUs
+# - GPU 0 is the "master" - copies model to all GPUs, 
+#   collects gradients back to GPU 0 (creates bottleneck)
+# - Easy to use: wrap any model with nn.DataParallel
+# - Limitation: GPU 0 uses more memory; GIL prevents true parallelism
+# =========================================================
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+# Simple model for demonstration
+model_dp = nn.Sequential(
+    nn.Linear(128, 256),
+    nn.ReLU(),
+    nn.Linear(256, 128),
+    nn.ReLU(),
+    nn.Linear(128, 10)
+)
+
+# Wrap with DataParallel
+if torch.cuda.device_count() > 1:
+    print(f"Using DataParallel across {torch.cuda.device_count()} GPUs")
+    model_dp = nn.DataParallel(model_dp)  # Uses all available GPUs
+else:
+    print(f"Single GPU/CPU mode: {device}")
+
+model_dp = model_dp.to(device)
+
+# Training works exactly the same - DataParallel handles splitting internally
+optimizer = optim.Adam(model_dp.parameters(), lr=0.001)
+criterion = nn.CrossEntropyLoss()
+
+# Fake data
+X = torch.randn(64, 128)
+y = torch.randint(0, 10, (64,))
+
+for epoch in range(3):
+    X_batch, y_batch = X.to(device), y.to(device)
+    optimizer.zero_grad()
+    outputs = model_dp(X_batch)  # DataParallel splits batch automatically
+    loss = criterion(outputs, y_batch)
+    loss.backward()
+    optimizer.step()
+    print(f'Epoch {epoch+1}/3, Loss: {loss.item():.4f}')
+
+print('\nDataParallel: easy setup but GPU 0 bottleneck limits scaling.')
+print('For serious multi-GPU training, use DistributedDataParallel.')
+</code></pre>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.distributed as dist
+import torch.multiprocessing as mp
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data import DataLoader, TensorDataset, DistributedSampler
+import os
+
+# =========================================================
+# Option 2: DistributedDataParallel (DDP) — production standard
+# - Each GPU runs an independent Python process (no GIL)
+# - Each process has a complete model copy
+# - Gradients are averaged across all GPUs (AllReduce)
+# - Each GPU is truly independent — no bottleneck
+# - Requires: torch.distributed backend (nccl for GPU, gloo for CPU)
+# =========================================================
+
+def train_ddp(rank, world_size):
+    """
+    Training function called once per GPU process.
+    
+    Args:
+        rank: This process's GPU index (0, 1, 2, ...)
+        world_size: Total number of GPU processes
+    """
+    # Initialize process group — enables inter-GPU communication
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
+    dist.init_process_group(
+        backend='nccl',   # NCCL for GPU-GPU, 'gloo' for CPU
+        rank=rank,
+        world_size=world_size
+    )
+    
+    # Each process uses its own GPU
+    torch.cuda.set_device(rank)
+    
+    # Build model and wrap with DDP
+    model = nn.Sequential(
+        nn.Linear(128, 256), nn.ReLU(),
+        nn.Linear(256, 128), nn.ReLU(),
+        nn.Linear(128, 10)
+    ).to(rank)
+    
+    # DDP wraps the model — synchronizes gradients automatically
+    model = DDP(model, device_ids=[rank])
+    
+    # DistributedSampler ensures each GPU gets different data
+    X = torch.randn(1000, 128)
+    y = torch.randint(0, 10, (1000,))
+    dataset = TensorDataset(X, y)
+    sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank)
+    loader = DataLoader(dataset, batch_size=32, sampler=sampler)
+    
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    criterion = nn.CrossEntropyLoss()
+    
+    for epoch in range(3):
+        sampler.set_epoch(epoch)  # Ensures different shuffling per epoch
+        for X_batch, y_batch in loader:
+            X_batch, y_batch = X_batch.to(rank), y_batch.to(rank)
+            optimizer.zero_grad()
+            outputs = model(X_batch)
+            loss = criterion(outputs, y_batch)
+            loss.backward()
+            # DDP automatically calls AllReduce to average gradients here
+            optimizer.step()
+        
+        if rank == 0:  # Only log from main process
+            print(f'Epoch {epoch+1}/3, Loss: {loss.item():.4f} (rank 0)')
+    
+    dist.destroy_process_group()
+
+# Launch DDP training
+print('DDP Training Setup:')
+print('  - Each GPU gets an independent Python process')
+print('  - Gradients averaged via NCCL AllReduce after each backward()')
+print('  - Linear scaling: 4 GPUs ≈ 4x speedup vs single GPU')
+print()
+
+world_size = torch.cuda.device_count()
+if world_size > 1:
+    print(f'Launching DDP on {world_size} GPUs...')
+    mp.spawn(train_ddp, args=(world_size,), nprocs=world_size, join=True)
+else:
+    print(f'Only 1 GPU available. DDP requires 2+.')
+    print('On a multi-GPU machine, mp.spawn launches one process per GPU.')
+    print('Each process trains on its data shard independently.')
+</code></pre>
+
+                        <h3>FSDP: Fully Sharded Data Parallel</h3>
+
+                        <p><strong>Fully Sharded Data Parallel (FSDP)</strong>, introduced in PyTorch 1.12, enables training models that are too large to fit on a single GPU. Instead of each GPU holding a complete copy of the model (like DDP), FSDP <em>shards</em> (distributes) the model parameters, gradients, and optimizer states across all GPUs. A 70B parameter model with DDP would require 70B × 4 bytes × 8 GPUs = 2.2 TB of memory. With FSDP, each GPU only stores 1/8 of the parameters — enabling 70B+ models on commodity hardware.</p>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+from torch.distributed.fsdp import (
+    FullyShardedDataParallel as FSDP,
+    MixedPrecision,
+    ShardingStrategy,
+    BackwardPrefetch,
+    CPUOffload,
+)
+from torch.distributed.fsdp.wrap import (
+    size_based_auto_wrap_policy,
+    enable_wrap,
+    wrap,
+)
+import functools
+
+# FSDP Sharding Strategies (key decision for memory vs communication tradeoff)
+print("FSDP Sharding Strategies:")
+print("=" * 60)
+
+strategies = {
+    "FULL_SHARD": {
+        "desc": "Shards params + grads + optimizer states",
+        "memory_reduction": "~8x reduction on 8 GPUs",
+        "communication": "High (gather before forward, scatter after backward)",
+        "use_case": "Models that don't fit in memory (70B+ params)"
+    },
+    "SHARD_GRAD_OP": {
+        "desc": "Shards grads + optimizer states (not params)",
+        "memory_reduction": "~3-4x reduction",
+        "communication": "Medium",
+        "use_case": "Models that fit if params are replicated (7B-13B params)"
+    },
+    "NO_SHARD": {
+        "desc": "No sharding (equivalent to DDP)",
+        "memory_reduction": "None",
+        "communication": "Same as DDP",
+        "use_case": "Baseline comparison with DDP"
+    },
+    "HYBRID_SHARD": {
+        "desc": "Full sharding within node, replication across nodes",
+        "memory_reduction": "~node_size x reduction",
+        "communication": "Optimized for multi-node clusters",
+        "use_case": "Large multi-node training (hundreds of GPUs)"
+    },
+}
+
+for strategy, info in strategies.items():
+    print(f"\n{strategy}:")
+    print(f"  Description: {info['desc']}")
+    print(f"  Memory: {info['memory_reduction']}")
+    print(f"  Use case: {info['use_case']}")
+
+print()
+print("Example FSDP wrapping (run on multi-GPU setup):")
+</code></pre>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP, ShardingStrategy
+from torch.distributed.fsdp.wrap import size_based_auto_wrap_policy
+import functools
+
+# Build a larger model (simulating a transformer)
+class TransformerBlock(nn.Module):
+    def __init__(self, d_model=512, nhead=8, dim_ff=2048):
+        super().__init__()
+        self.attention = nn.MultiheadAttention(d_model, nhead, batch_first=True)
+        self.ff = nn.Sequential(
+            nn.Linear(d_model, dim_ff),
+            nn.GELU(),
+            nn.Linear(dim_ff, d_model)
+        )
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+    
+    def forward(self, x):
+        attn_out, _ = self.attention(x, x, x)
+        x = self.norm1(x + attn_out)
+        x = self.norm2(x + self.ff(x))
+        return x
+
+class LargeTransformer(nn.Module):
+    def __init__(self, num_layers=12, d_model=512, vocab_size=10000):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, d_model)
+        self.layers = nn.ModuleList([
+            TransformerBlock(d_model) for _ in range(num_layers)
+        ])
+        self.head = nn.Linear(d_model, vocab_size)
+    
+    def forward(self, x):
+        x = self.embedding(x)
+        for layer in self.layers:
+            x = layer(x)
+        return self.head(x)
+
+# Count parameters
+model = LargeTransformer(num_layers=12, d_model=512)
+total_params = sum(p.numel() for p in model.parameters())
+memory_fp32 = total_params * 4 / (1024**3)  # GB in FP32
+
+print(f"Model: {num_layers=}, d_model=512")
+print(f"Parameters: {total_params:,}")
+print(f"Memory (FP32): {memory_fp32:.2f} GB")
+print(f"Memory per GPU (DDP, 8 GPUs): {memory_fp32:.2f} GB (full copy per GPU)")
+print(f"Memory per GPU (FSDP FULL_SHARD, 8 GPUs): {memory_fp32/8:.2f} GB (sharded)")
+print()
+
+# FSDP wrapping (requires distributed init — shown conceptually)
+print("FSDP wrapping configuration:")
+print("""
+# Auto-wrap policy: shard layers with >1M parameters individually
+auto_wrap_policy = functools.partial(
+    size_based_auto_wrap_policy,
+    min_num_params=1_000_000  # Shard modules larger than 1M params
+)
+
+# Wrap model with FSDP
+model = FSDP(
+    model,
+    sharding_strategy=ShardingStrategy.FULL_SHARD,  # Maximum memory savings
+    auto_wrap_policy=auto_wrap_policy,
+    mixed_precision=MixedPrecision(
+        param_dtype=torch.float16,   # Store params in FP16
+        reduce_dtype=torch.float32,  # Gradient reduction in FP32 for stability
+        buffer_dtype=torch.float16,
+    ),
+    cpu_offload=CPUOffload(offload_params=False),  # Set True to offload to RAM
+    device_id=torch.cuda.current_device(),
+)
+""")
+</code></pre>
+
+                        <h3>DeepSpeed ZeRO: Training at Billion-Parameter Scale</h3>
+
+                        <p><strong>DeepSpeed</strong>, developed by Microsoft, provides the ZeRO (Zero Redundancy Optimizer) algorithm which pushes memory efficiency even further than FSDP. ZeRO has three stages that progressively eliminate redundancy in optimizer states, gradients, and parameters. ZeRO-3 can reduce memory by up to 64× compared to a standard DDP setup, enabling trillion-parameter models. Used to train GPT-3, BLOOM, and many other frontier models.</p>
+
+<pre><code class="language-python">import json
+
+# DeepSpeed configuration file for ZeRO-2 training
+# Save as 'ds_config.json' and pass to deepspeed launcher
+
+ds_config_zero2 = {
+    "train_batch_size": 32,
+    "train_micro_batch_size_per_gpu": 4,  # With 8 GPUs: 4 * 8 = 32
+    "gradient_accumulation_steps": 1,
+    
+    # ZeRO Stage 2: shards gradients + optimizer states
+    "zero_optimization": {
+        "stage": 2,
+        "allgather_partitions": True,    # Gather params for forward pass
+        "allgather_bucket_size": 2e8,    # 200MB bucket for AllGather
+        "overlap_comm": True,             # Overlap communication with compute
+        "reduce_scatter": True,           # Scatter-reduce for gradients
+        "reduce_bucket_size": 2e8,        # 200MB bucket for ReduceScatter
+        "contiguous_gradients": True,     # Contiguous memory for gradients
+        "offload_optimizer": {            # CPU offload: saves GPU memory
+            "device": "none",             # Set "cpu" to enable
+            "pin_memory": True
+        }
+    },
+    
+    # Mixed precision for speed + memory savings
+    "fp16": {
+        "enabled": True,
+        "loss_scale": 0,                  # 0 = dynamic loss scaling
+        "initial_scale_power": 16,
+        "loss_scale_window": 1000
+    },
+    
+    # Learning rate scheduler
+    "scheduler": {
+        "type": "WarmupLR",
+        "params": {
+            "warmup_min_lr": 0,
+            "warmup_max_lr": 3e-4,
+            "warmup_num_steps": 1000
+        }
+    },
+    
+    # Logging and checkpointing
+    "steps_per_print": 100,
+    "wall_clock_breakdown": False
+}
+
+print("DeepSpeed ZeRO-2 Configuration")
+print("=" * 60)
+print(json.dumps(ds_config_zero2, indent=2)[:1000])
+print()
+print("ZeRO Stages Memory Reduction (vs baseline):")
+print(f"  Stage 0 (baseline DDP):   1×  (no reduction)")
+print(f"  Stage 1 (optimizer shard): 4×  (optimizer states distributed)")
+print(f"  Stage 2 (+ grad shard):   8×  (+ gradients distributed)")
+print(f"  Stage 3 (+ param shard): 64×  (+ parameters distributed)")
+print()
+print("Usage: deepspeed --num_gpus=8 train.py --deepspeed ds_config.json")
+</code></pre>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+# Gradient checkpointing: trade compute for memory
+# Re-computes activations during backward pass instead of storing them
+# Reduces activation memory by ~sqrt(num_layers) at 30% compute overhead
+
+class CheckpointedTransformer(nn.Module):
+    """Transformer with gradient checkpointing for memory efficiency."""
+    
+    def __init__(self, num_layers=24, d_model=768):
+        super().__init__()
+        self.layers = nn.ModuleList([
+            nn.TransformerEncoderLayer(d_model, nhead=12, batch_first=True)
+            for _ in range(num_layers)
+        ])
+    
+    def forward(self, x, use_checkpointing=True):
+        from torch.utils.checkpoint import checkpoint
+        
+        for layer in self.layers:
+            if use_checkpointing and self.training:
+                # Don't store activations — recompute during backward
+                x = checkpoint(layer, x, use_reentrant=False)
+            else:
+                x = layer(x)  # Normal forward: store all activations
+        return x
+
+# Estimate memory savings from gradient checkpointing
+def estimate_activation_memory(batch_size, seq_len, d_model, num_layers):
+    """Estimate GPU memory used by activations (FP16)."""
+    bytes_per_element = 2  # FP16
+    # Each transformer layer stores: attention scores + FFN activations
+    activation_per_layer = batch_size * seq_len * d_model * 4  # simplified
+    return activation_per_layer * num_layers * bytes_per_element / (1024**3)  # GB
+
+print("Gradient Checkpointing Memory Analysis")
+print("=" * 60)
+
+configs = [
+    (8, 512, 768, 12, "BERT-base"),
+    (4, 2048, 1024, 24, "GPT-2 medium"),
+    (2, 4096, 4096, 32, "LLaMA-7B (approx)"),
+]
+
+print(f"{'Model':>20} | {'Without GC':>12} | {'With GC':>10} | {'Savings':>8}")
+print("-" * 60)
+
+for batch, seq, d_model, layers, name in configs:
+    full_mem = estimate_activation_memory(batch, seq, d_model, layers)
+    # Checkpointing stores only sqrt(n) layer outputs + recomputes
+    ckpt_mem = estimate_activation_memory(batch, seq, d_model, int(layers**0.5))
+    savings = (1 - ckpt_mem/full_mem) * 100
+    print(f"{name:>20} | {full_mem:>9.2f} GB | {ckpt_mem:>7.2f} GB | {savings:>7.0f}%")
+
+print()
+print("Enable in training: model = CheckpointedTransformer(use_checkpointing=True)")
+print("Cost: ~30% slower training (recomputing forward pass during backward)")
+print("Benefit: Can train 2-4x larger batch sizes or models")
+</code></pre>
+
+                        <div class="experiment-card">
+                            <h4><i class="fas fa-server me-2"></i>Case Study: Training GPT-2 Scale on 4 GPUs with DDP</h4>
+                            <div class="meta mb-2">
+                                <span class="badge bg-teal me-2">Case Study</span>
+                                <span class="badge bg-crimson">Multi-GPU Training</span>
+                            </div>
+                            <div class="content">
+                                <p><strong>Setup:</strong> GPT-2 Medium (345M params) training on a 4-GPU machine (4× A100 40GB). Original single-GPU training: 72 hours for 1 epoch on 10B tokens. Target: reduce to under 24 hours.</p>
+                                <p><strong>Single GPU baseline:</strong> Batch size 8, FP32, 14 samples/second throughput.</p>
+                                <p><strong>4-GPU DDP + AMP:</strong> Batch size 32 (8 per GPU), FP16 with GradScaler, NCCL backend. Result: 58 samples/second — 4.1× speedup. Near-linear scaling efficiency of 97%.</p>
+                                <p><strong>Practical takeaways:</strong> Use DDP (not DataParallel) for linear scaling. Always pair with AMP (2× speedup). Use DistributedSampler to prevent data overlap. Save checkpoints only from rank 0. Log metrics only from rank 0 to avoid duplicate output.</p>
+                            </div>
+                        </div>
+
+                        <div class="experiment-card">
+                            <h4><i class="fas fa-dumbbell me-2"></i>Distributed Training Exercises</h4>
+                            <div class="meta mb-2">
+                                <span class="badge bg-teal me-2">Beginner</span>
+                                <span class="badge bg-crimson">Advanced</span>
+                            </div>
+                            <div class="content">
+                                <ol>
+                                    <li><strong>[Beginner]</strong> Wrap a ResNet-18 with <code>nn.DataParallel</code> on 2 GPUs. Verify GPU memory usage with <code>torch.cuda.memory_allocated()</code> on each GPU — observe that GPU 0 uses more memory than GPU 1.</li>
+                                    <li><strong>[Beginner]</strong> Enable gradient checkpointing on a 12-layer transformer. Measure peak GPU memory with and without checkpointing using <code>torch.cuda.max_memory_allocated()</code>.</li>
+                                    <li><strong>[Intermediate]</strong> Implement a complete DDP training loop with <code>mp.spawn</code> for a CIFAR-10 classifier. Compare training throughput (samples/second) with 1, 2, and 4 GPUs.</li>
+                                    <li><strong>[Intermediate]</strong> Set up FSDP with <code>SHARD_GRAD_OP</code> on a 300M parameter model. Profile memory usage per GPU and compare to DDP.</li>
+                                    <li><strong>[Advanced]</strong> Use DeepSpeed with ZeRO-2 to fine-tune GPT-2 large (774M params) on a text generation task. Compare memory usage vs standard DDP. Enable CPU offloading and measure the throughput tradeoff.</li>
+                                    <li><strong>[Advanced]</strong> Implement pipeline parallelism manually: split a 12-layer transformer into 4 stages of 3 layers each, one stage per GPU. Handle the micro-batching needed to keep all GPUs busy.</li>
+                                </ol>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="transfer-learning" class="blog-content mt-5">
