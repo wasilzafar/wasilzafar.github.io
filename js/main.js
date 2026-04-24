@@ -478,27 +478,19 @@ document.addEventListener('DOMContentLoaded', function() {
 /* ============================================
    Google Analytics Event Tracking via GTM
    ============================================
-   Naming Convention:
-   - CTA (Call-to-Action) Elements: cta-[action]-[context]
-   - data-tracking-id: cta_[action]_[category]_[index]
-   - data-article-slug: [article-slug-from-filename]
-   - data-category: [blog-category-name]
-   
-   Example: cta_read_article_psychology_001
-   - cta: Element type (Call-to-Action)
-   - read_article: Action performed
-   - psychology: Category context
-   - 001: Sequential index for extensibility
-   
-   Event Structure for GTM:
-   {
-     event: 'engagement_cta_click',
-     engagement_type: 'article_cta',
-     action: 'read_article',
-     category: 'psychology',
-     article_slug: 'psychology-experiments-cognitive-biases',
-     element_id: 'cta_read_article_psychology_001'
-   }
+   Event names use GA4 recommended names where applicable:
+   - select_content  : article CTA clicks & interest card clicks
+   - cta_click       : hero CTA button clicks
+   - navigation_click: internal nav link clicks
+   - social_share    : social media link clicks
+   - footer_click    : footer link clicks
+   - file_download   : doc generator downloads (pushed from doc-generator-core.js)
+   - contact_form_submit : contact form submission (pushed from contact.html)
+   - scroll_depth    : scroll milestones (handled via GTM native trigger)
+   - print_article   : browser print triggered
+
+   Each event includes engagement_type for GTM filtering:
+   article_cta | interest_cta | hero_cta | navigation | social_link | footer_link
 ============================================ */
 
 function initAnalyticsTracking() {
@@ -508,7 +500,7 @@ function initAnalyticsTracking() {
     readArticleButtons.forEach(button => {
         button.addEventListener('click', function(e) {
             const trackingData = {
-                event: 'engagement_cta_click',
+                event: 'select_content',
                 engagement_type: 'article_cta',
                 action: 'read_article',
                 category: this.getAttribute('data-category') || 'uncategorized',
@@ -523,8 +515,7 @@ function initAnalyticsTracking() {
                 window.dataLayer.push(trackingData);
             }
             
-            // Console logging for development/debugging
-            console.log('[Analytics] CTA Click (Read Article):', trackingData);
+            console.log('[Analytics] Read Article Click:', trackingData);
         });
     });
 
@@ -534,7 +525,7 @@ function initAnalyticsTracking() {
     navLinks.forEach(link => {
         link.addEventListener('click', function(e) {
             const trackingData = {
-                event: 'engagement_cta_click',
+                event: 'navigation_click',
                 engagement_type: 'navigation',
                 action: 'navigate_section',
                 section: this.getAttribute('data-section') || 'unknown',
@@ -557,7 +548,7 @@ function initAnalyticsTracking() {
     heroCtaButtons.forEach(button => {
         button.addEventListener('click', function(e) {
             const trackingData = {
-                event: 'engagement_cta_click',
+                event: 'cta_click',
                 engagement_type: 'hero_cta',
                 action: this.getAttribute('data-cta-action') || 'unknown',
                 element_id: this.getAttribute('data-tracking-id') || 'unknown',
@@ -579,7 +570,7 @@ function initAnalyticsTracking() {
     interestCards.forEach(card => {
         card.addEventListener('click', function(e) {
             const trackingData = {
-                event: 'engagement_cta_click',
+                event: 'select_content',
                 engagement_type: 'interest_cta',
                 action: 'explore_interest',
                 interest: this.getAttribute('data-interest') || 'unknown',
@@ -602,7 +593,7 @@ function initAnalyticsTracking() {
     socialLinks.forEach(link => {
         link.addEventListener('click', function(e) {
             const trackingData = {
-                event: 'engagement_cta_click',
+                event: 'social_share',
                 engagement_type: 'social_link',
                 action: 'visit_social',
                 social_platform: this.getAttribute('data-social') || 'unknown',
@@ -625,7 +616,7 @@ function initAnalyticsTracking() {
     footerLinks.forEach(link => {
         link.addEventListener('click', function(e) {
             const trackingData = {
-                event: 'engagement_cta_click',
+                event: 'footer_click',
                 engagement_type: 'footer_link',
                 action: 'visit_page',
                 page: this.getAttribute('data-footer-link') || 'unknown',
@@ -643,9 +634,96 @@ function initAnalyticsTracking() {
     });
 }
 
+/* ============================================
+   Content Grouping — push page metadata to GTM
+   Parses URL to derive category, series, and page type.
+   GTM reads content_group1/2/3 from the dataLayer for
+   GA4 event parameters and audience segmentation.
+============================================ */
+
+function initContentGrouping() {
+    var dl = window.dataLayer = window.dataLayer || [];
+    var path = window.location.pathname;
+
+    var contentGroup1 = 'other';
+    var contentGroup2 = '';
+    var pageType = 'other';
+
+    // Series → category lookup
+    var seriesCategoryMap = {
+        'ai-app-dev': 'technology', 'ai-in-the-wild': 'technology',
+        'ai-data-science': 'technology', 'api-development': 'technology',
+        'arm-assembly': 'technology', 'assembly-mastery': 'technology',
+        'cloud-computing': 'technology', 'cmsis': 'technology',
+        'computer-architecture': 'technology', 'data-structures': 'technology',
+        'database-mastery': 'technology', 'embedded-systems': 'technology',
+        'gnu-make': 'technology', 'kernel-development': 'technology',
+        'nlp': 'technology', 'protocols-master': 'technology',
+        'sensors-actuators': 'technology', 'stm32-hal': 'technology',
+        'system-design': 'technology', 'usb-dev': 'technology',
+        'behavioral-psychology': 'psychology', 'cognitive-psych': 'psychology',
+        'biochemistry': 'life-sciences', 'evolutionary-biology': 'life-sciences',
+        'human-anatomy': 'life-sciences', 'physiology': 'life-sciences',
+        'consulting-frameworks': 'business', 'dddm': 'business',
+        'economics': 'business', 'entrepreneurship': 'business',
+        'marketing-strategy': 'business', 'sales-mastery': 'business',
+        'ethics-moral-philosophy': 'philosophy', 'logic-critical-thinking': 'philosophy',
+        'manufacturing-engineering': 'engineering', 'materials-science': 'engineering',
+        'mech-movements': 'engineering', 'robotics-automation': 'engineering',
+        'game-development': 'gaming', 'unity-game-engine': 'gaming'
+    };
+
+    if (path === '/' || path === '/index.html') {
+        pageType = 'homepage';
+        contentGroup1 = 'homepage';
+    } else if (path.indexOf('/pages/categories/') !== -1) {
+        pageType = 'category_listing';
+        var catMatch = path.match(/\/pages\/categories\/([^/]+)\.html/);
+        if (catMatch) { contentGroup1 = catMatch[1]; }
+    } else if (path.indexOf('/pages/series/') !== -1) {
+        pageType = 'series_article';
+        var seriesMatch = path.match(/\/pages\/series\/([^/]+)\//);
+        if (seriesMatch) {
+            contentGroup2 = seriesMatch[1];
+            contentGroup1 = seriesCategoryMap[contentGroup2] || 'other';
+        }
+    } else if (/\/pages\/\d{4}\/\d{2}\//.test(path)) {
+        pageType = 'standalone_article';
+    } else if (path.indexOf('/pages/contact') !== -1) {
+        pageType = 'contact';
+    }
+
+    dl.push({
+        event: 'content_group',
+        content_group1: contentGroup1,
+        content_group2: contentGroup2,
+        page_type: pageType,
+        page_path: path
+    });
+}
+
+/* ============================================
+   Print Tracking
+   Fires a dataLayer event when the user prints.
+   GTM listens for 'print_article' customEvent.
+============================================ */
+
+function initPrintTracking() {
+    window.addEventListener('beforeprint', function() {
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push({
+            event: 'print_article',
+            page_path: window.location.pathname,
+            page_title: document.title
+        });
+    });
+}
+
 // Initialize tracking when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
     initAnalyticsTracking();
+    initContentGrouping();
+    initPrintTracking();
 });
 
 /* ============================================
