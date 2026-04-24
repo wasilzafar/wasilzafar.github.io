@@ -1162,6 +1162,17 @@ var DocGenerator = {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+
+    // Track file download event in GA4 via GTM
+    var ext = filename.split('.').pop().toLowerCase();
+    var formatMap = { 'docx': 'word', 'xlsx': 'excel', 'pdf': 'pdf', 'pptx': 'powerpoint' };
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: 'file_download',
+      file_format: formatMap[ext] || ext,
+      file_name: filename,
+      page_path: window.location.pathname
+    });
   }
 };
 
