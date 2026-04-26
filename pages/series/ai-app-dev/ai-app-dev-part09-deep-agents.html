@@ -196,9 +196,12 @@
             <li>
                 <a href="#context-engineering" onclick="closeNav()">Context Engineering</a>
                 <ul>
+                    <li><a href="#harness-context-role" onclick="closeNav()">The Agent Harness</a></li>
                     <li><a href="#input-context" onclick="closeNav()">Input Context</a></li>
+                    <li><a href="#runtime-context" onclick="closeNav()">Runtime Context</a></li>
                     <li><a href="#context-compression" onclick="closeNav()">Context Compression</a></li>
                     <li><a href="#context-summarization" onclick="closeNav()">Context Summarization</a></li>
+                    <li><a href="#context-isolation" onclick="closeNav()">Context Isolation</a></li>
                 </ul>
             </li>
             <li>
@@ -654,6 +657,41 @@ print(result["messages"][-1].content)
                             </table>
                         </div>
 
+                        <h3 id="harness-context-role">3.0 The Agent Harness</h3>
+
+                        <p>The <strong>agent harness</strong> is what distinguishes Deep Agents from a bare tool-calling loop. It wraps the core LLM loop with a layered set of built-in middleware — adding planning (<code>write_todos</code>), virtual filesystem tools (<code>ls</code>, <code>read_file</code>, <code>write_file</code>, <code>edit_file</code>, <code>glob</code>, <code>grep</code>), subagent delegation (<code>task</code>), and automatic context management — all assembled into a complete system prompt before every invocation.</p>
+
+                        <p>When you call <code>create_deep_agent()</code>, the harness assembles the system prompt from multiple sources in a fixed order. Your <code>system_prompt</code> is always prepended first, so your instructions override built-in guidance at every layer:</p>
+
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Prompt Layer</th>
+                                        <th>Source</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td>1</td><td><strong>Custom System Prompt</strong></td><td><code>system_prompt=</code> parameter</td><td>Your role, domain rules, constraints — highest priority</td></tr>
+                                    <tr><td>2</td><td><strong>Base Agent Prompt</strong></td><td>Harness built-in</td><td>Core reasoning and tool-use guidance</td></tr>
+                                    <tr><td>3</td><td><strong>To-Do List Prompt</strong></td><td>Harness built-in</td><td>Instructions for the <code>write_todos</code> planning tool</td></tr>
+                                    <tr><td>4</td><td><strong>Memory Prompt</strong></td><td>When <code>memory=</code> configured</td><td>Loads AGENTS.md files + usage guidelines</td></tr>
+                                    <tr><td>5</td><td><strong>Skills Prompt</strong></td><td>When <code>skills=</code> configured</td><td>Skill locations + frontmatter for progressive disclosure</td></tr>
+                                    <tr><td>6</td><td><strong>Virtual Filesystem Prompt</strong></td><td>Harness built-in</td><td>Docs for <code>ls</code>, <code>read_file</code>, <code>write_file</code>, <code>edit_file</code>, <code>glob</code>, <code>grep</code></td></tr>
+                                    <tr><td>7</td><td><strong>Subagent Prompt</strong></td><td>Harness built-in</td><td>Guidance for the <code>task</code> delegation tool</td></tr>
+                                    <tr><td>8</td><td><strong>Custom Middleware Prompts</strong></td><td>When custom middleware added</td><td>Your domain context and custom tool instructions</td></tr>
+                                    <tr><td>9</td><td><strong>HITL Prompt</strong></td><td>When <code>interrupt_on=</code> set</td><td>Human approval guidance (only when configured)</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Harness vs. Bare Agent:</strong> A bare LLM call gives you tool calling. The harness adds <em>opinionated built-in tools</em> (planning, filesystem, subagents), <em>system prompts that teach the model how to use them effectively</em>, and <em>automatic context management</em> (offloading at 20k tokens, summarization at 85% capacity). You get a production-ready loop with sensible defaults — fully customizable or replaceable at every layer.
+                        </div>
+
                         <h3 id="input-context">3.1 Input Context</h3>
 
                         <p>Input context is the foundation layer — content loaded into every agent turn. It includes the system prompt, memory files, skill frontmatter, and built-in tool descriptions. The <code>system_prompt</code> you provide is <em>prepended</em> to the harness's built-in prompt, so your instructions take priority:</p>
@@ -684,7 +722,76 @@ print(result["messages"][-1].content)
                             <strong>Key Insight:</strong> Memory files (<code>AGENTS.md</code>) are always loaded into the agent's context, regardless of context compression. Use them for persistent instructions, coding standards, or domain knowledge that must survive summarization.
                         </div>
 
-                        <h3 id="context-compression">3.2 Context Compression</h3>
+                        <h3 id="runtime-context">3.2 Runtime Context</h3>
+
+                        <p>Runtime context is per-invocation typed configuration that you pass when calling the agent. Unlike the static <code>system_prompt</code>, runtime context changes per-call — carrying user identity, API credentials, roles, feature flags, or any other request-scoped data your tools need.</p>
+
+                        <p>Runtime context is <strong>not automatically visible to the LLM</strong>. It is never injected into the conversation history. Tools read it explicitly via <code>ToolRuntime</code> injection, creating a deliberate security boundary: sensitive values like API keys or session tokens never appear in the model's prompt or tool call history.</p>
+
+                        <p>Define the context shape with a Python <code>dataclass</code> or <code>TypedDict</code>, declare it as <code>context_schema</code>, and pass values via <code>context=</code> at invoke time:</p>
+
+<pre><code class="language-python"># pip install deepagents langchain-anthropic
+from dataclasses import dataclass
+from deepagents import create_deep_agent
+from langchain.tools import tool, ToolRuntime
+
+# 1. Define runtime context shape — changes per user/session
+@dataclass
+class UserContext:
+    user_id: str
+    user_role: str     # "admin" | "viewer"
+    api_key: str       # Never visible to the LLM
+
+# 2. Tools receive context via ToolRuntime[Context] injection
+@tool
+def fetch_user_orders(query: str, runtime: ToolRuntime[UserContext]) -> str:
+    """Fetch orders for the currently authenticated user.
+
+    Args:
+        query: Search filter for orders
+    """
+    user_id = runtime.context.user_id
+    return f"Orders for {user_id} matching '{query}': [order-001, order-002]"
+
+@tool
+def update_order_status(order_id: str, status: str, runtime: ToolRuntime[UserContext]) -> str:
+    """Update an order's status. Requires admin role.
+
+    Args:
+        order_id: The order to update
+        status: New status: 'pending', 'shipped', or 'delivered'
+    """
+    role = runtime.context.user_role
+    if role != "admin":
+        return f"Permission denied: admin role required (your role: {role})"
+    return f"Order {order_id} updated to '{status}'"
+
+# 3. Declare context_schema when creating the agent
+agent = create_deep_agent(
+    model="anthropic:claude-haiku-4-5",
+    tools=[fetch_user_orders, update_order_status],
+    context_schema=UserContext,
+    system_prompt="You are an order management assistant.",
+)
+
+# 4. Pass context per invocation — different per user/session
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "Show my recent orders and ship order-001."}]},
+    context=UserContext(
+        user_id="user-789",
+        user_role="admin",
+        api_key="sk-real-key-never-in-llm-history",
+    ),
+)
+print(result["messages"][-1].content)
+</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb"></i>
+                            <strong>Key Insight:</strong> Runtime context automatically propagates to all subagents. When the main agent delegates a task, every spawned subagent receives the same <code>UserContext</code> (same <code>user_id</code>, <code>user_role</code>, etc.), so multi-agent workflows stay consistently authorized without manual plumbing. For dynamic system prompts that vary per user — e.g., injecting <em>"You have admin access"</em> based on role — use the <code>@dynamic_prompt</code> middleware pattern covered in Section 8.
+                        </div>
+
+                        <h3 id="context-compression">3.3 Context Compression</h3>
 
                         <p>When tool inputs or outputs exceed 20,000 tokens, the harness automatically <strong>offloads</strong> them to the virtual filesystem and replaces the content with a reference pointer. This keeps the conversation history lean while preserving all data:</p>
 
@@ -714,7 +821,7 @@ result = agent.invoke({
 print(result["messages"][-1].content)
 </code></pre>
 
-                        <h3 id="context-summarization">3.3 Context Summarization</h3>
+                        <h3 id="context-summarization">3.4 Context Summarization</h3>
 
                         <p>When the conversation history reaches <strong>85% of the model's context window</strong>, the harness triggers automatic summarization. The agent generates a structured summary of the conversation so far, preserving:</p>
 
@@ -767,6 +874,68 @@ stateDiagram-v2
     Normal --> [*]: Task complete
                             </pre>
                         </div>
+
+                        <h3 id="context-isolation">3.5 Context Isolation</h3>
+
+                        <p>Subagents solve the <strong>context bloat problem</strong>. When an agent performs heavy multi-step work — web searches, large file reads, database queries — that work fills the main agent's context window rapidly. Context isolation delegates heavy subtasks to a subagent with its own fresh context. The main agent receives only the final summary result, keeping its own context clean throughout:</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Context Isolation: Subagent Work Stays Isolated</div>
+                            <pre class="mermaid">
+flowchart LR
+    A["Main Agent\n(clean context)"] -->|"task tool"| B["Subagent\n(fresh context)"]
+    B --> C["Tool Call 1\n50k tokens"]
+    B --> D["Tool Call 2\n30k tokens"]
+    B --> E["Tool Call N\n25k tokens"]
+    C & D & E --> F["Final Summary\n~300 words"]
+    F -->|"single result"| A
+                            </pre>
+                        </div>
+
+<pre><code class="language-python"># pip install deepagents langchain-anthropic
+from deepagents import create_deep_agent
+
+# Define a specialized research subagent that isolates heavy work
+research_subagent = {
+    "name": "researcher",
+    "description": (
+        "Conducts deep research on a single focused topic. Use this when a task "
+        "requires extensive searching, reading, or multi-step analysis."
+    ),
+    "system_prompt": """You are a research analyst.
+Research the topic thoroughly using all available tools.
+
+CRITICAL OUTPUT RULES:
+- Return ONLY the essential summary (300-500 words maximum)
+- Do NOT include raw search results or verbose tool outputs
+- Format: Brief Summary | Key Findings (3-5 bullets) | Confidence Level""",
+}
+
+agent = create_deep_agent(
+    model="anthropic:claude-haiku-4-5",
+    subagents=[research_subagent],
+    system_prompt=(
+        "You are a project lead. For any research-heavy task, "
+        "delegate to the researcher subagent to keep your context clean."
+    ),
+)
+
+# The researcher subagent may use thousands of tokens internally.
+# The main agent only sees the final concise summary.
+result = agent.invoke({
+    "messages": [{
+        "role": "user",
+        "content": "Compare event sourcing vs. traditional CRUD for a financial transactions system."
+    }]
+})
+print(result["messages"][-1].content)
+</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb"></i>
+                            <strong>Key Insight:</strong> The subagent's entire session — potentially hundreds of tool calls and thousands of tokens — collapses into a single short result in the main agent's conversation history. This enables orchestrating multiple parallel research tasks simultaneously without the main agent's context window ever filling up. Each subagent can be configured with its own model, tools, skills, and permissions, independently of the main agent. See Section 5 for full subagent configuration options.
+                        </div>
+
                     </div>
 
                     <!-- Section 4: Backends & Sandboxes -->
