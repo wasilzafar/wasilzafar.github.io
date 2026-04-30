@@ -31,6 +31,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <!-- KaTeX Math Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
     <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
@@ -223,7 +225,7 @@
 
                         <h3 id="rnn-architecture">Architecture</h3>
 
-                        <p>The vanilla RNN processes a sequence one element at a time, maintaining a hidden state vector that acts as the network's "memory." At each time step t, the RNN takes two inputs: the current input x_t and the previous hidden state h_{t-1}. It produces a new hidden state h_t and optionally an output y_t. The mathematical formulation is elegantly simple: the hidden state is computed by applying a non-linear activation function (typically tanh) to a linear combination of the input and previous hidden state.</p>
+                        <p>The vanilla RNN processes a sequence one element at a time, maintaining a hidden state vector that acts as the network's "memory." At each time step $t$, the RNN takes two inputs: the current input $x_t$ and the previous hidden state $h_{t-1}$. It produces a new hidden state $h_t$ and optionally an output $y_t$. The mathematical formulation is elegantly simple: the hidden state is computed by applying a non-linear activation function (typically $\tanh$) to a linear combination of the input and previous hidden state.</p>
 
                         <div class="experiment-card">
                             <h4><i class="fas fa-project-diagram me-2"></i>RNN Architecture Diagram</h4>
@@ -232,39 +234,33 @@
                                 <span class="badge bg-crimson">Weight Sharing</span>
                             </div>
                             <div class="content">
-<pre><code class="language-python">"""
-Vanilla RNN Unfolded Through Time:
-
-    x0         x1         x2         x3
-    ↓          ↓          ↓          ↓
-+-------+  +-------+  +-------+  +-------+
-¦       ¦  ¦       ¦  ¦       ¦  ¦       ¦
-¦  RNN  ¦→→¦  RNN  ¦→→¦  RNN  ¦→→¦  RNN  ¦
-¦ Cell  ¦  ¦ Cell  ¦  ¦ Cell  ¦  ¦ Cell  ¦
-¦       ¦  ¦       ¦  ¦       ¦  ¦       ¦
-+-------+  +-------+  +-------+  +-------+
-    ↓          ↓          ↓          ↓
-   h0    →    h1    →    h2    →    h3
-    ↓          ↓          ↓          ↓
-   y0         y1         y2         y3
-
-Hidden State Update:
-  h_t = tanh(W_xh · x_t + W_hh · h_{t-1} + b_h)
-  
-Output Computation:
-  y_t = W_hy · h_t + b_y
-
-Where:
-- W_xh: Input-to-hidden weights
-- W_hh: Hidden-to-hidden (recurrent) weights  
-- W_hy: Hidden-to-output weights
-- b_h, b_y: Bias terms
-"""
-</code></pre>
+                                <div class="mermaid-container">
+                                    <div class="mermaid-label">Vanilla RNN Unfolded Through Time — Weight Sharing Across Steps</div>
+                                    <pre class="mermaid">
+flowchart LR
+    x0["x₀"] --> c0["RNN Cell"]
+    x1["x₁"] --> c1["RNN Cell"]
+    x2["x₂"] --> c2["RNN Cell"]
+    x3["x₃"] --> c3["RNN Cell"]
+    c0 -->|"h₀"| c1
+    c1 -->|"h₁"| c2
+    c2 -->|"h₂"| c3
+    c0 --> y0["y₀"]
+    c1 --> y1["y₁"]
+    c2 --> y2["y₂"]
+    c3 --> y3["y₃"]
+                                    </pre>
+                                </div>
+                                <div class="highlight-box highlight-navy mt-3">
+                                    <p class="mb-1"><strong>Hidden State Update:</strong></p>
+                                    <p class="text-center">$$h_t = \tanh(W_{xh} \cdot x_t + W_{hh} \cdot h_{t-1} + b_h)$$</p>
+                                    <p class="mb-1"><strong>Output Computation:</strong></p>
+                                    <p class="mb-0 text-center">$$y_t = W_{hy} \cdot h_t + b_y$$</p>
+                                </div>
                             </div>
                         </div>
 
-                        <p>The key components of an RNN cell are the weight matrices: W_xh transforms the input, W_hh transforms the previous hidden state, and W_hy (if outputs are produced at each step) projects the hidden state to the output space. The hidden state dimension is a hyperparameter that determines the network's capacity to store information.</p>
+                        <p>The key components of an RNN cell are the weight matrices: $W_{xh}$ transforms the input, $W_{hh}$ transforms the previous hidden state, and $W_{hy}$ (if outputs are produced at each step) projects the hidden state to the output space. The hidden state dimension is a hyperparameter that determines the network's capacity to store information.</p>
 
 <pre><code class="language-python">import torch
 import torch.nn as nn
@@ -397,34 +393,43 @@ print(f"Final hidden shape: {final_hidden.shape}")
                                 <span class="badge bg-crimson">Gradient Computation</span>
                             </div>
                             <div class="content">
-<pre><code class="language-python">"""
-Backpropagation Through Time (BPTT):
-
-Forward Pass (left to right):
-  h0 → h1 → h2 → ... → h_T → Loss
-
-Backward Pass (right to left):
-  ∂L/∂h0 ← ∂L/∂h1 ← ∂L/∂h2 ← ... ← ∂L/∂h_T ← ∂Loss
-
-Gradient for h_t depends on:
-  1. Direct contribution to loss at time t (if output at t)
-  2. Indirect contribution through h_{t+1}, h_{t+2}, ...
-
-Gradient accumulation for W_hh:
-  ∂L/∂W_hh = Σ_{t=1}^{T} ∂L/∂h_t · ∂h_t/∂W_hh
-
-The gradient at time step t:
-  ∂L/∂h_t = ∂L/∂y_t · ∂y_t/∂h_t + ∂L/∂h_{t+1} · ∂h_{t+1}/∂h_t
-
-Where ∂h_{t+1}/∂h_t involves the recurrent weight W_hh
-"""
-</code></pre>
+                                <div class="highlight-box highlight-navy">
+                                    <p class="mb-1"><strong>Forward Pass (left → right):</strong></p>
+                                    <p class="text-center">$$h_0 \to h_1 \to h_2 \to \cdots \to h_T \to \mathcal{L}$$</p>
+                                    <p class="mb-1"><strong>Backward Pass — right ← left (BPTT):</strong></p>
+                                    <p class="text-center">$$\frac{\partial \mathcal{L}}{\partial h_0} \leftarrow \cdots \leftarrow \frac{\partial \mathcal{L}}{\partial h_T} \leftarrow \mathcal{L}$$</p>
+                                    <p class="mb-1"><strong>Gradient accumulation for W<sub>hh</sub>:</strong></p>
+                                    <p class="text-center">$$\frac{\partial \mathcal{L}}{\partial W_{hh}} = \sum_{t=1}^{T} \frac{\partial \mathcal{L}}{\partial h_t} \cdot \frac{\partial h_t}{\partial W_{hh}}$$</p>
+                                    <p class="mb-1"><strong>Gradient at each time step t:</strong></p>
+                                    <p class="mb-0 text-center">$$\frac{\partial \mathcal{L}}{\partial h_t} = \frac{\partial \mathcal{L}}{\partial y_t} \cdot \frac{\partial y_t}{\partial h_t} + \frac{\partial \mathcal{L}}{\partial h_{t+1}} \cdot \frac{\partial h_{t+1}}{\partial h_t}$$</p>
+                                </div>
                             </div>
                         </div>
 
 <pre><code class="language-python">import torch
 import torch.nn as nn
 import torch.optim as optim
+
+# SimpleRNN included here for a self-contained, runnable example
+class SimpleRNN(nn.Module):
+    """RNN for sequence processing using PyTorch nn.RNN."""
+
+    def __init__(self, vocab_size, embedding_dim, hidden_size, output_size):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.rnn = nn.RNN(
+            input_size=embedding_dim,
+            hidden_size=hidden_size,
+            num_layers=1,
+            batch_first=True,
+            nonlinearity='tanh'
+        )
+        self.fc = nn.Linear(hidden_size, output_size)
+
+    def forward(self, x, h_0=None):
+        embedded = self.embedding(x)
+        output, h_n = self.rnn(embedded, h_0)
+        return self.fc(output), h_n
 
 # Demonstrating BPTT with truncated backpropagation
 class TruncatedBPTTTrainer:
@@ -468,8 +473,8 @@ class TruncatedBPTTTrainer:
             
             # Compute loss (reshape for CrossEntropyLoss)
             loss = self.criterion(
-                output.view(-1, output.size(-1)),
-                y_chunk.view(-1)
+                output.reshape(-1, output.size(-1)),
+                y_chunk.reshape(-1)
             )
             
             # Backward pass (only through this chunk due to detach)
@@ -501,13 +506,13 @@ print(f"Average loss per chunk: {avg_loss:.4f}")
 
                         <h3 id="vanishing-gradient">Vanishing Gradient Problem</h3>
 
-                        <p>The <strong>vanishing gradient problem</strong> is the fundamental limitation of vanilla RNNs that prevents them from learning long-range dependencies. During backpropagation through time, gradients are multiplied by the weight matrix W_hh at each time step. If the largest eigenvalue of W_hh is less than 1, gradients decay exponentially as they flow backward; if greater than 1, they explode exponentially. For sequences of length T, gradients can shrink by a factor of λ^T where λ is the dominant eigenvalue.</p>
+                        <p>The <strong>vanishing gradient problem</strong> is the fundamental limitation of vanilla RNNs that prevents them from learning long-range dependencies. During backpropagation through time, gradients are multiplied by the weight matrix $W_{hh}$ at each time step. If the largest eigenvalue of $W_{hh}$ is less than 1, gradients decay exponentially as they flow backward; if greater than 1, they explode exponentially. For sequences of length $T$, gradients can shrink by a factor of $\lambda^T$ where $\lambda$ is the dominant eigenvalue.</p>
 
                         <p>Consider trying to learn that a word at position 0 is important for predicting a word at position 100. The gradient signal from position 100 must pass through 100 matrix multiplications to reach position 0. With typical weight initializations, this gradient becomes vanishingly small, making it nearly impossible for the network to learn such long-range dependencies. This is why vanilla RNNs typically can only effectively model dependencies spanning 10-20 time steps.</p>
 
                         <div class="highlight-box">
                             <h4><i class="fas fa-exclamation-triangle me-2"></i>Why Gradients Vanish</h4>
-                            <p><strong>Mathematical explanation:</strong> When backpropagating through time, we compute ∂h_T/∂h_0 = Π_{t=1}^{T} ∂h_t/∂h_{t-1}. Each term involves W_hh and the derivative of tanh (bounded by 1). With tanh saturation and ||W_hh|| &lt; 1, this product approaches zero exponentially. The key insight is that gradients decay/explode at a rate determined by the spectral radius of W_hh times the average derivative of the activation function.</p>
+                            <p><strong>Mathematical explanation:</strong> When backpropagating through time, we compute $\partial h_T / \partial h_0 = \prod_{t=1}^{T} \partial h_t / \partial h_{t-1}$. Each term involves $W_{hh}$ and the derivative of $\tanh$ (bounded by 1). With $\tanh$ saturation and $\|W_{hh}\| &lt; 1$, this product approaches zero exponentially. The key insight is that gradients decay/explode at a rate determined by the spectral radius of $W_{hh}$ times the average derivative of the activation function.</p>
                         </div>
 
 <pre><code class="language-python">import torch
@@ -645,38 +650,32 @@ demonstrate_vanishing_exploding_gradients()
                                 <span class="badge bg-crimson">Three Gates</span>
                             </div>
                             <div class="content">
-<pre><code class="language-python">"""
-LSTM Cell Architecture:
-
-                    Cell State (C_t)
-         +----------------------------------+
-         ¦               ↑                  ¦
-         ¦    +-----+   ↑    +-----+       ¦
-    C_{t-1}--→¦  ×  ¦---→----¦  ×  ¦-------→ C_t
-         ¦    ¦ f_t ¦   ↑    ¦ i_t ¦       ¦
-         ¦    +-----+   ¦    +-----+       ¦
-         ¦      ↑       ¦      ↑           ¦
-         ¦   Forget    New   Input         ¦
-         ¦    Gate   Content  Gate         ¦
-         +----------------------------------+
-                                ↓
-                             +-----+
-    h_{t-1}-----------------→¦ o_t ¦----→ tanh(C_t) × o_t = h_t
-         ↑                   +-----+
-         +---→ [h_{t-1}, x_t] ----→ All Gates
-
-Gate Equations:
-  f_t = s(W_f · [h_{t-1}, x_t] + b_f)     # Forget gate
-  i_t = s(W_i · [h_{t-1}, x_t] + b_i)     # Input gate  
-  C~_t = tanh(W_C · [h_{t-1}, x_t] + b_C)  # Candidate cell state
-  C_t = f_t ⊙ C_{t-1} + i_t ⊙ C~_t        # New cell state
-  o_t = s(W_o · [h_{t-1}, x_t] + b_o)     # Output gate
-  h_t = o_t ⊙ tanh(C_t)                   # Hidden state
-
-Key insight: Cell state allows DIRECT gradient flow!
-  ∂C_t/∂C_{t-1} = f_t (values 0-1, not multiplied by weights)
-"""
-</code></pre>
+                                <div class="mermaid-container">
+                                    <div class="mermaid-label">LSTM Cell — Three-Gate Architecture and Information Flow</div>
+                                    <pre class="mermaid">
+flowchart TD
+    IN["Input: h_prev, x_t"] --> FG["Forget Gate f_t"]
+    IN --> IG["Input Gate i_t"]
+    IN --> CC["Candidate C_tilde"]
+    IN --> OG["Output Gate o_t"]
+    CP["Cell State C_prev"] --> CT["Cell State C_t"]
+    FG --> CT
+    IG --> CT
+    CC --> CT
+    CT --> HT["Hidden State h_t"]
+    OG --> HT
+                                    </pre>
+                                </div>
+                                <div class="highlight-box highlight-navy mt-3">
+                                    <p class="mb-1"><strong>Gate Equations:</strong></p>
+                                    <p class="text-center">$$f_t = \sigma(W_f \cdot [h_{t-1}, x_t] + b_f) \quad \text{(forget gate)}$$</p>
+                                    <p class="text-center">$$i_t = \sigma(W_i \cdot [h_{t-1}, x_t] + b_i) \quad \text{(input gate)}$$</p>
+                                    <p class="text-center">$$\tilde{C}_t = \tanh(W_C \cdot [h_{t-1}, x_t] + b_C) \quad \text{(candidate)}$$</p>
+                                    <p class="text-center">$$C_t = f_t \odot C_{t-1} + i_t \odot \tilde{C}_t \quad \text{(new cell state)}$$</p>
+                                    <p class="text-center">$$o_t = \sigma(W_o \cdot [h_{t-1}, x_t] + b_o) \quad \text{(output gate)}$$</p>
+                                    <p class="mb-1 text-center">$$h_t = o_t \odot \tanh(C_t) \quad \text{(hidden state)}$$</p>
+                                    <p class="mb-0"><small><strong>Key insight:</strong> Cell state enables direct gradient flow — $\partial C_t / \partial C_{t-1} = f_t$ (no weight multiplication, values 0–1).</small></p>
+                                </div>
                             </div>
                         </div>
 
@@ -761,7 +760,7 @@ print(f"Cell state shape: {c_new.shape}")
 
                         <div class="highlight-box">
                             <h4><i class="fas fa-key me-2"></i>Why LSTMs Solve Vanishing Gradients</h4>
-                            <p><strong>The cell state provides an "information highway."</strong> When computing ∂C_t/∂C_{t-1}, we get f_t (the forget gate value), which is a scalar between 0 and 1—not a weight matrix multiplication. If the forget gate is close to 1 (remember), gradients flow directly backward with minimal decay. The network learns when to let gradients pass (large f_t) and when to gate them (small f_t). This is fundamentally different from vanilla RNNs where gradients always pass through W_hh.</p>
+                            <p><strong>The cell state provides an "information highway."</strong> When computing $\partial C_t / \partial C_{t-1}$, we get $f_t$ (the forget gate value), which is a scalar between 0 and 1—not a weight matrix multiplication. If the forget gate is close to 1 (remember), gradients flow directly backward with minimal decay. The network learns when to let gradients pass (large $f_t$) and when to gate them (small $f_t$). This is fundamentally different from vanilla RNNs where gradients always pass through $W_{hh}$.</p>
                         </div>
 
 <pre><code class="language-python">import torch
@@ -854,7 +853,7 @@ print(f"Hidden c_n: {hidden[1].shape}")
 
                         <h3 id="lstm-variants">LSTM Variants</h3>
 
-                        <p>Several LSTM variants have been proposed to improve performance or reduce computational cost. <strong>Peephole connections</strong> allow gates to look at the cell state directly, not just the hidden state. The <strong>Coupled Input-Forget Gate (CIFG)</strong> ties the input and forget gates together as i_t = 1 - f_t, reducing parameters. <strong>Multiplicative LSTM</strong> uses the hidden state to modulate the weight matrix rather than just adding it.</p>
+                        <p>Several LSTM variants have been proposed to improve performance or reduce computational cost. <strong>Peephole connections</strong> allow gates to look at the cell state directly, not just the hidden state. The <strong>Coupled Input-Forget Gate (CIFG)</strong> ties the input and forget gates together as $i_t = 1 - f_t$, reducing parameters. <strong>Multiplicative LSTM</strong> uses the hidden state to modulate the weight matrix rather than just adding it.</p>
 
 <pre><code class="language-python">import torch
 import torch.nn as nn
@@ -965,45 +964,24 @@ print(f"Coupled saves {standard_params - coupled_params:,} parameters ({100*(1-c
                                 <span class="badge bg-crimson">Simplified Design</span>
                             </div>
                             <div class="content">
-<pre><code class="language-python">"""
-GRU Cell Architecture:
-
-    h_{t-1}                                    h_t
-       ↓                                        ↓
-    +------------------------------------------+
-    ¦                                          ¦
-    ¦    +-----+                   +-----+    ¦
-    ¦----¦  ×  ¦--------------→----¦ 1-z ¦----¦
-    ¦    ¦ z_t ¦              ×    +-----+    ¦
-    ¦    +-----+              ¦        ×      ¦
-    ¦      ↓                  ¦        ↓      ¦
-    ¦   Update               h~_t    +-----+   ¦
-    ¦    Gate                  →    ¦  z  ¦   ¦
-    ¦                     +----+    +-----+   ¦
-    ¦                     ¦           ↓       ¦
-    ¦                   tanh          +-------¦→ h_t
-    ¦                     ↓                   ¦
-    ¦              +-------------+            ¦
-    ¦              ¦             ¦            ¦
-    ¦         [r_t ⊙ h_{t-1}, x_t]            ¦
-    ¦              ↓                          ¦
-    ¦    +-----+   ¦                          ¦
-    ¦----¦ r_t ¦---+                          ¦
-    ¦    +-----+                              ¦
-    ¦      ↓                                  ¦
-    ¦    Reset                                ¦
-    ¦    Gate                                 ¦
-    +------------------------------------------+
-           ↓
-      [h_{t-1}, x_t]
-
-Equations:
-  z_t = s(W_z · [h_{t-1}, x_t])        # Update gate
-  r_t = s(W_r · [h_{t-1}, x_t])        # Reset gate
-  h~_t = tanh(W · [r_t ⊙ h_{t-1}, x_t]) # Candidate hidden
-  h_t = (1 - z_t) ⊙ h_{t-1} + z_t ⊙ h~_t # New hidden state
-"""
-</code></pre>
+                                <div class="mermaid-container">
+                                    <div class="mermaid-label">GRU Cell — Two-Gate Architecture</div>
+                                    <pre class="mermaid">
+flowchart TD
+    IN["Input: h_prev, x_t"] --> UG["Update Gate z_t"]
+    IN --> RG["Reset Gate r_t"]
+    RG -->|"r_t × h_prev"| CH["Candidate h_tilde"]
+    UG --> NH["New Hidden h_t"]
+    CH --> NH
+                                    </pre>
+                                </div>
+                                <div class="highlight-box highlight-navy mt-3">
+                                    <p class="mb-1"><strong>Gate Equations:</strong></p>
+                                    <p class="text-center">$$z_t = \sigma(W_z \cdot [h_{t-1}, x_t]) \quad \text{(update gate)}$$</p>
+                                    <p class="text-center">$$r_t = \sigma(W_r \cdot [h_{t-1}, x_t]) \quad \text{(reset gate)}$$</p>
+                                    <p class="text-center">$$\tilde{h}_t = \tanh(W \cdot [r_t \odot h_{t-1}, x_t]) \quad \text{(candidate)}$$</p>
+                                    <p class="mb-0 text-center">$$h_t = (1 - z_t) \odot h_{t-1} + z_t \odot \tilde{h}_t \quad \text{(new hidden state)}$$</p>
+                                </div>
                             </div>
                         </div>
 
@@ -1310,36 +1288,34 @@ print(f"Sample predictions: {[id_to_tag[p.item()] for p in predictions[0][:5]]}"
                                 <span class="badge bg-crimson">Many-to-Many</span>
                             </div>
                             <div class="content">
-<pre><code class="language-python">"""
-Sequence-to-Sequence Architecture:
+                                <div class="mermaid-container">
+                                    <div class="mermaid-label">Seq2Seq Encoder-Decoder Architecture</div>
+                                    <pre class="mermaid">
+flowchart LR
+    subgraph ENC["ENCODER"]
+        x1["x₁"] --> E1["LSTM"]
+        x2["x₂"] --> E2["LSTM"]
+        x3["x₃"] --> E3["LSTM"]
+        EOS_in["&lt;EOS&gt;"] --> E4["LSTM"]
+        E1 --> E2 --> E3 --> E4
+    end
 
-Encoder (reads input, produces context):
-  x_1 → [LSTM] → h_1
-  x_2 → [LSTM] → h_2
-  x_3 → [LSTM] → h_3
-  &lt;EOS&gt; → [LSTM] → h_enc (context vector)
+    E4 -->|"h_enc\n(context)"| CV(["Context\nVector"])
 
-Decoder (generates output from context):
-  &lt;SOS&gt;, h_enc → [LSTM] → y_1, h_1
-  y_1, h_1 → [LSTM] → y_2, h_2
-  y_2, h_2 → [LSTM] → y_3, h_3
-  y_3, h_3 → [LSTM] → &lt;EOS&gt;
+    subgraph DEC["DECODER"]
+        SOS["&lt;SOS&gt;"] --> D1["LSTM"]
+        D1 --> D2["LSTM"]
+        D2 --> D3["LSTM"]
+        D3 --> D4["LSTM"]
+        D1 --> y1["y₁"]
+        D2 --> y2["y₂"]
+        D3 --> y3["y₃"]
+        D4 --> EOS_out["&lt;EOS&gt;"]
+    end
 
-                    Context Vector
-                         ↓
-+-----------------------------------------------+
-¦  ENCODER                ¦    DECODER          ¦
-¦                         ¦                     ¦
-¦  x1 → x2 → x3 → &lt;EOS&gt;  ¦  &lt;SOS&gt; → y1 → y2 → &lt;EOS&gt; ¦
-¦  ↓    ↓    ↓     ↓     ¦    ↓     ↓    ↓      ¦
-¦ [E]→ [E]→ [E]→ [E]----→¦→ [D]→ [D]→ [D]→[D]  ¦
-¦                    h_enc¦                     ¦
-+-----------------------------------------------+
-
-Training: Teacher forcing (use ground truth y as decoder input)
-Inference: Autoregressive (use predicted y as next input)
-"""
-</code></pre>
+    CV -->|"init state"| D1
+                                    </pre>
+                                </div>
                             </div>
                         </div>
 
@@ -1951,6 +1927,11 @@ print(f"Number of hidden states: {len(hiddens)}")
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <!-- KaTeX Math Rendering -->
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body, {delimiters: [{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}], throwOnError: false});"></script>
+    <!-- Mermaid.js Diagrams -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 
             </body>
 </html>

@@ -31,6 +31,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <!-- KaTeX Math Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
     <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
@@ -229,7 +231,9 @@
                         <h3 id="scaled-dot-product">Scaled Dot-Product Attention</h3>
                         <p>Scaled dot-product attention is the specific attention variant used in Transformers. Given a query vector <code>Q</code>, a set of key vectors <code>K</code>, and value vectors <code>V</code>, attention computes a weighted sum of the values, where the weights are determined by the compatibility between the query and each key. The "scaled" part refers to dividing by the square root of the dimension to prevent softmax from producing extremely peaked distributions in high dimensions.</p>
 
-                        <p>The mathematical formula is: <code>Attention(Q, K, V) = softmax(QK^T / vd_k) × V</code>, where <code>d_k</code> is the dimension of the keys. The dot product <code>QK^T</code> measures similarity between queries and keys, softmax normalizes these scores into a probability distribution, and the result weights the values. This simple yet powerful formulation is highly parallelizable and efficient.</p>
+                        <p>The mathematical formula, where $d_k$ is the dimension of the keys, is:</p>
+                        <p style="text-align: center;">$$\text{Attention}(Q, K, V) = \text{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right) V$$</p>
+                        <p>The dot product $QK^\top$ measures similarity between queries and keys, softmax normalizes these scores into a probability distribution, and the result weights the values. This simple yet powerful formulation is highly parallelizable and efficient.</p>
 
 <pre><code class="language-python">import torch
 import torch.nn as nn
@@ -612,8 +616,42 @@ print(f"Each head's d_k: {d_model // num_heads}")  # 64</code></pre>
 
 <pre><code class="language-python">import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import seaborn as sns
+import math
+
+# MultiHeadAttention included here for a self-contained, runnable example
+class MultiHeadAttention(nn.Module):
+    def __init__(self, d_model, num_heads, dropout=0.1):
+        super().__init__()
+        assert d_model % num_heads == 0
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+        self.W_q = nn.Linear(d_model, d_model)
+        self.W_k = nn.Linear(d_model, d_model)
+        self.W_v = nn.Linear(d_model, d_model)
+        self.W_o = nn.Linear(d_model, d_model)
+        self.dropout = nn.Dropout(dropout)
+
+    def split_heads(self, x, batch_size):
+        x = x.view(batch_size, -1, self.num_heads, self.d_k)
+        return x.transpose(1, 2)
+
+    def forward(self, query, key, value, mask=None):
+        batch_size = query.size(0)
+        Q = self.split_heads(self.W_q(query), batch_size)
+        K = self.split_heads(self.W_k(key), batch_size)
+        V = self.split_heads(self.W_v(value), batch_size)
+        scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.d_k)
+        if mask is not None:
+            if mask.dim() == 2:
+                mask = mask.unsqueeze(0).unsqueeze(0)
+            scores = scores.masked_fill(mask == 0, float('-inf'))
+        weights = self.dropout(F.softmax(scores, dim=-1))
+        context = torch.matmul(weights, V).transpose(1, 2).contiguous()
+        return self.W_o(context.view(batch_size, -1, self.d_model)), weights
 
 def visualize_attention_heads(attention_weights, tokens, num_heads_to_show=4):
     """
@@ -879,6 +917,38 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
+# MultiHeadAttention included here for a self-contained, runnable example
+class MultiHeadAttention(nn.Module):
+    def __init__(self, d_model, num_heads, dropout=0.1):
+        super().__init__()
+        assert d_model % num_heads == 0
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+        self.W_q = nn.Linear(d_model, d_model)
+        self.W_k = nn.Linear(d_model, d_model)
+        self.W_v = nn.Linear(d_model, d_model)
+        self.W_o = nn.Linear(d_model, d_model)
+        self.dropout = nn.Dropout(dropout)
+
+    def split_heads(self, x, batch_size):
+        x = x.view(batch_size, -1, self.num_heads, self.d_k)
+        return x.transpose(1, 2)
+
+    def forward(self, query, key, value, mask=None):
+        batch_size = query.size(0)
+        Q = self.split_heads(self.W_q(query), batch_size)
+        K = self.split_heads(self.W_k(key), batch_size)
+        V = self.split_heads(self.W_v(value), batch_size)
+        scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.d_k)
+        if mask is not None:
+            if mask.dim() == 2:
+                mask = mask.unsqueeze(0).unsqueeze(0)
+            scores = scores.masked_fill(mask == 0, float('-inf'))
+        weights = self.dropout(F.softmax(scores, dim=-1))
+        context = torch.matmul(weights, V).transpose(1, 2).contiguous()
+        return self.W_o(context.view(batch_size, -1, self.d_model)), weights
+
 class PositionwiseFeedForward(nn.Module):
     """
     Position-wise Feed-Forward Network.
@@ -1039,6 +1109,48 @@ print(f"\nTotal parameters: {sum(p.numel() for p in encoder.parameters()):,}")</
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+
+# MultiHeadAttention and PositionwiseFeedForward included here for a self-contained, runnable example
+class MultiHeadAttention(nn.Module):
+    def __init__(self, d_model, num_heads, dropout=0.1):
+        super().__init__()
+        assert d_model % num_heads == 0
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+        self.W_q = nn.Linear(d_model, d_model)
+        self.W_k = nn.Linear(d_model, d_model)
+        self.W_v = nn.Linear(d_model, d_model)
+        self.W_o = nn.Linear(d_model, d_model)
+        self.dropout = nn.Dropout(dropout)
+
+    def split_heads(self, x, batch_size):
+        x = x.view(batch_size, -1, self.num_heads, self.d_k)
+        return x.transpose(1, 2)
+
+    def forward(self, query, key, value, mask=None):
+        batch_size = query.size(0)
+        Q = self.split_heads(self.W_q(query), batch_size)
+        K = self.split_heads(self.W_k(key), batch_size)
+        V = self.split_heads(self.W_v(value), batch_size)
+        scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.d_k)
+        if mask is not None:
+            if mask.dim() == 2:
+                mask = mask.unsqueeze(0).unsqueeze(0)
+            scores = scores.masked_fill(mask == 0, float('-inf'))
+        weights = self.dropout(F.softmax(scores, dim=-1))
+        context = torch.matmul(weights, V).transpose(1, 2).contiguous()
+        return self.W_o(context.view(batch_size, -1, self.d_model)), weights
+
+class PositionwiseFeedForward(nn.Module):
+    def __init__(self, d_model, d_ff, dropout=0.1):
+        super().__init__()
+        self.fc1 = nn.Linear(d_model, d_ff)
+        self.fc2 = nn.Linear(d_ff, d_model)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+        return self.fc2(self.dropout(F.relu(self.fc1(x))))
 
 class DecoderLayer(nn.Module):
     """Single Transformer decoder layer with masked self-attention + cross-attention."""
@@ -1415,7 +1527,50 @@ print(f"Classification logits: {logits.shape}")  # (4, 3)</code></pre>
 
 <pre><code class="language-python">import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import math
+
+# MultiHeadAttention and PositionwiseFeedForward included here for a self-contained, runnable example
+class MultiHeadAttention(nn.Module):
+    def __init__(self, d_model, num_heads, dropout=0.1):
+        super().__init__()
+        assert d_model % num_heads == 0
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+        self.W_q = nn.Linear(d_model, d_model)
+        self.W_k = nn.Linear(d_model, d_model)
+        self.W_v = nn.Linear(d_model, d_model)
+        self.W_o = nn.Linear(d_model, d_model)
+        self.dropout = nn.Dropout(dropout)
+
+    def split_heads(self, x, batch_size):
+        x = x.view(batch_size, -1, self.num_heads, self.d_k)
+        return x.transpose(1, 2)
+
+    def forward(self, query, key, value, mask=None):
+        batch_size = query.size(0)
+        Q = self.split_heads(self.W_q(query), batch_size)
+        K = self.split_heads(self.W_k(key), batch_size)
+        V = self.split_heads(self.W_v(value), batch_size)
+        scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.d_k)
+        if mask is not None:
+            if mask.dim() == 2:
+                mask = mask.unsqueeze(0).unsqueeze(0)
+            scores = scores.masked_fill(mask == 0, float('-inf'))
+        weights = self.dropout(F.softmax(scores, dim=-1))
+        context = torch.matmul(weights, V).transpose(1, 2).contiguous()
+        return self.W_o(context.view(batch_size, -1, self.d_model)), weights
+
+class PositionwiseFeedForward(nn.Module):
+    def __init__(self, d_model, d_ff, dropout=0.1):
+        super().__init__()
+        self.fc1 = nn.Linear(d_model, d_ff)
+        self.fc2 = nn.Linear(d_ff, d_model)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+        return self.fc2(self.dropout(F.relu(self.fc1(x))))
 
 class DecoderOnlyTransformer(nn.Module):
     """
@@ -1804,5 +1959,8 @@ print(f"~{total_params / 1e6:.1f}M parameters")</code></pre>
             
     <!-- Mermaid.js Diagrams -->
     <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <!-- KaTeX Math Rendering -->
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body, {delimiters: [{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}], throwOnError: false});"></script>
 </body>
 </html>
