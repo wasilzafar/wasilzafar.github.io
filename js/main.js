@@ -662,6 +662,8 @@ function initContentGrouping() {
         'sensors-actuators': 'technology', 'stm32-hal': 'technology',
         'system-design': 'technology', 'usb-dev': 'technology',
         'behavioral-psychology': 'psychology', 'cognitive-psych': 'psychology',
+        'social-psychology': 'psychology',
+        'math-for-ai': 'mathematics',
         'biochemistry': 'life-sciences', 'evolutionary-biology': 'life-sciences',
         'human-anatomy': 'life-sciences', 'physiology': 'life-sciences',
         'consulting-frameworks': 'business', 'dddm': 'business',
