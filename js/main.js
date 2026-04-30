@@ -1028,7 +1028,7 @@ function initInterestsMegaDropdown() {
         { name: 'Poetry', slug: 'poetry', icon: 'fa-feather-alt', desc: 'Words & rhythm' },
         { name: 'Business', slug: 'business', icon: 'fa-briefcase', desc: 'Strategy & marketing' },
         { name: 'Technology', slug: 'technology', icon: 'fa-rocket', desc: 'Innovation & frontiers' },
-        { name: 'Science', slug: 'science', icon: 'fa-flask', desc: 'Discovery & research' },
+        { name: 'Physical Sciences', slug: 'physical-sciences', icon: 'fa-atom', desc: 'Physics, chemistry & cosmos' },
         { name: 'Engineering', slug: 'engineering', icon: 'fa-cogs', desc: 'Design & build' },
         { name: 'Mathematics', slug: 'mathematics', icon: 'fa-square-root-variable', desc: 'Patterns & proofs' },
         { name: 'Life Sciences', slug: 'life-sciences', icon: 'fa-dna', desc: 'Biology & genetics' },
