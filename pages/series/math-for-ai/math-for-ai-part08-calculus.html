@@ -136,7 +136,15 @@
             <li><a href="#partial-derivatives" onclick="closeNav()">Partial Derivatives &amp; Gradients</a></li>
             <li><a href="#jacobian-hessian" onclick="closeNav()">Jacobian &amp; Hessian</a></li>
             <li><a href="#gradient-descent" onclick="closeNav()">Gradient Descent</a></li>
-            <li><a href="#optimizers" onclick="closeNav()">Modern Optimizers</a></li>
+            <li>
+                <a href="#optimizers" onclick="closeNav()">Modern Optimizers</a>
+                <ul>
+                    <li><a href="#sgd-baseline" onclick="closeNav()">Vanilla SGD</a></li>
+                    <li><a href="#momentum-optimizer" onclick="closeNav()">Momentum</a></li>
+                    <li><a href="#rmsprop-optimizer" onclick="closeNav()">RMSProp</a></li>
+                    <li><a href="#adam-optimizer" onclick="closeNav()">Adam &amp; AdamW</a></li>
+                </ul>
+            </li>
             <li><a href="#backpropagation" onclick="closeNav()">Backpropagation</a></li>
             <li><a href="#convexity" onclick="closeNav()">Convexity &amp; Loss Landscapes</a></li>
             <li>
@@ -701,19 +709,308 @@ for i, x_i in enumerate(history[:11]):
 
                         <h2 id="optimizers">Modern Optimizers</h2>
 
+                        <p>An <strong>optimizer</strong> is the algorithm that updates a neural network's weights to reduce the loss. Gradient descent tells us <em>which direction</em> to move (opposite to the gradient), but it says nothing about <em>how fast</em> to move, or whether to adapt to the shape of the loss landscape. Modern optimizers solve exactly these problems.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i><strong>The hill-rolling analogy:</strong> Imagine you're blindfolded on a hilly landscape and want to reach the lowest valley. Gradient descent says "take a small step downhill." But what if the slope is very steep in one direction and nearly flat in another? You'd want to slow down on steep slopes and speed up on flat ones — that's exactly what adaptive optimizers do.
+                        </div>
+
+                        <h3 id="sgd-baseline">Vanilla SGD — The Baseline</h3>
+
+                        <p><strong>Stochastic Gradient Descent (SGD)</strong> is the simplest optimizer. At each step it moves the weights in the direction that reduces the loss, by a fixed amount called the <strong>learning rate</strong> $\alpha$:</p>
+
+                        <div class="math-block">$$\theta_{t+1} = \theta_t - \alpha \cdot \nabla_\theta \mathcal{L}$$</div>
+
+                        <p>Think of $\nabla_\theta \mathcal{L}$ as a signpost that says "loss goes up this way" and you go the opposite direction. The learning rate $\alpha$ controls the step size.</p>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-circle me-2"></i><strong>Problem with vanilla SGD:</strong> A fixed step size is clumsy. On a steep slope you overshoot; on a flat region you move too slowly. It also oscillates wildly in narrow ravines (common in deep networks) and can get stuck in saddle points.
+                        </div>
+
+                        <pre><code class="language-python">import numpy as np
+
+# Vanilla SGD on a simple 1D loss: L(w) = (w - 3)^2
+# Minimum is at w = 3, gradient is 2*(w - 3)
+
+def loss(w):
+    return (w - 3) ** 2
+
+def grad(w):
+    return 2 * (w - 3)
+
+w = 0.0          # start far from minimum
+alpha = 0.1      # learning rate
+history = [w]
+
+for step in range(20):
+    w = w - alpha * grad(w)
+    history.append(w)
+
+print("Vanilla SGD — tracking w toward minimum (w=3):")
+for i, val in enumerate(history[::4]):
+    print(f"  Step {i*4:2d}: w = {val:.4f}, loss = {loss(val):.4f}")
+</code></pre>
+
+                        <h3 id="momentum-optimizer">Momentum — Don't Stop, Keep Rolling</h3>
+
+                        <p>Momentum fixes the oscillation problem by giving the optimizer a <strong>"memory" of past gradients</strong>. Instead of reacting to each new gradient independently, it accumulates a running average — just like a ball rolling downhill picks up speed and rolls past small bumps.</p>
+
+                        <p>We maintain a <strong>velocity</strong> vector $v$ that blends the old velocity with the new gradient:</p>
+
+                        <div class="math-block">$$v_{t+1} = \beta \cdot v_t + (1-\beta) \cdot \nabla_\theta \mathcal{L}$$</div>
+                        <div class="math-block">$$\theta_{t+1} = \theta_t - \alpha \cdot v_{t+1}$$</div>
+
+                        <p>The hyperparameter $\beta$ (typically 0.9) controls how much past gradients are remembered. With $\beta = 0.9$, each step is 90% old velocity + 10% new gradient — so the update is smooth.</p>
+
                         <div class="experiment-card">
-                            <div class="experiment-meta"><span class="bias-tag">Momentum</span><span class="bias-tag">Adam</span></div>
-                            <h5>From SGD to Adam: A Progression</h5>
-                            <p><strong>Momentum</strong> accumulates a velocity vector in directions of persistent gradient:
-                            $$v_{t+1} = \beta v_t + (1-\beta)\nabla_\theta \mathcal{L} \quad \theta_{t+1} = \theta_t - \alpha v_{t+1}$$</p>
-                            <p><strong>RMSProp</strong> adapts learning rate per-parameter using exponential moving average of squared gradients:
-                            $$s_{t+1} = \beta s_t + (1-\beta)(\nabla\mathcal{L})^2 \quad \theta_{t+1} = \theta_t - \frac{\alpha}{\sqrt{s_{t+1}+\epsilon}}\nabla\mathcal{L}$$</p>
-                            <p><strong>Adam</strong> combines momentum + RMSProp with bias correction:</p>
-                            $$m_{t+1} = \beta_1 m_t + (1-\beta_1)\nabla\mathcal{L}$$
-                            $$v_{t+1} = \beta_2 v_t + (1-\beta_2)(\nabla\mathcal{L})^2$$
-                            $$\hat{m} = \frac{m_{t+1}}{1-\beta_1^{t+1}}, \quad \hat{v} = \frac{v_{t+1}}{1-\beta_2^{t+1}}$$
-                            $$\theta_{t+1} = \theta_t - \frac{\alpha\hat{m}}{\sqrt{\hat{v}}+\epsilon}$$
-                            <p>Defaults: $\beta_1=0.9$, $\beta_2=0.999$, $\epsilon=10^{-8}$, $\alpha=10^{-3}$. Adam is the default optimizer for most deep learning applications.</p>
+                            <div class="experiment-meta"><span class="bias-tag">Intuition</span><span class="bias-tag">Analogy</span></div>
+                            <h5>Why Momentum Helps: The Ravine Problem</h5>
+                            <p>Picture a long, narrow valley. The loss drops steeply from side to side (high gradient in the narrow direction) but only very gently toward the bottom of the valley (small gradient in the long direction). Vanilla SGD bounces back and forth on the steep walls while barely progressing toward the goal. Momentum damps out the bouncing (gradients cancel in the narrow direction) while the consistent downward gradient in the long direction accumulates — the optimizer slides smoothly to the minimum.</p>
+                        </div>
+
+                        <pre><code class="language-python">import numpy as np
+
+# Compare SGD vs Momentum on a 2D "ravine" loss
+# L(w1, w2) = w1^2 + 10*w2^2  (steep in w2, shallow in w1)
+# Minimum at (0, 0)
+
+def grad_ravine(w):
+    return np.array([2 * w[0], 20 * w[1]])
+
+def loss_ravine(w):
+    return w[0]**2 + 10 * w[1]**2
+
+w_sgd = np.array([2.0, 1.0])
+w_mom = np.array([2.0, 1.0])
+v = np.zeros(2)
+
+alpha = 0.05
+beta  = 0.9
+
+print("Step | SGD loss   | Momentum loss")
+print("-----|------------|---------------")
+for step in range(1, 26):
+    # SGD update
+    w_sgd = w_sgd - alpha * grad_ravine(w_sgd)
+
+    # Momentum update
+    v = beta * v + (1 - beta) * grad_ravine(w_mom)
+    w_mom = w_mom - alpha * v
+
+    if step % 5 == 0:
+        print(f"  {step:2d} | {loss_ravine(w_sgd):.6f} | {loss_ravine(w_mom):.6f}")
+
+print(f"\nFinal w_sgd : {w_sgd}")
+print(f"Final w_mom : {w_mom}  ← closer to (0, 0)")
+</code></pre>
+
+                        <h3 id="rmsprop-optimizer">RMSProp — Adaptive Learning Rates</h3>
+
+                        <p>Momentum smooths the <em>direction</em> of updates. <strong>RMSProp</strong> instead adapts the <em>step size</em> separately for each parameter — shrinking steps for parameters with large gradients and growing steps for parameters with small gradients. This is crucial when different weights need very different learning rates.</p>
+
+                        <p>It tracks a running average of the <strong>squared gradients</strong> $s$ for each parameter:</p>
+
+                        <div class="math-block">$$s_{t+1} = \beta \cdot s_t + (1-\beta) \cdot (\nabla_\theta \mathcal{L})^2$$</div>
+                        <div class="math-block">$$\theta_{t+1} = \theta_t - \frac{\alpha}{\sqrt{s_{t+1} + \epsilon}} \cdot \nabla_\theta \mathcal{L}$$</div>
+
+                        <p>The $\sqrt{s_{t+1}}$ in the denominator is a measure of "how large this gradient has been recently." Dividing by it means: if a gradient has been large, divide by a big number → take a small step. If it's been small, divide by a small number → take a big step. $\epsilon \approx 10^{-8}$ prevents division by zero.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-balance-scale me-2"></i><strong>Real-world use case:</strong> In NLP, word embeddings for rare words get very small gradients (they rarely appear), while common words get large gradients. RMSProp automatically gives rare-word embeddings larger update steps, so they learn quickly from the few examples they do get.
+                        </div>
+
+                        <pre><code class="language-python">import numpy as np
+
+# RMSProp on the same ravine loss
+# L(w1, w2) = w1^2 + 10*w2^2
+
+def grad_ravine(w):
+    return np.array([2 * w[0], 20 * w[1]])
+
+def loss_ravine(w):
+    return w[0]**2 + 10 * w[1]**2
+
+w = np.array([2.0, 1.0])
+s = np.zeros(2)     # running avg of squared gradients
+
+alpha = 0.05
+beta  = 0.9
+eps   = 1e-8
+
+print("RMSProp on ravine loss:")
+print(f"  Step  0: w = {w}, loss = {loss_ravine(w):.6f}")
+for step in range(1, 26):
+    g = grad_ravine(w)
+    s = beta * s + (1 - beta) * g**2           # update squared-grad average
+    w = w - (alpha / (np.sqrt(s) + eps)) * g   # adaptive step
+
+    if step % 5 == 0:
+        print(f"  Step {step:2d}: w = [{w[0]:+.4f}, {w[1]:+.4f}], loss = {loss_ravine(w):.6f}")
+
+print(f"\nFinal w: {w}  (target: [0, 0])")
+</code></pre>
+
+                        <h3 id="adam-optimizer">Adam — The Best of Both Worlds</h3>
+
+                        <p><strong>Adam</strong> (Adaptive Moment Estimation) combines Momentum and RMSProp into one algorithm. It keeps two running averages per parameter:</p>
+                        <ul>
+                            <li><strong>First moment $m$</strong> (like Momentum): tracks the mean gradient → smooths direction</li>
+                            <li><strong>Second moment $v$</strong> (like RMSProp): tracks mean squared gradient → adapts step size</li>
+                        </ul>
+
+                        <div class="math-block">$$m_{t+1} = \beta_1 \cdot m_t + (1-\beta_1) \cdot \nabla\mathcal{L} \qquad \text{(smoothed gradient)}$$</div>
+                        <div class="math-block">$$v_{t+1} = \beta_2 \cdot v_t + (1-\beta_2) \cdot (\nabla\mathcal{L})^2 \qquad \text{(smoothed squared gradient)}$$</div>
+
+                        <p>There's a catch: at the very start ($t=1$), both $m$ and $v$ are zero. That means the first few steps are artificially tiny — the averages haven't "warmed up" yet. Adam fixes this with <strong>bias correction</strong>:</p>
+
+                        <div class="math-block">$$\hat{m} = \frac{m_{t+1}}{1 - \beta_1^{t+1}}, \qquad \hat{v} = \frac{v_{t+1}}{1 - \beta_2^{t+1}}$$</div>
+
+                        <p>At $t=1$ with $\beta_1 = 0.9$: the denominator is $1 - 0.9 = 0.1$, so the corrected estimate is scaled up 10×, compensating for the cold start. As $t$ grows the denominators approach 1 and the correction vanishes.</p>
+
+                        <p>The final update is:</p>
+
+                        <div class="math-block">$$\theta_{t+1} = \theta_t - \frac{\alpha \cdot \hat{m}}{\sqrt{\hat{v}} + \epsilon}$$</div>
+
+                        <p>Default hyperparameters: $\beta_1 = 0.9$, $\beta_2 = 0.999$, $\epsilon = 10^{-8}$, $\alpha = 0.001$. These work well out of the box for the vast majority of deep learning tasks.</p>
+
+                        <pre><code class="language-python">import numpy as np
+
+# Implement Adam from scratch and compare with SGD on the ravine loss
+# L(w1, w2) = w1^2 + 10*w2^2, minimum at (0, 0)
+
+def grad_ravine(w):
+    return np.array([2 * w[0], 20 * w[1]])
+
+def loss_ravine(w):
+    return w[0]**2 + 10 * w[1]**2
+
+# --- Adam ---
+w_adam = np.array([2.0, 1.0])
+m = np.zeros(2)   # first moment (momentum)
+v = np.zeros(2)   # second moment (RMSProp)
+beta1, beta2, eps, alpha = 0.9, 0.999, 1e-8, 0.1
+
+# --- SGD ---
+w_sgd = np.array([2.0, 1.0])
+lr_sgd = 0.05
+
+print("Step | Adam loss  | SGD loss")
+print("-----|------------|----------")
+for t in range(1, 31):
+    g_adam = grad_ravine(w_adam)
+    m = beta1 * m + (1 - beta1) * g_adam
+    v = beta2 * v + (1 - beta2) * g_adam**2
+    m_hat = m / (1 - beta1**t)          # bias correction
+    v_hat = v / (1 - beta2**t)          # bias correction
+    w_adam = w_adam - alpha * m_hat / (np.sqrt(v_hat) + eps)
+
+    g_sgd = grad_ravine(w_sgd)
+    w_sgd = w_sgd - lr_sgd * g_sgd
+
+    if t % 5 == 0:
+        print(f"  {t:2d} | {loss_ravine(w_adam):.6f} | {loss_ravine(w_sgd):.6f}")
+
+print(f"\nFinal Adam w : {w_adam}")
+print(f"Final SGD  w : {w_sgd}")
+print("Adam converges faster and more smoothly on this asymmetric loss.")
+</code></pre>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Optimizer Progression: From SGD to Adam</div>
+                            <pre class="mermaid">
+flowchart TD
+    SGD["<b>Vanilla SGD</b><br/>θ = θ − α·∇L<br/>Fixed step size, no memory"]
+    SGD -->|"+ gradient memory"| MOM["<b>Momentum</b><br/>v = β·v + (1−β)·∇L<br/>θ = θ − α·v<br/>Smooths direction"]
+    SGD -->|"+ adaptive step size"| RMS["<b>RMSProp</b><br/>s = β·s + (1−β)·(∇L)²<br/>θ = θ − α·∇L / √s<br/>Adapts per-parameter LR"]
+    MOM -->|"combine both"| ADAM["<b>Adam</b><br/>m = β₁·m + (1−β₁)·∇L<br/>v = β₂·v + (1−β₂)·(∇L)²<br/>θ = θ − α·m̂ / (√v̂ + ε)<br/>Smooth direction + adaptive LR"]
+    ADAM -->|"+ decoupled weight decay"| ADAMW["<b>AdamW</b><br/>Same as Adam, but weight decay<br/>applied directly to weights<br/>(not inside the gradient)"]
+            </pre>
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta"><span class="bias-tag">AdamW</span><span class="bias-tag">Practical Tips</span></div>
+                            <h5>AdamW and Choosing an Optimizer in Practice</h5>
+                            <p><strong>AdamW</strong> is a small but important fix to Adam. In standard Adam, weight decay (L2 regularization) gets tangled with the adaptive learning rates, making it weaker than intended. AdamW decouples them — the weight decay is applied directly to the parameters, independent of the gradient statistics. This is why transformers like BERT and GPT are trained with AdamW rather than Adam.</p>
+                            <p><strong>When to use which:</strong></p>
+                            <ul>
+                                <li><strong>Adam / AdamW</strong> — default choice for almost everything; especially neural networks, transformers, CNNs</li>
+                                <li><strong>SGD + Momentum</strong> — often preferred for CNNs in vision tasks when careful learning rate tuning is done (e.g., ResNet training); can generalize better than Adam with proper schedules</li>
+                                <li><strong>RMSProp</strong> — historically used for RNNs; largely superseded by Adam</li>
+                                <li><strong>AdaGrad</strong> — sparse data (e.g., text with rare tokens); rarely used directly today</li>
+                            </ul>
+                            <p>In practice, start with Adam (lr=1e-3). If you care about best final accuracy, try SGD + Momentum + cosine LR decay. AdamW with a learning rate schedule is the standard for transformer fine-tuning.</p>
+                        </div>
+
+                        <pre><code class="language-python">import numpy as np
+
+# Side-by-side comparison: SGD, Momentum, RMSProp, Adam on a 2D non-convex loss
+# L(w1, w2) = sin(w1) + 0.5*w2^2   (non-convex in w1 dimension)
+
+def loss_fn(w):
+    return np.sin(w[0]) + 0.5 * w[1]**2
+
+def grad_fn(w):
+    return np.array([np.cos(w[0]), w[1]])
+
+np.random.seed(42)
+start = np.array([-1.5, 2.0])   # same start for all
+
+steps = 40
+alpha = 0.1
+
+# SGD
+w = start.copy()
+losses_sgd = []
+for _ in range(steps):
+    w = w - alpha * grad_fn(w)
+    losses_sgd.append(loss_fn(w))
+
+# Momentum
+w, vel = start.copy(), np.zeros(2)
+losses_mom = []
+for _ in range(steps):
+    vel = 0.9 * vel + 0.1 * grad_fn(w)
+    w = w - alpha * vel
+    losses_mom.append(loss_fn(w))
+
+# RMSProp
+w, s = start.copy(), np.zeros(2)
+losses_rms = []
+for _ in range(steps):
+    g = grad_fn(w)
+    s = 0.9 * s + 0.1 * g**2
+    w = w - (alpha / (np.sqrt(s) + 1e-8)) * g
+    losses_rms.append(loss_fn(w))
+
+# Adam
+w, m, v = start.copy(), np.zeros(2), np.zeros(2)
+losses_adam = []
+for t in range(1, steps + 1):
+    g = grad_fn(w)
+    m = 0.9 * m + 0.1 * g
+    v = 0.999 * v + 0.001 * g**2
+    m_hat = m / (1 - 0.9**t)
+    v_hat = v / (1 - 0.999**t)
+    w = w - alpha * m_hat / (np.sqrt(v_hat) + 1e-8)
+    losses_adam.append(loss_fn(w))
+
+print("Loss after N steps (lower is better):")
+print(f"{'Step':>5} | {'SGD':>8} | {'Momentum':>8} | {'RMSProp':>8} | {'Adam':>8}")
+print("-" * 52)
+for i in [4, 9, 19, 39]:
+    print(f"  {i+1:3d}  | {losses_sgd[i]:8.4f} | {losses_mom[i]:8.4f} | {losses_rms[i]:8.4f} | {losses_adam[i]:8.4f}")
+</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-graduation-cap me-2"></i><strong>Key takeaways on optimizers:</strong>
+                            <ul class="mt-2 mb-0">
+                                <li><strong>SGD</strong>: Simple but sensitive to learning rate and loss landscape shape</li>
+                                <li><strong>Momentum</strong>: Adds directional memory, damping oscillations and accelerating in consistent directions</li>
+                                <li><strong>RMSProp</strong>: Automatically scales learning rate per-parameter — large gradients → small step, small gradients → large step</li>
+                                <li><strong>Adam</strong>: Combines both, plus bias correction for stable early updates; best default choice</li>
+                                <li><strong>AdamW</strong>: Adam with proper weight decay; standard for transformers</li>
+                                <li>No single optimizer wins every task — the best choice depends on architecture, data, and available compute for tuning</li>
+                            </ul>
                         </div>
 
                         <h2 id="backpropagation">Backpropagation</h2>
