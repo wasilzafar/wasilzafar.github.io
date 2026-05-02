@@ -514,7 +514,32 @@ print('Random normal (mean=0, std=1):\n', rand_normal)
 #   - high: maximum value (exclusive)
 #   - shape: tuple of output shape
 rand_int = torch.randint(0, 10, (3, 3))  # Random integers between 0 and 9
-print('Random integers (0-9):\n', rand_int)</code></pre>
+print('Random integers (0-9):\n', rand_int)
+
+# torch.randperm(n) - random permutation of integers [0, n)
+# Returns a 1D tensor containing every integer from 0 to n-1 exactly once, shuffled
+# Use for: shuffling dataset indices, creating train/val splits, sampling without replacement
+indices = torch.randperm(8)       # All values 0–7 in a random order
+print('Random permutation:', indices)
+# e.g. tensor([3, 0, 7, 1, 5, 2, 6, 4]) — order changes every run
+
+# Core use case: shuffle a dataset without copying the data itself
+data = torch.tensor([10, 20, 30, 40, 50, 60, 70, 80])
+shuffled = data[indices]           # Fancy-index with the permutation
+print('Shuffled data:', shuffled)  # Same 8 values, different order
+print('Original data:', data)      # data is unchanged — randperm + indexing never modifies
+
+# Unlike torch.randint which can repeat values, randperm is a true shuffle:
+# no value appears twice — every index is visited exactly once
+check = torch.sort(indices).values
+print('Sorted permutation:', check)  # Always tensor([0, 1, 2, 3, 4, 5, 6, 7])
+
+# Template for a manual shuffled training loop:
+# n = len(dataset)
+# perm = torch.randperm(n)
+# for i in range(0, n, batch_size):
+#     idx = perm[i : i + batch_size]   # Random slice of indices
+#     x_batch, y_batch = x[idx], y[idx]</code></pre>
 
                         <h3>Tensor Attributes & Properties</h3>
                         <p>Every tensor has several attributes that describe its properties. Understanding these is crucial for debugging shape mismatches and device placement errors:</p>
@@ -841,6 +866,122 @@ print('Stacked:\n', stacked)
 #          [3, 4]],
 #         [[5, 6],
 #          [7, 8]]])</code></pre>
+
+                        <h3>Adding and Removing Dimensions: <code>unsqueeze()</code> and <code>squeeze()</code></h3>
+                        <p><code>unsqueeze(dim)</code> inserts a new size-1 dimension at position <code>dim</code>. Think of it as adding an extra pair of brackets around the data at that axis. This is one of the most common shape adjustments in deep learning because neural networks almost always expect a <em>batch</em> dimension at index 0, even if you only have a single sample.</p>
+
+                        <pre><code class="language-python">import torch
+
+# Start with a plain 1D vector — 4 features, no batch dimension
+x = torch.tensor([1.0, 2.0, 3.0, 4.0])
+print('Original shape:', x.shape)      # torch.Size([4])
+
+# unsqueeze(0) — add a new dimension at the FRONT  →  (1, 4)
+x_batch = x.unsqueeze(0)
+print('unsqueeze(0) shape:', x_batch.shape)   # torch.Size([1, 4])
+print('unsqueeze(0):', x_batch)               # tensor([[1., 2., 3., 4.]])
+
+# unsqueeze(1) — add dimension in the MIDDLE  →  (4, 1)  (column vector)
+x_col = x.unsqueeze(1)
+print('unsqueeze(1) shape:', x_col.shape)     # torch.Size([4, 1])
+print('unsqueeze(1):\n', x_col)
+# tensor([[1.],
+#         [2.],
+#         [3.],
+#         [4.]])
+
+# unsqueeze(-1) — add dimension at the END (same as unsqueeze(1) for a 1D input)
+x_end = x.unsqueeze(-1)
+print('unsqueeze(-1) shape:', x_end.shape)    # torch.Size([4, 1])
+
+# Chain two unsqueezes to add batch and channel dims for a CNN
+# Input: (features,)  →  (1, 1, features)
+x_cnn = x.unsqueeze(0).unsqueeze(0)
+print('Double unsqueeze shape:', x_cnn.shape) # torch.Size([1, 1, 4])</code></pre>
+
+                        <pre><code class="language-python">import torch
+
+# squeeze() — removes size-1 dimensions
+# With no argument: removes ALL size-1 dims
+x = torch.zeros(1, 4, 1)              # shape (1, 4, 1)
+print('Before squeeze:', x.shape)     # torch.Size([1, 4, 1])
+print('squeeze()   :', x.squeeze().shape)    # torch.Size([4])   — both 1s removed
+print('squeeze(0)  :', x.squeeze(0).shape)   # torch.Size([4, 1]) — only dim 0 removed
+print('squeeze(2)  :', x.squeeze(2).shape)   # torch.Size([1, 4]) — only dim 2 removed
+
+# Practical workflow: model produces (batch=1, classes=5), you want just (5,)
+model_output = torch.randn(1, 5)          # network output for a single input
+predictions = model_output.squeeze(0)     # drop the batch dim → (5,)
+print('After squeeze:', predictions.shape)  # torch.Size([5])
+
+# squeeze() only removes dims of SIZE 1 — it never collapses dims that are larger
+x_big = torch.randn(3, 1, 4)
+print('squeeze on 3×1×4:', x_big.squeeze().shape)     # torch.Size([3, 4])
+
+x_no_ones = torch.randn(3, 4)
+print('squeeze when no 1s:', x_no_ones.squeeze().shape)  # torch.Size([3, 4]) — unchanged
+
+# Both unsqueeze and squeeze are zero-copy — they return a view sharing the same storage
+x = torch.tensor([1.0, 2.0, 3.0])
+print('Same storage:', x.unsqueeze(0).data_ptr() == x.data_ptr())  # True</code></pre>
+
+                        <h3>Dtype Conversion: <code>.float()</code>, <code>.long()</code>, and <code>.to()</code></h3>
+                        <p>PyTorch tensors always have a fixed numeric type (dtype). The most important rule: <strong>neural network parameters and inputs must be <code>float32</code></strong>. Integer tensors will cause a <code>RuntimeError</code> in almost every mathematical operation. <code>.float()</code> is the one-liner fix that converts any tensor to 32-bit floating point.</p>
+
+                        <pre><code class="language-python">import torch
+
+# Integer tensor — fine for indexing, but breaks math operations
+x_int = torch.tensor([1, 4, 9, 16])
+print('Before .float():', x_int.dtype)    # torch.int64
+
+# .float() converts to torch.float32 (the deep learning default)
+x_float = x_int.float()
+print('.float() dtype:', x_float.dtype)   # torch.float32
+print('.float() values:', x_float)        # tensor([ 1.,  4.,  9., 16.])
+
+# Why is .float() necessary? Many ops require floating-point inputs:
+import torch
+x = torch.tensor([1, 4, 9])
+# torch.sqrt(x)   # RuntimeError: expected scalar type Float but found Long
+print('sqrt after .float():', torch.sqrt(x.float()))    # tensor([1., 2., 3.])
+print('exp  after .float():', torch.exp(x.float()))     # tensor([ 2.718, 54.598, 8103.1])
+print('log  after .float():', torch.log(x.float()))     # tensor([0.,   1.386,  2.197])</code></pre>
+
+                        <pre><code class="language-python">import torch
+
+# Full family of dtype conversion shorthand methods
+x = torch.tensor([1.9, 2.5, 3.7, -0.3])
+
+print('.float()  :', x.float().dtype,   x.float())    # float32 — most common
+print('.double() :', x.double().dtype,  x.double())   # float64 — higher precision
+print('.half()   :', x.half().dtype,    x.half())     # float16 — GPU memory saving
+print('.long()   :', x.long().dtype,    x.long())     # int64   — truncates decimals
+print('.int()    :', x.int().dtype,     x.int())      # int32   — truncates decimals
+print('.bool()   :', x.bool().dtype,    x.bool())     # True for any non-zero value
+
+# General form: .to(dtype=...) — most explicit and flexible
+x_int = torch.tensor([1, 2, 3])
+print('.to(float32):', x_int.to(dtype=torch.float32))
+print('.to(float16):', x_int.to(dtype=torch.float16))
+
+# .to() also handles device + dtype conversion in one call:
+# x = x.to(device='cuda', dtype=torch.float32)  # move to GPU AND convert dtype
+
+# Quick decision guide:
+# float32 (float)  — default for all model weights and inputs
+# float16 (half)   — mixed-precision training (torch.autocast) for speed
+# float64 (double) — scientific computing needing extra precision
+# int64  (long)    — class labels for nn.CrossEntropyLoss and nn.NLLLoss
+# bool             — attention masks, padding masks
+
+# Common pitfall: CrossEntropyLoss requires Long (int64) labels
+import torch
+import torch.nn as nn
+logits = torch.randn(4, 3)                           # (batch=4, num_classes=3)
+labels_float = torch.tensor([0.0, 1.0, 2.0, 1.0])   # Wrong dtype (float)
+labels_long  = labels_float.long()                    # Fix: convert to int64
+loss = nn.CrossEntropyLoss()(logits, labels_long)
+print('Loss:', loss.item())                           # Works — no RuntimeError</code></pre>
 
                         <div class="highlight-box">
                             <i class="fas fa-bolt"></i>
@@ -1386,6 +1527,41 @@ print(f'Total parameters with gradients: {sum(p.grad.numel() for p in net.parame
                         </figure>
 
                         <h3>Basic Neural Network Structure</h3>
+
+                        <p>The most fundamental building block in any feedforward network is <code>nn.Linear</code>. It implements a single fully-connected (dense) layer — the operation $y = xW^T + b$ — where <strong>W</strong> is a learned weight matrix and <strong>b</strong> is a learned bias vector. Both are initialised automatically (Kaiming uniform by default) and registered as parameters, meaning they receive gradients and are updated by the optimiser every training step.</p>
+
+                        <p><code>nn.Linear(in_features, out_features)</code> takes two required arguments: the number of input features and the number of output features. For a batch of shape <code>(N, in_features)</code>, it produces an output of shape <code>(N, out_features)</code> — the batch dimension <code>N</code> passes through untouched. The weight matrix <code>W</code> has shape <code>(out_features, in_features)</code> and the bias <code>b</code> has shape <code>(out_features,)</code>, so the total number of learnable parameters in one layer is <code>in_features × out_features + out_features</code>.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-calculator me-2"></i><strong>Parameter count example:</strong> <code>nn.Linear(10, 20)</code> has 10 × 20 = 200 weight parameters plus 20 bias parameters = <strong>220 parameters total</strong>. Stacking layers multiplies their parameter counts — this is why "wider" (more neurons) and "deeper" (more layers) networks grow in parameters quickly.
+                        </div>
+
+                        <pre><code class="language-python">import torch
+import torch.nn as nn
+
+# Standalone nn.Linear — understand it before putting it in a network
+layer = nn.Linear(in_features=10, out_features=4)
+
+print(f'Weight shape: {layer.weight.shape}')  # (4, 10)  — out × in
+print(f'Bias shape:   {layer.bias.shape}')    # (4,)
+print(f'Parameters:   {sum(p.numel() for p in layer.parameters())}')  # 44
+
+# Forward pass: one sample (no batch dimension)
+x_single = torch.randn(10)
+# Linear expects (*, in_features), so (10,) works for a single vector
+y_single = layer(x_single)
+print(f'Single input {x_single.shape} → output {y_single.shape}')  # (10,) → (4,)
+
+# Forward pass: batched input
+x_batch = torch.randn(32, 10)  # 32 samples, 10 features each
+y_batch = layer(x_batch)
+print(f'Batch input {x_batch.shape} → output {y_batch.shape}')  # (32, 10) → (32, 4)
+
+# Inspect the computation: y = x @ W.T + b
+y_manual = x_batch @ layer.weight.T + layer.bias
+print(f'Manual matches layer: {torch.allclose(y_batch, y_manual)}')  # True
+</code></pre>
+
                         <pre><code class="language-python">import torch
 import torch.nn as nn
 
@@ -2268,6 +2444,12 @@ print('CosineAnnealingLR: Smooth, empirically works well for many tasks.')
                         
                         <p>PyTorch's <code>Dataset</code> and <code>DataLoader</code> classes provide efficient data loading with automatic batching, shuffling, and parallel loading. This is essential for training on large datasets.</p>
 
+                        <p><code>Dataset</code> is an abstract class that defines <em>what</em> your data looks like. <code>DataLoader</code> wraps a <code>Dataset</code> and handles <em>how</em> that data is fed to your model — in shuffled batches, loaded in parallel, and transferred to the GPU. Keeping these two concerns separate means you can swap out any dataset without touching your training loop, and vice versa.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-handshake me-2"></i><strong>The Dataset contract:</strong> every custom <code>Dataset</code> must implement exactly two methods. <code>__len__()</code> returns the total number of samples so PyTorch knows when one epoch ends. <code>__getitem__(idx)</code> returns one sample — usually a (features, label) tuple — given an integer index. PyTorch calls these behind the scenes; you never invoke them directly during training.
+                        </div>
+
                         <h3>Creating Custom Dataset</h3>
                         <pre><code class="language-python">import torch
 from torch.utils.data import Dataset, DataLoader
@@ -2298,6 +2480,9 @@ print(f'Sample data shape: {sample_data.shape}')  # torch.Size([10])
 print(f'Sample label: {sample_label.item()}')  # 0 or 1</code></pre>
 
                         <h3>DataLoader: Batching & Shuffling</h3>
+
+                        <p><code>DataLoader</code> takes a <code>Dataset</code> and turns it into an iterable of batches. At the start of each epoch it optionally shuffles the sample indices, then slices them into groups of <code>batch_size</code> and calls <code>__getitem__</code> for each index in the group. The resulting tensors are stacked into a single batch tensor and yielded by the iterator. With <code>num_workers &gt; 0</code>, this fetching happens in background processes in parallel with your forward pass, so the GPU is never idle waiting for data.</p>
+
                         <pre><code class="language-python">import torch
 from torch.utils.data import Dataset, DataLoader
 
@@ -2336,6 +2521,9 @@ for batch_idx, (data, labels) in enumerate(dataloader):
         break</code></pre>
 
                         <h3>Using Built-in Datasets (TorchVision)</h3>
+
+                        <p>Writing a custom <code>Dataset</code> from scratch is only necessary when your data lives in a non-standard format. For common benchmarks, <code>torchvision.datasets</code> ships ready-made <code>Dataset</code> subclasses that download, cache, and preprocess the data for you. They all accept a <code>transform</code> argument — a callable (or a <code>transforms.Compose</code> pipeline) applied to each sample on the fly before it reaches the model. This keeps augmentation code out of your model and makes it trivial to swap in different pipelines for training vs. evaluation.</p>
+
                         <pre><code class="language-python">import torch
 from torch.utils.data import DataLoader
 import torchvision
