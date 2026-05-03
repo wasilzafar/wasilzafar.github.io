@@ -217,6 +217,15 @@
                 </ul>
             </li>
             <li>
+                <a href="#normalization-layers" onclick="closeNav()">Normalization Layers</a>
+                <ul>
+                    <li><a href="#normalization-layers" onclick="closeNav()">BatchNorm</a></li>
+                    <li><a href="#layer-norm" onclick="closeNav()">LayerNorm</a></li>
+                    <li><a href="#group-norm" onclick="closeNav()">GroupNorm &amp; InstanceNorm</a></li>
+                    <li><a href="#norm-comparison" onclick="closeNav()">When to Use Which</a></li>
+                </ul>
+            </li>
+            <li>
                 <a href="#optimizers" onclick="closeNav()">Optimizers</a>
                 <ul>
                     <li><a href="#optimizers" onclick="closeNav()">SGD &amp; Momentum</a></li>
@@ -793,7 +802,173 @@ print(f"Output std:   {out.std():.4f}")
                         </div>
 
                         <!-- ============================================================ -->
-                        <!-- 6. OPTIMIZERS -->
+                        <!-- 6. NORMALIZATION LAYERS -->
+                        <!-- ============================================================ -->
+
+                        <h2 id="normalization-layers">Normalization Layers</h2>
+
+                        <p>Normalization layers stabilize training by reducing internal covariate shift &mdash; the phenomenon where each layer&rsquo;s input distribution changes as preceding layers update their weights. By normalizing activations, these layers allow higher learning rates, faster convergence, and act as mild regularizers.</p>
+
+                        <h3>Batch Normalization (BatchNorm)</h3>
+
+                        <p><strong>BatchNorm</strong> normalizes across the <em>batch dimension</em> for each feature/channel independently. For a mini-batch of activations, it computes:</p>
+
+                        $$\hat{x}_i = \frac{x_i - \mu_B}{\sqrt{\sigma_B^2 + \epsilon}}$$
+                        $$y_i = \gamma \, \hat{x}_i + \beta$$
+
+                        <p>Where $\mu_B$ and $\sigma_B^2$ are the mean and variance computed over the batch, $\gamma$ (scale) and $\beta$ (shift) are learnable parameters that allow the network to undo the normalization if needed, and $\epsilon$ is a small constant for numerical stability.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Train vs Eval:</strong> During training, BatchNorm uses batch statistics. During evaluation, it uses <em>running</em> statistics (exponential moving averages accumulated during training). Always call <code>model.train()</code> and <code>model.eval()</code> to switch modes.
+                        </div>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+# BatchNorm1d: for fully-connected layers (normalizes over batch for each feature)
+bn1d = nn.BatchNorm1d(num_features=64)
+
+# BatchNorm2d: for convolutional layers (normalizes over batch for each channel)
+bn2d = nn.BatchNorm2d(num_features=128)
+
+# Example: batch of 8 samples, 64 features
+x_fc = torch.randn(8, 64)
+out_fc = bn1d(x_fc)
+print(f"BatchNorm1d input: {x_fc.shape} -> output: {out_fc.shape}")
+print(f"Output mean per feature: {out_fc.mean(dim=0)[:5].tolist()}")
+print(f"Output std per feature:  {out_fc.std(dim=0)[:5].tolist()}")
+
+# Example: batch of 8, 128 channels, 16x16 spatial
+x_conv = torch.randn(8, 128, 16, 16)
+out_conv = bn2d(x_conv)
+print(f"\nBatchNorm2d input: {x_conv.shape} -> output: {out_conv.shape}")
+print(f"Learnable params: gamma={bn2d.weight.shape}, beta={bn2d.bias.shape}")
+print(f"Running mean shape: {bn2d.running_mean.shape}")
+</code></pre>
+
+                        <h3 id="layer-norm">Layer Normalization (LayerNorm)</h3>
+
+                        <p><strong>LayerNorm</strong> normalizes across the <em>feature dimension</em> for each sample independently (no dependence on batch). This makes it ideal for sequence models (Transformers, RNNs) where batch statistics are unreliable due to variable sequence lengths:</p>
+
+                        $$\hat{x}_i = \frac{x_i - \mu_L}{\sqrt{\sigma_L^2 + \epsilon}}, \quad \mu_L = \frac{1}{H}\sum_{j=1}^H x_j, \quad \sigma_L^2 = \frac{1}{H}\sum_{j=1}^H (x_j - \mu_L)^2$$
+
+                        <p>Where the statistics are computed over the last $H$ dimensions (the <code>normalized_shape</code>). Unlike BatchNorm, LayerNorm behaves identically during training and inference.</p>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+# LayerNorm: normalizes over the last N dimensions
+# For a Transformer with hidden_dim=512
+ln = nn.LayerNorm(normalized_shape=512)
+
+# Single sample: each token is normalized independently
+x = torch.randn(1, 20, 512)  # (batch, seq_len, hidden_dim)
+out = ln(x)
+print(f"LayerNorm input: {x.shape} -> output: {out.shape}")
+print(f"Token 0 mean: {out[0, 0].mean().item():.6f}")
+print(f"Token 0 std:  {out[0, 0].std().item():.4f}")
+
+# LayerNorm over multiple dimensions (e.g., for CNN feature maps)
+ln_2d = nn.LayerNorm(normalized_shape=[64, 8, 8])  # channels, H, W
+x_2d = torch.randn(4, 64, 8, 8)
+out_2d = ln_2d(x_2d)
+print(f"\nLayerNorm 2D input: {x_2d.shape} -> output: {out_2d.shape}")
+print(f"Sample 0 mean: {out_2d[0].mean().item():.6f}")
+print(f"Params: weight={ln.weight.shape}, bias={ln.bias.shape}")
+</code></pre>
+
+                        <h3 id="group-norm">Group Normalization &amp; Instance Normalization</h3>
+
+                        <p><strong>GroupNorm</strong> divides channels into groups and normalizes within each group. It bridges the gap between LayerNorm (1 group = all channels) and InstanceNorm (groups = channels). It&rsquo;s batch-size independent, making it ideal for small-batch training (detection, segmentation):</p>
+
+                        $$\hat{x}_i = \frac{x_i - \mu_g}{\sqrt{\sigma_g^2 + \epsilon}}$$
+
+                        <p>Where $\mu_g$ and $\sigma_g^2$ are computed over each group of channels per sample.</p>
+
+                        <p><strong>InstanceNorm</strong> normalizes each channel per sample independently (equivalent to GroupNorm with num_groups = num_channels). It&rsquo;s the default for style transfer because it removes instance-specific contrast:</p>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+# GroupNorm: divide 64 channels into 8 groups of 8 channels each
+gn = nn.GroupNorm(num_groups=8, num_channels=64)
+
+# InstanceNorm: each channel normalized independently (groups = channels)
+ins_norm = nn.InstanceNorm2d(num_features=64, affine=True)
+
+# Input: batch of 2, 64 channels, 32x32 spatial
+x = torch.randn(2, 64, 32, 32)
+
+out_gn = gn(x)
+out_in = ins_norm(x)
+
+print(f"GroupNorm (8 groups of 8ch): {out_gn.shape}")
+print(f"  Sample 0, Group 0 (ch 0-7) mean: {out_gn[0, :8].mean().item():.6f}")
+
+print(f"\nInstanceNorm (64 groups of 1ch): {out_in.shape}")
+print(f"  Sample 0, Channel 0 mean: {out_in[0, 0].mean().item():.6f}")
+print(f"  Sample 0, Channel 0 std:  {out_in[0, 0].std().item():.4f}")
+
+# GroupNorm special cases:
+# num_groups=1 -> equivalent to LayerNorm
+# num_groups=num_channels -> equivalent to InstanceNorm
+ln_equiv = nn.GroupNorm(num_groups=1, num_channels=64)   # LayerNorm
+in_equiv = nn.GroupNorm(num_groups=64, num_channels=64)  # InstanceNorm
+print(f"\nGroupNorm(1 group) ~ LayerNorm: {ln_equiv}")
+print(f"GroupNorm(64 groups) ~ InstanceNorm: {in_equiv}")
+</code></pre>
+
+                        <h3 id="norm-comparison">When to Use Which Normalization</h3>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="experiment-type"><i class="fas fa-balance-scale me-1"></i>Comparison Guide</span>
+                            </div>
+                            <div class="experiment-content">
+                                <p><strong>BatchNorm:</strong> Default for CNNs and MLPs with batch size &ge; 16. Best convergence speed. Avoid with small batches or sequence models.</p>
+                                <p><strong>LayerNorm:</strong> Default for Transformers, RNNs, and any model with variable-length inputs. Batch-size independent.</p>
+                                <p><strong>GroupNorm:</strong> Use when batch size is small (1&ndash;8), e.g., object detection, segmentation. Set groups=32 as a solid default.</p>
+                                <p><strong>InstanceNorm:</strong> Style transfer and generative models. Removes per-instance contrast information.</p>
+                            </div>
+                            <div class="experiment-tags">
+                                <span class="bias-tag">BatchNorm</span>
+                                <span class="bias-tag">LayerNorm</span>
+                                <span class="bias-tag">GroupNorm</span>
+                                <span class="bias-tag">InstanceNorm</span>
+                            </div>
+                        </div>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+# Side-by-side comparison: how each norm computes statistics differently
+x = torch.randn(4, 8, 6, 6)  # batch=4, channels=8, spatial=6x6
+
+norms = {
+    "BatchNorm2d":    nn.BatchNorm2d(8),
+    "LayerNorm":      nn.LayerNorm([8, 6, 6]),
+    "GroupNorm(2gr)":  nn.GroupNorm(num_groups=2, num_channels=8),
+    "InstanceNorm2d": nn.InstanceNorm2d(8, affine=True),
+}
+
+print(f"Input shape: {x.shape} (batch=4, channels=8, H=6, W=6)")
+print(f"{'Norm Type':<18} {'Output mean':>12} {'Output std':>11} {'Params':>8}")
+print("-" * 55)
+
+for name, norm in norms.items():
+    out = norm(x)
+    n_params = sum(p.numel() for p in norm.parameters())
+    print(f"{name:<18} {out.mean().item():>12.6f} {out.std().item():>11.4f} {n_params:>8}")
+</code></pre>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Common Pitfalls:</strong> (1) Never use BatchNorm with batch_size=1 &mdash; variance is undefined. (2) Place BatchNorm <em>before</em> activation for best results (Conv &rarr; BN &rarr; ReLU). (3) Set <code>bias=False</code> in Conv/Linear layers preceding BatchNorm since BN already has a learnable bias ($\beta$). (4) Don&rsquo;t use BatchNorm in the Discriminator&rsquo;s first layer (GANs).
+                        </div>
+
+                        <!-- ============================================================ -->
+                        <!-- 7. OPTIMIZERS -->
                         <!-- ============================================================ -->
 
                         <h2 id="optimizers">Optimizers</h2>
