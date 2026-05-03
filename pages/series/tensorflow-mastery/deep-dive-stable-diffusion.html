@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Dive: Stable Diffusion &mdash; Image Generation in TensorFlow | Wasil Zafar</title>
+    <meta name="description" content="Implement the complete Stable Diffusion pipeline in TensorFlow from the denoising U-Net and VAE to the CLIP text encoder, noise scheduling, and classifier-free guidance for text-to-image generation.">
+    <meta name="keywords" content="stable diffusion, tensorflow, diffusion models, U-Net, VAE, CLIP, text-to-image, deep learning">
+    <meta name="author" content="Wasil Zafar">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Deep Dive: Stable Diffusion &mdash; Image Generation in TensorFlow">
+    <meta property="og:description" content="Implement the complete Stable Diffusion pipeline in TensorFlow from the denoising U-Net and VAE to the CLIP text encoder, noise scheduling, and classifier-free guidance.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/tensorflow-mastery/deep-dive-stable-diffusion.html">
+    <meta property="article:published_time" content="2026-05-03">
+    <meta property="article:author" content="Wasil Zafar">
+    <meta property="article:section" content="Technology">
+
+    <!-- Canonical -->
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/tensorflow-mastery/deep-dive-stable-diffusion.html">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="../../../images/favicon_io/favicon.ico">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- KaTeX CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+
+    <!-- PrismJS Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="../../../css/main.css">
+
+    <!-- Google Tag Manager - Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'functionality_storage': 'granted',
+            'personalization_storage': 'granted',
+            'security_storage': 'granted',
+            'wait_for_update': 500
+        });
+    </script>
+
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <!-- Navigation -->
+    <div class="nav-v16-wrapper">
+        <nav class="nav-v16">
+            <a href="/" class="brand">
+                <div class="brand-stack"><span></span><span></span><span></span></div>
+                <span class="brand-text">Wasil Zafar</span>
+            </a>
+            <button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="links">
+                <a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a>
+                <a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a>
+                <a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a>
+                <a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a>
+                <a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Blog Hero -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to TensorFlow Mastery Series</a>
+                <h1 class="display-4 fw-bold mb-3">Deep Dive: Stable Diffusion &mdash; Image Generation in TensorFlow</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>May 3, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>40 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Implement the complete Stable Diffusion pipeline in TensorFlow &mdash; from the denoising U-Net and VAE to the CLIP text encoder, noise scheduling, and classifier-free guidance for text-to-image generation.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation Overlay -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#diffusion-fundamentals" onclick="closeNav()">Diffusion Fundamentals</a>
+                <ul>
+                    <li><a href="#diffusion-fundamentals" onclick="closeNav()">How Diffusion Models Work</a></li>
+                    <li><a href="#noise-scheduling" onclick="closeNav()">Noise Scheduling</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#unet-architecture" onclick="closeNav()">U-Net Architecture</a>
+                <ul>
+                    <li><a href="#unet-architecture" onclick="closeNav()">The U-Net Denoiser</a></li>
+                    <li><a href="#cross-attention" onclick="closeNav()">Cross-Attention Conditioning</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#vae-latent-space" onclick="closeNav()">VAE &amp; Latent Space</a>
+                <ul>
+                    <li><a href="#vae-latent-space" onclick="closeNav()">Latent Space Encoding</a></li>
+                    <li><a href="#complete-pipeline" onclick="closeNav()">Complete Pipeline</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#guidance-production" onclick="closeNav()">Guidance &amp; Production</a>
+                <ul>
+                    <li><a href="#classifier-free-guidance" onclick="closeNav()">Classifier-Free Guidance</a></li>
+                    <li><a href="#kerascv-stable-diffusion" onclick="closeNav()">KerasCV Stable Diffusion</a></li>
+                </ul>
+            </li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                        <!-- Section 1: How Diffusion Models Work -->
+                        <h2 id="diffusion-fundamentals">How Diffusion Models Work</h2>
+
+                        <p>Diffusion models generate images by learning to reverse a gradual noising process. The key insight is that destroying structure (adding noise) is trivial, but learning to recover structure (removing noise) produces a powerful generative model.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Core Idea:</strong> Stable Diffusion operates in a compressed latent space rather than directly on pixels, making it 48&times; more computationally efficient than pixel-space diffusion models like DALL-E 2.
+                        </div>
+
+                        <h3>Forward Process (Adding Noise)</h3>
+
+                        <p>The forward process gradually adds Gaussian noise to a clean image over <span class="katex-inline">T</span> timesteps until it becomes pure noise. At each step:</p>
+
+                        <p class="katex-block">$$q(x_t | x_{t-1}) = \mathcal{N}(x_t; \sqrt{1-\beta_t} \, x_{t-1}, \, \beta_t I)$$</p>
+
+                        <p>Where <span class="katex-inline">$\beta_t$</span> is the noise schedule controlling how much noise is added at each step. Using the reparameterization trick, we can jump directly to any timestep:</p>
+
+                        <p class="katex-block">$$x_t = \sqrt{\bar{\alpha}_t} \, x_0 + \sqrt{1 - \bar{\alpha}_t} \, \epsilon, \quad \epsilon \sim \mathcal{N}(0, I)$$</p>
+
+                        <p>Where <span class="katex-inline">$\bar{\alpha}_t = \prod_{s=1}^{t} (1 - \beta_s)$</span> is the cumulative product of noise retention factors.</p>
+
+                        <h3>Reverse Process (Denoising)</h3>
+
+                        <p>The reverse process learns to predict and remove noise step by step. A neural network (the U-Net) is trained to predict the noise <span class="katex-inline">$\epsilon_\theta(x_t, t)$</span> added at each timestep, then subtracts it to recover the cleaner image.</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Diffusion Forward and Reverse Processes</div>
+                            <pre class="mermaid">
+flowchart LR
+    A["Clean Image x0"] -->|"Add noise beta_1"| B["x1"]
+    B -->|"Add noise beta_2"| C["x2"]
+    C -->|"... T steps ..."| D["xT ~ N(0,I)"]
+    D -->|"U-Net predicts noise"| E["x(T-1)"]
+    E -->|"Denoise step"| F["x(T-2)"]
+    F -->|"... T steps ..."| G["Generated Image"]
+
+    style A fill:#3B9797,color:#fff
+    style D fill:#BF092F,color:#fff
+    style G fill:#3B9797,color:#fff
+                            </pre>
+                        </div>
+
+                        <h3>Latent Diffusion</h3>
+
+                        <p>Instead of operating on full-resolution pixels (e.g., 512&times;512&times;3 = 786,432 dimensions), Stable Diffusion first compresses the image to a latent space (64&times;64&times;4 = 16,384 dimensions) using a VAE. The diffusion process operates entirely in this compressed space, then decodes back to pixel space.</p>
+
+<pre><code class="language-python">import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Demonstrate the forward diffusion process
+def forward_diffusion_demo(num_steps=5):
+    """Show progressive noising of a synthetic image."""
+    # Create a simple synthetic image (gradient pattern)
+    x = np.zeros((64, 64, 3), dtype=np.float32)
+    x[:32, :, 0] = 1.0  # Red top half
+    x[32:, :, 2] = 1.0  # Blue bottom half
+    x[:, 32:, 1] = 0.5  # Green right half
+
+    # Linear noise schedule
+    betas = np.linspace(0.0001, 0.02, 1000)
+    alphas = 1.0 - betas
+    alpha_bar = np.cumprod(alphas)
+
+    # Show progressive noising
+    timesteps = np.linspace(0, 999, num_steps, dtype=int)
+    fig, axes = plt.subplots(1, num_steps, figsize=(15, 3))
+
+    for i, t in enumerate(timesteps):
+        noise = np.random.randn(*x.shape).astype(np.float32)
+        x_t = np.sqrt(alpha_bar[t]) * x + np.sqrt(1 - alpha_bar[t]) * noise
+        x_t_clipped = np.clip(x_t, 0, 1)
+        axes[i].imshow(x_t_clipped)
+        axes[i].set_title(f"t={t}")
+        axes[i].axis("off")
+
+    plt.suptitle("Forward Diffusion: Clean Image to Noise")
+    plt.tight_layout()
+    plt.show()
+
+forward_diffusion_demo()
+</code></pre>
+
+                        <!-- Section 2: Noise Scheduling -->
+                        <h2 id="noise-scheduling">Noise Scheduling</h2>
+
+                        <p>The noise schedule <span class="katex-inline">$\{\beta_t\}_{t=1}^T$</span> controls how quickly images are destroyed during the forward process. The choice of schedule significantly impacts generation quality.</p>
+
+                        <h3>Linear Schedule</h3>
+
+                        <p>The original DDPM paper used a linear schedule from <span class="katex-inline">$\beta_1 = 10^{-4}$</span> to <span class="katex-inline">$\beta_T = 0.02$</span>. This destroys information too quickly in early steps, wasting model capacity on nearly-pure noise.</p>
+
+                        <h3>Cosine Schedule</h3>
+
+                        <p>The cosine schedule provides a more gradual noise increase, preserving structure longer and giving the model more useful signal to learn from at intermediate timesteps.</p>
+
+<pre><code class="language-python">import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+
+def linear_beta_schedule(timesteps, beta_start=1e-4, beta_end=0.02):
+    """Linear noise schedule as in original DDPM."""
+    return np.linspace(beta_start, beta_end, timesteps, dtype=np.float32)
+
+def cosine_beta_schedule(timesteps, s=0.008):
+    """Cosine noise schedule (improved DDPM)."""
+    steps = timesteps + 1
+    t = np.linspace(0, timesteps, steps, dtype=np.float64)
+    alpha_bar = np.cos(((t / timesteps) + s) / (1 + s) * np.pi * 0.5) ** 2
+    alpha_bar = alpha_bar / alpha_bar[0]
+    betas = 1 - (alpha_bar[1:] / alpha_bar[:-1])
+    return np.clip(betas, 0.0001, 0.999).astype(np.float32)
+
+# Compare schedules
+T = 1000
+linear_betas = linear_beta_schedule(T)
+cosine_betas = cosine_beta_schedule(T)
+
+# Compute alpha_bar for both
+linear_alpha_bar = np.cumprod(1.0 - linear_betas)
+cosine_alpha_bar = np.cumprod(1.0 - cosine_betas)
+
+# Plot comparison
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+axes[0].plot(linear_betas, label="Linear", color="#BF092F")
+axes[0].plot(cosine_betas, label="Cosine", color="#3B9797")
+axes[0].set_xlabel("Timestep")
+axes[0].set_ylabel("Beta (noise level)")
+axes[0].set_title("Noise Schedule: Beta over Time")
+axes[0].legend()
+axes[0].grid(True, alpha=0.3)
+
+axes[1].plot(linear_alpha_bar, label="Linear", color="#BF092F")
+axes[1].plot(cosine_alpha_bar, label="Cosine", color="#3B9797")
+axes[1].set_xlabel("Timestep")
+axes[1].set_ylabel("Alpha Bar (signal retention)")
+axes[1].set_title("Signal Retention over Time")
+axes[1].legend()
+axes[1].grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+print(f"Linear: signal at t=500: {linear_alpha_bar[500]:.4f}")
+print(f"Cosine: signal at t=500: {cosine_alpha_bar[500]:.4f}")
+</code></pre>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span><i class="fas fa-flask me-1"></i>Observation</span>
+                            </div>
+                            <div class="experiment-content">
+                                <p>The cosine schedule retains more signal at intermediate timesteps. At t=500, cosine retains ~50% signal while linear retains only ~5%. This means the model spends more training steps learning meaningful structure removal rather than just distinguishing noise from slightly-less noise.</p>
+                            </div>
+                            <div class="experiment-tags">
+                                <span class="bias-tag">noise-schedule</span>
+                                <span class="bias-tag">DDPM</span>
+                                <span class="bias-tag">cosine</span>
+                            </div>
+                        </div>
+
+<pre><code class="language-python">import tensorflow as tf
+import numpy as np
+
+class NoiseScheduler:
+    """Manages noise scheduling for diffusion models."""
+
+    def __init__(self, timesteps=1000, schedule_type="cosine"):
+        self.timesteps = timesteps
+
+        if schedule_type == "linear":
+            self.betas = tf.constant(
+                np.linspace(1e-4, 0.02, timesteps, dtype=np.float32)
+            )
+        elif schedule_type == "cosine":
+            steps = timesteps + 1
+            t = np.linspace(0, timesteps, steps, dtype=np.float64)
+            alpha_bar = np.cos(((t / timesteps) + 0.008) / 1.008 * np.pi * 0.5) ** 2
+            alpha_bar = alpha_bar / alpha_bar[0]
+            betas = 1 - (alpha_bar[1:] / alpha_bar[:-1])
+            self.betas = tf.constant(np.clip(betas, 1e-4, 0.999), dtype=tf.float32)
+        else:
+            raise ValueError(f"Unknown schedule: {schedule_type}")
+
+        self.alphas = 1.0 - self.betas
+        self.alpha_bar = tf.math.cumprod(self.alphas)
+        self.sqrt_alpha_bar = tf.sqrt(self.alpha_bar)
+        self.sqrt_one_minus_alpha_bar = tf.sqrt(1.0 - self.alpha_bar)
+
+    def add_noise(self, x_0, noise, t):
+        """Add noise to clean images at timestep t."""
+        sqrt_ab = tf.gather(self.sqrt_alpha_bar, t)
+        sqrt_one_minus_ab = tf.gather(self.sqrt_one_minus_alpha_bar, t)
+        # Reshape for broadcasting with image dimensions
+        sqrt_ab = tf.reshape(sqrt_ab, [-1, 1, 1, 1])
+        sqrt_one_minus_ab = tf.reshape(sqrt_one_minus_ab, [-1, 1, 1, 1])
+        return sqrt_ab * x_0 + sqrt_one_minus_ab * noise
+
+# Test the scheduler
+scheduler = NoiseScheduler(timesteps=1000, schedule_type="cosine")
+print(f"Beta range: [{scheduler.betas[0].numpy():.6f}, {scheduler.betas[-1].numpy():.6f}]")
+print(f"Alpha_bar at t=0: {scheduler.alpha_bar[0].numpy():.4f}")
+print(f"Alpha_bar at t=500: {scheduler.alpha_bar[500].numpy():.4f}")
+print(f"Alpha_bar at t=999: {scheduler.alpha_bar[999].numpy():.4f}")
+
+# Demo: add noise to a batch of random images
+batch = tf.random.normal([4, 64, 64, 4])  # Latent space batch
+noise = tf.random.normal(tf.shape(batch))
+timesteps = tf.constant([0, 250, 500, 999])
+noisy = scheduler.add_noise(batch, noise, timesteps)
+print(f"Noisy batch shape: {noisy.shape}")
+</code></pre>
+
+                        <!-- Section 3: The U-Net Denoiser -->
+                        <h2 id="unet-architecture">The U-Net Denoiser</h2>
+
+                        <p>The U-Net is the core neural network in Stable Diffusion. It takes a noisy latent image and a timestep embedding, and predicts the noise to be removed. The architecture uses an encoder-decoder structure with skip connections, residual blocks, and attention mechanisms at multiple resolutions.</p>
+
+                        <h3>Architecture Components</h3>
+
+                        <ul>
+                            <li><strong>Time Embedding:</strong> Sinusoidal positional encoding of the timestep, projected through two linear layers</li>
+                            <li><strong>Residual Blocks:</strong> GroupNorm &rarr; SiLU &rarr; Conv &rarr; GroupNorm &rarr; SiLU &rarr; Conv + skip connection</li>
+                            <li><strong>Attention Blocks:</strong> Self-attention for spatial reasoning at 32&times;32, 16&times;16, and 8&times;8 resolutions</li>
+                            <li><strong>Downsample/Upsample:</strong> Strided convolutions (down) and transposed convolutions (up)</li>
+                        </ul>
+
+<pre><code class="language-python">import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+import numpy as np
+
+class TimeEmbedding(layers.Layer):
+    """Sinusoidal time embedding for conditioning on diffusion timestep."""
+
+    def __init__(self, embed_dim, **kwargs):
+        super().__init__(**kwargs)
+        self.embed_dim = embed_dim
+        self.dense1 = layers.Dense(embed_dim * 4, activation="swish")
+        self.dense2 = layers.Dense(embed_dim * 4)
+
+    def sinusoidal_embedding(self, t):
+        half_dim = self.embed_dim // 2
+        freq = tf.exp(
+            -tf.math.log(10000.0) * tf.range(0, half_dim, dtype=tf.float32) / half_dim
+        )
+        t = tf.cast(t, tf.float32)
+        args = t[:, None] * freq[None, :]
+        return tf.concat([tf.sin(args), tf.cos(args)], axis=-1)
+
+    def call(self, t):
+        emb = self.sinusoidal_embedding(t)
+        emb = self.dense1(emb)
+        emb = self.dense2(emb)
+        return emb
+
+
+class ResBlock(layers.Layer):
+    """Residual block with time embedding injection."""
+
+    def __init__(self, out_channels, **kwargs):
+        super().__init__(**kwargs)
+        self.out_channels = out_channels
+        self.norm1 = layers.GroupNormalization(groups=32)
+        self.conv1 = layers.Conv2D(out_channels, 3, padding="same")
+        self.time_proj = layers.Dense(out_channels)
+        self.norm2 = layers.GroupNormalization(groups=32)
+        self.conv2 = layers.Conv2D(out_channels, 3, padding="same")
+        self.skip_conv = None  # Lazy init for channel mismatch
+
+    def build(self, input_shape):
+        if input_shape[-1] != self.out_channels:
+            self.skip_conv = layers.Conv2D(self.out_channels, 1)
+        super().build(input_shape)
+
+    def call(self, x, time_emb):
+        h = self.norm1(x)
+        h = tf.nn.silu(h)
+        h = self.conv1(h)
+        # Inject time embedding
+        t = tf.nn.silu(time_emb)
+        t = self.time_proj(t)[:, None, None, :]
+        h = h + t
+        h = self.norm2(h)
+        h = tf.nn.silu(h)
+        h = self.conv2(h)
+        # Skip connection
+        if self.skip_conv is not None:
+            x = self.skip_conv(x)
+        return x + h
+
+
+class AttentionBlock(layers.Layer):
+    """Self-attention block for spatial reasoning."""
+
+    def __init__(self, channels, num_heads=4, **kwargs):
+        super().__init__(**kwargs)
+        self.channels = channels
+        self.num_heads = num_heads
+        self.norm = layers.GroupNormalization(groups=32)
+        self.qkv = layers.Dense(channels * 3)
+        self.proj = layers.Dense(channels)
+
+    def call(self, x):
+        b, h, w, c = tf.shape(x)[0], x.shape[1], x.shape[2], x.shape[3]
+        residual = x
+        x = self.norm(x)
+        x = tf.reshape(x, [b, h * w, c])
+        qkv = self.qkv(x)
+        q, k, v = tf.split(qkv, 3, axis=-1)
+        # Multi-head attention
+        head_dim = c // self.num_heads
+        q = tf.reshape(q, [b, h * w, self.num_heads, head_dim])
+        k = tf.reshape(k, [b, h * w, self.num_heads, head_dim])
+        v = tf.reshape(v, [b, h * w, self.num_heads, head_dim])
+        q = tf.transpose(q, [0, 2, 1, 3])
+        k = tf.transpose(k, [0, 2, 1, 3])
+        v = tf.transpose(v, [0, 2, 1, 3])
+        scale = tf.math.rsqrt(tf.cast(head_dim, tf.float32))
+        attn = tf.matmul(q, k, transpose_b=True) * scale
+        attn = tf.nn.softmax(attn, axis=-1)
+        out = tf.matmul(attn, v)
+        out = tf.transpose(out, [0, 2, 1, 3])
+        out = tf.reshape(out, [b, h, w, c])
+        out = self.proj(tf.reshape(out, [b, h * w, c]))
+        out = tf.reshape(out, [b, h, w, c])
+        return residual + out
+
+
+# Test components
+time_emb = TimeEmbedding(embed_dim=128)
+t = tf.constant([0, 100, 500, 999])
+emb = time_emb(t)
+print(f"Time embedding shape: {emb.shape}")  # (4, 512)
+
+res_block = ResBlock(out_channels=256)
+x = tf.random.normal([2, 32, 32, 128])
+out = res_block(x, emb[:2])
+print(f"ResBlock output shape: {out.shape}")  # (2, 32, 32, 256)
+
+attn_block = AttentionBlock(channels=256, num_heads=4)
+out = attn_block(out)
+print(f"AttentionBlock output shape: {out.shape}")  # (2, 32, 32, 256)
+</code></pre>
+
+                        <h3>Complete U-Net Assembly</h3>
+
+<pre><code class="language-python">import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+
+def build_unet(latent_channels=4, base_channels=128, channel_mults=(1, 2, 4, 4),
+               num_res_blocks=2, attention_resolutions=(2, 4)):
+    """Build a simplified U-Net for latent diffusion."""
+
+    # Inputs
+    latent_input = keras.Input(shape=(64, 64, latent_channels), name="latent")
+    time_input = keras.Input(shape=(), dtype=tf.int32, name="timestep")
+
+    # Time embedding
+    time_emb_layer = TimeEmbedding(embed_dim=base_channels)
+    t_emb = time_emb_layer(time_input)
+
+    # Initial convolution
+    h = layers.Conv2D(base_channels, 3, padding="same")(latent_input)
+
+    # Encoder path
+    skips = [h]
+    for level, mult in enumerate(channel_mults):
+        ch = base_channels * mult
+        for _ in range(num_res_blocks):
+            res = ResBlock(ch)
+            h = res(h, t_emb)
+            if mult in attention_resolutions:
+                attn = AttentionBlock(ch)
+                h = attn(h)
+            skips.append(h)
+        if level < len(channel_mults) - 1:
+            h = layers.Conv2D(ch, 3, strides=2, padding="same")(h)
+            skips.append(h)
+
+    # Middle block
+    mid_ch = base_channels * channel_mults[-1]
+    mid_res1 = ResBlock(mid_ch)
+    mid_attn = AttentionBlock(mid_ch)
+    mid_res2 = ResBlock(mid_ch)
+    h = mid_res1(h, t_emb)
+    h = mid_attn(h)
+    h = mid_res2(h, t_emb)
+
+    # Decoder path
+    for level, mult in reversed(list(enumerate(channel_mults))):
+        ch = base_channels * mult
+        for _ in range(num_res_blocks + 1):
+            skip = skips.pop()
+            h = layers.Concatenate()([h, skip])
+            res = ResBlock(ch)
+            h = res(h, t_emb)
+            if mult in attention_resolutions:
+                attn = AttentionBlock(ch)
+                h = attn(h)
+        if level > 0:
+            h = layers.Conv2DTranspose(ch, 3, strides=2, padding="same")(h)
+
+    # Output
+    h = layers.GroupNormalization(groups=32)(h)
+    h = tf.nn.silu(h)
+    noise_pred = layers.Conv2D(latent_channels, 3, padding="same")(h)
+
+    model = keras.Model(inputs=[latent_input, time_input], outputs=noise_pred)
+    return model
+
+# Build and summarize
+unet = build_unet()
+print(f"U-Net parameters: {unet.count_params():,}")
+print(f"Input shapes: latent={unet.input[0].shape}, time={unet.input[1].shape}")
+print(f"Output shape: {unet.output.shape}")
+</code></pre>
+
+                        <!-- Section 4: Cross-Attention -->
+                        <h2 id="cross-attention">Cross-Attention: Conditioning on Text</h2>
+
+                        <p>The key innovation that makes Stable Diffusion controllable by text prompts is cross-attention. Rather than only attending to other spatial positions (self-attention), cross-attention layers allow the U-Net features to attend to text embeddings from a CLIP encoder.</p>
+
+                        <p class="katex-block">$$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V$$</p>
+
+                        <p>In cross-attention: <span class="katex-inline">$Q$</span> comes from the image features (spatial), while <span class="katex-inline">$K$</span> and <span class="katex-inline">$V$</span> come from the text embeddings (77 tokens &times; 768 dimensions from CLIP).</p>
+
+<pre><code class="language-python">import tensorflow as tf
+from tensorflow.keras import layers
+
+class CrossAttention(layers.Layer):
+    """Cross-attention layer for text-conditioned image generation.
+
+    Q from image features, K/V from text embeddings (CLIP output).
+    """
+
+    def __init__(self, channels, context_dim=768, num_heads=8, **kwargs):
+        super().__init__(**kwargs)
+        self.channels = channels
+        self.num_heads = num_heads
+        self.head_dim = channels // num_heads
+
+        self.norm = layers.GroupNormalization(groups=32)
+        self.to_q = layers.Dense(channels, use_bias=False)
+        self.to_k = layers.Dense(channels, use_bias=False)
+        self.to_v = layers.Dense(channels, use_bias=False)
+        self.to_out = layers.Dense(channels)
+
+    def call(self, x, context):
+        """
+        Args:
+            x: Image features [batch, height, width, channels]
+            context: Text embeddings [batch, seq_len, context_dim]
+        """
+        b, h, w, c = tf.shape(x)[0], x.shape[1], x.shape[2], x.shape[3]
+        residual = x
+
+        x = self.norm(x)
+        x_flat = tf.reshape(x, [b, h * w, c])
+
+        # Q from image features, K/V from text context
+        q = self.to_q(x_flat)
+        k = self.to_k(context)
+        v = self.to_v(context)
+
+        # Reshape for multi-head attention
+        q = tf.reshape(q, [b, h * w, self.num_heads, self.head_dim])
+        k = tf.reshape(k, [b, -1, self.num_heads, self.head_dim])
+        v = tf.reshape(v, [b, -1, self.num_heads, self.head_dim])
+
+        q = tf.transpose(q, [0, 2, 1, 3])  # [b, heads, hw, dim]
+        k = tf.transpose(k, [0, 2, 1, 3])  # [b, heads, seq, dim]
+        v = tf.transpose(v, [0, 2, 1, 3])
+
+        # Scaled dot-product attention
+        scale = tf.math.rsqrt(tf.cast(self.head_dim, tf.float32))
+        attn_weights = tf.matmul(q, k, transpose_b=True) * scale
+        attn_weights = tf.nn.softmax(attn_weights, axis=-1)
+        attn_output = tf.matmul(attn_weights, v)
+
+        # Reshape back
+        attn_output = tf.transpose(attn_output, [0, 2, 1, 3])
+        attn_output = tf.reshape(attn_output, [b, h * w, c])
+        attn_output = self.to_out(attn_output)
+        attn_output = tf.reshape(attn_output, [b, h, w, c])
+
+        return residual + attn_output
+
+
+# Test cross-attention
+cross_attn = CrossAttention(channels=256, context_dim=768, num_heads=8)
+
+# Simulated inputs
+image_features = tf.random.normal([2, 32, 32, 256])   # From U-Net encoder
+text_embeddings = tf.random.normal([2, 77, 768])       # From CLIP (77 tokens)
+
+output = cross_attn(image_features, text_embeddings)
+print(f"Cross-attention input: {image_features.shape}")
+print(f"Text context: {text_embeddings.shape}")
+print(f"Cross-attention output: {output.shape}")
+# Verify shape preserved: (2, 32, 32, 256)
+</code></pre>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Key Insight:</strong> The text embeddings act as a &ldquo;steering signal&rdquo; for the denoising process. At each denoising step, cross-attention allows the model to focus on different words from the prompt depending on which spatial regions are being refined. This is why prompt word order and emphasis matter.
+                        </div>
+
+                        <!-- Section 5: The VAE -->
+                        <h2 id="vae-latent-space">The VAE: Latent Space Encoding</h2>
+
+                        <p>The Variational Autoencoder (VAE) in Stable Diffusion provides the compression between pixel space and latent space. The encoder maps a 512&times;512&times;3 image to a 64&times;64&times;4 latent representation (48&times; compression), and the decoder reverses this mapping.</p>
+
+                        <h3>Why Latent Space?</h3>
+
+                        <ul>
+                            <li><strong>Computation:</strong> 512&times;512&times;3 = 786,432 values vs 64&times;64&times;4 = 16,384 values</li>
+                            <li><strong>Memory:</strong> U-Net attention on 64&times;64 is tractable; on 512&times;512 it would require 100+ GB</li>
+                            <li><strong>Quality:</strong> The latent space captures semantic features, not pixel noise</li>
+                        </ul>
+
+<pre><code class="language-python">import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+
+def build_vae_encoder(input_shape=(512, 512, 3), latent_channels=4):
+    """VAE Encoder: Image -> Latent (with KL regularization)."""
+    inputs = keras.Input(shape=input_shape)
+
+    # Downsampling path: 512 -> 256 -> 128 -> 64
+    x = layers.Conv2D(64, 3, padding="same")(inputs)
+    x = layers.GroupNormalization(groups=32)(x)
+    x = tf.nn.silu(x)
+
+    x = layers.Conv2D(128, 3, strides=2, padding="same")(x)  # 256x256
+    x = layers.GroupNormalization(groups=32)(x)
+    x = tf.nn.silu(x)
+
+    x = layers.Conv2D(256, 3, strides=2, padding="same")(x)  # 128x128
+    x = layers.GroupNormalization(groups=32)(x)
+    x = tf.nn.silu(x)
+
+    x = layers.Conv2D(512, 3, strides=2, padding="same")(x)  # 64x64
+    x = layers.GroupNormalization(groups=32)(x)
+    x = tf.nn.silu(x)
+
+    # Produce mean and log-variance
+    x = layers.Conv2D(latent_channels * 2, 3, padding="same")(x)
+    mean, logvar = tf.split(x, 2, axis=-1)
+
+    # Reparameterization trick
+    std = tf.exp(0.5 * logvar)
+    eps = tf.random.normal(tf.shape(std))
+    z = mean + std * eps
+
+    encoder = keras.Model(inputs, [z, mean, logvar], name="vae_encoder")
+    return encoder
+
+
+def build_vae_decoder(latent_shape=(64, 64, 4), output_channels=3):
+    """VAE Decoder: Latent -> Image."""
+    inputs = keras.Input(shape=latent_shape)
+
+    # Upsampling path: 64 -> 128 -> 256 -> 512
+    x = layers.Conv2D(512, 3, padding="same")(inputs)
+    x = layers.GroupNormalization(groups=32)(x)
+    x = tf.nn.silu(x)
+
+    x = layers.Conv2DTranspose(256, 3, strides=2, padding="same")(x)  # 128x128
+    x = layers.GroupNormalization(groups=32)(x)
+    x = tf.nn.silu(x)
+
+    x = layers.Conv2DTranspose(128, 3, strides=2, padding="same")(x)  # 256x256
+    x = layers.GroupNormalization(groups=32)(x)
+    x = tf.nn.silu(x)
+
+    x = layers.Conv2DTranspose(64, 3, strides=2, padding="same")(x)   # 512x512
+    x = layers.GroupNormalization(groups=32)(x)
+    x = tf.nn.silu(x)
+
+    outputs = layers.Conv2D(output_channels, 3, padding="same", activation="tanh")(x)
+
+    decoder = keras.Model(inputs, outputs, name="vae_decoder")
+    return decoder
+
+
+# Build and test
+encoder = build_vae_encoder()
+decoder = build_vae_decoder()
+
+# Test forward pass
+test_image = tf.random.normal([1, 512, 512, 3])
+z, mean, logvar = encoder(test_image)
+reconstructed = decoder(z)
+
+print(f"Input image: {test_image.shape}")
+print(f"Latent z: {z.shape}")
+print(f"Mean: {mean.shape}, LogVar: {logvar.shape}")
+print(f"Reconstructed: {reconstructed.shape}")
+print(f"Compression ratio: {512*512*3 / (64*64*4):.1f}x")
+
+# KL divergence loss
+kl_loss = -0.5 * tf.reduce_mean(1 + logvar - tf.square(mean) - tf.exp(logvar))
+print(f"KL divergence: {kl_loss.numpy():.4f}")
+</code></pre>
+
+                        <!-- Section 6: Complete Pipeline -->
+                        <h2 id="complete-pipeline">The Complete Stable Diffusion Pipeline</h2>
+
+                        <p>The full Stable Diffusion pipeline connects all components: a text prompt flows through CLIP to produce embeddings, random noise is iteratively denoised by the U-Net (conditioned on text via cross-attention), and the final latent is decoded by the VAE into a full-resolution image.</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Complete Stable Diffusion Pipeline</div>
+                            <pre class="mermaid">
+flowchart TD
+    A["Text Prompt"] --> B["CLIP Text Encoder"]
+    B --> C["Text Embeddings (77x768)"]
+    D["Random Noise z_T"] --> E["U-Net Denoiser"]
+    C --> E
+    F["Timestep t"] --> E
+    E --> G["Predicted Noise"]
+    G --> H["Remove Noise (Scheduler)"]
+    H --> I{"t > 0?"}
+    I -->|"Yes"| E
+    I -->|"No"| J["Clean Latent z_0"]
+    J --> K["VAE Decoder"]
+    K --> L["Generated Image (512x512)"]
+
+    style A fill:#3B9797,color:#fff
+    style L fill:#3B9797,color:#fff
+    style E fill:#132440,color:#fff
+    style K fill:#16476A,color:#fff
+                            </pre>
+                        </div>
+
+<pre><code class="language-python">import tensorflow as tf
+import numpy as np
+
+class StableDiffusionPipeline:
+    """Complete Stable Diffusion inference pipeline.
+
+    Components: CLIP text encoder, U-Net denoiser, VAE decoder, noise scheduler.
+    """
+
+    def __init__(self, unet, vae_decoder, text_encoder, scheduler, guidance_scale=7.5):
+        self.unet = unet
+        self.vae_decoder = vae_decoder
+        self.text_encoder = text_encoder
+        self.scheduler = scheduler
+        self.guidance_scale = guidance_scale
+
+    def encode_text(self, prompt, negative_prompt=""):
+        """Encode text prompt to CLIP embeddings."""
+        # In production: tokenize + encode with CLIP
+        # Here: simulate with random embeddings for demonstration
+        cond_embeddings = self.text_encoder(prompt)
+        uncond_embeddings = self.text_encoder(negative_prompt)
+        return cond_embeddings, uncond_embeddings
+
+    @tf.function
+    def denoise_step(self, latents, t, text_embeddings, uncond_embeddings):
+        """Single denoising step with classifier-free guidance."""
+        # Predict noise for conditional and unconditional
+        noise_cond = self.unet([latents, t, text_embeddings])
+        noise_uncond = self.unet([latents, t, uncond_embeddings])
+
+        # Classifier-free guidance
+        noise_pred = noise_uncond + self.guidance_scale * (noise_cond - noise_uncond)
+
+        # Scheduler step: remove predicted noise
+        alpha_t = self.scheduler.alpha_bar[t]
+        alpha_prev = self.scheduler.alpha_bar[t - 1] if t > 0 else tf.constant(1.0)
+        beta_t = 1 - alpha_t / alpha_prev
+
+        # DDIM-like update (deterministic)
+        pred_x0 = (latents - tf.sqrt(1 - alpha_t) * noise_pred) / tf.sqrt(alpha_t)
+        direction = tf.sqrt(1 - alpha_prev) * noise_pred
+        latents = tf.sqrt(alpha_prev) * pred_x0 + direction
+
+        return latents
+
+    def generate(self, prompt, negative_prompt="", num_steps=50, seed=42):
+        """Generate an image from a text prompt."""
+        tf.random.set_seed(seed)
+
+        # 1. Encode text
+        text_emb, uncond_emb = self.encode_text(prompt, negative_prompt)
+
+        # 2. Start with random noise in latent space
+        latents = tf.random.normal([1, 64, 64, 4])
+
+        # 3. Iterative denoising
+        timesteps = np.linspace(999, 0, num_steps, dtype=int)
+        for i, t in enumerate(timesteps):
+            t_tensor = tf.constant(t, dtype=tf.int32)
+            latents = self.denoise_step(latents, t_tensor, text_emb, uncond_emb)
+
+        # 4. Decode latent to pixel space
+        image = self.vae_decoder(latents)
+
+        # 5. Post-process: [-1, 1] -> [0, 255]
+        image = (image + 1.0) * 127.5
+        image = tf.clip_by_value(image, 0, 255)
+        image = tf.cast(image, tf.uint8)
+
+        return image[0]  # Remove batch dimension
+
+
+# Usage demonstration (with placeholder components)
+print("Pipeline components:")
+print("  1. CLIP Text Encoder: prompt -> 77x768 embeddings")
+print("  2. Noise Scheduler: manages beta/alpha schedules")
+print("  3. U-Net: iterative denoising (conditioned on text)")
+print("  4. VAE Decoder: 64x64x4 latent -> 512x512x3 image")
+print(f"  5. Guidance scale: 7.5 (default)")
+print(f"  6. Denoising steps: 50 (default)")
+print(f"  7. Latent dimensions: 64x64x4 = {64*64*4:,} values")
+print(f"  8. Output dimensions: 512x512x3 = {512*512*3:,} pixels")
+</code></pre>
+
+                        <!-- Section 7: Classifier-Free Guidance -->
+                        <h2 id="classifier-free-guidance">Classifier-Free Guidance</h2>
+
+                        <p>Classifier-Free Guidance (CFG) is the technique that makes text-to-image generation controllable. During training, the text condition is randomly dropped (replaced with an empty embedding) 10% of the time, teaching the model both conditional and unconditional generation.</p>
+
+                        <h3>The Guidance Formula</h3>
+
+                        <p>At inference time, we compute both conditional and unconditional noise predictions, then extrapolate away from the unconditional prediction toward the conditional one:</p>
+
+                        <p class="katex-block">$$\hat{\epsilon} = \epsilon_{\text{uncond}} + s \cdot (\epsilon_{\text{cond}} - \epsilon_{\text{uncond}})$$</p>
+
+                        <p>Where <span class="katex-inline">$s$</span> is the guidance scale:</p>
+
+                        <ul>
+                            <li><span class="katex-inline">$s = 1$</span>: No guidance (just conditional prediction)</li>
+                            <li><span class="katex-inline">$s = 7.5$</span>: Default &mdash; good balance of quality and diversity</li>
+                            <li><span class="katex-inline">$s = 15+$</span>: Strong guidance &mdash; very prompt-adherent but less diverse, can be oversaturated</li>
+                        </ul>
+
+<pre><code class="language-python">import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+
+def classifier_free_guidance(noise_cond, noise_uncond, guidance_scale):
+    """Apply classifier-free guidance to noise predictions.
+
+    Args:
+        noise_cond: Noise predicted with text conditioning
+        noise_uncond: Noise predicted without text (unconditional)
+        guidance_scale: How strongly to follow the text prompt
+
+    Returns:
+        Guided noise prediction
+    """
+    return noise_uncond + guidance_scale * (noise_cond - noise_uncond)
+
+
+# Demonstrate effect of guidance scale
+def visualize_guidance_effect():
+    """Show how guidance scale affects the generation direction."""
+    # Simulate noise predictions (1D for visualization)
+    np.random.seed(42)
+    noise_uncond = np.random.randn(100)
+    noise_cond = noise_uncond + 0.3 * np.ones(100)  # Conditional shifts toward prompt
+
+    scales = [1.0, 3.0, 7.5, 15.0, 25.0]
+    fig, axes = plt.subplots(1, len(scales), figsize=(18, 3))
+
+    for i, s in enumerate(scales):
+        guided = noise_uncond + s * (noise_cond - noise_uncond)
+        axes[i].hist(noise_uncond, bins=20, alpha=0.4, label="Unconditional", color="#BF092F")
+        axes[i].hist(guided, bins=20, alpha=0.6, label=f"Guided (s={s})", color="#3B9797")
+        axes[i].set_title(f"Scale = {s}")
+        axes[i].legend(fontsize=7)
+        axes[i].set_xlim(-4, 6)
+
+    plt.suptitle("Classifier-Free Guidance: Effect of Scale on Noise Distribution")
+    plt.tight_layout()
+    plt.show()
+
+visualize_guidance_effect()
+
+# Practical implementation
+class GuidedDiffusionSampler:
+    """Diffusion sampler with classifier-free guidance."""
+
+    def __init__(self, model, scheduler, guidance_scale=7.5):
+        self.model = model
+        self.scheduler = scheduler
+        self.guidance_scale = guidance_scale
+
+    def predict_noise(self, latents, timestep, text_embeddings, uncond_embeddings):
+        """Predict noise with CFG."""
+        # Batch both predictions together for efficiency
+        latent_input = tf.concat([latents, latents], axis=0)
+        text_input = tf.concat([uncond_embeddings, text_embeddings], axis=0)
+        t_input = tf.concat([timestep, timestep], axis=0)
+
+        # Single forward pass for both
+        noise_pred = self.model([latent_input, t_input, text_input])
+        noise_uncond, noise_cond = tf.split(noise_pred, 2, axis=0)
+
+        # Apply guidance
+        guided_noise = classifier_free_guidance(
+            noise_cond, noise_uncond, self.guidance_scale
+        )
+        return guided_noise
+
+
+print("Guidance Scale Effects:")
+print("  s=1.0  : Pure conditional (no guidance boost)")
+print("  s=3.0  : Mild guidance (more diverse outputs)")
+print("  s=7.5  : Default (balanced quality/diversity)")
+print("  s=15.0 : Strong guidance (high prompt adherence)")
+print("  s=25.0 : Extreme (oversaturated, artifacts likely)")
+</code></pre>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span><i class="fas fa-chart-line me-1"></i>Practical Guide</span>
+                            </div>
+                            <div class="experiment-content">
+                                <p><strong>Choosing Guidance Scale:</strong> For photorealistic images, use s=7-9. For artistic/stylized images, use s=10-15. For maximum prompt adherence (e.g., specific compositions), try s=12-20. If you see color oversaturation or strange artifacts, reduce the scale. If outputs ignore parts of your prompt, increase it.</p>
+                            </div>
+                            <div class="experiment-tags">
+                                <span class="bias-tag">CFG</span>
+                                <span class="bias-tag">guidance-scale</span>
+                                <span class="bias-tag">quality-control</span>
+                            </div>
+                        </div>
+
+                        <!-- Section 8: KerasCV Stable Diffusion -->
+                        <h2 id="kerascv-stable-diffusion">Using KerasCV Stable Diffusion</h2>
+
+                        <p>For production use, KerasCV provides a fully pre-trained Stable Diffusion implementation that generates high-quality images in just a few lines of code. This is built on the same architecture we implemented above but with optimized weights and inference paths.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-rocket me-2"></i>
+                            <strong>Production Ready:</strong> KerasCV&rsquo;s Stable Diffusion supports text-to-image, image-to-image, and inpainting. With mixed precision and XLA compilation, it can generate a 512&times;512 image in under 10 seconds on a consumer GPU.
+                        </div>
+
+                        <h3>Text-to-Image Generation</h3>
+
+<pre><code class="language-python">import tensorflow as tf
+import keras_cv
+import matplotlib.pyplot as plt
+
+# Initialize Stable Diffusion model (downloads weights on first run)
+model = keras_cv.models.StableDiffusion(
+    img_width=512,
+    img_height=512,
+    jit_compile=True  # XLA compilation for speed
+)
+
+# Generate images from text prompt
+images = model.text_to_image(
+    prompt="a serene mountain lake at sunset, photorealistic, 4k",
+    batch_size=1,
+    num_steps=50,
+    unconditional_guidance_scale=7.5,
+    seed=42
+)
+
+# Display result
+plt.figure(figsize=(8, 8))
+plt.imshow(images[0])
+plt.axis("off")
+plt.title("Generated: Mountain Lake at Sunset")
+plt.tight_layout()
+plt.show()
+
+print(f"Image shape: {images[0].shape}")
+print(f"Pixel range: [{images[0].min()}, {images[0].max()}]")
+</code></pre>
+
+                        <h3>Image-to-Image (Modifying Existing Images)</h3>
+
+<pre><code class="language-python">import tensorflow as tf
+import keras_cv
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Initialize model
+model = keras_cv.models.StableDiffusion(img_width=512, img_height=512)
+
+# Load and preprocess an existing image
+# (Using a synthetic gradient image for demonstration)
+source_image = np.zeros((512, 512, 3), dtype=np.float32)
+source_image[:256, :, 0] = np.linspace(0, 1, 256)[:, None]  # Red gradient top
+source_image[256:, :, 2] = np.linspace(0, 1, 256)[:, None]  # Blue gradient bottom
+
+# img2img: modify existing image with a text prompt
+# strength controls how much to change (0=no change, 1=full generation)
+images = model.image_to_image(
+    prompt="a beautiful landscape painting in watercolor style",
+    image=source_image,
+    strength=0.7,       # 70% modification
+    num_steps=50,
+    unconditional_guidance_scale=8.0,
+    seed=123
+)
+
+# Compare
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+axes[0].imshow(np.clip(source_image, 0, 1))
+axes[0].set_title("Source Image")
+axes[0].axis("off")
+axes[1].imshow(images[0])
+axes[1].set_title("img2img Result (strength=0.7)")
+axes[1].axis("off")
+plt.tight_layout()
+plt.show()
+</code></pre>
+
+                        <h3>Performance Optimization</h3>
+
+<pre><code class="language-python">import tensorflow as tf
+import keras_cv
+import time
+
+# Enable mixed precision for faster inference
+tf.keras.mixed_precision.set_global_policy("mixed_float16")
+
+# Build with XLA compilation
+model = keras_cv.models.StableDiffusion(
+    img_width=512,
+    img_height=512,
+    jit_compile=True  # Enables XLA - major speedup
+)
+
+# Warm-up run (XLA compilation happens here)
+print("Warm-up run (compiling XLA graph)...")
+_ = model.text_to_image("warmup", batch_size=1, num_steps=25)
+
+# Benchmark
+prompt = "a cyberpunk cityscape at night with neon lights, detailed"
+start = time.time()
+images = model.text_to_image(prompt, batch_size=1, num_steps=50, seed=777)
+elapsed = time.time() - start
+
+print(f"Generation time: {elapsed:.2f} seconds")
+print(f"Steps per second: {50 / elapsed:.1f}")
+print(f"Mixed precision: {tf.keras.mixed_precision.global_policy().name}")
+print(f"XLA compiled: True")
+
+# Memory usage
+gpu_devices = tf.config.list_physical_devices("GPU")
+if gpu_devices:
+    mem_info = tf.config.experimental.get_memory_info("GPU:0")
+    print(f"GPU memory used: {mem_info['current'] / 1e9:.2f} GB")
+</code></pre>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-balance-scale me-2"></i>
+                            <strong>When to Use Each Approach:</strong>
+                            <ul class="mt-2 mb-0">
+                                <li><strong>From-scratch implementation:</strong> Research, custom architectures, fine-tuning specific components, educational purposes</li>
+                                <li><strong>KerasCV pre-built:</strong> Production applications, rapid prototyping, standard text-to-image/img2img workflows, when you need optimized inference</li>
+                            </ul>
+                        </div>
+
+                        <!-- Series Navigation -->
+                        <div class="series-nav">
+                            <a href="deep-dive-bert.html" class="series-nav-item prev">
+                                <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous Deep Dive</span>
+                                <span class="nav-title">BERT: Bidirectional Transformers</span>
+                            </a>
+                            <a href="deep-dive-yolov8.html" class="series-nav-item next">
+                                <span class="nav-label">Next Deep Dive <i class="fas fa-arrow-right ms-1"></i></span>
+                                <span class="nav-title">YOLOv8: Object Detection in TF</span>
+                            </a>
+                        </div>
+
+                        <!-- Related Posts -->
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                            <div class="related-post-item">
+                                <h5>Deep Dive: BERT &mdash; Bidirectional Transformers</h5>
+                                <p>Implement BERT from scratch in TensorFlow, including masked language modeling, next sentence prediction, and fine-tuning for downstream NLP tasks.</p>
+                                <a href="deep-dive-bert.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Deep Dive: YOLOv8 &mdash; Object Detection in TensorFlow</h5>
+                                <p>Build a real-time object detection system with YOLOv8 architecture in TensorFlow, covering anchor-free detection heads, feature pyramid networks, and inference optimization.</p>
+                                <a href="deep-dive-yolov8.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 8: Transformers &amp; Attention Mechanisms</h5>
+                                <p>Master the Transformer architecture from first principles &mdash; self-attention, multi-head attention, positional encoding, and building encoder-decoder models in Keras.</p>
+                                <a href="tensorflow-mastery-transformers.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left">
+                    <div class="fc-brand-group">
+                        <div class="fc-brand-stack"><span></span><span></span><span></span></div>
+                        <span class="fc-brand-name">Wasil Zafar</span>
+                    </div>
+                    <span class="fc-tagline">Consultant &amp; Cloud Architect</span>
+                </div>
+                <div class="fc-center">
+                    <a href="/">Home</a>
+                    <a href="/disclaimer.html">Disclaimer</a>
+                    <a href="/privacy-policy.html">Privacy</a>
+                    <a href="/pages/contact.html">Contact</a>
+                </div>
+                <div class="fc-right">
+                    <a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a>
+                    <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>
+                    <a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                    <a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a>
+                </div>
+            </div>
+            <div class="footer-sub">
+                <span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span>
+                <a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <!-- Cookie Consent Banner -->
+    <div id="cookieConsentBanner" class="cookie-consent-banner" style="display:none;">
+        <div class="cookie-content">
+            <p>We use cookies to enhance your experience. By continuing to visit this site you agree to our use of cookies.</p>
+            <div class="cookie-actions">
+                <button id="acceptCookies" class="cookie-btn accept">Accept</button>
+                <button id="rejectCookies" class="cookie-btn reject">Reject</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- KaTeX JS -->
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+    <script src="../../../js/cookie-consent.js"></script>
+
+    <!-- PrismJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- Mermaid.js Diagrams -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+
+    <!-- KaTeX Auto-render -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "$", right: "$", display: false}
+                ],
+                throwOnError: false
+            });
+        });
+    </script>
+</body>
+</html>
