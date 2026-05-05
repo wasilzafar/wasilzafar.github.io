@@ -246,6 +246,14 @@
                     <li><a href="#gradient-clipping" onclick="closeNav()">Norm &amp; Value Clipping</a></li>
                 </ul>
             </li>
+            <li>
+                <a href="#generation-strategies" onclick="closeNav()">Text Generation Strategies</a>
+                <ul>
+                    <li><a href="#greedy-vs-sampling" onclick="closeNav()">Greedy vs Sampling</a></li>
+                    <li><a href="#temperature-scaling" onclick="closeNav()">Temperature Scaling</a></li>
+                    <li><a href="#top-k-sampling" onclick="closeNav()">Top-k &amp; Top-p Sampling</a></li>
+                </ul>
+            </li>
             <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
         </ol>
     </div>
@@ -1431,7 +1439,154 @@ for epoch in range(5):
 
                         <!-- ============================================================ -->
                         <!-- CONCLUSION -->
+                        
                         <!-- ============================================================ -->
+                        <!-- TEXT GENERATION STRATEGIES -->
+                        <!-- ============================================================ -->
+                        <h2 id="generation-strategies">Text Generation Strategies</h2>
+
+                        <p>When using models for <strong>text generation</strong> (language models, chatbots, code completion), the model outputs a probability distribution over the vocabulary at each step. The <strong>decoding strategy</strong> determines how we select the next token from this distribution. The choice dramatically affects output quality — greedy decoding produces repetitive text, while sophisticated sampling produces creative, diverse outputs.</p>
+
+                        <h3 id="greedy-vs-sampling">Greedy Decoding vs Sampling</h3>
+
+                        <p><strong>Greedy decoding</strong> always picks the highest-probability token. It's deterministic and fast but often produces boring, repetitive text ("I think that the the the..."). <strong>Sampling</strong> randomly draws from the full distribution, producing diverse outputs but potentially incoherent ones. The key is finding the middle ground.</p>
+
+<pre><code class="language-python">import torch
+import torch.nn.functional as F
+
+# Simulate model output: logits over a vocabulary of 10 tokens
+torch.manual_seed(42)
+vocab_size = 10
+logits = torch.randn(vocab_size)  # raw model output (unnormalized)
+
+# Convert to probabilities
+probs = F.softmax(logits, dim=-1)
+print("Token probabilities:", probs.round(decimals=3).tolist())
+print(f"Sum: {probs.sum().item():.4f}")
+
+# Greedy decoding: always pick the most likely token
+greedy_token = torch.argmax(logits)
+print(f"\nGreedy choice: token {greedy_token.item()} (prob={probs[greedy_token]:.3f})")
+
+# Sampling: draw randomly from the distribution
+sampled_token = torch.multinomial(probs, num_samples=1)
+print(f"Sampled choice: token {sampled_token.item()} (prob={probs[sampled_token]:.3f})")
+
+# Sample 20 times to see the diversity
+samples = torch.multinomial(probs, num_samples=20, replacement=True)
+print(f"\n20 samples: {samples.tolist()}")
+print(f"Most frequent: token {samples.mode().values.item()}")
+</code></pre>
+
+                        <h3 id="temperature-scaling">Temperature Scaling</h3>
+
+                        <p><strong>Temperature</strong> controls the "sharpness" of the probability distribution. Before applying softmax, we divide the logits by a temperature parameter $T$:</p>
+
+                        $$P(\text{token}_i) = \frac{\exp(z_i / T)}{\sum_j \exp(z_j / T)}$$
+
+                        <p>When $T = 1.0$ (default), the distribution is unchanged. When $T < 1.0$ (e.g., 0.1), the distribution becomes <em>sharper</em> — high-probability tokens get even higher probability, approaching greedy behavior. When $T > 1.0$ (e.g., 2.0), the distribution becomes <em>flatter</em> — all tokens become more equally likely, increasing randomness and creativity.</p>
+
+<pre><code class="language-python">import torch
+import torch.nn.functional as F
+
+# Same logits, different temperatures
+logits = torch.tensor([2.0, 1.0, 0.5, 0.1, -0.5, -1.0])
+tokens = ["great", "good", "fine", "okay", "bad", "terrible"]
+
+temperatures = [0.1, 0.5, 1.0, 1.5, 3.0]
+print(f"{'Token':<10} {'Logit':<7} | " + " | ".join(f"T={t}" for t in temperatures))
+print("-" * 75)
+
+for i, token in enumerate(tokens):
+    row = f"{token:<10} {logits[i]:<7.1f} | "
+    for T in temperatures:
+        prob = F.softmax(logits / T, dim=-1)[i].item()
+        row += f"{prob:.3f}   | "
+    print(row)
+
+print("\nNotice:")
+print("  T=0.1 -> almost greedy (99%+ on 'great')")
+print("  T=1.0 -> standard softmax")
+print("  T=3.0 -> nearly uniform (even 'terrible' has ~10% chance)")
+</code></pre>
+
+                        <h3 id="top-k-sampling">Top-k and Top-p (Nucleus) Sampling</h3>
+
+                        <p><strong>Top-k sampling</strong> restricts the candidate pool to the $k$ highest-probability tokens and redistributes probability among them. This prevents sampling from the "long tail" of unlikely tokens that could produce nonsensical outputs. <strong>Top-p (nucleus) sampling</strong> is more adaptive — it includes the smallest set of tokens whose cumulative probability exceeds $p$ (e.g., 0.9). When the model is confident, this might be just 2-3 tokens; when uncertain, it could be dozens.</p>
+
+<pre><code class="language-python">import torch
+import torch.nn.functional as F
+
+def top_k_sampling(logits, k=5, temperature=1.0):
+    """Sample from the top-k most likely tokens."""
+    scaled_logits = logits / temperature
+    
+    # Keep only top-k logits, set rest to -inf
+    top_k_values, top_k_indices = torch.topk(scaled_logits, k)
+    filtered_logits = torch.full_like(scaled_logits, float('-inf'))
+    filtered_logits.scatter_(0, top_k_indices, top_k_values)
+    
+    probs = F.softmax(filtered_logits, dim=-1)
+    return torch.multinomial(probs, num_samples=1)
+
+def top_p_sampling(logits, p=0.9, temperature=1.0):
+    """Sample from the smallest set of tokens with cumulative prob >= p."""
+    scaled_logits = logits / temperature
+    probs = F.softmax(scaled_logits, dim=-1)
+    
+    # Sort by probability (descending)
+    sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+    cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+    
+    # Remove tokens with cumulative prob above threshold
+    # Keep at least one token
+    sorted_mask = cumulative_probs - sorted_probs >= p
+    sorted_probs[sorted_mask] = 0.0
+    sorted_probs /= sorted_probs.sum()  # renormalize
+    
+    # Sample from filtered distribution
+    sampled_idx = torch.multinomial(sorted_probs, num_samples=1)
+    return sorted_indices[sampled_idx]
+
+# Demo with a vocabulary
+torch.manual_seed(0)
+logits = torch.tensor([5.0, 3.5, 2.0, 1.5, 1.0, 0.5, 0.1, -1.0, -2.0, -5.0])
+vocab = ["the", "a", "cat", "dog", "sat", "ran", "big", "on", "was", "xyz"]
+
+probs = F.softmax(logits, dim=-1)
+print("Full distribution:")
+for i, (t, p) in enumerate(zip(vocab, probs)):
+    print(f"  {t:<6} {p:.4f} {'***' if p > 0.05 else ''}")
+
+print(f"\nTop-k (k=3): only samples from [{', '.join(vocab[:3])}]")
+print(f"Top-p (p=0.9): includes tokens until cumulative prob >= 0.9")
+
+# Generate 10 samples with each method
+top_k_results = [vocab[top_k_sampling(logits, k=3).item()] for _ in range(10)]
+top_p_results = [vocab[top_p_sampling(logits, p=0.9).item()] for _ in range(10)]
+print(f"\nTop-k samples: {top_k_results}")
+print(f"Top-p samples: {top_p_results}")
+</code></pre>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span><i class="fas fa-flask me-1"></i>Practical Guide</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h5>Choosing Generation Parameters</h5>
+                                <p><strong>Factual tasks</strong> (summarization, translation): Low temperature (0.1–0.5) + low top-k (5–10). You want deterministic, accurate output.</p>
+                                <p><strong>Creative tasks</strong> (stories, poetry): Higher temperature (0.7–1.2) + top-p (0.9–0.95). You want diversity without complete randomness.</p>
+                                <p><strong>Code generation</strong>: Temperature 0.2–0.4 + top-p 0.95. Code needs to be correct but you still want exploration of different valid solutions.</p>
+                                <p><strong>Chatbots</strong>: Temperature 0.7 + top-p 0.9 is a common starting point for natural-sounding responses.</p>
+                            </div>
+                            <div class="experiment-tags">
+                                <span class="bias-tag">temperature</span>
+                                <span class="bias-tag">top-k</span>
+                                <span class="bias-tag">nucleus sampling</span>
+                            </div>
+                        </div>
+
+<!-- ============================================================ -->
 
                         <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
 

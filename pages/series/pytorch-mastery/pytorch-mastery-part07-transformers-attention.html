@@ -185,6 +185,13 @@
                 </ul>
             </li>
             <li>
+                <a href="#simple-self-attention" onclick="closeNav()">Self-Attention: Building Intuition</a>
+                <ul>
+                    <li><a href="#attention-no-weights" onclick="closeNav()">Attention Without Weights</a></li>
+                    <li><a href="#why-qkv" onclick="closeNav()">Why We Need Q, K, V</a></li>
+                </ul>
+            </li>
+            <li>
                 <a href="#scaled-dot-product" onclick="closeNav()">Scaled Dot-Product Attention</a>
                 <ul>
                     <li><a href="#scaled-dot-product" onclick="closeNav()">Q, K, V Intuition</a></li>
@@ -218,6 +225,7 @@
                 <a href="#encoder-block" onclick="closeNav()">Transformer Encoder Block</a>
                 <ul>
                     <li><a href="#encoder-block" onclick="closeNav()">Architecture Overview</a></li>
+                    <li><a href="#residual-connections" onclick="closeNav()">Residual Connections</a></li>
                     <li><a href="#encoder-from-scratch" onclick="closeNav()">Building an Encoder Block</a></li>
                 </ul>
             </li>
@@ -285,6 +293,112 @@
                         <p>The impact was seismic. Within two years, Transformers replaced RNNs in virtually every NLP task. Today, every large language model — GPT-4, Claude, LLaMA, Gemini — is a Transformer. The architecture has also conquered computer vision (Vision Transformers), audio (Whisper), protein structure prediction (AlphaFold), and even reinforcement learning (Decision Transformers). Understanding Transformers is now the single most important skill in deep learning.</p>
 
                         <p>Let's build one from scratch, starting with the core mechanism that makes it all work: <strong>attention</strong>.</p>
+
+                        <!-- ===== 1B. SIMPLE SELF-ATTENTION (INTUITION) ===== -->
+                        <h2 id="simple-self-attention">Self-Attention: Building Intuition</h2>
+
+                        <p>Before diving into the full scaled dot-product formula, let's build intuition by implementing the <strong>simplest possible self-attention</strong> — no trainable weights, no scaling, no multi-head splitting. This is the core idea stripped to its essence: each token computes a <em>relevance score</em> with every other token, normalizes those scores with softmax, and then takes a weighted average of all token representations.</p>
+
+                        <h3 id="attention-no-weights">Attention Without Trainable Weights</h3>
+
+                        <p>The simplest self-attention computes attention scores as the raw dot product between token embeddings. If two tokens have similar embeddings (pointing in the same direction), their dot product is large, and they attend strongly to each other. This is conceptually equivalent to measuring <em>"how similar are these two tokens?"</em></p>
+
+                        $$\omega_{ij} = x_i \cdot x_j = \sum_{k=1}^{d} x_{ik} \, x_{jk}$$
+                        $$\alpha_{ij} = \frac{\exp(\omega_{ij})}{\sum_{k=1}^{n} \exp(\omega_{ik})} \quad \text{(softmax normalization)}$$
+                        $$z_i = \sum_{j=1}^{n} \alpha_{ij} \, x_j \quad \text{(context vector)}$$
+
+                        <p>Where $x_i$ is the embedding of token $i$, $\omega_{ij}$ is the raw attention score, $\alpha_{ij}$ is the normalized attention weight, and $z_i$ is the output — a weighted combination of all tokens, biased toward the most "relevant" ones.</p>
+
+<pre><code class="language-python">import torch
+import torch.nn.functional as F
+
+# Simple sentence: 4 tokens, each represented by a 3-dimensional embedding
+# (In practice, embeddings are 512-1024 dims; we use 3 for clarity)
+embeddings = torch.tensor([
+    [0.43, 0.15, 0.89],  # Token 0: "The"
+    [0.55, 0.87, 0.66],  # Token 1: "cat"
+    [0.57, 0.85, 0.64],  # Token 2: "sat"
+    [0.22, 0.58, 0.33],  # Token 3: "down"
+])
+
+# Step 1: Compute all pairwise dot products (similarity scores)
+# Each entry [i, j] = how much token i attends to token j
+scores = embeddings @ embeddings.T  # [4, 4]
+print("Raw attention scores (dot products):")
+print(scores.round(decimals=3))
+
+# Step 2: Normalize each row with softmax (weights sum to 1)
+attention_weights = F.softmax(scores, dim=-1)
+print("\nAttention weights (after softmax):")
+print(attention_weights.round(decimals=3))
+print("Row sums:", attention_weights.sum(dim=-1))
+
+# Step 3: Compute context vectors (weighted sum of all embeddings)
+context_vectors = attention_weights @ embeddings  # [4, 3]
+print("\nContext vectors (output):")
+print(context_vectors.round(decimals=3))
+
+# Interpretation: context_vectors[1] is "cat" enriched with info from similar tokens
+# "cat" and "sat" have similar embeddings, so they attend strongly to each other
+print(f"\n'cat' attends to 'sat' with weight: {attention_weights[1, 2]:.3f}")
+print(f"'cat' attends to 'down' with weight: {attention_weights[1, 3]:.3f}")
+</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Key Insight:</strong> Even without any learnable parameters, this simple mechanism already captures something meaningful: tokens with similar embeddings attend to each other. The word "cat" attends more strongly to "sat" (similar vector direction) than to "down". The output for each token becomes a <em>context-enriched</em> version of itself, blending information from the most relevant neighbors.
+                        </div>
+
+                        <h3 id="why-qkv">Why We Need Q, K, V Projections</h3>
+
+                        <p>The simple version above has a major limitation: each token uses the <em>same</em> vector for three different roles — as the thing doing the searching, the thing being searched for, and the thing being retrieved. In practice, these roles should be different. Consider the word "it" in "The cat sat on the mat because <u>it</u> was tired" — what "it" is <em>looking for</em> (an antecedent noun) is different from what "it" <em>advertises</em> (a pronoun) and what "it" <em>contains</em> (its semantic meaning).</p>
+
+                        <p>This is why we introduce three separate <strong>learnable linear projections</strong>:</p>
+                        $$Q = XW_Q, \quad K = XW_K, \quad V = XW_V$$
+
+                        <p>The <strong>Query</strong> ($Q$) represents "what am I looking for?", the <strong>Key</strong> ($K$) represents "what do I contain that others might want?", and the <strong>Value</strong> ($V$) represents "what information do I actually carry?". By learning separate projections, the model can attend based on one criterion (Q·K similarity) while retrieving different information (V). This separation is what gives Transformers their remarkable expressive power.</p>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+# Now with LEARNABLE projections (Q, K, V)
+d_in = 3    # input embedding dimension
+d_out = 2   # output/attention dimension (can differ from input)
+
+# Learnable weight matrices (these are trained via backpropagation)
+W_Q = nn.Parameter(torch.randn(d_in, d_out))
+W_K = nn.Parameter(torch.randn(d_in, d_out))
+W_V = nn.Parameter(torch.randn(d_in, d_out))
+
+# Same embeddings as before
+embeddings = torch.tensor([
+    [0.43, 0.15, 0.89],
+    [0.55, 0.87, 0.66],
+    [0.57, 0.85, 0.64],
+    [0.22, 0.58, 0.33],
+])
+
+# Project into Q, K, V spaces
+Q = embeddings @ W_Q  # [4, 2] — what each token is looking for
+K = embeddings @ W_K  # [4, 2] — what each token advertises
+V = embeddings @ W_V  # [4, 2] — what each token carries
+
+print(f"Q shape: {Q.shape}")  # [4, 2]
+print(f"K shape: {K.shape}")  # [4, 2]
+print(f"V shape: {V.shape}")  # [4, 2]
+
+# Attention with scaling (the "Scaled Dot-Product" we'll formalize next)
+d_k = Q.size(-1)
+scores = (Q @ K.T) / (d_k ** 0.5)
+weights = F.softmax(scores, dim=-1)
+output = weights @ V
+
+print(f"\nAttention output shape: {output.shape}")  # [4, 2]
+print(f"Attention weights:\n{weights.round(decimals=3)}")
+</code></pre>
+
+                        <p>This is exactly the <strong>Scaled Dot-Product Attention</strong> formula — we've just arrived at it by building up from the simplest possible version. Now let's formalize it and handle batching.</p>
 
                         <!-- ===== 2. SCALED DOT-PRODUCT ATTENTION ===== -->
                         <h2 id="scaled-dot-product">Scaled Dot-Product Attention</h2>
@@ -622,6 +736,19 @@ flowchart TD
     Add1 --> Add2
     Add2 --> Output["Encoder Output"]
                             </pre>
+                        </div>
+
+                        <h3 id="residual-connections">Why Residual (Shortcut) Connections Work</h3>
+
+                        <p>Every sub-layer in a Transformer block is wrapped with a <strong>residual connection</strong>: the output is <code>x + SubLayer(x)</code> rather than just <code>SubLayer(x)</code>. This seemingly simple addition is critical for training deep networks (Transformers can be 96+ layers). The key insight: instead of learning the full desired transformation $H(x)$, the sub-layer only needs to learn the <em>residual</em> $F(x) = H(x) - x$ — the difference from the identity. If the optimal transformation is close to identity (often the case), learning a near-zero residual is much easier than learning a full identity mapping from scratch.</p>
+
+                        $$\text{output} = x + \text{SubLayer}(\text{LayerNorm}(x))$$
+
+                        <p>During backpropagation, the gradient flows through two paths: through the sub-layer AND directly through the addition (gradient = 1). This "gradient highway" prevents vanishing gradients even in 100+ layer models. Without residual connections, Transformers deeper than 6 layers become essentially untrainable.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Pre-Norm vs Post-Norm:</strong> The original "Attention Is All You Need" paper placed LayerNorm <em>after</em> the residual addition (Post-LN): <code>LayerNorm(x + SubLayer(x))</code>. Modern architectures like GPT-2, LLaMA, and most current models use <strong>Pre-LN</strong>: <code>x + SubLayer(LayerNorm(x))</code>. Pre-LN produces more stable training and avoids the need for careful learning rate warmup that Post-LN requires.
                         </div>
 
                         <h3 id="encoder-from-scratch">Building an Encoder Block From Scratch</h3>

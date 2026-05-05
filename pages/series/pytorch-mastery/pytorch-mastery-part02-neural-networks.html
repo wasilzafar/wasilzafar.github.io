@@ -182,6 +182,7 @@
                 <ul>
                     <li><a href="#nn-module-foundation" onclick="closeNav()">Subclassing nn.Module</a></li>
                     <li><a href="#model-inspection" onclick="closeNav()">Model Inspection</a></li>
+                    <li><a href="#nn-parameter" onclick="closeNav()">nn.Parameter</a></li>
                 </ul>
             </li>
             <li>
@@ -196,6 +197,7 @@
                 <a href="#activation-functions" onclick="closeNav()">Activation Functions</a>
                 <ul>
                     <li><a href="#activation-functions" onclick="closeNav()">Common Activations</a></li>
+                    <li><a href="#gelu-deep-dive" onclick="closeNav()">GELU Deep Dive</a></li>
                     <li><a href="#dead-neuron" onclick="closeNav()">Dead Neuron Problem</a></li>
                     <li><a href="#activation-comparison" onclick="closeNav()">Visual Comparison</a></li>
                 </ul>
@@ -345,6 +347,99 @@ print("\n=== Named Modules ===")
 for name, module in model.named_modules():
     print(f"  {name or '(root)':30s} -> {module.__class__.__name__}")
 </code></pre>
+
+                        <h3 id="nn-parameter">nn.Parameter — Custom Learnable Tensors</h3>
+
+                        <p><code>nn.Parameter</code> is a special tensor wrapper that tells PyTorch: <em>"this tensor is a learnable weight — include it in <code>.parameters()</code>, track its gradients, and save/load it with the model."</em> Every <code>nn.Linear</code>, <code>nn.Conv2d</code>, etc. uses <code>nn.Parameter</code> internally for their weights and biases. You use it directly when building custom layers that need learnable values not covered by standard modules.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Parameter vs Tensor:</strong> A plain <code>torch.Tensor</code> assigned as an attribute is <em>not</em> registered — it won't appear in <code>.parameters()</code>, won't be moved by <code>.to(device)</code>, and won't be saved in <code>.state_dict()</code>. Wrapping it in <code>nn.Parameter</code> solves all three problems. For non-learnable constants (e.g., a fixed positional encoding), use <code>self.register_buffer()</code> instead.
+                        </div>
+
+                        <p>The following example builds a <strong>CustomScaleShift</strong> layer that learns a per-feature scale ($\gamma$) and shift ($\beta$) — essentially the same learnable affine transform used inside BatchNorm and LayerNorm. We use <code>nn.Parameter</code> for the learnable tensors and <code>register_buffer</code> for a non-learnable running mean. After construction, we inspect the model to see how PyTorch distinguishes the two:</p>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+class CustomScaleShift(nn.Module):
+    """A layer that learns per-feature scale and shift (like simplified LayerNorm)."""
+
+    def __init__(self, num_features):
+        super().__init__()
+        # nn.Parameter: automatically tracked, requires_grad=True by default
+        self.scale = nn.Parameter(torch.ones(num_features))   # learnable
+        self.shift = nn.Parameter(torch.zeros(num_features))  # learnable
+
+        # register_buffer: tracked for .to(device) and state_dict, but NOT learnable
+        self.register_buffer('running_mean', torch.zeros(num_features))
+
+    def forward(self, x):
+        return x * self.scale + self.shift
+
+# Create and inspect
+layer = CustomScaleShift(num_features=64)
+
+# Parameters are registered automatically
+print("=== Parameters (learnable) ===")
+for name, p in layer.named_parameters():
+    print(f"  {name}: shape={p.shape}, requires_grad={p.requires_grad}")
+
+# Buffers are tracked but not learnable
+print("\n=== Buffers (non-learnable) ===")
+for name, b in layer.named_buffers():
+    print(f"  {name}: shape={b.shape}, requires_grad={b.requires_grad}")
+
+# Both appear in state_dict (for saving/loading)
+print("\n=== State Dict Keys ===")
+for key in layer.state_dict():
+    print(f"  {key}")
+
+# .to(device) moves both parameters AND buffers
+print(f"\nTotal learnable params: {sum(p.numel() for p in layer.parameters())}")
+</code></pre>
+
+                        <p>Notice how <code>scale</code> and <code>shift</code> appear under <strong>Parameters</strong> with <code>requires_grad=True</code>, while <code>running_mean</code> appears under <strong>Buffers</strong> with <code>requires_grad=False</code>. All three are saved in <code>state_dict()</code> and move together when you call <code>.to('cuda')</code>, but only the parameters receive gradient updates during training.</p>
+
+                        <p>A common real-world use case is <strong>learnable positional encodings</strong> — models like BERT, GPT, and Vision Transformers (ViT) add a learnable position vector to each token/patch embedding. Since these positions must be updated during training, they are stored as <code>nn.Parameter</code>:</p>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+# Common pattern: using nn.Parameter for attention/positional embeddings
+class LearnablePositionalEncoding(nn.Module):
+    """Learnable position embeddings (used in ViT, BERT, etc.)."""
+
+    def __init__(self, max_seq_len, embed_dim):
+        super().__init__()
+        # Each position gets a learnable vector
+        self.pos_embed = nn.Parameter(torch.randn(1, max_seq_len, embed_dim) * 0.02)
+
+    def forward(self, x):
+        # x shape: (batch, seq_len, embed_dim)
+        seq_len = x.size(1)
+        return x + self.pos_embed[:, :seq_len, :]
+
+# Example
+pe = LearnablePositionalEncoding(max_seq_len=512, embed_dim=256)
+x = torch.randn(4, 100, 256)  # batch=4, seq_len=100
+out = pe(x)
+
+print(f"Input:  {x.shape}")
+print(f"Output: {out.shape}")
+print(f"pos_embed shape: {pe.pos_embed.shape}")
+print(f"Learnable params: {pe.pos_embed.numel():,}")  # 512 * 256 = 131,072
+</code></pre>
+
+                        <p>The <code>pos_embed</code> parameter has shape <code>(1, 512, 256)</code> \u2014 one learnable vector per position, broadcast across the batch. During the forward pass we slice <code>[:, :seq_len, :]</code> to handle variable-length inputs. The leading dimension of 1 allows broadcasting across any batch size. During training, backpropagation updates each position vector to encode useful position-dependent patterns.</p>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Common Mistake:</strong> If you assign a raw tensor without <code>nn.Parameter</code>, the optimizer will never update it:
+                            <br><code>self.weights = torch.randn(10, 10)</code> &#x2718; (invisible to optimizer)
+                            <br><code>self.weights = nn.Parameter(torch.randn(10, 10))</code> &#x2714; (learnable)
+                            <br>Similarly, <code>nn.ParameterList</code> and <code>nn.ParameterDict</code> exist for dynamic collections of parameters.
+                        </div>
 
                         <!-- ============================================================ -->
                         <!-- 2. LINEAR LAYERS & SEQUENTIAL MODELS -->
@@ -516,6 +611,54 @@ print("Softmax:   ", [round(v, 4) for v in softmax(x).tolist()])
                                 <span class="bias-tag">Sigmoid</span>
                                 <span class="bias-tag">Softmax</span>
                             </div>
+                        </div>
+
+                        <h3 id="gelu-deep-dive">GELU: The Transformer Activation</h3>
+
+                        <p>The <strong>Gaussian Error Linear Unit (GELU)</strong> has become the default activation in Transformer architectures (BERT, GPT, LLaMA, ViT). Unlike ReLU which makes a hard binary decision (pass or block), GELU makes a <em>soft, probabilistic</em> decision — it multiplies each input by the probability of that input being greater than other inputs (modeled by the Gaussian CDF):</p>
+
+                        $$\text{GELU}(x) = x \cdot \Phi(x) = x \cdot \frac{1}{2}\left[1 + \text{erf}\left(\frac{x}{\sqrt{2}}\right)\right]$$
+
+                        <p>The practical approximation used in most implementations is:</p>
+                        $$\text{GELU}(x) \approx 0.5 \cdot x \cdot \left(1 + \tanh\left[\sqrt{\frac{2}{\pi}}(x + 0.044715 x^3)\right]\right)$$
+
+                        <p>Why is this better than ReLU for Transformers? ReLU has a sharp corner at zero and completely kills negative activations (gradient = 0). GELU instead provides a <em>smooth</em> transition: small negative values are dampened (not killed), allowing a small gradient to flow. This smoothness aligns with the stochastic regularization used in Transformers (dropout, attention masking) and empirically produces better optimization landscapes for deep attention networks.</p>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import math
+
+# Compare ReLU, GELU, and the GELU approximation
+x = torch.linspace(-4, 4, 200)
+
+# Exact GELU: x * Phi(x) where Phi is the standard Gaussian CDF
+def gelu_exact(x):
+    return x * 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))
+
+# Tanh approximation (used in GPT-2)
+def gelu_approx(x):
+    return 0.5 * x * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (x + 0.044715 * x**3)))
+
+relu_out = torch.relu(x)
+gelu_out = gelu_exact(x)
+gelu_approx_out = gelu_approx(x)
+pytorch_gelu = nn.GELU()(x)
+
+print("Comparison at x = -1.0:")
+print(f"  ReLU(-1.0)  = {torch.relu(torch.tensor(-1.0)).item():.4f}")   # 0.0 (killed!)
+print(f"  GELU(-1.0)  = {gelu_exact(torch.tensor(-1.0)).item():.4f}")   # -0.1587 (dampened, not killed)
+print(f"  Approx(-1.0)= {gelu_approx(torch.tensor(-1.0)).item():.4f}")  # close to exact
+
+print("\nComparison at x = 2.0:")
+print(f"  ReLU(2.0)   = {torch.relu(torch.tensor(2.0)).item():.4f}")    # 2.0
+print(f"  GELU(2.0)   = {gelu_exact(torch.tensor(2.0)).item():.4f}")    # ~1.9545 (slightly less)
+
+print(f"\nPyTorch nn.GELU matches exact: {torch.allclose(pytorch_gelu, gelu_out, atol=1e-4)}")
+</code></pre>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-brain me-2"></i>
+                            <strong>Intuition:</strong> Think of GELU as a "stochastic gate" — for each neuron, it asks "given the other inputs, how likely is this neuron to be relevant?" Large positive values pass through almost unchanged (probability ≈ 1), large negative values are nearly zeroed (probability ≈ 0), and values near zero get a smooth, data-dependent blend. This probabilistic interpretation makes GELU a natural fit for the attention mechanism's soft-weighting philosophy.
                         </div>
 
                         <h3 id="dead-neuron">The Dead Neuron Problem</h3>

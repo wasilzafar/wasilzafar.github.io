@@ -246,6 +246,13 @@
                     <li><a href="#model-selection-guide" onclick="closeNav()">Model Selection Guide</a></li>
                 </ul>
             </li>
+            <li>
+                <a href="#lora" onclick="closeNav()">LoRA (Parameter-Efficient Fine-Tuning)</a>
+                <ul>
+                    <li><a href="#lora-intuition" onclick="closeNav()">How LoRA Works</a></li>
+                    <li><a href="#lora-apply-model" onclick="closeNav()">Applying LoRA to a Model</a></li>
+                </ul>
+            </li>
             <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
         </ol>
     </div>
@@ -1142,7 +1149,168 @@ for name, model in architectures.items():
                         </div>
 
                         <!-- ============================================================ -->
-                        <!-- SECTION 10: Conclusion -->
+                        <!-- SECTION 10: LoRA -->
+                        <!-- ============================================================ -->
+                        <h2 id="lora">Parameter-Efficient Fine-Tuning with LoRA</h2>
+
+                        <p>Fine-tuning a full model (even just unfreezing a few layers) updates millions or billions of parameters. <strong>LoRA (Low-Rank Adaptation)</strong>, introduced by Hu et al. (2021), offers a revolutionary alternative: freeze the entire pretrained model and inject tiny trainable low-rank matrices that adapt the model's behavior with <strong>0.1–1% of the original parameters</strong>. This means you can fine-tune GPT-3 sized models on a single GPU.</p>
+
+                        <h3 id="lora-intuition">How LoRA Works</h3>
+
+                        <p>The key insight is that the weight updates during fine-tuning have <strong>low intrinsic rank</strong> — the change matrix $\Delta W$ can be approximated by the product of two much smaller matrices. Instead of updating the full weight matrix $W \in \mathbb{R}^{d \times d}$, LoRA decomposes the update into:</p>
+
+                        $$W' = W + \Delta W = W + BA$$
+
+                        <p>Where $B \in \mathbb{R}^{d \times r}$ and $A \in \mathbb{R}^{r \times d}$ with rank $r \ll d$ (typically $r = 4, 8, 16$). The original weight $W$ stays frozen — only $A$ and $B$ are trained. For a layer with $d = 4096$, the full weight has $4096^2 = 16.7M$ parameters, while LoRA with $r = 8$ has only $2 \times 4096 \times 8 = 65K$ parameters — a <strong>256x reduction</strong>.</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">LoRA: Low-Rank Adaptation</div>
+                            <pre class="mermaid">
+flowchart LR
+    X["Input x"] --> W["Frozen W
+(d × d)"]
+    X --> A["A matrix
+(r × d)
+trainable"]
+    A --> B["B matrix
+(d × r)
+trainable"]
+    W --> ADD["+"]
+    B --> ADD
+    ADD --> Y["Output"]
+                            </pre>
+                        </div>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+class LoRALinear(nn.Module):
+    """Linear layer with LoRA adaptation."""
+
+    def __init__(self, original_layer, rank=8, alpha=16):
+        super().__init__()
+        self.original = original_layer
+        self.original.weight.requires_grad = False  # Freeze original weights
+        if self.original.bias is not None:
+            self.original.bias.requires_grad = False
+
+        d_in = original_layer.in_features
+        d_out = original_layer.out_features
+
+        # LoRA matrices: A (down-projection) and B (up-projection)
+        self.lora_A = nn.Parameter(torch.randn(rank, d_in) * 0.01)
+        self.lora_B = nn.Parameter(torch.zeros(d_out, rank))  # initialized to zero!
+
+        # Scaling factor (alpha / rank) controls the magnitude of LoRA's contribution
+        self.scaling = alpha / rank
+
+    def forward(self, x):
+        # Original frozen forward pass + LoRA adaptation
+        original_output = self.original(x)
+        lora_output = (x @ self.lora_A.T @ self.lora_B.T) * self.scaling
+        return original_output + lora_output
+
+
+# Demo: apply LoRA to a pretrained linear layer
+pretrained_layer = nn.Linear(512, 512)
+lora_layer = LoRALinear(pretrained_layer, rank=8, alpha=16)
+
+# Count parameters
+total_original = sum(p.numel() for p in pretrained_layer.parameters())
+trainable_lora = sum(p.numel() for p in lora_layer.parameters() if p.requires_grad)
+frozen_lora = sum(p.numel() for p in lora_layer.parameters() if not p.requires_grad)
+
+print(f"Original layer params:   {total_original:,}")
+print(f"LoRA trainable params:   {trainable_lora:,}")
+print(f"LoRA frozen params:      {frozen_lora:,}")
+print(f"Reduction: {total_original / trainable_lora:.1f}x fewer trainable params")
+
+# Forward pass works identically at init (B is zeros, so LoRA contribution is 0)
+x = torch.randn(4, 512)
+original_out = pretrained_layer(x)
+lora_out = lora_layer(x)
+print(f"\nOutputs match at init: {torch.allclose(original_out, lora_out, atol=1e-6)}")
+</code></pre>
+
+                        <h3 id="lora-apply-model">Applying LoRA to a Full Model</h3>
+
+                        <p>In practice, LoRA is typically applied to the <strong>attention layers</strong> (Q, K, V projections and output projection) of a Transformer. Here's how to replace all linear layers in a model with LoRA-adapted versions:</p>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+class LoRALinear(nn.Module):
+    """Linear layer with LoRA adaptation."""
+    def __init__(self, original_layer, rank=8, alpha=16):
+        super().__init__()
+        self.original = original_layer
+        self.original.weight.requires_grad = False
+        if self.original.bias is not None:
+            self.original.bias.requires_grad = False
+        d_in = original_layer.in_features
+        d_out = original_layer.out_features
+        self.lora_A = nn.Parameter(torch.randn(rank, d_in) * 0.01)
+        self.lora_B = nn.Parameter(torch.zeros(d_out, rank))
+        self.scaling = alpha / rank
+
+    def forward(self, x):
+        return self.original(x) + (x @ self.lora_A.T @ self.lora_B.T) * self.scaling
+
+def apply_lora(model, rank=8, alpha=16, target_modules=None):
+    """Replace target Linear layers with LoRA-adapted versions."""
+    for name, module in model.named_modules():
+        if isinstance(module, nn.Linear):
+            # Only apply to specified modules (e.g., attention layers)
+            if target_modules and not any(t in name for t in target_modules):
+                continue
+            # Replace the module
+            parent_name = '.'.join(name.split('.')[:-1])
+            child_name = name.split('.')[-1]
+            parent = model.get_submodule(parent_name) if parent_name else model
+            setattr(parent, child_name, LoRALinear(module, rank=rank, alpha=alpha))
+    return model
+
+# Example: simple Transformer-like model
+class MiniTransformer(nn.Module):
+    def __init__(self, d_model=256, num_heads=4):
+        super().__init__()
+        self.attn_qkv = nn.Linear(d_model, 3 * d_model)
+        self.attn_out = nn.Linear(d_model, d_model)
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, d_model * 4),
+            nn.GELU(),
+            nn.Linear(d_model * 4, d_model),
+        )
+
+    def forward(self, x):
+        # Simplified (no actual attention computation)
+        qkv = self.attn_qkv(x)
+        out = self.attn_out(qkv[..., :256])
+        return self.ffn(out) + x
+
+model = MiniTransformer(d_model=256)
+total_before = sum(p.numel() for p in model.parameters())
+
+# Apply LoRA only to attention layers
+model = apply_lora(model, rank=8, target_modules=['attn_qkv', 'attn_out'])
+
+trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+total_after = sum(p.numel() for p in model.parameters())
+frozen = total_after - trainable
+
+print(f"Total parameters:     {total_after:,}")
+print(f"Trainable (LoRA):     {trainable:,}")
+print(f"Frozen (pretrained):  {frozen:,}")
+print(f"Trainable fraction:   {trainable/total_after*100:.1f}%")
+</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>In Practice:</strong> Use the <code>peft</code> library from Hugging Face for production LoRA. It handles targeting specific modules, merging weights for inference (eliminating the runtime overhead), and supports variants like QLoRA (LoRA + 4-bit quantization) that can fine-tune 65B-parameter models on a single 48GB GPU. Install with <code>pip install peft</code> and wrap any Hugging Face model with <code>get_peft_model(model, LoraConfig(r=8, target_modules=["q_proj", "v_proj"]))</code>.
+                        </div>
+
+                        <!-- ============================================================ -->
+                        <!-- SECTION 11: Conclusion -->
                         <!-- ============================================================ -->
                         <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
 

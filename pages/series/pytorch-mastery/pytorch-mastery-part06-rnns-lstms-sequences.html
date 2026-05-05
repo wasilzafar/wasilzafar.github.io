@@ -188,6 +188,7 @@
                 <a href="#vanilla-rnns" onclick="closeNav()">Vanilla RNNs</a>
                 <ul>
                     <li><a href="#vanilla-rnns" onclick="closeNav()">Hidden State &amp; Unrolling</a></li>
+                    <li><a href="#rnn-from-scratch" onclick="closeNav()">RNN from Scratch</a></li>
                     <li><a href="#rnn-pytorch" onclick="closeNav()">nn.RNN in PyTorch</a></li>
                     <li><a href="#vanishing-gradient" onclick="closeNav()">The Vanishing Gradient Problem</a></li>
                 </ul>
@@ -284,7 +285,12 @@
                         <!-- ===== 2. VANILLA RNNs ===== -->
                         <h2 id="vanilla-rnns">Vanilla RNNs</h2>
 
-                        <p>A <strong>Recurrent Neural Network (RNN)</strong> is a neural network with a loop. At each time step <em>t</em>, the RNN takes two inputs: the current data element <em>x<sub>t</sub></em> and the previous hidden state <em>h<sub>t-1</sub></em>. It combines them through a learned transformation to produce a new hidden state <em>h<sub>t</sub></em>. Mathematically: <code>h_t = tanh(W_ih * x_t + W_hh * h_{t-1} + b)</code>. The same weights (<code>W_ih</code> and <code>W_hh</code>) are reused at every time step — this is called <strong>weight sharing</strong>, and it is what lets the RNN handle sequences of any length.</p>
+                        <p>A <strong>Recurrent Neural Network (RNN)</strong> is a neural network with a loop. At each time step <em>t</em>, the RNN takes two inputs: the current data element <em>x<sub>t</sub></em> and the previous hidden state <em>h<sub>t-1</sub></em>. It combines them through a learned transformation to produce a new hidden state <em>h<sub>t</sub></em>. The same weights are reused at every time step &mdash; this is called <strong>weight sharing</strong>, and it is what lets the RNN handle sequences of any length.</p>
+
+                        <p><strong>RNN hidden state update:</strong></p>
+                        $$h_t = \tanh(W_{ih} \cdot x_t + W_{hh} \cdot h_{t-1} + b)$$
+
+                        <p>Where $x_t \in \mathbb{R}^d$ is the input at time $t$, $h_{t-1} \in \mathbb{R}^h$ is the previous hidden state, $W_{ih} \in \mathbb{R}^{h \times d}$ maps input to hidden, $W_{hh} \in \mathbb{R}^{h \times h}$ maps hidden to hidden, and $b$ is the bias. The output at each step is simply $y_t = h_t$ (or a linear projection of it).</p>
 
                         <p>The following diagram shows an RNN "unrolled" across three time steps. You can see how the hidden state flows from left to right, carrying information from earlier time steps to later ones:</p>
 
@@ -309,7 +315,87 @@ flowchart LR
                             </pre>
                         </div>
 
-                        <p>Notice that all three cells share the exact same weights — we draw them as separate boxes only to show the flow through time. In PyTorch, a single <code>nn.RNN</code> module handles this unrolling automatically.</p>
+                        <p>Notice that all three cells share the exact same weights — we draw them as separate boxes only to show the flow through time. Let's first build an RNN from scratch to see exactly what happens inside, then use PyTorch's built-in <code>nn.RNN</code>.</p>
+
+                        <h3 id="rnn-from-scratch">RNN from Scratch (Manual Implementation)</h3>
+
+                        <p>Before using <code>nn.RNN</code>, let's build the recurrence manually with basic <code>nn.Parameter</code> tensors. This makes the weight sharing and time-step loop completely explicit:</p>
+
+                        <p><strong>Output at each step:</strong></p>
+                        $$y_t = W_{hy} \cdot h_t + b_y$$
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+class SimpleRNN(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(SimpleRNN, self).__init__()
+
+        self.hidden_size = hidden_size
+
+        # Weight matrices
+        self.W_xh = nn.Parameter(torch.randn(input_size, hidden_size) * 0.01)
+        self.W_hh = nn.Parameter(torch.randn(hidden_size, hidden_size) * 0.01)
+        self.W_hy = nn.Parameter(torch.randn(hidden_size, output_size) * 0.01)
+
+        # Biases
+        self.b_h = nn.Parameter(torch.zeros(hidden_size))
+        self.b_y = nn.Parameter(torch.zeros(output_size))
+
+    def forward(self, x, h0=None):
+        """
+        x: (batch_size, seq_len, input_size)
+        h0: (batch_size, hidden_size)
+        """
+        batch_size, seq_len, _ = x.size()
+
+        if h0 is None:
+            h_t = torch.zeros(batch_size, self.hidden_size, device=x.device)
+        else:
+            h_t = h0
+
+        outputs = []
+
+        for t in range(seq_len):
+            x_t = x[:, t, :]
+
+            # RNN recurrence: h_t = tanh(x_t @ W_xh + h_t @ W_hh + b_h)
+            h_t = torch.tanh(
+                x_t @ self.W_xh +
+                h_t @ self.W_hh +
+                self.b_h
+            )
+
+            # Output projection: y_t = h_t @ W_hy + b_y
+            y_t = h_t @ self.W_hy + self.b_y
+            outputs.append(y_t.unsqueeze(1))
+
+        outputs = torch.cat(outputs, dim=1)
+
+        return outputs, h_t
+
+
+# --- Example Usage ---
+input_size = 10
+hidden_size = 20
+output_size = 5
+
+model = SimpleRNN(input_size, hidden_size, output_size)
+
+# Dummy input: (batch, seq_len, input_size)
+x = torch.randn(4, 6, input_size)
+
+outputs, last_hidden = model(x)
+
+print(f"Output shape:      {outputs.shape}")      # (4, 6, 5) — one output per time step
+print(f"Last hidden shape: {last_hidden.shape}")   # (4, 20) — final hidden state
+print(f"\nModel parameters: {sum(p.numel() for p in model.parameters())}")
+print(f"  W_xh: {model.W_xh.shape}  (input -> hidden)")
+print(f"  W_hh: {model.W_hh.shape}  (hidden -> hidden)")
+print(f"  W_hy: {model.W_hy.shape}  (hidden -> output)")
+</code></pre>
+
+                        <p>This is exactly what <code>nn.RNN</code> does internally — the same <code>W_xh</code> and <code>W_hh</code> matrices are applied at every time step (weight sharing). The loop over <code>seq_len</code> is the "unrolling" we visualized in the diagram above. Now let's see how PyTorch wraps this into a single efficient module:</p>
 
                         <h3 id="rnn-pytorch">nn.RNN in PyTorch</h3>
 
@@ -465,14 +551,32 @@ print("For classification, use h_n[-1] (the last layer's final hidden state).")
 
                         <h3 id="lstm-vs-rnn">Why LSTMs Solve Vanishing Gradients</h3>
 
-                        <p>The secret is the cell state's additive update rule. In a vanilla RNN, the hidden state is computed by <em>multiplying</em> by a weight matrix at every step — this repeated multiplication causes gradients to vanish or explode. In an LSTM, the cell state is updated by <em>addition</em>: <code>c_t = f * c_{t-1} + i * candidate</code>. Addition preserves gradient magnitude, allowing information (and its gradient) to flow across hundreds of time steps without degradation. The forget gate <code>f</code> learns to be close to 1 for information that should be remembered long-term.</p>
+                        <p>The secret is the cell state's additive update rule. In a vanilla RNN, the hidden state is computed by <em>multiplying</em> by a weight matrix at every step &mdash; this repeated multiplication causes gradients to vanish or explode. In an LSTM, the cell state is updated by <em>addition</em>. Addition preserves gradient magnitude, allowing information (and its gradient) to flow across hundreds of time steps without degradation. The forget gate learns to be close to 1 for information that should be remembered long-term.</p>
+
+                        <p><strong>LSTM gate equations:</strong></p>
+                        $$f_t = \sigma(W_f \cdot [h_{t-1}, x_t] + b_f) \quad \text{(forget gate)}$$
+                        $$i_t = \sigma(W_i \cdot [h_{t-1}, x_t] + b_i) \quad \text{(input gate)}$$
+                        $$\tilde{c}_t = \tanh(W_c \cdot [h_{t-1}, x_t] + b_c) \quad \text{(candidate)}$$
+                        $$c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t \quad \text{(cell state update)}$$
+                        $$o_t = \sigma(W_o \cdot [h_{t-1}, x_t] + b_o) \quad \text{(output gate)}$$
+                        $$h_t = o_t \odot \tanh(c_t) \quad \text{(hidden state)}$$
+
+                        <p>Where $\sigma$ is the sigmoid function, $\odot$ is element-wise multiplication, and $[h_{t-1}, x_t]$ is the concatenation of the previous hidden state and current input. The cell state $c_t$ flows through time via addition, avoiding the repeated multiplication that causes vanishing gradients.</p>
 
                         <!-- ===== 4. GRU ===== -->
                         <h2 id="gru">GRU: Gated Recurrent Unit</h2>
 
                         <p>The <strong>Gated Recurrent Unit (GRU)</strong>, introduced by Cho et al. in 2014, is a simplified alternative to the LSTM. Instead of three gates and a separate cell state, the GRU uses only two gates — a <strong>reset gate</strong> and an <strong>update gate</strong> — and merges the cell state and hidden state into a single vector. This makes GRUs faster to train (fewer parameters) while often achieving comparable performance.</p>
 
-                        <p>The <strong>reset gate</strong> controls how much of the previous hidden state to ignore when computing a candidate new state (like erasing a whiteboard before writing new notes). The <strong>update gate</strong> controls the blend between keeping the old hidden state and accepting the new candidate (like a slider between "remember everything" and "start fresh").</p>
+                        <p>The <strong>reset gate</strong> controls how much of the previous hidden state to ignore when computing a candidate new state (like erasing a whiteboard before writing new notes). The <strong>update gate</strong> controls the blend between keeping the old hidden state and accepting the new candidate (like a slider between &ldquo;remember everything&rdquo; and &ldquo;start fresh&rdquo;).</p>
+
+                        <p><strong>GRU gate equations:</strong></p>
+                        $$r_t = \sigma(W_r \cdot [h_{t-1}, x_t] + b_r) \quad \text{(reset gate)}$$
+                        $$z_t = \sigma(W_z \cdot [h_{t-1}, x_t] + b_z) \quad \text{(update gate)}$$
+                        $$\tilde{h}_t = \tanh(W_h \cdot [r_t \odot h_{t-1}, x_t] + b_h) \quad \text{(candidate)}$$
+                        $$h_t = (1 - z_t) \odot h_{t-1} + z_t \odot \tilde{h}_t \quad \text{(final state)}$$
+
+                        <p>Where $r_t$ determines how much past info to reset before computing the candidate, and $z_t$ blends the old $h_{t-1}$ with the new candidate $\tilde{h}_t$. When $z_t \approx 1$, the GRU accepts the new candidate; when $z_t \approx 0$, it keeps the old state unchanged.</p>
 
 <pre><code class="language-python">import torch
 import torch.nn as nn
