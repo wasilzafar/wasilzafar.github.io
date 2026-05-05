@@ -204,7 +204,7 @@
             <li>
                 <a href="#feature-extraction-pipeline" onclick="closeNav()">Feature Extraction Pipeline</a>
                 <ul>
-                    <li><a href="#feature-extraction-pipeline" onclick="closeNav()">Load &amp; Freeze</a></li>
+                    <li><a href="#feature-extraction-pipeline" onclick="closeNav()">Building Intuition</a></li>
                     <li><a href="#replace-classifier" onclick="closeNav()">Replace Classifier Head</a></li>
                     <li><a href="#train-new-head" onclick="closeNav()">Train Only New Head</a></li>
                 </ul>
@@ -212,7 +212,7 @@
             <li>
                 <a href="#fine-tuning-pipeline" onclick="closeNav()">Fine-Tuning Pipeline</a>
                 <ul>
-                    <li><a href="#fine-tuning-pipeline" onclick="closeNav()">Selective Unfreezing</a></li>
+                    <li><a href="#fine-tuning-pipeline" onclick="closeNav()">Building Intuition</a></li>
                     <li><a href="#discriminative-lr" onclick="closeNav()">Discriminative Learning Rates</a></li>
                     <li><a href="#gradual-unfreezing" onclick="closeNav()">Gradual Unfreezing</a></li>
                 </ul>
@@ -249,6 +249,7 @@
             <li>
                 <a href="#lora" onclick="closeNav()">LoRA (Parameter-Efficient Fine-Tuning)</a>
                 <ul>
+                    <li><a href="#lora" onclick="closeNav()">Building Intuition</a></li>
                     <li><a href="#lora-intuition" onclick="closeNav()">How LoRA Works</a></li>
                     <li><a href="#lora-apply-model" onclick="closeNav()">Applying LoRA to a Model</a></li>
                 </ul>
@@ -481,6 +482,30 @@ for name, module in model.named_children():
                         <!-- ============================================================ -->
                         <h2 id="feature-extraction-pipeline">Feature Extraction Pipeline</h2>
 
+                        <h3>The Core Idea (Plain English)</h3>
+
+                        <p>Feature extraction is the simplest form of transfer learning: freeze everything the pretrained model knows, and only teach it your new classification task. It's like hiring a pre-trained photographer and only teaching them which photos to sort into which folder.</p>
+
+                        <div class="highlight-box">
+                            <h4><i class="fas fa-snowflake me-2"></i>The Best Analogy: A Camera + New Lens</h4>
+                            <p>Think of a pretrained model as an expensive camera body:</p>
+                            <ul class="mb-0">
+                                <li><strong>Backbone (frozen)</strong> = the camera body — already knows how to capture light, detect edges, recognize shapes</li>
+                                <li><strong>Classifier head (trained)</strong> = the lens you swap out — changes what the camera "looks for" (cats vs dogs vs cars)</li>
+                                <li><strong>Freeze = don't open the camera body</strong> — just change the lens on top</li>
+                            </ul>
+                            <p class="mt-2 mb-0">Result: you get 90%+ accuracy with just a few hundred images and minutes of training, because the "camera" already knows what objects look like.</p>
+                        </div>
+
+                        <p><strong>Ultra-compressed version:</strong></p>
+
+<pre><code class="language-python"># Feature extraction in 4 lines:
+model = load_pretrained("resnet50")       # 1. Get a trained model
+freeze(model)                              # 2. Lock ALL weights
+model.head = new_classifier(num_classes)   # 3. Replace the final layer
+train(model.head, my_small_dataset)        # 4. Train ONLY the new head
+</code></pre>
+
                         <p>Feature extraction is the simplest and safest form of transfer learning. The process has three steps: (1) load a pretrained model, (2) freeze all its parameters, and (3) replace the classifier head with a new one matching your number of classes. Only the new head gets trained — the rest of the model acts as a powerful, fixed feature extractor.</p>
 
                         <h3 id="replace-classifier">Load, Freeze, and Replace Classifier Head</h3>
@@ -578,6 +603,31 @@ for epoch in range(3):
                         <!-- SECTION 5: Fine-Tuning Pipeline -->
                         <!-- ============================================================ -->
                         <h2 id="fine-tuning-pipeline">Fine-Tuning Pipeline</h2>
+
+                        <h3>The Core Idea (Plain English)</h3>
+
+                        <p>Fine-tuning goes beyond feature extraction: instead of just teaching the model a new task, you <strong>let it adapt its existing knowledge</strong> to your specific domain. This is more powerful but riskier — you need to be careful not to "erase" what it already knows.</p>
+
+                        <div class="highlight-box">
+                            <h4><i class="fas fa-temperature-high me-2"></i>The Best Analogy: Retraining a Surgeon for a New Specialty</h4>
+                            <p>Think of fine-tuning as retraining a general surgeon to specialize in orthopedics:</p>
+                            <ul class="mb-0">
+                                <li><strong>Basic skills (early layers)</strong> — anatomy, sterile technique, suturing — barely need updating (very low learning rate)</li>
+                                <li><strong>General surgery skills (middle layers)</strong> — need some adaptation for bone work (medium learning rate)</li>
+                                <li><strong>Specialty knowledge (final layers)</strong> — completely new procedures to learn (high learning rate)</li>
+                            </ul>
+                            <p class="mt-2 mb-0">Key principle: <strong>deeper layers change less, newer layers change more</strong>. This is called "discriminative learning rates" — the most important fine-tuning technique.</p>
+                        </div>
+
+                        <p><strong>Ultra-compressed version:</strong></p>
+
+<pre><code class="language-python"># Fine-tuning = different learning rates for different depths
+optimizer = Adam([
+    {"params": early_layers,  "lr": 1e-5},   # barely change (general features)
+    {"params": middle_layers, "lr": 1e-4},   # adapt somewhat
+    {"params": classifier,    "lr": 1e-3},   # change freely (task-specific)
+])
+</code></pre>
 
                         <p>When feature extraction doesn't give you enough accuracy — typically when your target domain differs significantly from ImageNet — fine-tuning lets you update the pretrained weights themselves. The key challenge is balancing adaptation (learning new features) against catastrophic forgetting (destroying useful pretrained features). The solution: use much smaller learning rates for pretrained layers than for the new head.</p>
 
@@ -1152,6 +1202,33 @@ for name, model in architectures.items():
                         <!-- SECTION 10: LoRA -->
                         <!-- ============================================================ -->
                         <h2 id="lora">Parameter-Efficient Fine-Tuning with LoRA</h2>
+
+                        <h3>The Core Idea (Plain English)</h3>
+
+                        <p>Full fine-tuning updates millions of parameters. LoRA asks: <strong>"What if the change we need is actually very small and simple?"</strong> Instead of modifying the entire weight matrix, LoRA learns a tiny "patch" that gets added on top — like a Post-It note stuck to a textbook rather than rewriting the whole book.</p>
+
+                        <div class="highlight-box">
+                            <h4><i class="fas fa-compress me-2"></i>The Best Analogy: A Guitar Effect Pedal</h4>
+                            <p>Think of LoRA as an <strong>effects pedal</strong> for a guitar amplifier:</p>
+                            <ul class="mb-0">
+                                <li><strong>The amplifier (frozen model)</strong> — a powerful, expensive piece of equipment that stays untouched</li>
+                                <li><strong>The effects pedal (LoRA matrices)</strong> — a tiny, cheap device that modifies the signal slightly</li>
+                                <li><strong>Combining both</strong> — the original amp sound + a small learned adjustment = perfectly adapted tone</li>
+                                <li><strong>Swap pedals</strong> — you can have different LoRA adapters for different tasks, all sharing the same frozen base model</li>
+                            </ul>
+                            <p class="mt-2 mb-0">Instead of training 16 million parameters (full weight), you train just 65K (two small matrices). That's a <strong>256× reduction</strong> — fine-tune GPT-3 on a single GPU.</p>
+                        </div>
+
+                        <p><strong>Ultra-compressed version:</strong></p>
+
+<pre><code class="language-python"># Standard fine-tuning: update the ENTIRE weight matrix (expensive)
+W_new = W_old + gradient_updates          # millions of params changed
+
+# LoRA: freeze W, learn a tiny low-rank "patch"
+W_new = W_frozen + B @ A                  # B is [d×r], A is [r×d], r=8
+# Only 2 × d × r trainable params instead of d × d
+# For d=4096, r=8: 65K instead of 16.7M (256× smaller!)
+</code></pre>
 
                         <p>Fine-tuning a full model (even just unfreezing a few layers) updates millions or billions of parameters. <strong>LoRA (Low-Rank Adaptation)</strong>, introduced by Hu et al. (2021), offers a revolutionary alternative: freeze the entire pretrained model and inject tiny trainable low-rank matrices that adapt the model's behavior with <strong>0.1–1% of the original parameters</strong>. This means you can fine-tune GPT-3 sized models on a single GPU.</p>
 
