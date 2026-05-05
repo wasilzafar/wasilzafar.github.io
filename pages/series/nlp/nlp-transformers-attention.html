@@ -106,6 +106,7 @@
                 </ul>
             </li>
             <li><a href="#self-attention" onclick="closeNav()">Self-Attention</a></li>
+            <li><a href="#attention-dropout" onclick="closeNav()">Attention Dropout</a></li>
             <li><a href="#multi-head" onclick="closeNav()">Multi-Head Attention</a>
                 <ul>
                     <li><a href="#attention-tools" onclick="closeNav()">Attention Visualization Tools</a></li>
@@ -514,6 +515,74 @@ print(weights[0].round(decimals=2))
                         <div class="highlight-box">
                             <h4><i class="fas fa-info-circle me-2"></i>Self-Attention Complexity</h4>
                             <p><strong>Time complexity: O(n² × d)</strong> where n is sequence length and d is dimension. This quadratic scaling with sequence length is the main limitation of Transformers, motivating efficient variants like Linformer, Performer, and sparse attention patterns for very long sequences.</p>
+                        </div>
+
+                        <h3 id="attention-dropout">Attention Dropout: Regularizing Attention Weights</h3>
+
+                        <p>In practice, Transformers apply <strong>dropout to attention weights</strong> after softmax and before multiplying with values. This randomly zeroes out some attention connections during training, forcing the model to not rely too heavily on any single token-to-token relationship. This is a crucial regularization technique that prevents overfitting, especially in large models.</p>
+
+                        <p>The dropout is applied <em>after</em> softmax normalization, which means some attention weights become zero randomly during each training step. The model must learn robust, distributed attention patterns rather than "memorizing" specific shortcuts. During inference, dropout is disabled and all connections are active.</p>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import math
+
+class SelfAttentionWithDropout(nn.Module):
+    """Self-attention with attention dropout (as used in all production Transformers)."""
+
+    def __init__(self, d_model, dropout_rate=0.1):
+        super().__init__()
+        self.d_model = d_model
+        self.W_q = nn.Linear(d_model, d_model)
+        self.W_k = nn.Linear(d_model, d_model)
+        self.W_v = nn.Linear(d_model, d_model)
+        self.attn_dropout = nn.Dropout(dropout_rate)  # Applied to attention weights
+        self.output_dropout = nn.Dropout(dropout_rate)  # Applied to output
+
+    def forward(self, x, mask=None):
+        Q = self.W_q(x)
+        K = self.W_k(x)
+        V = self.W_v(x)
+
+        # Compute attention scores
+        scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.d_model)
+
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, float('-inf'))
+
+        # Softmax -> Dropout -> Matmul with V
+        attention_weights = F.softmax(scores, dim=-1)
+        attention_weights = self.attn_dropout(attention_weights)  # Key: dropout AFTER softmax
+
+        output = torch.matmul(attention_weights, V)
+        output = self.output_dropout(output)  # Also dropout on output
+
+        return output, attention_weights
+
+# Demonstrate dropout effect
+model = SelfAttentionWithDropout(d_model=64, dropout_rate=0.2)
+x = torch.randn(1, 6, 64)  # 6-token sequence
+
+# Training mode: some attention weights randomly zeroed
+model.train()
+out_train, weights_train = model(x)
+zeros_train = (weights_train == 0).sum().item()
+
+# Eval mode: full attention (no dropout)
+model.eval()
+with torch.no_grad():
+    out_eval, weights_eval = model(x)
+    zeros_eval = (weights_eval == 0).sum().item()
+
+print(f"Training: {zeros_train} attention weights zeroed (out of {weights_train.numel()})")
+print(f"Eval:     {zeros_eval} attention weights zeroed (all connections active)")
+print(f"\nDropout rate 0.2 means ~20% of connections randomly removed during training")
+</code></pre>
+
+                        <div class="highlight-box">
+                            <h4><i class="fas fa-info-circle me-2"></i>Where Dropout Appears in a Transformer Block</h4>
+                            <p>A standard Transformer block applies dropout in <strong>three</strong> places: (1) on attention weights (after softmax), (2) on the attention output (before the residual connection), and (3) on the feed-forward output (before the residual connection). All three use the same dropout rate (typically 0.1). During pretraining of large models like GPT-3, dropout is sometimes set to 0.0 because the massive dataset already provides sufficient regularization.</p>
                         </div>
 
                         <h2 id="multi-head"><i class="fas fa-layer-group me-2"></i>Multi-Head Attention</h2>

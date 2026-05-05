@@ -135,6 +135,12 @@
                     <li><a href="#sentencepiece" onclick="closeNav()">SentencePiece & Unigram</a></li>
                 </ul>
             </li>
+            <li><a href="#token-ids-special-tokens" onclick="closeNav()">Token IDs & Special Tokens</a>
+                <ul>
+                    <li><a href="#token-to-id" onclick="closeNav()">Building a Vocabulary</a></li>
+                    <li><a href="#special-tokens" onclick="closeNav()">Special Tokens</a></li>
+                </ul>
+            </li>
             <li><a href="#character-tokenization" onclick="closeNav()">Character Tokenization</a></li>
             <li><a href="#text-preprocessing" onclick="closeNav()">Text Preprocessing</a>
                 <ul>
@@ -1094,6 +1100,133 @@ print("\nNote: '?' indicates the start of a new word in SentencePiece")
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+
+                        <h2 id="token-ids-special-tokens"><i class="fas fa-id-badge me-2"></i>Token IDs & Special Tokens</h2>
+
+                        <p>After tokenization splits text into subwords, the next step is converting these tokens into <strong>integer IDs</strong> that a model can process. Each unique token in the vocabulary is assigned a fixed numerical index. The model never sees text — it only sees sequences of integers. Understanding this mapping and the role of <strong>special tokens</strong> is crucial for working with any language model.</p>
+
+                        <h3 id="token-to-id">Building a Vocabulary & Mapping Tokens to IDs</h3>
+
+                        <p>A vocabulary is simply a dictionary that maps each unique token to an integer. When you tokenize text, you first split it into subword tokens, then look up each token's integer ID in this vocabulary. At the model's output, you reverse the process: map predicted IDs back to tokens, then join tokens into text.</p>
+
+<pre><code class="language-python"># Understanding token-to-ID mapping from scratch
+# This is what happens inside every tokenizer
+
+# Step 1: Build vocabulary from a corpus
+corpus = [
+    "the cat sat on the mat",
+    "the dog ran in the park",
+    "a cat and a dog played"
+]
+
+# Collect all unique tokens (word-level for simplicity)
+all_tokens = set()
+for sentence in corpus:
+    all_tokens.update(sentence.split())
+
+# Sort for deterministic ordering, then assign IDs
+vocab = {token: idx for idx, token in enumerate(sorted(all_tokens))}
+print("Vocabulary (token -> ID):")
+for token, idx in vocab.items():
+    print(f"  '{token}' -> {idx}")
+
+# Step 2: Encode text (tokens -> IDs)
+def encode(text, vocabulary):
+    tokens = text.split()
+    return [vocabulary[t] for t in tokens]
+
+# Step 3: Decode IDs back to text (IDs -> tokens)
+id_to_token = {idx: token for token, idx in vocab.items()}
+def decode(ids, id_to_token_map):
+    return ' '.join(id_to_token_map[i] for i in ids)
+
+# Round-trip demonstration
+text = "the cat sat on the mat"
+encoded = encode(text, vocab)
+decoded = decode(encoded, id_to_token)
+
+print(f"\nOriginal: '{text}'")
+print(f"Encoded:  {encoded}")
+print(f"Decoded:  '{decoded}'")
+print(f"Round-trip match: {text == decoded}")
+</code></pre>
+
+                        <h3 id="special-tokens">Special Tokens: The Model's Control Signals</h3>
+
+                        <p>Language models use <strong>special tokens</strong> that don't correspond to real words but serve as control signals. These tokens mark boundaries, indicate structure, and provide the model with information about the task. Different model families use different special token conventions:</p>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span><i class="fas fa-key me-1"></i>Special Token Reference</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h5>Common Special Tokens by Model Family</h5>
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr><th>Token</th><th>Model</th><th>Purpose</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td><code>[CLS]</code></td><td>BERT</td><td>Classification token — prepended to every input; its final hidden state is used for classification</td></tr>
+                                        <tr><td><code>[SEP]</code></td><td>BERT</td><td>Separator — marks boundary between sentence pairs</td></tr>
+                                        <tr><td><code>[MASK]</code></td><td>BERT</td><td>Mask token — replaces words for masked language model training</td></tr>
+                                        <tr><td><code>[PAD]</code></td><td>All</td><td>Padding — fills sequences to equal length in a batch</td></tr>
+                                        <tr><td><code>[UNK]</code></td><td>All</td><td>Unknown — replaces tokens not in vocabulary</td></tr>
+                                        <tr><td><code>&lt;|endoftext|&gt;</code></td><td>GPT-2/3/4</td><td>End of text — marks document boundaries; used as both BOS and EOS</td></tr>
+                                        <tr><td><code>&lt;s&gt;</code>, <code>&lt;/s&gt;</code></td><td>T5, LLaMA</td><td>Beginning/end of sequence markers</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="experiment-tags">
+                                <span class="bias-tag">BERT</span>
+                                <span class="bias-tag">GPT</span>
+                                <span class="bias-tag">T5</span>
+                            </div>
+                        </div>
+
+<pre><code class="language-python"># Special tokens in practice: BERT vs GPT-2
+from transformers import BertTokenizer, GPT2Tokenizer
+
+# --- BERT Tokenizer ---
+bert_tok = BertTokenizer.from_pretrained('bert-base-uncased')
+
+text = "Machine learning is fascinating"
+encoded = bert_tok(text)
+
+print("=== BERT Tokenization ===")
+print(f"Input: '{text}'")
+print(f"Tokens: {bert_tok.convert_ids_to_tokens(encoded['input_ids'])}")
+print(f"IDs:    {encoded['input_ids']}")
+print(f"Note: [CLS] prepended (ID={bert_tok.cls_token_id}), [SEP] appended (ID={bert_tok.sep_token_id})")
+
+# BERT with sentence pairs (for NLI, QA, etc.)
+pair_encoded = bert_tok("What is NLP?", "NLP is natural language processing.")
+print(f"\nSentence pair tokens: {bert_tok.convert_ids_to_tokens(pair_encoded['input_ids'])}")
+print(f"Token type IDs:       {pair_encoded['token_type_ids']}")
+print("  (0 = sentence A, 1 = sentence B)")
+
+# --- GPT-2 Tokenizer ---
+gpt2_tok = GPT2Tokenizer.from_pretrained('gpt2')
+
+print("\n=== GPT-2 Tokenization ===")
+print(f"Input: '{text}'")
+tokens = gpt2_tok.encode(text)
+print(f"Tokens: {[gpt2_tok.decode(t) for t in tokens]}")
+print(f"IDs:    {tokens}")
+print(f"Vocab size: {gpt2_tok.vocab_size}")
+print(f"&lt;|endoftext|&gt; ID: {gpt2_tok.eos_token_id}")
+
+# GPT-2 uses <|endoftext|> as document separator
+doc1 = "First document."
+doc2 = "Second document."
+combined = f"{doc1}{gpt2_tok.eos_token}{doc2}"
+print(f"\nMulti-doc: '{combined}'")
+print(f"IDs: {gpt2_tok.encode(combined)}")
+</code></pre>
+
+                        <div class="highlight-box">
+                            <h4><i class="fas fa-lightbulb me-2"></i>Why Special Tokens Matter</h4>
+                            <p>Special tokens are not just bookkeeping — they serve critical architectural roles. BERT's <code>[CLS]</code> token is designed to accumulate a "summary" of the entire input through self-attention, which is why its final hidden state works for classification. GPT-2's <code>&lt;|endoftext|&gt;</code> teaches the model document boundaries so it doesn't bleed context between unrelated texts during pretraining. If you forget to add special tokens when using a model, you'll get degraded performance because the model has never seen inputs without them.</p>
                         </div>
 
                         <h2 id="training-tokenizers"><i class="fas fa-tools me-2"></i>Training Tokenizers from Scratch</h2>

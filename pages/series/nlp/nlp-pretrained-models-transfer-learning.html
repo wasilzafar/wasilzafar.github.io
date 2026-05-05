@@ -112,6 +112,7 @@
                 </ul>
             </li>
             <li><a href="#fine-tuning" onclick="closeNav()">Fine-Tuning Strategies</a></li>
+            <li><a href="#classification-head" onclick="closeNav()">Adding a Classification Head</a></li>
             <li><a href="#huggingface" onclick="closeNav()">Hugging Face Transformers</a></li>
             <li><a href="#practical" onclick="closeNav()">Practical Implementation</a></li>
             <li><a href="#conclusion" onclick="closeNav()">Conclusion & Next Steps</a></li>
@@ -693,6 +694,86 @@ for i, step in enumerate([0, 50, 100, 500, 1000]):
     for _ in range(step - (i > 0 and [0, 50, 100, 500, 1000][i-1] or 0)):
         scheduler.step()
     print(f"  Step {step}: LR = {scheduler.get_last_lr()[0]:.2e}")</code></pre>
+
+                        <h3 id="classification-head">Adding a Classification Head to a Pretrained LLM</h3>
+
+                        <p>The most common fine-tuning pattern is to add a <strong>classification head</strong> on top of a pretrained model. For encoder models like BERT, we extract the <code>[CLS]</code> token's final hidden state and pass it through a linear layer. For decoder models like GPT, we use the <strong>last token's</strong> hidden state (since it has attended to all previous tokens via causal attention). This simple approach converts a general language model into a powerful classifier.</p>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+from transformers import GPT2Model, GPT2Tokenizer
+
+class GPTClassifier(nn.Module):
+    """Fine-tune GPT-2 for text classification.
+    
+    Key insight: In a causal (left-to-right) model, the LAST token's
+    hidden state has attended to ALL previous tokens, making it the
+    natural choice for classification (analogous to BERT's [CLS]).
+    """
+
+    def __init__(self, model_name='gpt2', num_classes=2):
+        super().__init__()
+        self.gpt = GPT2Model.from_pretrained(model_name)
+        d_model = self.gpt.config.n_embd  # 768 for gpt2-base
+
+        # Classification head: project last token's hidden state to num_classes
+        self.classifier = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(d_model, num_classes),
+        )
+
+        # Freeze GPT-2 backbone initially (optional)
+        for param in self.gpt.parameters():
+            param.requires_grad = False
+
+    def forward(self, input_ids, attention_mask=None):
+        # Get all hidden states from GPT-2
+        outputs = self.gpt(input_ids, attention_mask=attention_mask)
+        hidden_states = outputs.last_hidden_state  # (batch, seq_len, 768)
+
+        # Use the LAST token's representation for classification
+        # (it has seen all previous tokens via causal attention)
+        if attention_mask is not None:
+            # Find the last non-padding position for each sample
+            last_positions = attention_mask.sum(dim=1) - 1  # (batch,)
+            last_hidden = hidden_states[
+                torch.arange(hidden_states.size(0)), last_positions
+            ]
+        else:
+            last_hidden = hidden_states[:, -1, :]  # Simply take last position
+
+        logits = self.classifier(last_hidden)  # (batch, num_classes)
+        return logits
+
+# Example usage
+tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+tokenizer.pad_token = tokenizer.eos_token  # GPT-2 has no pad token by default
+
+model = GPTClassifier(num_classes=3)
+
+# Count parameters
+total = sum(p.numel() for p in model.parameters())
+trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+print(f"Total parameters:     {total:,}")
+print(f"Trainable parameters: {trainable:,} ({trainable/total*100:.1f}%)")
+print(f"Frozen (GPT-2):       {total - trainable:,}")
+
+# Forward pass
+texts = ["This movie was great!", "Terrible waste of time."]
+encoded = tokenizer(texts, padding=True, return_tensors='pt')
+logits = model(encoded['input_ids'], encoded['attention_mask'])
+predictions = logits.argmax(dim=-1)
+print(f"\nInput: {texts}")
+print(f"Logits shape: {logits.shape}")
+print(f"Predictions: {predictions.tolist()}")
+</code></pre>
+
+                        <div class="highlight-box highlight-navy">
+                            <h4><i class="fas fa-brain me-2"></i>BERT [CLS] vs GPT Last Token</h4>
+                            <p><strong>BERT</strong> uses the <code>[CLS]</code> token (first position) because bidirectional attention means every position can see every other position — but <code>[CLS]</code> is specifically trained as a summary representation. <strong>GPT</strong> uses the <em>last</em> token because causal (left-to-right) attention means only the last position has attended to the entire sequence. Both achieve the same goal: extracting a single vector that represents the whole input for classification.</p>
+                        </div>
 
                         <h2 id="huggingface"><i class="fas fa-face-smile me-2"></i>Hugging Face Transformers</h2>
                         

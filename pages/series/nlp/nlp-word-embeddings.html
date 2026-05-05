@@ -122,6 +122,12 @@
                     <li><a href="#when-pretrained" onclick="closeNav()">Pre-trained vs. Custom</a></li>
                 </ul>
             </li>
+            <li><a href="#embedding-layer" onclick="closeNav()">The Embedding Layer</a>
+                <ul>
+                    <li><a href="#embedding-layer" onclick="closeNav()">Lookup Table</a></li>
+                    <li><a href="#token-vs-positional" onclick="closeNav()">Token + Positional Embeddings</a></li>
+                </ul>
+            </li>
             <li><a href="#limitations" onclick="closeNav()">Limitations & Beyond</a>
                 <ul>
                     <li><a href="#contextual-embeddings" onclick="closeNav()">From Static to Contextual</a></li>
@@ -1350,6 +1356,87 @@ print("Saved: word_embeddings_pca.png")</code></pre>
                         <h3 id="when-pretrained">Pre-trained vs. Custom Embeddings</h3>
 
                         <p>Pre-trained embeddings are trained on massive general-purpose corpora and capture broad linguistic knowledge. They work well for most tasks out of the box. However, if your domain uses specialised vocabulary\u2014medical terminology, legal jargon, programming terms\u2014the general embeddings may not capture domain-specific relationships (e.g., "CRISPR" close to "gene editing" in biomedical text). In such cases, <strong>fine-tuning</strong> pre-trained embeddings on domain data or training from scratch on a large domain corpus can significantly improve downstream performance.</p>
+
+                        <h2 id="embedding-layer"><i class="fas fa-table me-2"></i>The Embedding Layer: How Models Use Embeddings</h2>
+
+                        <p>In neural networks, word embeddings are implemented as an <strong>embedding layer</strong> — which is really just a <strong>lookup table</strong>. The layer stores a matrix of shape <code>(vocab_size, embedding_dim)</code> where each row is a word's vector. Given a token ID, the layer simply retrieves that row. There's no matrix multiplication involved — it's a pure indexing operation, making it extremely fast.</p>
+
+                        <p>This is conceptually equivalent to one-hot encoding followed by a linear layer (without bias), but implemented as a direct lookup for efficiency. During training, backpropagation updates only the rows that were actually accessed in the forward pass.</p>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+# The embedding layer IS a lookup table
+vocab_size = 10000   # 10k unique tokens in vocabulary
+embedding_dim = 256  # Each token gets a 256-dimensional vector
+
+# Create embedding layer (randomly initialized)
+embedding_layer = nn.Embedding(vocab_size, embedding_dim)
+
+print(f"Embedding matrix shape: {embedding_layer.weight.shape}")
+print(f"  = {vocab_size} tokens x {embedding_dim} dimensions")
+print(f"  = {embedding_layer.weight.numel():,} trainable parameters")
+
+# Encoding: token IDs -> dense vectors (pure lookup, no math)
+token_ids = torch.tensor([42, 1337, 7, 42])  # A short sequence
+embeddings = embedding_layer(token_ids)
+
+print(f"\nInput token IDs: {token_ids.tolist()}")
+print(f"Output shape: {embeddings.shape}")  # [4, 256] - one vector per token
+
+# Same token ID always gives same vector (it's a lookup!)
+assert torch.equal(embeddings[0], embeddings[3])  # Both are token 42
+print(f"\nTokens 0 and 3 are both ID 42 - same vector: True")
+
+# Equivalent to one-hot @ weight_matrix (but MUCH faster):
+one_hot = torch.zeros(4, vocab_size)
+one_hot[range(4), token_ids] = 1.0
+manual_lookup = one_hot @ embedding_layer.weight
+print(f"Lookup == one_hot @ weight: {torch.allclose(embeddings, manual_lookup, atol=1e-6)}")
+</code></pre>
+
+                        <h3 id="token-vs-positional">Token Embeddings + Positional Embeddings</h3>
+
+                        <p>Modern Transformers combine <strong>two</strong> embedding layers: one for the token identity (what word is this?) and one for the position (where in the sequence is it?). The final input to the model is their element-wise sum. This is essential because self-attention is permutation-invariant — without positional information, the model can't distinguish "dog bites man" from "man bites dog".</p>
+
+<pre><code class="language-python">import torch
+import torch.nn as nn
+
+# GPT-style input embedding: token embedding + positional embedding
+vocab_size = 50257    # GPT-2 vocabulary size
+max_seq_len = 1024    # Maximum sequence length GPT-2 can handle
+embedding_dim = 768   # GPT-2 base model dimension
+
+# Two separate embedding layers
+token_embedding = nn.Embedding(vocab_size, embedding_dim)       # What token?
+position_embedding = nn.Embedding(max_seq_len, embedding_dim)   # Where in sequence?
+
+# Simulate a tokenized input: "The cat sat" -> token IDs
+token_ids = torch.tensor([[464, 3797, 3332]])  # batch=1, seq_len=3
+
+# Position IDs are simply 0, 1, 2, ..., seq_len-1
+seq_len = token_ids.size(1)
+position_ids = torch.arange(seq_len).unsqueeze(0)  # [[0, 1, 2]]
+
+# Combine: final input = token_embedding + position_embedding
+token_embeds = token_embedding(token_ids)       # [1, 3, 768]
+pos_embeds = position_embedding(position_ids)   # [1, 3, 768]
+input_embeds = token_embeds + pos_embeds        # [1, 3, 768] - element-wise sum
+
+print(f"Token IDs:         {token_ids.tolist()}")
+print(f"Position IDs:      {position_ids.tolist()}")
+print(f"Token embeddings:  {token_embeds.shape}")
+print(f"Position embeds:   {pos_embeds.shape}")
+print(f"Combined input:    {input_embeds.shape}")
+print(f"\nTotal embedding params: {token_embedding.weight.numel() + position_embedding.weight.numel():,}")
+print(f"  Token:    {vocab_size} x {embedding_dim} = {vocab_size * embedding_dim:,}")
+print(f"  Position: {max_seq_len} x {embedding_dim} = {max_seq_len * embedding_dim:,}")
+</code></pre>
+
+                        <div class="highlight-box">
+                            <h4><i class="fas fa-lightbulb me-2"></i>Key Insight: Embeddings Are Trained End-to-End</h4>
+                            <p>Unlike Word2Vec or GloVe which are trained separately, the embedding layers inside GPT, BERT, and other Transformers are trained <strong>jointly</strong> with the rest of the model. This means the embeddings are optimized specifically for the model's task (language modeling, masked prediction, etc.) rather than for general similarity. The result is that Transformer embeddings capture task-relevant features that static embeddings miss — this is one reason why BERT embeddings outperform Word2Vec on downstream tasks.</p>
+                        </div>
 
                         <h2 id="limitations"><i class="fas fa-exclamation-circle me-2"></i>Limitations & Beyond</h2>
                         
