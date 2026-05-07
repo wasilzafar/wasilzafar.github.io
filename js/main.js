@@ -995,6 +995,11 @@ function initCategoryNewTab() {
     for (var i = 0; i < links.length; i++) {
         links[i].setAttribute('target', '_blank');
         links[i].setAttribute('rel', 'noopener');
+        links[i].addEventListener('click', function(e) {
+            // Category hex tiles often navigate on the parent container.
+            // Prevent bubbling so link clicks do not also trigger same-tab navigation.
+            e.stopPropagation();
+        });
     }
 }
 
