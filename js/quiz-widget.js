@@ -8,10 +8,12 @@
 (function() {
     'use strict';
 
-    var TRIGGER_DELAY = 4000;
+    var TRIGGER_DELAY = 3000;
     var DISMISS_KEY = 'quiz-widget-dismissed';
     var PROGRESS_KEY = 'quiz-progress';
     var QUESTION_COUNT = 3;
+    var FEEDBACK_DELAY_CORRECT = 3000;
+    var FEEDBACK_DELAY_INCORRECT = 4000;
 
     // ─── Security ────────────────────────────────────────────────────────────────
 
@@ -426,7 +428,7 @@
         setTimeout(function() {
             state.current++;
             showQuestion();
-        }, ok ? 1500 : 2500);
+        }, ok ? FEEDBACK_DELAY_CORRECT : FEEDBACK_DELAY_INCORRECT);
     }
 
     function showFinish() {
