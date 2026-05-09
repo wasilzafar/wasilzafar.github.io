@@ -164,7 +164,13 @@
                 <ul>
                     <li><a href="#sigmoid" onclick="closeNav()">Sigmoid</a></li>
                     <li><a href="#tanh" onclick="closeNav()">Tanh</a></li>
-                    <li><a href="#relu" onclick="closeNav()">ReLU &amp; Leaky ReLU</a></li>
+                    <li><a href="#relu" onclick="closeNav()">ReLU</a></li>
+                    <li><a href="#leaky-relu" onclick="closeNav()">Leaky ReLU &amp; PReLU</a></li>
+                    <li><a href="#elu-selu" onclick="closeNav()">ELU &amp; SELU</a></li>
+                    <li><a href="#gelu" onclick="closeNav()">GELU (Transformers)</a></li>
+                    <li><a href="#swish-mish" onclick="closeNav()">Swish, SiLU &amp; Mish</a></li>
+                    <li><a href="#softmax" onclick="closeNav()">Softmax &amp; Softplus</a></li>
+                    <li><a href="#activation-guide" onclick="closeNav()">Choosing the Right One</a></li>
                 </ul>
             </li>
             <li>
@@ -410,124 +416,477 @@ print("Zero bias = transition centered at input = 0")
                         <!-- Section 3: Activation Functions -->
                         <h2 id="activation-functions">Activation Functions</h2>
 
-                        <p>Activation functions introduce <strong>non-linearity</strong> into neural networks. Without them, stacking layers would be pointless &mdash; the entire network would collapse to a single linear transformation. Let&rsquo;s implement the four most important activations from scratch.</p>
+                        <p>Every neuron computes a weighted sum $z = \mathbf{w}^\top \mathbf{x} + b$ — a purely linear operation. Stacking linear operations always collapses to one linear transformation, no matter how many layers you add. <strong>Activation functions are the nonlinear gates that break this collapse</strong>, letting the network learn curves, boundaries, and concepts that no straight line can capture.</p>
 
-                        <h3 id="sigmoid">Sigmoid: $\sigma(z) = \frac{1}{1+e^{-z}}$</h3>
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Intuition first:</strong> Think of activation functions like rheostats on a circuit — they decide <em>how much</em> of a signal passes through, and they can do it in a curved, threshold-gated, or conditionally shaped way. Without them the whole network is just one big multiplication.
+                        </div>
 
-                        <p>Sigmoid squashes any input to the range (0, 1). It was the dominant activation in early networks but suffers from the <strong>vanishing gradient problem</strong> &mdash; gradients become tiny for large or small inputs, making deep networks hard to train.</p>
+                        <p>There are roughly a dozen activation functions in active use across modern ML. Below we cover every one that matters — formula, intuition, implementation, strengths, and exactly when to reach for it.</p>
 
-                        <h3 id="tanh">Tanh: $\tanh(z) = \frac{e^z - e^{-z}}{e^z + e^{-z}}$</h3>
+                        <!-- ── Sigmoid ────────────────────────────────────── -->
+                        <h3 id="sigmoid">Sigmoid &mdash; $\sigma(z) = \dfrac{1}{1+e^{-z}}$</h3>
 
-                        <p>Tanh is similar to sigmoid but outputs in (-1, 1), making it zero-centered. This helps with optimization since gradients don&rsquo;t all push in the same direction.</p>
+                        <p><strong>Range:</strong> (0, 1) &nbsp;|&nbsp; <strong>Zero-centred:</strong> No &nbsp;|&nbsp; <strong>Saturates:</strong> Yes</p>
 
-                        <h3 id="relu">ReLU and Leaky ReLU</h3>
+                        <p><strong>Analogy:</strong> A spam filter that turns raw email-weirdness scores into a clean probability — 0 = definitely not spam, 1 = definitely spam. Nothing is ever perfectly certain, so the output is always strictly between the extremes.</p>
 
-                        <p>ReLU (Rectified Linear Unit) is the modern default: $f(z) = \max(0, z)$. It&rsquo;s computationally cheap and doesn&rsquo;t saturate for positive inputs. Leaky ReLU fixes the &ldquo;dying ReLU&rdquo; problem by allowing a small gradient for negative inputs: $f(z) = \max(\alpha z, z)$ where $\alpha = 0.01$.</p>
+                        <div class="experiment-card">
+                            <div class="experiment-meta"><span class="bias-tag">Use Case</span><span class="bias-tag">Binary Classification</span></div>
+                            <h5>When Sigmoid Belongs in Your Network</h5>
+                            <p><strong>Output layer of binary classifiers</strong> — logistic regression, medical diagnosis (disease/no disease), fraud detection. Sigmoid turns a raw score into an interpretable probability. It is almost never used in hidden layers of deep networks today because its derivative maxes out at 0.25 and vanishes toward zero for large $|z|$, making backpropagation through many layers numerically ineffective.</p>
+                        </div>
 
 <pre><code class="language-python">import numpy as np
 import matplotlib.pyplot as plt
 
-# Implement all activation functions from scratch
 def sigmoid(z):
-    """Sigmoid: squashes to (0, 1)."""
-    return 1.0 / (1.0 + np.exp(-z))
+    """Squashes any real number to (0, 1)."""
+    return 1.0 / (1.0 + np.exp(-np.clip(z, -500, 500)))  # clip prevents overflow
 
 def sigmoid_derivative(z):
-    """Derivative of sigmoid: s(z) * (1 - s(z))."""
+    """Max value is 0.25 at z=0 — shrinks fast for large |z|."""
     s = sigmoid(z)
     return s * (1.0 - s)
 
-def tanh(z):
-    """Tanh: squashes to (-1, 1)."""
-    return np.tanh(z)
+z = np.linspace(-6, 6, 300)
+plt.figure(figsize=(8, 4))
+plt.plot(z, sigmoid(z), linewidth=2.5, label='sigmoid(z)')
+plt.plot(z, sigmoid_derivative(z), linewidth=2, linestyle='--', label="sigmoid'(z) [max=0.25]")
+plt.axhline(0, color='k', linewidth=0.5); plt.axvline(0, color='k', linewidth=0.5)
+plt.title('Sigmoid and Its Derivative'); plt.legend(); plt.grid(alpha=0.3)
+plt.tight_layout(); plt.show()
 
-def tanh_derivative(z):
-    """Derivative of tanh: 1 - tanh(z)^2."""
-    return 1.0 - np.tanh(z) ** 2
-
-def relu(z):
-    """ReLU: max(0, z)."""
-    return np.maximum(0, z)
-
-def relu_derivative(z):
-    """Derivative of ReLU: 1 if z > 0, else 0."""
-    return (z > 0).astype(float)
-
-def leaky_relu(z, alpha=0.01):
-    """Leaky ReLU: max(alpha*z, z)."""
-    return np.where(z > 0, z, alpha * z)
-
-def leaky_relu_derivative(z, alpha=0.01):
-    """Derivative of Leaky ReLU: 1 if z > 0, else alpha."""
-    return np.where(z > 0, 1.0, alpha)
-
-# Plot all activations and their derivatives
-z = np.linspace(-5, 5, 300)
-
-fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-
-# Sigmoid
-axes[0, 0].plot(z, sigmoid(z), 'b-', linewidth=2, label='Sigmoid')
-axes[0, 0].plot(z, sigmoid_derivative(z), 'r--', linewidth=2, label='Derivative')
-axes[0, 0].axhline(y=0, color='k', linewidth=0.5)
-axes[0, 0].axvline(x=0, color='k', linewidth=0.5)
-axes[0, 0].set_title('Sigmoid', fontsize=13)
-axes[0, 0].legend(fontsize=11)
-axes[0, 0].grid(True, alpha=0.3)
-axes[0, 0].set_ylim(-0.2, 1.2)
-
-# Tanh
-axes[0, 1].plot(z, tanh(z), 'b-', linewidth=2, label='Tanh')
-axes[0, 1].plot(z, tanh_derivative(z), 'r--', linewidth=2, label='Derivative')
-axes[0, 1].axhline(y=0, color='k', linewidth=0.5)
-axes[0, 1].axvline(x=0, color='k', linewidth=0.5)
-axes[0, 1].set_title('Tanh', fontsize=13)
-axes[0, 1].legend(fontsize=11)
-axes[0, 1].grid(True, alpha=0.3)
-axes[0, 1].set_ylim(-1.5, 1.5)
-
-# ReLU
-axes[1, 0].plot(z, relu(z), 'b-', linewidth=2, label='ReLU')
-axes[1, 0].plot(z, relu_derivative(z), 'r--', linewidth=2, label='Derivative')
-axes[1, 0].axhline(y=0, color='k', linewidth=0.5)
-axes[1, 0].axvline(x=0, color='k', linewidth=0.5)
-axes[1, 0].set_title('ReLU', fontsize=13)
-axes[1, 0].legend(fontsize=11)
-axes[1, 0].grid(True, alpha=0.3)
-axes[1, 0].set_ylim(-1, 5.5)
-
-# Leaky ReLU
-axes[1, 1].plot(z, leaky_relu(z), 'b-', linewidth=2, label='Leaky ReLU')
-axes[1, 1].plot(z, leaky_relu_derivative(z), 'r--', linewidth=2, label='Derivative')
-axes[1, 1].axhline(y=0, color='k', linewidth=0.5)
-axes[1, 1].axvline(x=0, color='k', linewidth=0.5)
-axes[1, 1].set_title('Leaky ReLU (alpha=0.01)', fontsize=13)
-axes[1, 1].legend(fontsize=11)
-axes[1, 1].grid(True, alpha=0.3)
-axes[1, 1].set_ylim(-1, 5.5)
-
-for ax in axes.flat:
-    ax.set_xlabel('z', fontsize=11)
-    ax.set_ylabel('f(z)', fontsize=11)
-
-plt.suptitle('Activation Functions and Their Derivatives', fontsize=15, y=1.01)
-plt.tight_layout()
-plt.savefig('activation_functions.png', dpi=100, bbox_inches='tight')
-plt.show()
-
-# Print key properties
-print("=== Activation Function Properties ===")
-print(f"{'Function':<12} {'Range':<12} {'Zero-Centered':<16} {'Saturates':<12}")
-print("-" * 52)
-print(f"{'Sigmoid':<12} {'(0, 1)':<12} {'No':<16} {'Yes':<12}")
-print(f"{'Tanh':<12} {'(-1, 1)':<12} {'Yes':<16} {'Yes':<12}")
-print(f"{'ReLU':<12} {'[0, inf)':<12} {'No':<16} {'No (pos)':<12}")
-print(f"{'Leaky ReLU':<12} {'(-inf,inf)':<12} {'No':<16} {'No':<12}")
+# Practical demo: binary classification probability
+raw_scores = np.array([-3.0, -1.0, 0.0, 1.0, 3.0])
+probs = sigmoid(raw_scores)
+for score, prob in zip(raw_scores, probs):
+    print(f"score={score:+.1f}  →  P(positive)={prob:.3f}")
+# score=-3.0  →  P(positive)=0.047
+# score= 0.0  →  P(positive)=0.500
+# score=+3.0  →  P(positive)=0.953
 </code></pre>
 
                         <div class="highlight-box highlight-crimson">
                             <i class="fas fa-exclamation-triangle me-2"></i>
-                            <strong>Vanishing Gradient Problem:</strong> Notice how sigmoid&rsquo;s derivative peaks at only 0.25 and vanishes near 0 for large $|z|$. In a 10-layer network, gradients multiply: $0.25^{10} = 0.000001$. This is why deep sigmoid networks were nearly impossible to train before ReLU.
+                            <strong>Vanishing gradient trap:</strong> In a 10-layer network, gradients are multiplied at each layer. If every layer uses sigmoid, the product is roughly $0.25^{10} \approx 10^{-6}$ — the first layers learn almost nothing. Use sigmoid only at the <em>output</em> of binary classifiers.
+                        </div>
+
+                        <!-- ── Tanh ───────────────────────────────────────── -->
+                        <h3 id="tanh">Tanh &mdash; $\tanh(z) = \dfrac{e^z - e^{-z}}{e^z + e^{-z}}$</h3>
+
+                        <p><strong>Range:</strong> (&minus;1, 1) &nbsp;|&nbsp; <strong>Zero-centred:</strong> Yes &nbsp;|&nbsp; <strong>Saturates:</strong> Yes</p>
+
+                        <p><strong>Analogy:</strong> A sentiment meter that reads from &minus;1 (strongly negative) through 0 (neutral) to +1 (strongly positive). Because the centre is zero, the average gradient across a mini-batch stays near zero — gradients cancel rather than all pushing the same way, giving faster convergence than sigmoid.</p>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta"><span class="bias-tag">Use Case</span><span class="bias-tag">Recurrent Networks</span></div>
+                            <h5>Where Tanh Still Wins in 2026</h5>
+                            <p>Tanh is the <strong>standard activation inside LSTM and GRU cells</strong>. It keeps hidden states in a bounded, zero-centred range, which prevents hidden state magnitudes from exploding over hundreds of timesteps. It is also used in some normalizing flows because it is invertible over its full domain.</p>
+                        </div>
+
+<pre><code class="language-python">import numpy as np
+import matplotlib.pyplot as plt
+
+def tanh(z):
+    """Zero-centred, range (-1, 1)."""
+    return np.tanh(z)
+
+def tanh_derivative(z):
+    """Derivative: 1 - tanh(z)^2. Maximum 1.0 at z=0."""
+    return 1.0 - np.tanh(z) ** 2
+
+z = np.linspace(-4, 4, 300)
+plt.figure(figsize=(8, 4))
+plt.plot(z, tanh(z), linewidth=2.5, label='tanh(z)')
+plt.plot(z, tanh_derivative(z), linewidth=2, linestyle='--', label="tanh'(z) [max=1.0]")
+plt.axhline(0, color='k', linewidth=0.5); plt.axvline(0, color='k', linewidth=0.5)
+plt.title('Tanh and Its Derivative'); plt.legend(); plt.grid(alpha=0.3)
+plt.tight_layout(); plt.show()
+
+# tanh vs sigmoid: derivative comparison
+for z_val in [-3, -1, 0, 1, 3]:
+    sig_grad = sigmoid_val = 1/(1+np.exp(-z_val))
+    sig_grad = sig_grad * (1 - sig_grad)
+    tanh_grad = tanh_derivative(z_val)
+    print(f"z={z_val:+d}  sigmoid'={sig_grad:.4f}  tanh'={tanh_grad:.4f}")
+# z=0  sigmoid'=0.2500  tanh'=1.0000  ← tanh has 4× larger gradient at centre
+</code></pre>
+
+                        <!-- ── ReLU ───────────────────────────────────────── -->
+                        <h3 id="relu">ReLU &mdash; $f(z) = \max(0, z)$</h3>
+
+                        <p><strong>Range:</strong> [0, &infin;) &nbsp;|&nbsp; <strong>Zero-centred:</strong> No &nbsp;|&nbsp; <strong>Saturates:</strong> No (positive side)</p>
+
+                        <p><strong>Analogy:</strong> A one-way valve in a water pipe — water flows freely in one direction (positive values pass through unchanged), but the valve blocks all backflow (negative values become zero). It is cheap to compute, never saturates on the positive side, and empirically trains deep networks faster than sigmoid or tanh.</p>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta"><span class="bias-tag">Use Case</span><span class="bias-tag">Deep CNNs &amp; MLPs</span></div>
+                            <h5>Why ReLU Became the Default Hidden-Layer Activation</h5>
+                            <p>When deep learning took off with AlexNet (2012), ReLU was the key ingredient enabling 8 layers to train in days rather than months. Its gradient is always 1 for positive inputs (no shrinkage), so gradients flow cleanly to early layers. Most <strong>convolutional neural networks and MLPs</strong> today still use ReLU as the default unless there is a specific reason to switch. PyTorch's <code>nn.ReLU()</code> and TensorFlow's <code>tf.keras.activations.relu</code> both default to this.</p>
+                        </div>
+
+<pre><code class="language-python">import numpy as np
+import matplotlib.pyplot as plt
+
+def relu(z):
+    """Passes positive values unchanged; clips negatives to zero."""
+    return np.maximum(0, z)
+
+def relu_derivative(z):
+    """1 for z>0, 0 for z<0, undefined at z=0 (convention: 0)."""
+    return (z > 0).astype(float)
+
+z = np.linspace(-4, 4, 300)
+plt.figure(figsize=(8, 4))
+plt.plot(z, relu(z), linewidth=2.5, label='relu(z)')
+plt.plot(z, relu_derivative(z), linewidth=2, linestyle='--', label="relu'(z)")
+plt.axhline(0, color='k', linewidth=0.5); plt.axvline(0, color='k', linewidth=0.5)
+plt.title('ReLU and Its Derivative'); plt.legend(); plt.grid(alpha=0.3)
+plt.tight_layout(); plt.show()
+
+# Demonstrate sparse activation (healthy for feature learning)
+np.random.seed(42)
+batch = np.random.randn(1000, 64)   # 1000 samples, 64 features
+activations = relu(batch)
+sparsity = (activations == 0).mean()
+print(f"Sparsity of ReLU activations: {sparsity:.1%}")  # ~50% neurons silent
+print("Sparse activations → efficient representations (only relevant neurons fire)")
+</code></pre>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Dying ReLU problem:</strong> If a neuron receives predominantly negative inputs (e.g., due to a large negative bias or bad initialisation), its output is permanently zero and its gradient is zero — it can never recover during training. With large learning rates this can kill 40–50% of neurons in a network. The variants below solve this.
+                        </div>
+
+                        <!-- ── Leaky ReLU & PReLU ─────────────────────────── -->
+                        <h3 id="leaky-relu">Leaky ReLU &amp; PReLU &mdash; $f(z) = \max(\alpha z,\, z)$</h3>
+
+                        <p><strong>Range:</strong> (&minus;&infin;, &infin;) &nbsp;|&nbsp; <strong>Zero-centred:</strong> Near &nbsp;|&nbsp; <strong>Saturates:</strong> No</p>
+
+                        <p><strong>Analogy:</strong> The same one-way valve, but with a tiny leak — negative signals aren't completely blocked; a small fraction ($\alpha$) trickles through. This keeps the gradient non-zero everywhere, preventing neurons from dying permanently.</p>
+
+                        <ul>
+                            <li><strong>Leaky ReLU:</strong> $\alpha$ is a fixed hyperparameter (typically 0.01 or 0.1).</li>
+                            <li><strong>PReLU (Parametric ReLU):</strong> $\alpha$ is <em>learned</em> during backpropagation — one $\alpha$ per channel. Microsoft Research used PReLU to win ImageNet 2015.</li>
+                        </ul>
+
+<pre><code class="language-python">import numpy as np
+import matplotlib.pyplot as plt
+
+def leaky_relu(z, alpha=0.01):
+    """Small fixed slope alpha for negative inputs."""
+    return np.where(z > 0, z, alpha * z)
+
+def leaky_relu_derivative(z, alpha=0.01):
+    return np.where(z > 0, 1.0, alpha)
+
+class PReLU:
+    """Parametric ReLU — alpha is a learnable parameter."""
+    def __init__(self, init_alpha=0.25):
+        self.alpha = init_alpha   # updated by optimizer during training
+    def forward(self, z):
+        return np.where(z > 0, z, self.alpha * z)
+    def backward(self, z, grad_output):
+        grad_z     = np.where(z > 0, grad_output, self.alpha * grad_output)
+        grad_alpha = np.sum(np.where(z > 0, 0, grad_output * z))  # dL/d_alpha
+        return grad_z, grad_alpha
+
+z = np.linspace(-4, 4, 300)
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+alpha_values = [0.01, 0.1, 0.3]
+for alpha in alpha_values:
+    axes[0].plot(z, leaky_relu(z, alpha), linewidth=2, label=f'alpha={alpha}')
+axes[0].set_title('Leaky ReLU (various alpha)'); axes[0].legend(); axes[0].grid(alpha=0.3)
+
+prelu = PReLU(init_alpha=0.25)
+axes[1].plot(z, prelu.forward(z), linewidth=2.5, color='purple', label='PReLU (alpha=0.25 learned)')
+axes[1].set_title('PReLU — learnable slope'); axes[1].legend(); axes[1].grid(alpha=0.3)
+plt.tight_layout(); plt.show()
+
+# Quick comparison: how many neurons die?
+np.random.seed(0)
+z_batch = np.random.randn(10000) - 1.5  # biased toward negative (simulates bad init)
+relu_dead    = (np.maximum(0, z_batch) == 0).mean()
+leaky_dead   = (leaky_relu(z_batch, 0.01) == 0).mean()
+print(f"ReLU dead neurons:       {relu_dead:.1%}")
+print(f"Leaky ReLU dead neurons: {leaky_dead:.1%}")
+# ReLU dead neurons:       ~82%  ← catastrophic
+# Leaky ReLU dead neurons: 0.0%  ← none, leak keeps gradient alive
+</code></pre>
+
+                        <!-- ── ELU & SELU ─────────────────────────────────── -->
+                        <h3 id="elu-selu">ELU &amp; SELU &mdash; smooth negative region</h3>
+
+                        <p><strong>ELU Range:</strong> (&minus;&alpha;, &infin;) &nbsp;|&nbsp; <strong>Zero-centred:</strong> Approximately &nbsp;|&nbsp; <strong>Saturates:</strong> Only below at &minus;&alpha;</p>
+
+                        <p><strong>Analogy (ELU):</strong> A soft-edged valve — instead of a hard kink at zero, the negative side curves smoothly to a floor of $-\alpha$. This reduces the bias shift that Leaky ReLU can cause and pushes the mean activation closer to zero, speeding up convergence.</p>
+
+                        <p>$$\text{ELU}(z) = \begin{cases} z & z > 0 \\ \alpha (e^z - 1) & z \leq 0 \end{cases}$$</p>
+
+                        <p><strong>SELU (Scaled ELU)</strong> adds two carefully chosen constants $\lambda$ and $\alpha$ (derived mathematically) so that activations are <em>self-normalizing</em> — the mean and variance of each layer's output are automatically kept near 0 and 1 respectively, <strong>without BatchNorm</strong>. This is the activation of choice for fully-connected deep networks where you want to avoid adding normalisation layers.</p>
+
+                        <p>$$\text{SELU}(z) = \lambda \begin{cases} z & z > 0 \\ \alpha (e^z - 1) & z \leq 0 \end{cases} \quad \lambda \approx 1.0507,\ \alpha \approx 1.6733$$</p>
+
+<pre><code class="language-python">import numpy as np
+import matplotlib.pyplot as plt
+
+def elu(z, alpha=1.0):
+    """Smooth negative region, mean activation closer to zero."""
+    return np.where(z > 0, z, alpha * (np.exp(z) - 1))
+
+# SELU constants are derived theoretically (Klambauer et al., 2017)
+SELU_LAMBDA = 1.0507009873554804934193349852946
+SELU_ALPHA  = 1.6732632423543772848170429916717
+
+def selu(z):
+    """Self-normalizing ELU — keeps layer outputs near N(0,1)."""
+    return SELU_LAMBDA * np.where(z > 0, z, SELU_ALPHA * (np.exp(z) - 1))
+
+z = np.linspace(-4, 4, 300)
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+for alpha in [0.5, 1.0, 2.0]:
+    axes[0].plot(z, elu(z, alpha), linewidth=2, label=f'ELU alpha={alpha}')
+axes[0].set_title('ELU (various alpha)'); axes[0].legend(); axes[0].grid(alpha=0.3)
+axes[1].plot(z, selu(z), linewidth=2.5, color='green', label='SELU')
+axes[1].set_title('SELU — self-normalising'); axes[1].legend(); axes[1].grid(alpha=0.3)
+plt.tight_layout(); plt.show()
+
+# Verify SELU self-normalisation property
+np.random.seed(42)
+x = np.random.randn(10000)   # standard normal input
+y = selu(x)
+print(f"Input:  mean={x.mean():.4f}, std={x.std():.4f}")
+print(f"SELU:   mean={y.mean():.4f}, std={y.std():.4f}")
+# SELU:   mean~-0.08, std~0.96  — close to N(0,1) after one pass
+</code></pre>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>SELU requirements:</strong> Self-normalisation only holds when weights are initialised with LeCun normal initialisation (<code>torch.nn.init.lecun_normal_</code>) and the network uses AlphaDropout instead of standard dropout. Mixing SELU with BatchNorm or incorrect initialisation breaks the theoretical guarantee.
+                        </div>
+
+                        <!-- ── GELU ───────────────────────────────────────── -->
+                        <h3 id="gelu">GELU &mdash; Gaussian Error Linear Unit (Transformers)</h3>
+
+                        <p><strong>Range:</strong> (&minus;0.17, &infin;) &nbsp;|&nbsp; <strong>Zero-centred:</strong> Approximately &nbsp;|&nbsp; <strong>Saturates:</strong> No</p>
+
+                        <p>$$\text{GELU}(z) = z \cdot \Phi(z) \approx 0.5\,z\left(1 + \tanh\!\left[\sqrt{\tfrac{2}{\pi}}\left(z + 0.044715\,z^3\right)\right]\right)$$</p>
+
+                        <p><strong>Analogy:</strong> A probabilistic gate — instead of a hard or leaky switch, GELU asks "what is the probability that a Gaussian random variable is less than $z$?" and gates the signal by that probability. A neuron with a small positive input still passes <em>some</em> signal (proportional to its statistical likelihood of being signal rather than noise), while a neuron with a large positive input passes almost all of it.</p>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta"><span class="bias-tag">Use Case</span><span class="bias-tag">Transformers &amp; LLMs</span></div>
+                            <h5>GELU Powers BERT, GPT, and Most Modern LLMs</h5>
+                            <p>Google's BERT (2018) and OpenAI's GPT series both use GELU in their feed-forward sublayers. The smooth probabilistic gating empirically outperforms ReLU on NLP tasks. It is now also the default in many vision transformers (ViT). The exact form uses a tanh approximation for computational efficiency; PyTorch exposes both via <code>F.gelu(x)</code> and <code>F.gelu(x, approximate='tanh')</code>.</p>
+                        </div>
+
+<pre><code class="language-python">import numpy as np
+import matplotlib.pyplot as plt
+from scipy.special import erf   # or use tanh approximation
+
+def gelu_exact(z):
+    """Exact GELU via the Gaussian CDF (requires scipy)."""
+    return z * 0.5 * (1.0 + erf(z / np.sqrt(2)))
+
+def gelu_approx(z):
+    """Tanh approximation used in PyTorch (matches torch.nn.functional.gelu)."""
+    return 0.5 * z * (1.0 + np.tanh(np.sqrt(2 / np.pi) * (z + 0.044715 * z**3)))
+
+z = np.linspace(-4, 4, 300)
+plt.figure(figsize=(9, 4))
+plt.plot(z, gelu_exact(z),  linewidth=2.5, label='GELU (exact)')
+plt.plot(z, gelu_approx(z), linewidth=2,   linestyle='--', label='GELU (tanh approx)')
+# Compare against ReLU
+plt.plot(z, np.maximum(0, z), linewidth=1.5, linestyle=':', color='gray', label='ReLU')
+plt.axhline(0, color='k', linewidth=0.5); plt.axvline(0, color='k', linewidth=0.5)
+plt.title('GELU vs ReLU'); plt.legend(); plt.grid(alpha=0.3)
+plt.tight_layout(); plt.show()
+
+# Key property: GELU can suppress small positive values (probabilistic gating)
+for z_val in [-2, -0.5, 0, 0.5, 2]:
+    print(f"z={z_val:+.1f}  GELU={gelu_exact(np.array([z_val]))[0]:+.4f}  "
+          f"ReLU={max(0, z_val):.4f}")
+# z=-0.5  GELU=-0.1543  ReLU=0.0000  ← GELU leaks slight negative signal
+# z=+0.5  GELU=+0.3457  ReLU=0.5000  ← GELU gates down small positives
+</code></pre>
+
+                        <!-- ── Swish / SiLU & Mish ───────────────────────── -->
+                        <h3 id="swish-mish">Swish / SiLU &amp; Mish &mdash; smooth self-gated units</h3>
+
+                        <p><strong>Swish / SiLU Range:</strong> (&minus;0.28, &infin;) &nbsp;|&nbsp; <strong>Zero-centred:</strong> Approximately &nbsp;|&nbsp; <strong>Saturates:</strong> No</p>
+
+                        <p>$$\text{Swish}(z) = z \cdot \sigma(z) = \frac{z}{1+e^{-z}} \qquad \text{Mish}(z) = z \cdot \tanh(\text{Softplus}(z)) = z \cdot \tanh(\ln(1+e^z))$$</p>
+
+                        <p><strong>Swish analogy:</strong> A self-gating highway — the input multiplies its own sigmoid, so large positive inputs pass through cleanly while small or negative inputs are smoothly attenuated. Discovered by Google Brain (2017) via neural architecture search, Swish outperforms ReLU on deep networks for image classification and language tasks.</p>
+
+                        <p><strong>Mish analogy:</strong> A smoother, slightly more aggressive version of Swish — it uses tanh(softplus(z)) as the gate, giving it a marginally richer gradient landscape. YOLOv4 and some recent object detection models prefer Mish because its slightly negative dip for small inputs helps prevent dead neurons. In practice, Swish and Mish are nearly interchangeable.</p>
+
+                        <p><strong>SiLU</strong> (Sigmoid Linear Unit) is identical to Swish with no learnable parameter. PyTorch calls it <code>torch.nn.SiLU()</code>; it is the default activation in EfficientNet and many diffusion model U-Nets.</p>
+
+<pre><code class="language-python">import numpy as np
+import matplotlib.pyplot as plt
+
+def sigmoid(z):
+    return 1.0 / (1.0 + np.exp(-np.clip(z, -500, 500)))
+
+def swish(z, beta=1.0):
+    """Swish / SiLU (beta=1). Also written as z * sigmoid(z)."""
+    return z * sigmoid(beta * z)
+
+def softplus(z):
+    """Smooth approximation to ReLU: log(1 + e^z)."""
+    return np.log1p(np.exp(np.clip(z, -500, 20)))  # clip for numerical stability
+
+def mish(z):
+    """Mish = z * tanh(softplus(z))."""
+    return z * np.tanh(softplus(z))
+
+z = np.linspace(-4, 6, 300)
+plt.figure(figsize=(10, 4))
+plt.plot(z, swish(z),           linewidth=2.5, label='Swish / SiLU')
+plt.plot(z, mish(z),            linewidth=2,   linestyle='--', label='Mish')
+plt.plot(z, np.maximum(0, z),   linewidth=1.5, linestyle=':', color='gray', label='ReLU (reference)')
+plt.axhline(0, color='k', linewidth=0.5)
+plt.title('Swish / SiLU vs Mish vs ReLU'); plt.legend(); plt.grid(alpha=0.3)
+plt.tight_layout(); plt.show()
+
+# Gradient comparison (Swish has a richer gradient landscape than ReLU)
+def swish_derivative(z):
+    sig = sigmoid(z)
+    return sig + z * sig * (1 - sig)
+
+print("Swish gradient at key points:")
+for z_val in [-2, -0.5, 0, 1, 3]:
+    z_arr = np.array([z_val])
+    print(f"  z={z_val:+.1f}  swish'={swish_derivative(z_arr)[0]:+.4f}")
+</code></pre>
+
+                        <!-- ── Softmax & Softplus ─────────────────────────── -->
+                        <h3 id="softmax">Softmax &amp; Softplus &mdash; probability outputs and smooth approximation</h3>
+
+                        <p><strong>Softmax</strong> is not used in hidden layers — it is exclusively an <strong>output-layer activation for multi-class classification</strong>. It converts a vector of raw scores (logits) into a valid probability distribution: all outputs are positive and sum to exactly 1.</p>
+
+                        <p>$$\text{Softmax}(z_i) = \frac{e^{z_i}}{\sum_{j=1}^{K} e^{z_j}}$$</p>
+
+                        <p><strong>Analogy (Softmax):</strong> A tournament voting system — each contestant (class) gets votes proportional to the exponent of their score. The winner takes a large share, but every contestant gets at least some non-zero fraction of the total vote. This is why softmax is paired with cross-entropy loss in every multi-class classifier.</p>
+
+                        <p><strong>Softplus</strong> $= \ln(1 + e^z)$ is a smooth, everywhere-differentiable approximation of ReLU. It is mainly used in variational autoencoders (to produce positive variance predictions) and in models where smoothness at zero matters more than computational speed.</p>
+
+<pre><code class="language-python">import numpy as np
+import matplotlib.pyplot as plt
+
+def softmax(z):
+    """
+    Numerically stable softmax: subtract max before exp to prevent overflow.
+    Input:  z — 1-D array of logits (raw scores)
+    Output: probability distribution summing to 1.0
+    """
+    e = np.exp(z - z.max())    # subtract max for numerical stability
+    return e / e.sum()
+
+def softplus(z):
+    """Smooth, always-positive approximation to ReLU."""
+    return np.log1p(np.exp(np.clip(z, -500, 20)))
+
+# Softmax demo: 5-class classifier (e.g., digit recognition 0–4)
+logits = np.array([2.0, 1.0, 0.1, -0.5, 3.5])   # raw network outputs
+probs  = softmax(logits)
+print("Logits → Softmax probabilities:")
+for i, (logit, prob) in enumerate(zip(logits, probs)):
+    bar = '█' * int(prob * 40)
+    print(f"  Class {i}: logit={logit:+.1f}  P={prob:.3f}  {bar}")
+print(f"  Sum = {probs.sum():.6f}")
+
+# Softplus vs ReLU comparison
+z = np.linspace(-4, 4, 300)
+plt.figure(figsize=(8, 4))
+plt.plot(z, softplus(z),        linewidth=2.5, label='Softplus')
+plt.plot(z, np.maximum(0, z),   linewidth=2,   linestyle='--', color='gray', label='ReLU')
+plt.axhline(0, color='k', linewidth=0.5)
+plt.title('Softplus vs ReLU — Softplus is smooth at the kink')
+plt.legend(); plt.grid(alpha=0.3)
+plt.tight_layout(); plt.show()
+</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            <strong>Softmax + Cross-Entropy:</strong> In practice, modern frameworks (PyTorch's <code>nn.CrossEntropyLoss</code>, TensorFlow's <code>tf.keras.losses.CategoricalCrossentropy(from_logits=True)</code>) apply softmax internally during loss calculation. Pass raw logits — <em>not</em> the softmax output — to the loss function for better numerical stability.
+                        </div>
+
+                        <!-- ── Selection Guide ────────────────────────────── -->
+                        <h3 id="activation-guide">Choosing the Right Activation Function</h3>
+
+                        <p>With a dozen options available, the choice comes down to three questions: <em>where in the network are you?</em>, <em>what is the task?</em>, and <em>how deep is the network?</em></p>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-table me-2"></i><strong>Quick decision table:</strong>
+                            <table class="mt-3" style="width:100%; border-collapse:collapse; font-size:0.92rem;">
+                                <thead>
+                                    <tr style="background:var(--color-navy); color:#fff;">
+                                        <th style="padding:8px;">Situation</th>
+                                        <th style="padding:8px;">Recommended</th>
+                                        <th style="padding:8px;">Why</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr style="background:#f0f4f8;"><td style="padding:7px;">Default hidden layers (MLP/CNN)</td><td style="padding:7px;"><strong>ReLU</strong></td><td style="padding:7px;">Fast, sparse, no vanishing gradient on positive side</td></tr>
+                                    <tr><td style="padding:7px;">Seeing dying neurons?</td><td style="padding:7px;"><strong>Leaky ReLU</strong></td><td style="padding:7px;">Non-zero gradient everywhere; $\alpha$=0.01–0.1</td></tr>
+                                    <tr style="background:#f0f4f8;"><td style="padding:7px;">Deep MLP without BatchNorm</td><td style="padding:7px;"><strong>SELU</strong></td><td style="padding:7px;">Self-normalises; use LeCun init + AlphaDropout</td></tr>
+                                    <tr><td style="padding:7px;">Transformer feed-forward layer</td><td style="padding:7px;"><strong>GELU</strong></td><td style="padding:7px;">Used in BERT, GPT; probabilistic gating suits attention outputs</td></tr>
+                                    <tr style="background:#f0f4f8;"><td style="padding:7px;">EfficientNet / diffusion U-Net</td><td style="padding:7px;"><strong>Swish / SiLU</strong></td><td style="padding:7px;">Smooth, self-gated; matches neural architecture search results</td></tr>
+                                    <tr><td style="padding:7px;">Object detection (YOLO, etc.)</td><td style="padding:7px;"><strong>Mish</strong></td><td style="padding:7px;">Slightly richer gradient than Swish for localisation tasks</td></tr>
+                                    <tr style="background:#f0f4f8;"><td style="padding:7px;">LSTM / GRU hidden state</td><td style="padding:7px;"><strong>Tanh</strong></td><td style="padding:7px;">Zero-centred, bounded — prevents state explosion over time</td></tr>
+                                    <tr><td style="padding:7px;">Binary classification output</td><td style="padding:7px;"><strong>Sigmoid</strong></td><td style="padding:7px;">Outputs P(positive class) in (0,1)</td></tr>
+                                    <tr style="background:#f0f4f8;"><td style="padding:7px;">Multi-class classification output</td><td style="padding:7px;"><strong>Softmax</strong></td><td style="padding:7px;">Converts logits to valid probability distribution</td></tr>
+                                    <tr><td style="padding:7px;">Regression output</td><td style="padding:7px;"><strong>None (linear)</strong></td><td style="padding:7px;">Unconstrained real-valued prediction</td></tr>
+                                    <tr style="background:#f0f4f8;"><td style="padding:7px;">VAE variance head / positive output</td><td style="padding:7px;"><strong>Softplus</strong></td><td style="padding:7px;">Smooth, always positive — models variance without clamping</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+<pre><code class="language-python">import numpy as np
+
+# All activations in one self-contained reference block
+def sigmoid(z):      return 1 / (1 + np.exp(-np.clip(z, -500, 500)))
+def tanh(z):         return np.tanh(z)
+def relu(z):         return np.maximum(0, z)
+def leaky_relu(z, alpha=0.01): return np.where(z > 0, z, alpha * z)
+def elu(z, alpha=1.0): return np.where(z > 0, z, alpha * (np.exp(z) - 1))
+
+SELU_L, SELU_A = 1.0507009873554805, 1.6732632423543772
+def selu(z): return SELU_L * np.where(z > 0, z, SELU_A * (np.exp(z) - 1))
+
+def gelu(z): return 0.5*z*(1+np.tanh(np.sqrt(2/np.pi)*(z+0.044715*z**3)))
+def swish(z): return z * sigmoid(z)
+def softplus(z): return np.log1p(np.exp(np.clip(z, -500, 20)))
+def mish(z):  return z * np.tanh(softplus(z))
+def softmax(z): e=np.exp(z-z.max()); return e/e.sum()
+
+# Side-by-side evaluation at representative inputs
+activations = {
+    'Sigmoid':    sigmoid,     'Tanh':      tanh,
+    'ReLU':       relu,        'Leaky ReLU': leaky_relu,
+    'ELU':        elu,         'SELU':       selu,
+    'GELU':       gelu,        'Swish/SiLU': swish,
+    'Mish':       mish,        'Softplus':   softplus,
+}
+test_values = np.array([-3.0, -1.0, 0.0, 1.0, 3.0])
+print(f"{'Function':<14} ", end='')
+for v in test_values: print(f"z={v:+.0f}    ", end='')
+print()
+print('-' * 75)
+for name, fn in activations.items():
+    vals = fn(test_values)
+    print(f"{name:<14} ", end='')
+    for v in vals: print(f"{v:+7.3f}  ", end='')
+    print()
+</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-road me-2"></i>
+                            <strong>Rule of thumb for 2026:</strong> Start with <strong>ReLU</strong> for CNNs and MLPs. Switch to <strong>GELU or Swish</strong> for transformers and large models. Use <strong>Sigmoid/Softmax</strong> only at the output layer. Only reach for ELU, SELU, Mish, or PReLU when you have a concrete reason (dying neurons, no BatchNorm, specific benchmark evidence).
                         </div>
 
                         <!-- Section 4: Why Non-Linearity Matters -->
