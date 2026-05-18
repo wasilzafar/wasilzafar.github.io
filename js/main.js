@@ -955,7 +955,7 @@ function initMermaidDiagrams() {
     if (!document.querySelector('.mermaid')) return;
 
     mermaid.initialize({
-        startOnLoad: true,
+        startOnLoad: false,
         theme: 'base',
         themeVariables: {
             primaryColor: '#e8f4f4',
@@ -974,6 +974,7 @@ function initMermaidDiagrams() {
         },
         flowchart: { curve: 'basis', padding: 15 }
     });
+    mermaid.run();
 }
 
 // Initialize blog features when DOM is ready
