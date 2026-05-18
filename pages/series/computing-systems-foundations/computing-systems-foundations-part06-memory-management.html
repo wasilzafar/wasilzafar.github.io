@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" /><meta http-equiv="X-UA-Compatible" content="IE=edge" /><meta name="robots" content="index, follow" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" /><link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="How Linux virtual memory works — page tables, TLB, the slab allocator, stack vs heap, OOM killer, huge pages, and how cgroups enforce memory limits for containers." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="linux virtual memory, page tables, TLB, memory allocation, malloc internals, OOM killer, huge pages, cgroups memory, memory management linux" />
+    <meta property="og:title" content="Part 6: Memory Management — Virtual Memory, Paging & cgroups" />
+    <meta property="og:description" content="Virtual memory, page tables, the OOM killer, and how cgroups enforce memory limits — the complete guide to Linux memory management for engineers who need to understand why their processes get killed." />
+    <meta property="og:type" content="article" /><meta property="article:published_time" content="2026-05-13" /><meta property="article:author" content="Wasil Zafar" /><meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/computing-systems-foundations/computing-systems-foundations-part06-memory-management.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/computing-systems-foundations/computing-systems-foundations-part06-memory-management-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/computing-systems-foundations/computing-systems-foundations-part06-memory-management-tw.jpg" />
+    <title>Part 6: Memory Management — Virtual Memory, Paging & cgroups - Computing & Systems Foundations</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/computing-systems-foundations/computing-systems-foundations-part06-memory-management.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png"><link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{'ad_storage':'denied','analytics_storage':'denied','region':['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']});gtag('consent','default',{'ad_storage':'granted','analytics_storage':'granted'});gtag('set','url_passthrough',true);</script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <div id="cookieBanner" class="light display-bottom" style="display:none;"><div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div><div class="content-wrap"><div class="msg-wrap"><div class="title-wrap"><h4 style="margin:0;font-size:18px;color:var(--color-navy);font-weight:700;">Cookie Consent</h4></div><p style="font-size:14px;color:var(--color-navy);margin-bottom:15px;">We use cookies. See our <a href="/privacy-policy.html" style="color:var(--color-teal);">Privacy Policy</a>.</p><div id="cookieSettings" style="display:none;"></div><div id="cookieTypes" style="display:none;"></div></div><div class="btn-wrap"><button id="cookieAccept">Accept All</button><button id="cookieReject">Reject All</button><button id="cookieSave" style="display:none;">Save</button></div></div></div>
+    <div class="nav-v16-wrapper"><nav class="nav-v16"><a href="/" class="brand"><div class="brand-stack"><span></span><span></span><span></span></div><span class="brand-text">Wasil Zafar</span></a><button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()"><span></span><span></span><span></span></button><div class="links"><a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a><a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a><a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a><a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a><a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a><button class="nav-search-btn" onclick="openSearch()"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button></div></nav></div>
+
+    <section class="blog-hero">
+        <div class="container py-5"><div class="blog-header">
+            <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Computing &amp; Systems Foundations Series</a>
+            <h1 class="display-4 fw-bold mb-3">Part 6: Memory Management — Virtual Memory, Paging &amp; cgroups</h1>
+            <div class="blog-meta"><span><i class="fas fa-calendar me-2"></i>May 13, 2026</span><span><i class="fas fa-user me-2"></i>Wasil Zafar</span><span class="reading-time"><i class="fas fa-clock me-1"></i>18 min read</span><button onclick="window.print()" class="print-btn"><i class="fas fa-print"></i> Print</button></div>
+            <p class="lead">Virtual memory, page tables, the OOM killer, huge pages, and how cgroups enforce memory limits — why your container gets killed and what to do about it.</p>
+        </div></div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc"><div class="toc-header"><h3><i class="fas fa-list me-2"></i>Table of Contents</h3><button class="closebtn" onclick="closeNav()">&times;</button></div>
+        <ol>
+            <li><a href="#virtual-memory" onclick="closeNav()">Virtual Memory</a><ul><li><a href="#page-tables" onclick="closeNav()">Page Tables &amp; the TLB</a></li><li><a href="#page-faults" onclick="closeNav()">Page Faults</a></li></ul></li>
+            <li><a href="#memory-allocation" onclick="closeNav()">Memory Allocation</a><ul><li><a href="#heap" onclick="closeNav()">Heap: brk() and mmap()</a></li><li><a href="#malloc" onclick="closeNav()">glibc malloc Internals</a></li></ul></li>
+            <li><a href="#stack" onclick="closeNav()">Stack Memory</a></li>
+            <li><a href="#swap" onclick="closeNav()">Swap Space</a></li>
+            <li><a href="#oom" onclick="closeNav()">The OOM Killer</a></li>
+            <li><a href="#huge-pages" onclick="closeNav()">Huge Pages &amp; THP</a></li>
+            <li><a href="#cgroups-memory" onclick="closeNav()">cgroups Memory Limits</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5"><div class="container"><div class="row"><div class="col-lg-8 mx-auto"><div class="blog-content">
+
+        <h2 id="virtual-memory">Virtual Memory</h2>
+        <p>Every process believes it has exclusive access to a large, contiguous address space — up to 128 TB on 64-bit Linux. This is an illusion created by <strong>virtual memory</strong>. The CPU works with virtual addresses; the memory management unit (MMU) hardware translates them to physical addresses (actual RAM locations) using page tables maintained by the kernel.</p>
+
+        <div class="highlight-box">
+            <i class="fas fa-lightbulb me-2"></i>
+            <strong>Why Virtual Memory Exists:</strong> Without it, every process would need to know the physical addresses of every other process to avoid collisions, processes could corrupt each other's memory, and the total memory of all running processes couldn't exceed physical RAM. Virtual memory solves all three: isolation, protection, and the ability to over-commit (run processes whose combined virtual footprint exceeds physical RAM).
+        </div>
+
+        <h3 id="page-tables">Page Tables &amp; the TLB</h3>
+        <p>Memory is divided into fixed-size units called <strong>pages</strong> (typically 4 KB). Each process has a <strong>page table</strong> — a multi-level data structure maintained by the kernel that maps virtual page numbers to physical frame numbers.</p>
+
+        <div class="mermaid-container">
+            <div class="mermaid-label">Virtual-to-Physical Address Translation</div>
+            <pre class="mermaid">
+flowchart LR
+    VA["Virtual Address\n0x7fff0001a4c0"]
+    TLB["TLB — Translation Lookaside Buffer\n(CPU-internal cache of recent translations)"]
+    PT["Page Table Walk\n(4-level on x86-64: PGD→PUD→PMD→PTE)"]
+    PA["Physical Address\n0x00000004a2c0"]
+    RAM["Physical RAM"]
+
+    VA -->|"CPU asks: what's the physical address?"| TLB
+    TLB -->|"Cache hit (~1 ns)"| PA
+    TLB -->|"Cache miss — walk page tables (~20-100 ns)"| PT
+    PT --> PA
+    PA --> RAM
+
+    style TLB fill:#3B9797,color:#fff
+    style PT fill:#BF092F,color:#fff
+    style PA fill:#132440,color:#fff
+            </pre>
+        </div>
+
+        <p>The <strong>TLB (Translation Lookaside Buffer)</strong> is a small hardware cache inside the CPU that stores recent virtual-to-physical translations. A TLB hit takes ~1 ns; a TLB miss requires walking the page table (~20-100 ns). TLB efficiency depends on working set size — if a process accesses widely scattered memory, TLB thrashing kills performance.</p>
+
+<pre><code class="language-bash"># View the memory map of a process (virtual address layout)
+# (Use your shell's PID $$)
+cat /proc/$$/maps | head -20
+# Format: start-end perms offset dev inode path
+# r=read, w=write, x=execute, p=private, s=shared
+
+# Count total virtual address space regions
+wc -l /proc/$$/maps
+
+# See where libraries are mapped
+cat /proc/$$/maps | grep "\.so\." | awk '{print $6}' | sort -u
+
+# View memory statistics for a process
+cat /proc/$$/status | grep -E "VmPeak|VmRSS|VmSize|VmSwap"
+# VmSize = total virtual address space
+# VmRSS  = Resident Set Size (pages actually in RAM)
+# VmPeak = peak virtual memory usage
+</code></pre>
+
+        <h3 id="page-faults">Page Faults</h3>
+        <p>A <strong>page fault</strong> occurs when a process accesses a virtual address that has no current mapping to a physical page. The CPU triggers a fault, the kernel's fault handler runs, and it resolves the situation by:</p>
+        <ul>
+            <li><strong>Minor page fault</strong>: The page is in RAM but not mapped (e.g., first access to a newly allocated page, or a copy-on-write trigger). Fast to handle — just map it.</li>
+            <li><strong>Major page fault</strong>: The page is on disk (swapped out or from a file). Requires disk I/O — very slow (milliseconds). This is why "paging" is bad for performance.</li>
+            <li><strong>Invalid access</strong>: The address is genuinely invalid (null pointer dereference, buffer overflow). The kernel sends <code>SIGSEGV</code> to the process.</li>
+        </ul>
+
+<pre><code class="language-bash"># Count page faults for a process
+# minflt = minor faults, majflt = major faults
+cat /proc/$$/status | grep -E "^(Min|Maj)Flt"
+
+# See page fault counts while running a program
+/usr/bin/time -v ls /tmp 2>&1 | grep -E "Major|Minor|page"
+
+# For a running process
+cat /proc/$(pgrep python3 | head -1)/status 2>/dev/null | grep Flt
+</code></pre>
+
+        <h2 id="memory-allocation">Memory Allocation</h2>
+
+        <h3 id="heap">Heap: brk() and mmap()</h3>
+        <p>Dynamic memory allocation (malloc/new) comes from the heap. The kernel provides two system calls for expanding the heap:</p>
+        <ul>
+            <li><code>brk()</code>/<code>sbrk()</code>: Moves the "program break" — the end of the heap segment — upward, extending the heap. Simple and fast but only grows contiguously.</li>
+            <li><code>mmap(MAP_ANONYMOUS)</code>: Maps new anonymous memory pages anywhere in the address space. Used for large allocations (typically &gt;128 KB by glibc malloc). More flexible — can be unmapped individually.</li>
+        </ul>
+
+<pre><code class="language-bash"># See which syscalls a Python memory allocation makes
+strace -e trace=brk,mmap python3 -c "x = [0] * 1000000" 2>&1 | grep -E "brk|mmap" | head -10
+
+# Demonstrate the heap vs mmap threshold in glibc
+python3 -c "
+import ctypes, mmap
+# Small allocation: goes through brk (heap)
+# Large allocation: goes through mmap
+# Check /proc/self/maps after large malloc
+import subprocess
+subprocess.run(['cat', '/proc/self/maps'], capture_output=False)
+" 2>/dev/null | grep anon | head -5
+</code></pre>
+
+        <h3 id="malloc">glibc malloc Internals</h3>
+        <p>When you call <code>malloc()</code>, you're not calling the kernel — you're calling glibc's allocator, which manages a pool of memory obtained from the kernel via <code>brk()</code>/<code>mmap()</code>. The allocator maintains free lists, coalesces adjacent free blocks, and only goes to the kernel when its current pool is exhausted.</p>
+
+        <div class="experiment-card">
+            <div class="experiment-meta"><span class="badge bg-teal"><i class="fas fa-memory me-1"></i>Performance</span></div>
+            <h4>Memory Fragmentation and Allocator Choice</h4>
+            <p>glibc's default malloc can suffer from <strong>memory fragmentation</strong> in long-running services with many small, varying-size allocations and frees — the allocator ends up with many small holes that can't be used for new allocations, so RSS grows even though the application "freed" memory. This is why high-performance services often swap to alternative allocators: <strong>jemalloc</strong> (used by Firefox, Redis, Facebook) or <strong>tcmalloc</strong> (used by Google Chrome, Chromium). They use different fragmentation-avoidance strategies and typically achieve 10-30% better memory efficiency in real workloads.</p>
+            <div class="bias-tags"><span class="bias-tag">jemalloc</span><span class="bias-tag">Memory Fragmentation</span><span class="bias-tag">Redis</span></div>
+        </div>
+
+        <h2 id="stack">Stack Memory</h2>
+        <p>The <strong>stack</strong> holds local variables, function arguments, return addresses, and saved register values. It grows <em>downward</em> in virtual address space. Each function call pushes a <strong>stack frame</strong> onto the stack; each return pops it off. This is automatic and O(1) — unlike heap allocation which may require searching free lists.</p>
+
+        <p>The default stack size limit on Linux is typically 8 MB (<code>ulimit -s</code>). Exceeding it causes a stack overflow — the program receives <code>SIGSEGV</code>. This is why deeply recursive programs (e.g., parsing deeply nested JSON with a recursive parser) can crash with a segfault.</p>
+
+<pre><code class="language-bash"># View stack size limit
+ulimit -s           # Default: 8192 (KB = 8 MB)
+
+# Increase stack size for a session
+ulimit -s unlimited  # Or a specific size
+
+# See stack region in process maps
+cat /proc/$$/maps | grep "\[stack\]"
+
+# Python has a default recursion limit (1000) to avoid stack overflow
+python3 -c "
+import sys
+print('Recursion limit:', sys.getrecursionlimit())   # 1000
+# sys.setrecursionlimit(10000)  # Can increase, but risk stack overflow
+"
+
+# Observe stack growth with a simple recursive function
+python3 -c "
+import sys
+def depth(n):
+    if n == 0: return 0
+    return 1 + depth(n - 1)
+print('Max safe depth:', 980)  # ~20 frames of overhead
+print('At depth 980:', depth(980))
+"
+</code></pre>
+
+        <h2 id="swap">Swap Space</h2>
+        <p>When physical RAM is exhausted, the kernel can move <strong>cold</strong> (infrequently accessed) memory pages to swap space on disk, freeing RAM for active use. The pages are transparently swapped back when accessed again (a major page fault).</p>
+
+<pre><code class="language-bash"># View swap usage
+free -h          # Shows: total, used, free for RAM and swap
+swapon --show    # List swap devices and their usage
+
+cat /proc/swaps  # Same info from kernel
+
+# How aggressively the kernel swaps
+cat /proc/sys/vm/swappiness    # 0=avoid swap, 100=swap aggressively
+# Default: 60 for desktop, 1 or 10 for servers
+# Set to 1 for latency-sensitive servers (databases)
+# sudo sysctl vm.swappiness=1
+</code></pre>
+
+        <h2 id="oom">The OOM Killer</h2>
+        <p>When the system runs out of both RAM and swap, the kernel's <strong>OOM (Out Of Memory) killer</strong> activates. It selects a process to kill based on an <strong>oom_score</strong> — a heuristic combining process size, runtime, and user-space hints. The process with the highest score is killed to free memory.</p>
+
+        <div class="highlight-box highlight-crimson">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>OOM Kill in Kubernetes:</strong> When a container exceeds its memory limit (set via <code>resources.limits.memory</code> in a Pod spec), the kernel's cgroup memory controller sends an OOM kill to the container's PID 1. This appears as a <code>OOMKilled</code> status in <code>kubectl describe pod</code>. The fix is not to increase limits blindly — first diagnose <em>why</em> the process is using so much memory (leak? legitimate growth? underestimated limit?).
+        </div>
+
+<pre><code class="language-bash"># Check OOM killer history in kernel logs
+dmesg | grep -i "oom\|kill\|out of memory" | tail -20
+journalctl -k | grep -i "oom\|killed process" | tail -10
+
+# View OOM score for current processes (higher = more likely to be killed)
+for pid in $(ls /proc | grep '^[0-9]' | head -20); do
+    score=$(cat /proc/$pid/oom_score 2>/dev/null)
+    cmd=$(cat /proc/$pid/comm 2>/dev/null)
+    [ -n "$score" ] && echo "$score $cmd"
+done | sort -rn | head -10
+
+# Protect a critical process from OOM kill (score adjustment)
+# echo -1000 > /proc/$(pgrep sshd)/oom_score_adj  # Requires root
+# -1000 = never kill, +1000 = kill first
+
+# View current oom_score_adj
+cat /proc/$$/oom_score_adj   # 0 = default
+</code></pre>
+
+        <h2 id="huge-pages">Huge Pages &amp; THP</h2>
+        <p>The default 4 KB page size means a process using 1 GB of memory has ~262,000 pages, requiring 262,000 TLB entries (which don't exist — the TLB has ~1,000-4,000 entries). <strong>Huge pages</strong> (2 MB or 1 GB on x86-64) reduce TLB pressure dramatically for memory-intensive workloads.</p>
+
+<pre><code class="language-bash"># View huge page configuration
+cat /proc/meminfo | grep -i huge
+
+# Transparent Huge Pages (THP) — kernel automatically promotes eligible regions
+cat /sys/kernel/mm/transparent_hugepage/enabled
+# [always] madvise never
+
+# For databases (Postgres, Oracle), disable THP — it causes latency spikes
+# echo never > /sys/kernel/mm/transparent_hugepage/enabled
+# Add to /etc/rc.local for persistence
+
+# View THP usage
+cat /proc/meminfo | grep AnonHugePages   # Memory in 2MB huge pages
+</code></pre>
+
+        <h2 id="cgroups-memory">cgroups Memory Limits</h2>
+        <p><strong>cgroups v2</strong> memory limits are how Docker, Kubernetes, and systemd enforce memory caps on processes. When a process in a cgroup tries to allocate memory beyond the limit, the kernel either invokes the OOM killer within that cgroup (killing the process) or throttles allocation.</p>
+
+<pre><code class="language-bash"># View cgroups memory hierarchy (cgroups v2)
+ls /sys/fs/cgroup/
+cat /sys/fs/cgroup/memory.max           # System-wide max
+cat /sys/fs/cgroup/user.slice/memory.current  # User slice usage
+
+# Docker container memory limits (run docker to test)
+docker run --memory=128m --memory-swap=128m \
+    --name mem-test alpine \
+    sh -c "cat /sys/fs/cgroup/memory.max" 2>/dev/null
+# Should output: 134217728 (= 128 MB in bytes)
+
+# See memory accounting for all cgroups
+find /sys/fs/cgroup -name "memory.current" 2>/dev/null | \
+    while read f; do
+        val=$(cat "$f" 2>/dev/null)
+        [ "$val" -gt 0 ] 2>/dev/null && echo "$(( val / 1024 / 1024 ))MB  $f"
+    done | sort -rn | head -10
+</code></pre>
+
+        <h2 id="exercises">Exercises</h2>
+<pre><code class="language-bash"># Exercise 1: Read your process's memory stats
+cat /proc/$$/status | grep -E "Vm|FDSize|Threads"
+# VmRSS = how much RAM is actually in use (Resident Set Size)
+
+# Exercise 2: Observe page faults
+/usr/bin/time -v cat /dev/null 2>&1 | grep -E "page fault|Maximum"
+
+# Exercise 3: See memory breakdown of a running Python process
+python3 &
+PY_PID=$!
+sleep 1
+cat /proc/$PY_PID/smaps | grep -E "^(Private|Shared|Rss)" | awk '{sum[$1]+=$2} END{for(k in sum) print k, sum[k]/1024, "MB"}'
+kill $PY_PID
+
+# Exercise 4: Find processes consuming the most RAM
+ps aux --sort=-%mem | head -10
+# Or: ps -eo pid,rss,comm --sort=-rss | head -10
+
+# Exercise 5: Check swap usage
+free -h
+swapon --show
+cat /proc/sys/vm/swappiness
+</code></pre>
+
+        <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
+        <p>Virtual memory isolates processes and enables memory over-commitment. Page tables + the TLB translate virtual to physical addresses — TLB efficiency is the key to memory performance. The heap grows via brk/mmap; the allocator manages the pool. The OOM killer is the kernel's last resort when memory runs out. cgroups enforce hard limits — and understanding them makes "OOMKilled" containers debuggable rather than mysterious.</p>
+
+        <div class="related-posts">
+            <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+            <div class="related-post-item"><h5 class="mb-2">Part 5: Process Management</h5><p class="text-muted small mb-2">The process lifecycle, scheduling, signals, and IPC that memory management supports.</p><a href="computing-systems-foundations-part05-process-management.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a></div>
+            <div class="related-post-item"><h5 class="mb-2">Part 7: File Systems &amp; Storage</h5><p class="text-muted small mb-2">inodes, ext4, journaling, OverlayFS — the persistent side of the storage hierarchy.</p><a href="computing-systems-foundations-part07-file-systems-storage.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a></div>
+        </div>
+
+        <div class="series-nav">
+            <a href="computing-systems-foundations-part05-process-management.html" class="series-nav-item prev"><span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span><span class="nav-title">Part 5: Process Management</span></a>
+            <a href="computing-systems-foundations-part07-file-systems-storage.html" class="series-nav-item next"><span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span><span class="nav-title">Part 7: File Systems &amp; Storage</span></a>
+        </div>
+    </div></div></div></div></section>
+
+    <footer id="social-media"><div class="footer-v2-wrapper"><div class="footer-bar"><div class="fc-left"><div class="fc-brand-group"><div class="fc-brand-stack"><span></span><span></span><span></span></div><span class="fc-brand-name">Wasil Zafar</span></div><span class="fc-tagline">Consultant &amp; Cloud Architect</span></div><div class="fc-center"><a href="/">Home</a><a href="/disclaimer.html">Disclaimer</a><a href="/privacy-policy.html">Privacy</a><a href="/pages/contact.html">Contact</a></div><div class="fc-right"><a href="https://www.facebook.com/wasil.zafar/" target="_blank"><i class="fab fa-facebook-f"></i></a><a href="https://twitter.com/wasilzafar" target="_blank"><i class="fab fa-twitter"></i></a><a href="https://www.linkedin.com/in/wasilzafar" target="_blank"><i class="fab fa-linkedin-in"></i></a><a href="https://www.youtube.com/@wasilzafar" target="_blank"><i class="fab fa-youtube"></i></a><a href="https://www.instagram.com/itswzee/" target="_blank"><i class="fab fa-instagram"></i></a><a href="https://in.pinterest.com/wasilz/" target="_blank"><i class="fab fa-pinterest-p"></i></a><a href="mailto:wasil.zafar@gmail.com"><i class="fas fa-envelope"></i></a><a href="/feed.xml" target="_blank"><i class="fas fa-rss"></i></a></div></div><div class="footer-sub"><span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span><a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a></div></div></footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"></div>
+    <script src="../../../js/cookie-consent.js"></script><script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script><script src="../../../js/search.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="../../../js/path-progress.js"></script><script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

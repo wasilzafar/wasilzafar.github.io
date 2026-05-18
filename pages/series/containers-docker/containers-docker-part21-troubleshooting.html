@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Diagnose and fix production container issues — crash loops, OOM kills, networking failures, filesystem problems, and advanced debugging with nsenter, strace, and tcpdump." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="container debugging, crash loops, OOM kill, nsenter, strace, tcpdump, Docker troubleshooting, container diagnostics" />
+    <meta property="og:title" content="Part 21: Container Troubleshooting — Containers & Runtime Environments Mastery" />
+    <meta property="og:description" content="Diagnose and fix production container issues — crash loops, OOM kills, networking failures, filesystem problems, and advanced debugging with nsenter, strace, and tcpdump." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-05-14" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/containers-docker/containers-docker-part21-troubleshooting.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/containers-docker/containers-docker-part21-troubleshooting-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/containers-docker/containers-docker-part21-troubleshooting-tw.jpg" />
+
+    <title>Part 21: Container Troubleshooting - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/containers-docker/containers-docker-part21-troubleshooting.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied',
+            'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', {
+            'ad_storage': 'granted', 'ad_user_data': 'granted',
+            'ad_personalization': 'granted', 'analytics_storage': 'granted'
+        });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});
+        var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
+        j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;
+        f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- GTM noscript -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking "Accept All", you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;"></div>
+                <div id="cookieTypes" style="display: none;"></div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept">Accept All</button>
+                <button id="cookieReject">Reject All</button>
+                <button id="cookieSave" style="display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <div class="nav-v16-wrapper">
+        <nav class="nav-v16">
+            <a href="/" class="brand">
+                <div class="brand-stack"><span></span><span></span><span></span></div>
+                <span class="brand-text">Wasil Zafar</span>
+            </a>
+            <button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="links">
+                <a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a>
+                <a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a>
+                <a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a>
+                <a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a>
+                <a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a>
+                <button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Containers & Runtime Environments Mastery Series</a>
+                <h1 class="display-4 fw-bold mb-3">Part 21: Container Troubleshooting</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>May 14, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>26 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">When containers fail in production, you need a systematic approach — not random guessing. This article builds a complete troubleshooting toolkit: reading exit codes, diagnosing OOM kills, debugging network failures, and using advanced Linux tools (nsenter, strace, tcpdump) to investigate containers from the host when <code>docker exec</code> isn't enough.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#mindset" onclick="closeNav()">Troubleshooting Mindset</a>
+                <ul>
+                    <li><a href="#mindset" onclick="closeNav()">Systematic Approach</a></li>
+                    <li><a href="#decision-tree" onclick="closeNav()">Decision Tree</a></li>
+                </ul>
+            </li>
+            <li><a href="#wont-start" onclick="closeNav()">Container Won't Start</a></li>
+            <li><a href="#crash-loops" onclick="closeNav()">Crash Loops</a></li>
+            <li><a href="#oom-kills" onclick="closeNav()">OOM Kills</a></li>
+            <li><a href="#networking" onclick="closeNav()">Networking Failures</a></li>
+            <li><a href="#filesystem" onclick="closeNav()">Filesystem Issues</a></li>
+            <li><a href="#docker-exec" onclick="closeNav()">Advanced docker exec</a></li>
+            <li><a href="#nsenter" onclick="closeNav()">nsenter</a></li>
+            <li><a href="#strace" onclick="closeNav()">strace</a></li>
+            <li><a href="#tcpdump" onclick="closeNav()">tcpdump</a></li>
+            <li><a href="#debug-container" onclick="closeNav()">Debug Container Pattern</a></li>
+            <li><a href="#performance" onclick="closeNav()">Performance Debugging</a></li>
+            <li><a href="#quick-reference" onclick="closeNav()">Quick Reference</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion & Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                        <!-- Section 1: Troubleshooting Mindset -->
+                        <h2 id="mindset">Troubleshooting Mindset</h2>
+
+                        <p>Effective container debugging follows a consistent methodology. The most common mistake is jumping to random fixes before understanding the problem. Instead, follow this sequence: <strong>Observe → Hypothesize → Test → Fix → Verify</strong>.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-brain me-2"></i>
+                            <strong>The Golden Rule:</strong> Always start with logs. <code>docker logs &lt;container&gt;</code> answers 80% of container issues within 10 seconds. The remaining 20% require the advanced tools in this article.
+                        </div>
+
+                        <h3 id="decision-tree">Diagnostic Decision Tree</h3>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Container Troubleshooting Decision Tree</div>
+                            <pre class="mermaid">
+flowchart TD
+    START["Container Issue"] --> Q1{"Container running?"}
+    Q1 -->|No| Q2{"Ever started?"}
+    Q1 -->|Yes| Q3{"Responding?"}
+
+    Q2 -->|"Never started"| A1["Check: docker logs<br/>Image exists? Ports free?<br/>Volumes valid?"]
+    Q2 -->|"Started then died"| A2["Check: Exit code<br/>docker inspect State<br/>OOM? Crash?"]
+
+    Q3 -->|"Not responding"| Q4{"Health check?"}
+    Q3 -->|"Slow response"| A5["Performance debug:<br/>CPU throttle? I/O wait?<br/>Memory pressure?"]
+
+    Q4 -->|"Failing"| A3["App-level issue:<br/>docker exec to test<br/>Check dependencies"]
+    Q4 -->|"No health check"| A4["Network issue:<br/>Port mapping? DNS?<br/>Firewall rules?"]
+
+    A2 --> Q5{"Exit code?"}
+    Q5 -->|"137"| OOM["OOM Kill<br/>Increase memory limit"]
+    Q5 -->|"139"| SEG["Segfault<br/>Check binary/deps"]
+    Q5 -->|"1"| APP["App error<br/>Check logs"]
+    Q5 -->|"143"| SIG["SIGTERM<br/>Graceful shutdown"]
+    Q5 -->|"0"| DONE["Normal exit<br/>Check CMD/entrypoint"]
+
+    style START fill:#f8f9fa,stroke:#132440
+    style OOM fill:#fff5f5,stroke:#BF092F
+    style SEG fill:#fff5f5,stroke:#BF092F
+                            </pre>
+                        </div>
+
+                        <!-- Section 2: Container Won't Start -->
+                        <h2 id="wont-start">Container Won't Start</h2>
+
+                        <p>When <code>docker run</code> or <code>docker start</code> fails immediately, the container never reaches "running" state. Common causes and their diagnostics:</p>
+
+<pre><code class="language-bash"># Step 1: Check what happened
+docker ps -a --filter "name=myapp"
+# CONTAINER ID  IMAGE       COMMAND     CREATED        STATUS                    NAMES
+# abc123def456  myapp:1.0   "/start"    2 minutes ago  Created                   myapp
+# (Status "Created" means it was never started successfully)
+
+# Step 2: Read the error from logs
+docker logs myapp
+# /start: no such file or directory
+# (The entrypoint binary doesn't exist in the image)
+
+# Step 3: Alternative — check events for the error
+docker events --since "5m" --filter container=myapp
+# container create abc123 (image=myapp:1.0, name=myapp)
+# container die abc123 (exitCode=127)
+
+# Common "won't start" causes and fixes:
+
+# 1. Image not found
+docker run nonexistent-image:latest
+# Unable to find image 'nonexistent-image:latest' locally
+# Error response from daemon: pull access denied
+# FIX: Check image name/tag, login to registry
+
+# 2. Port already in use
+docker run -p 80:80 nginx
+# Error response from daemon: driver failed programming external connectivity:
+# Bind for 0.0.0.0:80 failed: port is already allocated
+# FIX: Use different port or stop conflicting container
+docker ps --filter "publish=80"  # Find what's using port 80
+lsof -i :80                      # Or check host processes
+
+# 3. Volume mount path doesn't exist
+docker run -v /nonexistent/path:/data myapp
+# Error response from daemon: invalid mount config: invalid mount path
+# FIX: Create directory first, or use named volumes
+
+# 4. Insufficient permissions
+docker run --memory=100g myapp
+# Error response from daemon: cannot allocate memory
+# FIX: Reduce memory request to available host memory
+
+# 5. Invalid entrypoint/CMD
+docker run myapp /bin/nonexistent
+# exec: "/bin/nonexistent": stat /bin/nonexistent: no such file or directory
+# FIX: Check Dockerfile CMD/ENTRYPOINT, verify binary exists in image
+docker run -it --entrypoint /bin/sh myapp  # Override to debug</code></pre>
+
+                        <!-- Section 3: Crash Loops -->
+                        <h2 id="crash-loops">Crash Loops</h2>
+
+                        <p>A crash loop occurs when a container starts, runs briefly, then exits — and Docker's restart policy keeps restarting it. The container cycles between "starting" and "exited" indefinitely. Exit codes are your primary diagnostic tool:</p>
+
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Exit Code</th>
+                                    <th>Signal</th>
+                                    <th>Meaning</th>
+                                    <th>Common Cause</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><strong>0</strong></td><td>—</td><td>Normal exit (success)</td><td>CMD completed. Container isn't meant to be long-running, or foreground process ended.</td></tr>
+                                <tr><td><strong>1</strong></td><td>—</td><td>Application error</td><td>Unhandled exception, missing config, dependency unavailable.</td></tr>
+                                <tr><td><strong>2</strong></td><td>—</td><td>Shell misuse</td><td>Incorrect command syntax in entrypoint script.</td></tr>
+                                <tr><td><strong>126</strong></td><td>—</td><td>Command not executable</td><td>Permission denied on entrypoint binary (missing +x).</td></tr>
+                                <tr><td><strong>127</strong></td><td>—</td><td>Command not found</td><td>Binary doesn't exist in image (wrong PATH or missing install).</td></tr>
+                                <tr><td><strong>137</strong></td><td>SIGKILL (9)</td><td>Killed by external signal</td><td>OOM kill, <code>docker kill</code>, or orchestrator termination.</td></tr>
+                                <tr><td><strong>139</strong></td><td>SIGSEGV (11)</td><td>Segmentation fault</td><td>Binary crash, corrupt memory, wrong architecture (amd64 on arm64).</td></tr>
+                                <tr><td><strong>143</strong></td><td>SIGTERM (15)</td><td>Graceful termination</td><td><code>docker stop</code>, orchestrator rolling update. Normal if app handles SIGTERM.</td></tr>
+                            </tbody>
+                        </table>
+
+<pre><code class="language-bash"># Identify a crash loop
+docker ps -a --filter "name=app"
+# STATUS: Restarting (1) 2 seconds ago   ← Restarting = crash loop
+
+# Get the exit code
+docker inspect --format '{{.State.ExitCode}}' app
+# 137
+
+# Check if OOM killed
+docker inspect --format '{{.State.OOMKilled}}' app
+# true  ← Memory limit exceeded
+
+# View restart count
+docker inspect --format '{{.RestartCount}}' app
+# 47  ← Restarted 47 times
+
+# View the last crash logs (even for a restarting container)
+docker logs app --tail 50
+# Last 50 lines before the crash
+
+# Debugging strategy for crash loops:
+# 1. Override entrypoint to keep container alive for inspection
+docker run -it --entrypoint /bin/sh myapp:latest
+# Now you're inside the container — check files, env, deps
+
+# 2. Add sleep to see what's happening
+docker run -it --entrypoint /bin/sh myapp -c "sleep 3600"
+# Container stays alive for 1 hour — debug inside it
+
+# 3. Check if it's a dependency issue (database not ready)
+docker logs app 2>&1 | grep -i "connection\|timeout\|refused"
+# Error: Connection refused to postgres:5432
+# FIX: Add health check dependency, retry logic, or init container</code></pre>
+
+                        <!-- Section 4: OOM Kills -->
+                        <h2 id="oom-kills">OOM Kills</h2>
+
+                        <p>When a container exceeds its memory limit, the Linux kernel's OOM (Out of Memory) killer terminates the process with SIGKILL (exit code 137). This is the most dangerous failure mode because the application gets no chance to shut down gracefully — data can be lost.</p>
+
+<pre><code class="language-bash"># Confirm OOM kill via Docker
+docker inspect app --format '{{.State.OOMKilled}}'
+# true
+
+docker inspect app --format '{{json .State}}' | jq '{Status, ExitCode, OOMKilled, FinishedAt}'
+# {
+#   "Status": "exited",
+#   "ExitCode": 137,
+#   "OOMKilled": true,
+#   "FinishedAt": "2026-05-14T10:30:00.123456789Z"
+# }
+
+# Confirm via kernel logs (dmesg)
+dmesg | grep -i "oom\|killed" | tail -10
+# [1234567.890] Memory cgroup out of memory: Killed process 12345 (node)
+#    total-vm:1048576kB, anon-rss:524288kB, file-rss:0kB, shmem-rss:0kB
+# [1234567.891] oom_reaper: reaped process 12345 (node), now anon-rss:0kB
+
+# Check current memory usage vs limit
+docker stats app --no-stream --format "{{.MemUsage}}"
+# 245MiB / 256MiB  ← Almost at limit, OOM imminent
+
+# View memory limit from container config
+docker inspect --format '{{.HostConfig.Memory}}' app
+# 268435456  (bytes = 256 MiB)
+
+# Check cgroup memory events (how many OOM kills occurred)
+CONTAINER_ID=$(docker inspect --format '{{.Id}}' app)
+cat /sys/fs/cgroup/system.slice/docker-${CONTAINER_ID}.scope/memory.events
+# low 0
+# high 0
+# max 15        ← Hit memory.max limit 15 times
+# oom 3         ← Kernel OOM killed 3 times
+# oom_kill 3    ← Confirmed 3 OOM kills
+
+# Solutions:
+# 1. Increase memory limit (if app genuinely needs more)
+docker update --memory=512m --memory-swap=512m app
+
+# 2. Find the memory leak (if usage grows unbounded)
+# Run with relaxed limits and monitor growth over time
+docker run --memory=2g myapp
+docker stats app  # Watch memory climb over hours
+
+# 3. Set memory-swap equal to memory (disable swap, cleaner OOM)
+docker run --memory=256m --memory-swap=256m myapp
+# Without this, container can swap to disk, causing slowness before OOM</code></pre>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Silent OOM Kills:</strong> If <code>OOMKilled</code> is <code>false</code> but exit code is still 137, the OOM kill happened to a <em>child</em> process inside the container (not PID 1). Docker only reports OOMKilled for the main container process. Check <code>dmesg</code> for the full picture.
+                        </div>
+
+                        <!-- Section 5: Networking Failures -->
+                        <h2 id="networking">Networking Failures</h2>
+
+                        <p>Container networking issues fall into three categories: can't reach the internet, can't reach other containers, or external clients can't reach the container. Debug systematically from inside out:</p>
+
+<pre><code class="language-bash"># === Step 1: Can the container reach the internet? ===
+docker exec app ping -c 3 8.8.8.8
+# If FAILS → network connectivity issue (bridge config, iptables)
+# If WORKS → DNS or application-level issue
+
+# === Step 2: DNS resolution working? ===
+docker exec app nslookup google.com
+# If FAILS → DNS configuration issue
+docker exec app cat /etc/resolv.conf
+# nameserver 127.0.0.11  ← Docker's embedded DNS (expected)
+
+# Check Docker DNS is working
+docker exec app nslookup other-container
+# If FAILS for container names → containers not on same network
+
+# === Step 3: Can containers reach each other? ===
+# Verify both containers are on the same Docker network
+docker network inspect bridge --format '{{range .Containers}}{{.Name}} {{.IPv4Address}}{{"\n"}}{{end}}'
+# nginx 172.17.0.2/16
+# app   172.17.0.3/16
+
+# Test connectivity between containers
+docker exec app ping -c 3 172.17.0.2
+docker exec app curl -s http://nginx:80/
+
+# === Step 4: Port mapping from host? ===
+# Verify port binding
+docker port app
+# 3000/tcp -> 0.0.0.0:3000
+
+# Test from host
+curl -v http://localhost:3000/
+# If FAILS → app not listening on correct interface inside container
+
+# Common mistake: app listens on 127.0.0.1 inside container
+docker exec app ss -tlnp
+# LISTEN  0  128  127.0.0.1:3000  *:*   ← WRONG: bound to localhost only
+# LISTEN  0  128  0.0.0.0:3000    *:*   ← CORRECT: bound to all interfaces
+
+# === Step 5: iptables interference? ===
+# Docker manages iptables rules for port forwarding
+sudo iptables -t nat -L DOCKER -n --line-numbers
+# Check that DNAT rules exist for published ports
+
+# === Step 6: Docker network driver issues ===
+# Recreate the default bridge if corrupted
+docker network prune  # Remove unused networks
+docker network create --driver bridge my-network
+docker run --network my-network --name app myapp</code></pre>
+
+                        <!-- Section 6: Filesystem Issues -->
+                        <h2 id="filesystem">Filesystem Issues</h2>
+
+                        <p>Filesystem problems manifest as permission denied errors, read-only filesystem errors, or "no space left on device" — even when the host has plenty of space:</p>
+
+<pre><code class="language-bash"># === Read-only filesystem ===
+docker exec app touch /test
+# touch: cannot touch '/test': Read-only file system
+
+# Cause 1: Container started with --read-only flag
+docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' app
+# true  ← Intentional security hardening
+# FIX: Write to tmpfs mounts (/tmp, /var/run) or designated writable volumes
+
+# Cause 2: OverlayFS layer issue
+docker inspect --format '{{.GraphDriver.Data.MergedDir}}' app
+ls -la /var/lib/docker/overlay2/LAYER_ID/merged/
+# Check if layers are intact
+
+# === No space left on device ===
+docker exec app df -h /
+# Filesystem      Size  Used  Avail  Use%  Mounted on
+# overlay         50G   50G   0      100%  /
+
+# Check Docker disk usage
+docker system df
+# TYPE           TOTAL   ACTIVE  SIZE     RECLAIMABLE
+# Images         45      12      12.5GB   8.3GB (66%)
+# Containers     15      8       2.1GB    1.5GB (71%)
+# Local Volumes  23      8       5.4GB    3.2GB (59%)
+# Build Cache    0       0       3.8GB    3.8GB
+
+# Clean up unused resources
+docker system prune -a --volumes
+# WARNING! This will remove all stopped containers, unused networks,
+# unused images, and unused volumes.
+
+# === Permission denied in volume mounts ===
+docker run -v /host/data:/app/data myapp
+docker exec app ls -la /app/data/
+# ls: cannot open directory '/app/data/': Permission denied
+
+# Cause: UID mismatch between host and container
+ls -la /host/data/
+# drwxr-xr-x 2 root root 4096 ...  ← Owned by root (UID 0)
+docker exec app id
+# uid=1000(appuser) gid=1000(appuser)  ← Container runs as UID 1000
+
+# FIX: Match UIDs
+# Option 1: Change host directory ownership
+sudo chown -R 1000:1000 /host/data/
+
+# Option 2: Run container with matching UID
+docker run --user $(id -u):$(id -g) -v /host/data:/app/data myapp
+
+# Option 3: Use named volumes (Docker manages permissions)
+docker run -v app-data:/app/data myapp</code></pre>
+
+                        <!-- Section 7: Advanced docker exec -->
+                        <h2 id="docker-exec">Advanced Debugging with docker exec</h2>
+
+                        <p><code>docker exec</code> is your first-line debugging tool — running commands inside a container's namespaces. But many production images lack debugging tools. Here's how to work around that:</p>
+
+<pre><code class="language-bash"># Basic debugging inside a running container
+docker exec -it app /bin/sh           # Get a shell
+docker exec app cat /proc/1/status    # Check PID 1 details
+docker exec app env                   # View environment variables
+docker exec app cat /etc/hosts        # DNS overrides
+docker exec app ls -la /proc/1/fd/    # Open file descriptors
+
+# Problem: Distroless/minimal images have no shell or tools
+docker exec -it app /bin/sh
+# OCI runtime exec failed: exec failed: unable to start container process:
+# exec: "/bin/sh": stat /bin/sh: no such file or directory
+
+# Solution 1: Copy a static binary into the container
+docker cp /usr/bin/busybox app:/tmp/busybox
+docker exec app /tmp/busybox sh
+
+# Solution 2: Use Docker's debug feature (Docker Desktop 4.27+)
+docker debug app
+# Attaches a debug shell with common tools pre-installed
+# Works even on distroless images (injects a toolbox)
+
+# Solution 3: Install tools temporarily (if package manager exists)
+docker exec app apt-get update && apt-get install -y curl net-tools procps
+# WARNING: Changes lost on container restart. Only for debugging.
+
+# Useful one-liners for debugging inside containers:
+docker exec app cat /proc/net/tcp          # Active TCP connections
+docker exec app cat /proc/meminfo          # Memory details
+docker exec app cat /proc/1/cgroup         # Cgroup membership
+docker exec app cat /proc/1/mountinfo      # Mount table
+docker exec app find / -name "*.log" 2>/dev/null  # Find log files</code></pre>
+
+                        <!-- Section 8: nsenter -->
+                        <h2 id="nsenter">nsenter — Entering Container Namespaces from Host</h2>
+
+                        <p>When <code>docker exec</code> fails (no shell in image, container is stopped, Docker daemon issues), <strong>nsenter</strong> lets you enter a container's namespaces directly from the host. It operates at the kernel level, bypassing Docker entirely:</p>
+
+<pre><code class="language-bash"># Get the container's PID on the host
+PID=$(docker inspect --format '{{.State.Pid}}' app)
+echo $PID  # e.g., 12345
+
+# Enter ALL namespaces of the container (equivalent to docker exec)
+sudo nsenter -t $PID -m -u -i -n -p -- /bin/sh
+# -t PID     Target process
+# -m         Mount namespace (see container's filesystem)
+# -u         UTS namespace (container's hostname)
+# -i         IPC namespace
+# -n         Network namespace (container's network stack)
+# -p         PID namespace (see container's process tree)
+
+# Enter ONLY the network namespace (useful for network debugging)
+sudo nsenter -t $PID -n -- ip addr show
+# Shows network interfaces as the container sees them
+sudo nsenter -t $PID -n -- ss -tlnp
+# Shows listening ports inside the container
+sudo nsenter -t $PID -n -- ping 8.8.8.8
+# Test connectivity from the container's perspective
+
+# Enter ONLY the mount namespace (inspect container's filesystem)
+sudo nsenter -t $PID -m -- ls /app/config/
+sudo nsenter -t $PID -m -- cat /etc/resolv.conf
+
+# Enter ONLY the PID namespace (see container's process tree)
+sudo nsenter -t $PID -p -- ps aux
+# PID  USER  TIME  COMMAND
+# 1    root  0:05  node server.js
+# 15   root  0:00  ps aux
+
+# Why nsenter over docker exec?
+# 1. Works when Docker daemon is unresponsive
+# 2. Works on stopped containers (if PID still exists in /proc)
+# 3. Can enter individual namespaces (not all-or-nothing)
+# 4. Has access to host tools (strace, tcpdump, perf)</code></pre>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-book me-2"></i>
+                            <strong>Security Note:</strong> nsenter requires root on the host and effectively gives you full access to the container's isolated environment. In production Kubernetes clusters, use <code>kubectl debug</code> (ephemeral containers) instead of SSH-ing into nodes to run nsenter.
+                        </div>
+
+                        <!-- Section 9: strace -->
+                        <h2 id="strace">strace — System Call Tracing</h2>
+
+                        <p><strong>strace</strong> intercepts and records every system call a process makes. When a container process hangs, crashes without useful logs, or behaves unexpectedly, strace reveals exactly what it's doing at the kernel level:</p>
+
+<pre><code class="language-bash"># Get the container's main PID
+PID=$(docker inspect --format '{{.State.Pid}}' app)
+
+# Trace all system calls of the container's main process
+sudo strace -p $PID -f -tt
+# -p PID   Attach to running process
+# -f       Follow forked child processes
+# -tt      Print microsecond timestamps
+
+# Output example:
+# 10:30:01.123456 read(5, "GET / HTTP/1.1\r\n", 4096) = 16
+# 10:30:01.123500 write(5, "HTTP/1.1 200 OK\r\n", 17) = 17
+# 10:30:01.123550 epoll_wait(3, [{EPOLLIN, {u32=5}}], 128, 5000) = 1
+
+# Filter for specific syscall categories:
+# Network operations only
+sudo strace -p $PID -f -e trace=network -tt
+# connect(5, {sa_family=AF_INET, sin_port=5432, sin_addr="10.0.0.5"}, 16) = -1 ECONNREFUSED
+# ← Shows exactly which connection is failing and why
+
+# File operations only
+sudo strace -p $PID -f -e trace=file -tt
+# open("/app/config/database.yml", O_RDONLY) = -1 ENOENT (No such file or directory)
+# ← Shows what files the app is trying to read
+
+# Process operations only
+sudo strace -p $PID -f -e trace=process
+
+# Common discoveries via strace:
+# 1. "Permission denied" — which file? → strace shows the exact path
+# 2. "Connection refused" — to where? → strace shows IP:port
+# 3. "Process hangs" — on what? → strace shows it's blocked on read/poll/futex
+# 4. "Slow startup" — why? → strace shows DNS lookups or file scans taking seconds
+
+# Save trace to file for analysis
+sudo strace -p $PID -f -tt -o /tmp/app-trace.log
+# Then search: grep -i "ENOENT\|EACCES\|ECONNREFUSED" /tmp/app-trace.log</code></pre>
+
+                        <!-- Section 10: tcpdump -->
+                        <h2 id="tcpdump">tcpdump — Network Packet Capture</h2>
+
+                        <p><strong>tcpdump</strong> captures raw network packets, letting you see exactly what data flows in and out of a container. Essential for debugging API failures, TLS issues, DNS problems, and connection timeouts:</p>
+
+<pre><code class="language-bash"># Method 1: Capture from inside container's network namespace
+PID=$(docker inspect --format '{{.State.Pid}}' app)
+sudo nsenter -t $PID -n -- tcpdump -i eth0 -n -c 50
+# Captures 50 packets from the container's perspective
+
+# Method 2: Find container's veth pair on host and capture there
+# Step 1: Get container's interface index
+docker exec app cat /sys/class/net/eth0/iflink
+# 15  (this is the ifindex of the host-side veth)
+
+# Step 2: Find matching veth on host
+ip link | grep "^15:"
+# 15: veth1a2b3c4@if14: <BROADCAST,MULTICAST,UP,LOWER_UP>
+
+# Step 3: Capture on that interface
+sudo tcpdump -i veth1a2b3c4 -n -c 100
+
+# Useful capture filters:
+# All HTTP traffic to/from the container
+sudo nsenter -t $PID -n -- tcpdump -i eth0 -n port 80 or port 443
+
+# DNS queries (why is name resolution failing?)
+sudo nsenter -t $PID -n -- tcpdump -i eth0 -n port 53
+# 10:30:01.123 IP 172.17.0.3.54321 > 127.0.0.11.53: A? database.internal
+
+# TCP connection attempts (why is connection refused?)
+sudo nsenter -t $PID -n -- tcpdump -i eth0 -n "tcp[tcpflags] & (tcp-syn|tcp-rst) != 0"
+# Shows SYN (connection attempts) and RST (rejections)
+
+# Save capture to file for Wireshark analysis
+sudo nsenter -t $PID -n -- tcpdump -i eth0 -w /tmp/container-traffic.pcap -c 1000
+# Open in Wireshark: wireshark /tmp/container-traffic.pcap
+
+# Capture with ASCII output (see HTTP bodies)
+sudo nsenter -t $PID -n -- tcpdump -i eth0 -A port 80 -c 20</code></pre>
+
+                        <!-- Section 11: Debug Container Pattern -->
+                        <h2 id="debug-container">Docker Debug Container Pattern</h2>
+
+                        <p>Instead of installing tools in production containers, use an <strong>ephemeral debug container</strong> that shares the target container's namespaces. The debug container has all the tools; the target container stays lean:</p>
+
+<pre><code class="language-bash"># nicolaka/netshoot — the Swiss Army knife of container debugging
+# Contains: curl, ping, dig, nslookup, tcpdump, ip, iptables, ss, netstat,
+#           strace, ltrace, perf, drill, mtr, iperf3, and 50+ more tools
+
+# Share the target container's NETWORK namespace
+docker run -it --rm \
+    --network container:app \
+    nicolaka/netshoot
+
+# Inside netshoot, you see app's network stack:
+ip addr show          # app's interfaces
+ss -tlnp              # app's listening ports
+curl localhost:3000   # access app's ports via localhost
+dig database.internal # resolve DNS from app's perspective
+tcpdump -i eth0      # capture app's traffic
+
+# Share BOTH network and PID namespace
+docker run -it --rm \
+    --network container:app \
+    --pid container:app \
+    nicolaka/netshoot
+
+# Now you can also see app's processes:
+ps aux                # See all processes in app container
+strace -p 1          # Trace app's PID 1
+
+# For filesystem access too, mount the container's filesystem
+docker run -it --rm \
+    --network container:app \
+    --pid container:app \
+    --volumes-from app \
+    nicolaka/netshoot
+
+# Access app's files:
+ls /app/              # See app's application code
+cat /app/config.yml   # Read config files
+cat /proc/1/environ   # Read environment variables of PID 1</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Production Best Practice:</strong> Keep a debug container image (like netshoot) pre-pulled on all production hosts. When an incident occurs, you can immediately launch it — no image pull delay during a crisis.
+                        </div>
+
+                        <!-- Section 12: Performance Debugging -->
+                        <h2 id="performance">Performance Debugging</h2>
+
+                        <p>When containers are slow but not crashing, the problem is usually CPU throttling, I/O saturation, or memory pressure. These issues are invisible without the right tools:</p>
+
+<pre><code class="language-bash"># === CPU Throttling Detection ===
+# Check if container is being throttled by CFS scheduler
+CONTAINER_ID=$(docker inspect --format '{{.Id}}' app)
+cat /sys/fs/cgroup/system.slice/docker-${CONTAINER_ID}.scope/cpu.stat
+# nr_periods 100000      # Total scheduling periods
+# nr_throttled 15000     # Periods where container was throttled
+# throttled_usec 30000000  # Total microseconds throttled (30 seconds!)
+
+# Throttle ratio (should be < 5% for healthy containers)
+# throttled_ratio = nr_throttled / nr_periods = 15000/100000 = 15% ← TOO HIGH
+
+# FIX: Increase CPU limits
+docker update --cpus=2.0 app  # Allow 2 full CPU cores
+
+# === Memory Pressure ===
+cat /sys/fs/cgroup/system.slice/docker-${CONTAINER_ID}.scope/memory.pressure
+# some avg10=25.00 avg60=15.50 avg300=8.20 total=567890000
+# full avg10=5.00 avg60=2.00 avg300=0.80 total=123456000
+# "some" > 10% means processes are waiting for memory reclaim
+
+# === I/O Saturation ===
+cat /sys/fs/cgroup/system.slice/docker-${CONTAINER_ID}.scope/io.pressure
+# some avg10=45.00 avg60=30.20 avg300=12.80 total=89012345
+# ← 45% of time at least one task is waiting for I/O → disk bottleneck
+
+# === Process-level investigation from host ===
+PID=$(docker inspect --format '{{.State.Pid}}' app)
+
+# CPU usage per thread inside the container
+sudo top -H -p $PID
+# Shows which threads are consuming CPU
+
+# What is the process doing? (requires perf tools)
+sudo perf top -p $PID
+# Real-time view of which functions consume CPU
+
+# I/O operations per process
+sudo pidstat -d -p $PID 1 5
+# Shows read/write bytes per second for the container process</code></pre>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Debugging Technique</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h5>The "CPU Usage is Low but App is Slow" Mystery</h5>
+                                <p>A container shows only 30% CPU usage yet response times are 10x normal. The paradox resolves when you understand CFS scheduling:</p>
+                                <ol>
+                                    <li>Container has <code>--cpus=0.5</code> (50% of one core)</li>
+                                    <li>In each 100ms CFS period, it gets 50ms of CPU time</li>
+                                    <li>If a request arrives and needs 80ms of CPU work, it completes in 160ms wall-clock time (50ms running + 50ms throttled + 50ms running + 10ms throttled)</li>
+                                    <li><code>docker stats</code> shows 50% CPU — "normal" — but latency has doubled</li>
+                                </ol>
+                                <p><strong>Diagnostic:</strong> Check <code>nr_throttled</code> in cpu.stat. If throttling is frequent, either increase CPU limits or optimize the hot path.</p>
+                            </div>
+                            <div class="bias-tags">
+                                <span class="bias-tag">CFS-scheduling</span>
+                                <span class="bias-tag">CPU-throttling</span>
+                                <span class="bias-tag">latency</span>
+                            </div>
+                        </div>
+
+                        <!-- Section 13: Quick Reference -->
+                        <h2 id="quick-reference">Common Issues Quick Reference</h2>
+
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Symptom</th>
+                                    <th>Likely Cause</th>
+                                    <th>Diagnostic Command</th>
+                                    <th>Fix</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Exit code 137</td><td>OOM kill</td><td><code>docker inspect --format '{{.State.OOMKilled}}'</code></td><td>Increase <code>--memory</code></td></tr>
+                                <tr><td>Exit code 139</td><td>Segfault</td><td><code>dmesg | grep segfault</code></td><td>Check binary architecture, rebuild</td></tr>
+                                <tr><td>Exit code 127</td><td>Binary not found</td><td><code>docker run --entrypoint sh image -c "which cmd"</code></td><td>Fix CMD/ENTRYPOINT path</td></tr>
+                                <tr><td>"Permission denied"</td><td>UID mismatch</td><td><code>docker exec app id; ls -la /path</code></td><td>Match UIDs or use named volumes</td></tr>
+                                <tr><td>"No space left"</td><td>Overlay full</td><td><code>docker system df</code></td><td><code>docker system prune</code></td></tr>
+                                <tr><td>"Connection refused"</td><td>Wrong bind address</td><td><code>docker exec app ss -tlnp</code></td><td>Bind to 0.0.0.0 not 127.0.0.1</td></tr>
+                                <tr><td>"Name resolution failed"</td><td>DNS misconfiguration</td><td><code>docker exec app cat /etc/resolv.conf</code></td><td>Check Docker DNS, network driver</td></tr>
+                                <tr><td>Port not accessible</td><td>Port not published</td><td><code>docker port container</code></td><td>Add <code>-p host:container</code></td></tr>
+                                <tr><td>Container extremely slow</td><td>CPU throttling</td><td><code>cat cpu.stat | grep throttled</code></td><td>Increase <code>--cpus</code></td></tr>
+                                <tr><td>Random kills under load</td><td>PID limit reached</td><td><code>cat pids.current; cat pids.max</code></td><td>Increase <code>--pids-limit</code></td></tr>
+                                <tr><td>Volume data missing</td><td>Anonymous volume</td><td><code>docker inspect -f '{{.Mounts}}'</code></td><td>Use named volumes</td></tr>
+                                <tr><td>Health check failing</td><td>App not ready on expected port</td><td><code>docker exec app curl localhost:PORT</code></td><td>Check app startup, add start_period</td></tr>
+                                <tr><td>Intermittent network drops</td><td>MTU mismatch</td><td><code>docker exec app ip link show eth0</code></td><td>Set <code>--opt com.docker.network.driver.mtu=1400</code></td></tr>
+                                <tr><td>Container can't reach host</td><td>Bridge isolation</td><td><code>docker exec app ping host.docker.internal</code></td><td>Use <code>--add-host</code> or host network</td></tr>
+                                <tr><td>Logs missing after restart</td><td>json-file driver without volume</td><td><code>docker inspect --format '{{.LogPath}}'</code></td><td>Use log aggregation (Fluent Bit)</td></tr>
+                            </tbody>
+                        </table>
+
+                        <!-- Section 14: Exercises -->
+                        <h2 id="exercises">Exercises</h2>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-flask me-2"></i>
+                            <strong>Exercise 1:</strong> Create a container that deliberately crashes with each exit code (0, 1, 126, 127, 137, 139). For each, use <code>docker inspect</code> to confirm the exit code and diagnose what happened. For exit 137, trigger a real OOM kill by running a memory-eating process inside a container with <code>--memory=50m</code>.
+                        </div>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-flask me-2"></i>
+                            <strong>Exercise 2:</strong> Set up two containers on the same Docker network. Deliberately break connectivity (wrong network, DNS misconfiguration, firewall rule). Use the systematic debugging approach from Section 5 to identify and fix each issue.
+                        </div>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-flask me-2"></i>
+                            <strong>Exercise 3:</strong> Run a web server container, then use nsenter and tcpdump to capture HTTP traffic flowing through it. Identify the container's veth pair on the host and capture traffic from the host side. Compare both captures.
+                        </div>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-flask me-2"></i>
+                            <strong>Exercise 4:</strong> Deploy nicolaka/netshoot as a debug container sharing the network namespace of a running application. Use it to diagnose a simulated DNS failure (override /etc/resolv.conf with invalid nameservers).
+                        </div>
+
+                        <!-- Section 15: Conclusion -->
+                        <h2 id="conclusion">Conclusion & Next Steps</h2>
+
+                        <p>Container troubleshooting is a skill that combines systematic methodology with deep Linux knowledge. The toolkit we've built in this article escalates from simple to advanced:</p>
+
+                        <ol>
+                            <li><strong>docker logs</strong> — 80% of issues (application errors, missing config)</li>
+                            <li><strong>docker inspect</strong> — Exit codes, OOM flags, mount points, network config</li>
+                            <li><strong>docker exec</strong> — Interactive debugging inside running containers</li>
+                            <li><strong>nsenter</strong> — Enter specific namespaces when Docker isn't cooperating</li>
+                            <li><strong>strace</strong> — See exactly what system calls a stuck process is making</li>
+                            <li><strong>tcpdump</strong> — Capture and analyze network traffic at the packet level</li>
+                            <li><strong>Debug containers</strong> — Full toolbox without polluting production images</li>
+                        </ol>
+
+                        <p>With monitoring (Part 20) telling you <em>what's wrong</em> and troubleshooting (this part) telling you <em>why</em>, you can handle any container incident. The final piece is scaling these practices to the enterprise — the subject of our concluding article.</p>
+
+                        <!-- Next in Series -->
+                        <div class="series-next">
+                            <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                            <p>In <a href="containers-docker-part22-enterprise-platforms.html"><strong>Part 22: Enterprise Container Platforms</strong></a>, we'll scale containers to the enterprise — registry replication, access control, air-gapped deployments, policy enforcement, multi-architecture builds, and choosing between Docker Enterprise, OpenShift, and Rancher.</p>
+                        </div>
+
+                        <!-- Related Posts -->
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 20: Container Monitoring & Observability</h5>
+                                <p class="text-muted small mb-2">Build a container observability stack — metrics with cAdvisor and Prometheus, structured logging with Fluent Bit.</p>
+                                <a href="containers-docker-part20-monitoring-observability.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 10: Networking Fundamentals</h5>
+                                <p class="text-muted small mb-2">Container networking from bridge to overlay — understanding how containers communicate.</p>
+                                <a href="containers-docker-part10-networking-fundamentals.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 3: Control Groups (cgroups)</h5>
+                                <p class="text-muted small mb-2">The kernel mechanism behind memory limits and CPU throttling — root cause of OOM kills.</p>
+                                <a href="containers-docker-part03-control-groups.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                        <!-- Series Navigation -->
+                        <div class="series-nav">
+                            <a href="containers-docker-part20-monitoring-observability.html" class="series-nav-item prev">
+                                <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span>
+                                <span class="nav-title">Part 20: Container Monitoring & Observability</span>
+                            </a>
+                            <a href="containers-docker-part22-enterprise-platforms.html" class="series-nav-item next">
+                                <span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span>
+                                <span class="nav-title">Part 22: Enterprise Container Platforms</span>
+                            </a>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left">
+                    <div class="fc-brand-group">
+                        <div class="fc-brand-stack"><span></span><span></span><span></span></div>
+                        <span class="fc-brand-name">Wasil Zafar</span>
+                    </div>
+                    <span class="fc-tagline">Consultant &amp; Cloud Architect</span>
+                </div>
+                <div class="fc-center">
+                    <a href="/">Home</a>
+                    <a href="/disclaimer.html">Disclaimer</a>
+                    <a href="/privacy-policy.html">Privacy</a>
+                    <a href="/pages/contact.html">Contact</a>
+                </div>
+                <div class="fc-right">
+                    <a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a>
+                    <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>
+                    <a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                    <a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a>
+                    <a href="/feed.xml" target="_blank" title="RSS Feed"><i class="fas fa-rss"></i></a>
+                </div>
+            </div>
+            <div class="footer-sub">
+                <span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span>
+                <a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+    <!-- Fuse.js Search -->
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <!-- PrismJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-docker.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <!-- Mermaid.js -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <!-- Learning Paths Progress -->
+    <script src="../../../js/path-progress.js"></script>
+    <!-- Quiz Widget -->
+    <script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

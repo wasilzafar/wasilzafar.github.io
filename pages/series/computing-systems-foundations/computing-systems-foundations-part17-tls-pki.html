@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" /><meta http-equiv="X-UA-Compatible" content="IE=edge" /><meta name="robots" content="index, follow" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="TLS/SSL deep dive — PKI infrastructure, certificate authorities, X.509 certificates, certificate chains, mTLS, Let's Encrypt, and OpenSSL certificate management on Linux." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="TLS, SSL, PKI, certificate authority, X.509 certificate, certificate chain, mTLS, mutual TLS, Let's Encrypt, OpenSSL certificates, certificate signing request, CSR" />
+    <meta property="og:title" content="Part 17: TLS/SSL Deep Dive — PKI & Certificates" />
+    <meta property="og:description" content="The Public Key Infrastructure behind HTTPS — certificate authorities, X.509 certs, chain of trust, mTLS, Let's Encrypt automation, and OpenSSL certificate workflows." />
+    <meta property="og:type" content="article" /><meta property="article:published_time" content="2026-05-13" /><meta property="article:author" content="Wasil Zafar" /><meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/computing-systems-foundations/computing-systems-foundations-part17-tls-pki.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/computing-systems-foundations/computing-systems-foundations-part17-tls-pki-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/computing-systems-foundations/computing-systems-foundations-part17-tls-pki-tw.jpg" />
+    <title>Part 17: TLS/SSL Deep Dive — PKI &amp; Certificates - Computing &amp; Systems Foundations</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/computing-systems-foundations/computing-systems-foundations-part17-tls-pki.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png"><link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{'ad_storage':'denied','analytics_storage':'denied','region':['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']});gtag('consent','default',{'ad_storage':'granted','analytics_storage':'granted'});gtag('set','url_passthrough',true);</script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <div id="cookieBanner" class="light display-bottom" style="display:none;"><div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div><div class="content-wrap"><div class="msg-wrap"><div class="title-wrap"><h4 style="margin:0;font-size:18px;color:var(--color-navy);font-weight:700;">Cookie Consent</h4></div><p style="font-size:14px;color:var(--color-navy);margin-bottom:15px;">We use cookies. See our <a href="/privacy-policy.html" style="color:var(--color-teal);">Privacy Policy</a>.</p><div id="cookieSettings" style="display:none;"></div><div id="cookieTypes" style="display:none;"></div></div><div class="btn-wrap"><button id="cookieAccept">Accept All</button><button id="cookieReject">Reject All</button><button id="cookieSave" style="display:none;">Save</button></div></div></div>
+    <div class="nav-v16-wrapper"><nav class="nav-v16"><a href="/" class="brand"><div class="brand-stack"><span></span><span></span><span></span></div><span class="brand-text">Wasil Zafar</span></a><button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()"><span></span><span></span><span></span></button><div class="links"><a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a><a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a><a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a><a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a><a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a><button class="nav-search-btn" onclick="openSearch()" aria-label="Search"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button></div></nav></div>
+
+    <section class="blog-hero">
+        <div class="container py-5"><div class="blog-header">
+            <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Computing &amp; Systems Foundations Series</a>
+            <h1 class="display-4 fw-bold mb-3">Part 17: TLS/SSL Deep Dive — PKI &amp; Certificates</h1>
+            <div class="blog-meta"><span><i class="fas fa-calendar me-2"></i>May 13, 2026</span><span><i class="fas fa-user me-2"></i>Wasil Zafar</span><span class="reading-time"><i class="fas fa-clock me-1"></i>18 min read</span><button onclick="window.print()" class="print-btn"><i class="fas fa-print"></i> Print</button></div>
+            <p class="lead">The Public Key Infrastructure behind HTTPS — certificate authorities, X.509 certificates, chain of trust, mutual TLS, Let's Encrypt automation, and OpenSSL certificate workflows.</p>
+        </div></div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc"><div class="toc-header"><h3><i class="fas fa-list me-2"></i>Table of Contents</h3><button class="closebtn" onclick="closeNav()">&times;</button></div>
+        <ol>
+            <li><a href="#pki" onclick="closeNav()">Public Key Infrastructure</a><ul><li><a href="#certificate-authorities" onclick="closeNav()">Certificate Authorities</a></li><li><a href="#chain-of-trust" onclick="closeNav()">Chain of Trust</a></li></ul></li>
+            <li><a href="#x509" onclick="closeNav()">X.509 Certificates</a><ul><li><a href="#cert-fields" onclick="closeNav()">Certificate Fields</a></li><li><a href="#extensions" onclick="closeNav()">Extensions</a></li></ul></li>
+            <li><a href="#lifecycle" onclick="closeNav()">Certificate Lifecycle</a><ul><li><a href="#csr-generation" onclick="closeNav()">CSR Generation</a></li><li><a href="#signing" onclick="closeNav()">Signing</a></li><li><a href="#renewal" onclick="closeNav()">Renewal</a></li></ul></li>
+            <li><a href="#mtls" onclick="closeNav()">Mutual TLS (mTLS)</a></li>
+            <li><a href="#letsencrypt" onclick="closeNav()">Let's Encrypt &amp; ACME Protocol</a></li>
+            <li><a href="#openssl" onclick="closeNav()">OpenSSL Certificate Operations</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5"><div class="container"><div class="row"><div class="col-lg-8 mx-auto"><div class="blog-content">
+
+        <h2 id="pki">Public Key Infrastructure</h2>
+        <p><strong>PKI (Public Key Infrastructure)</strong> is the system of roles, policies, hardware, software, and procedures needed to create, manage, distribute, use, store, and revoke digital certificates. It's the trust foundation that makes HTTPS, code signing, email encryption (S/MIME), and VPNs work at internet scale.</p>
+
+        <p>The core problem PKI solves: how does a client know that a public key genuinely belongs to <code>example.com</code> and not an attacker? The answer: a trusted third party (a <strong>Certificate Authority</strong>) cryptographically signs a statement binding the public key to the domain name.</p>
+
+        <h3 id="certificate-authorities">Certificate Authorities</h3>
+        <p>A <strong>Certificate Authority (CA)</strong> is an entity trusted to issue digital certificates. CAs verify the identity of certificate requestors before signing. The CA hierarchy has three levels:</p>
+
+        <ul>
+            <li><strong>Root CA</strong> — Self-signed, stored offline in HSMs (Hardware Security Modules). Pre-installed in OS/browser trust stores. Never signs end-entity certs directly.</li>
+            <li><strong>Intermediate CA</strong> — Signed by the Root CA. Does the day-to-day signing of server certificates. If compromised, only the intermediate is revoked, not the root.</li>
+            <li><strong>End-Entity Certificate</strong> — The server/client certificate signed by an Intermediate CA. This is what your web server presents during the TLS handshake.</li>
+        </ul>
+
+        <h3 id="chain-of-trust">Chain of Trust</h3>
+        <p>During TLS, the server sends its certificate <em>plus</em> the intermediate CA certificate(s). The client walks up the chain: verifies the server cert was signed by the intermediate, then verifies the intermediate was signed by a root CA in its trust store.</p>
+
+        <div class="mermaid-container">
+            <div class="mermaid-label">Certificate Chain of Trust</div>
+            <pre class="mermaid">
+flowchart TD
+    ROOT["Root CA Certificate\n(Self-signed, in trust store)\nValidity: 20-30 years"]
+    INT["Intermediate CA Certificate\n(Signed by Root CA)\nValidity: 5-10 years"]
+    SERVER["Server Certificate\n(Signed by Intermediate CA)\nValidity: 90 days - 1 year"]
+    CLIENT["Client Browser / OS\nTrust Store"]
+
+    ROOT -->|"Signs"| INT
+    INT -->|"Signs"| SERVER
+    CLIENT -->|"Trusts Root CA\n(pre-installed)"| ROOT
+    CLIENT -->|"Verifies chain:\nServer → Intermediate → Root"| SERVER
+            </pre>
+        </div>
+
+<pre><code class="language-bash"># View the certificate chain for a live website
+openssl s_client -connect www.google.com:443 -showcerts &lt; /dev/null 2>/dev/null | \
+  grep -E "s:|i:" | head -10
+# s: = subject (who the cert is for)
+# i: = issuer (who signed it)
+
+# View your system's trusted root CAs (Debian/Ubuntu)
+ls /etc/ssl/certs/ | head -20
+cat /etc/ssl/certs/ca-certificates.crt | grep "BEGIN CERTIFICATE" | wc -l
+# Typically 130-150 root CAs in a default trust store
+
+# View root CAs on RHEL/CentOS
+trust list | grep -c "type: certificate"
+</code></pre>
+
+        <h2 id="x509">X.509 Certificates</h2>
+        <p><strong>X.509</strong> is the ITU-T standard defining the format of public key certificates. Every TLS certificate on the internet is an X.509v3 certificate, encoded in either DER (binary) or PEM (Base64-encoded DER wrapped in <code>-----BEGIN CERTIFICATE-----</code> headers).</p>
+
+        <h3 id="cert-fields">Certificate Fields</h3>
+        <table class="table table-bordered table-sm">
+            <thead class="table-dark"><tr><th>Field</th><th>Description</th><th>Example</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Version</strong></td><td>X.509 version (almost always v3)</td><td><code>3</code></td></tr>
+                <tr><td><strong>Serial Number</strong></td><td>Unique identifier assigned by the CA</td><td><code>04:8A:3F:...</code></td></tr>
+                <tr><td><strong>Signature Algorithm</strong></td><td>Algorithm used by CA to sign</td><td><code>sha256WithRSAEncryption</code></td></tr>
+                <tr><td><strong>Issuer</strong></td><td>DN of the signing CA</td><td><code>CN=R3, O=Let's Encrypt</code></td></tr>
+                <tr><td><strong>Validity</strong></td><td>Not Before / Not After dates</td><td><code>2026-05-01 to 2026-07-30</code></td></tr>
+                <tr><td><strong>Subject</strong></td><td>DN of the certificate holder</td><td><code>CN=example.com</code></td></tr>
+                <tr><td><strong>Subject Public Key</strong></td><td>The public key + algorithm</td><td>RSA 2048-bit or EC P-256</td></tr>
+                <tr><td><strong>Extensions</strong></td><td>v3 extensions (SAN, Key Usage, etc.)</td><td>See below</td></tr>
+                <tr><td><strong>Signature</strong></td><td>CA's digital signature over all above fields</td><td>(binary blob)</td></tr>
+            </tbody>
+        </table>
+
+        <h3 id="extensions">Extensions</h3>
+        <p>X.509v3 extensions add critical metadata. The most important ones:</p>
+
+        <table class="table table-bordered table-sm">
+            <thead class="table-dark"><tr><th>Extension</th><th>Critical?</th><th>Purpose</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Subject Alternative Name (SAN)</strong></td><td>No</td><td>Lists all valid domain names / IPs for the cert</td></tr>
+                <tr><td><strong>Key Usage</strong></td><td>Yes</td><td>Restricts key operations (digitalSignature, keyEncipherment)</td></tr>
+                <tr><td><strong>Extended Key Usage (EKU)</strong></td><td>No</td><td>Limits certificate purpose (serverAuth, clientAuth)</td></tr>
+                <tr><td><strong>Basic Constraints</strong></td><td>Yes</td><td>Is this a CA cert? (CA:TRUE/FALSE, pathlen)</td></tr>
+                <tr><td><strong>Authority Key Identifier</strong></td><td>No</td><td>Identifies the signing CA's key (for chain building)</td></tr>
+                <tr><td><strong>CRL Distribution Points</strong></td><td>No</td><td>URL to download the Certificate Revocation List</td></tr>
+                <tr><td><strong>Authority Information Access</strong></td><td>No</td><td>OCSP responder URL + CA issuer cert URL</td></tr>
+            </tbody>
+        </table>
+
+        <div class="highlight-box">
+            <i class="fas fa-lightbulb me-2"></i>
+            <strong>SAN Replaces CN:</strong> Since 2017 (Chrome 58+), browsers no longer check the Common Name (CN) field for domain validation — only the <strong>Subject Alternative Name (SAN)</strong> extension is used. A certificate without a SAN entry for the domain will trigger a browser warning even if the CN matches. Always include SANs when generating certificates. Wildcard certs use <code>*.example.com</code> as a SAN DNS entry (covers subdomains but not the apex domain itself).
+        </div>
+
+<pre><code class="language-bash"># View full X.509 certificate details for a website
+openssl s_client -connect example.com:443 &lt; /dev/null 2>/dev/null | \
+  openssl x509 -noout -text | head -60
+
+# View just the SAN entries
+openssl s_client -connect github.com:443 &lt; /dev/null 2>/dev/null | \
+  openssl x509 -noout -ext subjectAltName
+
+# View expiry date
+openssl s_client -connect example.com:443 &lt; /dev/null 2>/dev/null | \
+  openssl x509 -noout -dates
+# notBefore=...
+# notAfter=...
+
+# View the public key algorithm and size
+openssl s_client -connect example.com:443 &lt; /dev/null 2>/dev/null | \
+  openssl x509 -noout -pubkey | openssl pkey -pubin -text -noout | head -5
+</code></pre>
+
+        <h2 id="lifecycle">Certificate Lifecycle</h2>
+        <p>Every certificate goes through: generation → signing → deployment → monitoring → renewal/revocation. Automating this lifecycle is critical — expired certificates cause outages.</p>
+
+        <h3 id="csr-generation">CSR Generation</h3>
+        <p>A <strong>Certificate Signing Request (CSR)</strong> contains the public key and subject information. The private key never leaves the server — only the CSR is sent to the CA.</p>
+
+<pre><code class="language-bash"># Generate a private key + CSR in one command
+openssl req -new -newkey rsa:2048 -nodes \
+  -keyout server.key \
+  -out server.csr \
+  -subj "/C=US/ST=California/L=San Francisco/O=MyCompany/CN=api.example.com" \
+  -addext "subjectAltName=DNS:api.example.com,DNS:www.api.example.com"
+
+# View the CSR contents
+openssl req -in server.csr -noout -text
+
+# Generate an EC (Elliptic Curve) key + CSR (faster, smaller keys)
+openssl ecparam -genkey -name prime256v1 -out ec-server.key
+openssl req -new -key ec-server.key \
+  -out ec-server.csr \
+  -subj "/CN=api.example.com" \
+  -addext "subjectAltName=DNS:api.example.com"
+</code></pre>
+
+        <h3 id="signing">Signing</h3>
+        <p>The CA validates the CSR (domain ownership, organisation identity) and signs it with their private key, producing the certificate. For internal PKI, you can be your own CA.</p>
+
+<pre><code class="language-bash"># Create a self-signed Root CA (for internal/dev use)
+openssl req -x509 -new -nodes \
+  -keyout ca.key -out ca.crt \
+  -days 3650 \
+  -subj "/C=US/O=Internal Corp/CN=Internal Root CA" \
+  -addext "basicConstraints=critical,CA:TRUE" \
+  -addext "keyUsage=critical,keyCertSign,cRLSign"
+
+# Sign the server CSR with your CA
+openssl x509 -req -in server.csr \
+  -CA ca.crt -CAkey ca.key -CAcreateserial \
+  -out server.crt \
+  -days 365 \
+  -extfile &lt;(printf "subjectAltName=DNS:api.example.com,DNS:www.api.example.com\nextendedKeyUsage=serverAuth")
+
+# Verify the certificate was signed by your CA
+openssl verify -CAfile ca.crt server.crt
+# server.crt: OK
+</code></pre>
+
+        <h3 id="renewal">Renewal</h3>
+        <p>Certificates expire. Let's Encrypt certs last 90 days; commercial certs last up to 398 days (since 2020). Renewal generates a new CSR (optionally with the same key) and obtains a fresh signature from the CA.</p>
+
+        <div class="highlight-box highlight-crimson">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Certificate Expiry = Outage:</strong> Expired certificates cause immediate TLS failures — browsers show scary warnings, API clients refuse to connect, and automated systems break. Major companies (Microsoft, Spotify, Ericsson) have had outages from expired certs. Prevention: automate renewal with certbot/ACME, set up monitoring alerts (30 days, 14 days, 7 days before expiry), and never rely on manual calendar reminders. Use <code>certbot renew --deploy-hook "systemctl reload nginx"</code> for zero-downtime renewal.
+        </div>
+
+        <h2 id="mtls">Mutual TLS (mTLS)</h2>
+        <p>Standard TLS is one-way: the client verifies the server's certificate. <strong>Mutual TLS (mTLS)</strong> adds client certificate authentication — the server also requests and verifies a certificate from the client. This provides strong mutual authentication without passwords.</p>
+
+        <p>mTLS is widely used for:</p>
+        <ul>
+            <li><strong>Service-to-service communication</strong> (microservices, service meshes)</li>
+            <li><strong>Zero-trust networks</strong> (BeyondCorp, Cloudflare Access)</li>
+            <li><strong>IoT device authentication</strong></li>
+            <li><strong>Financial APIs</strong> (PSD2 Open Banking requires mTLS)</li>
+        </ul>
+
+<pre><code class="language-bash"># Generate a client certificate (signed by the same internal CA)
+openssl req -new -newkey rsa:2048 -nodes \
+  -keyout client.key -out client.csr \
+  -subj "/CN=service-a/O=Internal Corp"
+
+openssl x509 -req -in client.csr \
+  -CA ca.crt -CAkey ca.key -CAcreateserial \
+  -out client.crt -days 365 \
+  -extfile &lt;(printf "extendedKeyUsage=clientAuth")
+
+# Test mTLS connection with curl
+# Server requires client cert → pass --cert and --key
+curl --cacert ca.crt \
+     --cert client.crt \
+     --key client.key \
+     https://api.internal.example.com/health
+
+# Configure nginx to require client certificates
+# In nginx.conf server block:
+#   ssl_client_certificate /etc/nginx/ca.crt;
+#   ssl_verify_client on;
+#   ssl_verify_depth 2;
+</code></pre>
+
+        <div class="experiment-card">
+            <div class="experiment-meta"><span class="badge bg-teal"><i class="fas fa-shield-alt me-1"></i>Production Pattern</span></div>
+            <h4>How Kubernetes Handles TLS Certificates</h4>
+            <p>Kubernetes uses PKI extensively: the API server, kubelet, etcd, and controller-manager all communicate over mTLS. <strong>cert-manager</strong> automates certificate lifecycle inside clusters — it watches <code>Certificate</code> custom resources, generates CSRs, submits to CAs (Let's Encrypt, Vault, internal), and stores certs as Kubernetes Secrets. Service meshes like <strong>Istio</strong> and <strong>Linkerd</strong> inject sidecar proxies that perform automatic mTLS between all pods — each workload gets a short-lived SPIFFE identity certificate (valid ~24h), rotated automatically. This gives you zero-trust networking with no application code changes.</p>
+            <div class="bias-tags"><span class="bias-tag">cert-manager</span><span class="bias-tag">Istio</span><span class="bias-tag">SPIFFE</span><span class="bias-tag">Service Mesh</span></div>
+        </div>
+
+        <h2 id="letsencrypt">Let's Encrypt &amp; ACME Protocol</h2>
+        <p><strong>Let's Encrypt</strong> is a free, automated, open Certificate Authority that has issued billions of certificates. It uses the <strong>ACME (Automatic Certificate Management Environment)</strong> protocol (RFC 8555) to automate domain validation and certificate issuance — no human intervention required.</p>
+
+        <div class="mermaid-container">
+            <div class="mermaid-label">ACME Protocol Flow (HTTP-01 Challenge)</div>
+            <pre class="mermaid">
+sequenceDiagram
+    participant CB as Certbot (Client)
+    participant ACME as ACME Server (Let's Encrypt)
+    participant WEB as Web Server (port 80)
+
+    CB->>ACME: 1. Request certificate for example.com
+    ACME->>CB: 2. Challenge: place token at /.well-known/acme-challenge/{token}
+    CB->>WEB: 3. Write token file to web root
+    CB->>ACME: 4. Ready — please validate
+    ACME->>WEB: 5. HTTP GET /.well-known/acme-challenge/{token}
+    WEB->>ACME: 6. Returns token + key authorization
+    ACME->>ACME: 7. Validates domain control
+    ACME->>CB: 8. Validation passed — here's your signed certificate
+    CB->>CB: 9. Install cert + reload web server
+            </pre>
+        </div>
+
+        <p><strong>Challenge types:</strong></p>
+        <ul>
+            <li><strong>HTTP-01</strong> — Place a file at <code>http://domain/.well-known/acme-challenge/</code> (requires port 80 open)</li>
+            <li><strong>DNS-01</strong> — Create a <code>_acme-challenge.domain</code> TXT record (supports wildcards, no port 80 needed)</li>
+            <li><strong>TLS-ALPN-01</strong> — Serve a special self-signed cert on port 443 with ALPN extension</li>
+        </ul>
+
+<pre><code class="language-bash"># Install certbot (the official ACME client)
+sudo apt install certbot python3-certbot-nginx   # Debian/Ubuntu
+
+# Obtain a certificate with HTTP-01 challenge (nginx plugin)
+sudo certbot --nginx -d example.com -d www.example.com
+
+# Obtain a wildcard cert with DNS-01 challenge (manual DNS)
+sudo certbot certonly --manual --preferred-challenges dns \
+  -d "*.example.com" -d "example.com"
+
+# Automatic renewal (certbot installs a systemd timer/cron)
+sudo certbot renew --dry-run   # Test renewal without making changes
+
+# View installed certificates
+sudo certbot certificates
+
+# Renewal with post-hook to reload nginx
+sudo certbot renew --deploy-hook "systemctl reload nginx"
+</code></pre>
+
+        <h2 id="openssl">OpenSSL Certificate Operations</h2>
+        <p>OpenSSL is the Swiss Army knife for TLS debugging and certificate management. These are the commands you'll use daily when working with certificates.</p>
+
+<pre><code class="language-bash"># === Inspect a remote server's TLS configuration ===
+# Connect and show full handshake + certificate
+openssl s_client -connect example.com:443 -servername example.com &lt; /dev/null
+
+# Show only the certificate chain (subject + issuer)
+openssl s_client -connect example.com:443 -showcerts &lt; /dev/null 2>/dev/null | \
+  grep -E "s:|i:"
+
+# Check which TLS version and cipher was negotiated
+openssl s_client -connect example.com:443 &lt; /dev/null 2>/dev/null | \
+  grep -E "Protocol|Cipher"
+</code></pre>
+
+<pre><code class="language-bash"># === Verify a certificate chain locally ===
+# Verify server.crt against system trust store
+openssl verify server.crt
+
+# Verify against a specific CA bundle
+openssl verify -CAfile ca-bundle.crt server.crt
+
+# Verify a full chain (intermediate + server)
+openssl verify -CAfile root-ca.crt -untrusted intermediate.crt server.crt
+</code></pre>
+
+<pre><code class="language-bash"># === Convert between certificate formats ===
+# PEM to DER (binary)
+openssl x509 -in cert.pem -outform DER -out cert.der
+
+# DER to PEM
+openssl x509 -in cert.der -inform DER -outform PEM -out cert.pem
+
+# PEM to PKCS#12 (bundle cert + key for import into browsers/Java)
+openssl pkcs12 -export -out bundle.p12 \
+  -inkey server.key -in server.crt -certfile ca.crt
+
+# PKCS#12 to PEM (extract cert and key)
+openssl pkcs12 -in bundle.p12 -out extracted.pem -nodes
+</code></pre>
+
+<pre><code class="language-bash"># === Check certificate expiry (useful in monitoring scripts) ===
+# Check when a remote cert expires
+echo | openssl s_client -connect example.com:443 2>/dev/null | \
+  openssl x509 -noout -enddate
+
+# Check if cert expires within 30 days (exit code 0 = still valid)
+openssl x509 -in server.crt -checkend 2592000 -noout
+echo $?   # 0 = valid for 30+ more days, 1 = expires within 30 days
+
+# One-liner for monitoring: check multiple domains
+for domain in example.com api.example.com mail.example.com; do
+  expiry=$(echo | openssl s_client -connect "$domain:443" 2>/dev/null | \
+    openssl x509 -noout -enddate | cut -d= -f2)
+  echo "$domain expires: $expiry"
+done
+</code></pre>
+
+        <h2 id="exercises">Exercises</h2>
+<pre><code class="language-bash"># Exercise 1: View the certificate chain for your favourite website
+openssl s_client -connect github.com:443 &lt; /dev/null 2>/dev/null | \
+  grep -E "s:|i:"
+
+# Exercise 2: Create a self-signed CA and sign a server cert
+openssl req -x509 -new -nodes -keyout myca.key -out myca.crt \
+  -days 3650 -subj "/CN=My Test CA"
+openssl req -new -newkey rsa:2048 -nodes \
+  -keyout myserver.key -out myserver.csr \
+  -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+openssl x509 -req -in myserver.csr -CA myca.crt -CAkey myca.key \
+  -CAcreateserial -out myserver.crt -days 365 \
+  -extfile &lt;(printf "subjectAltName=DNS:localhost,IP:127.0.0.1")
+openssl verify -CAfile myca.crt myserver.crt
+
+# Exercise 3: Check how many days until a cert expires
+echo | openssl s_client -connect google.com:443 2>/dev/null | \
+  openssl x509 -noout -dates
+
+# Exercise 4: View the SAN entries on a multi-domain cert
+echo | openssl s_client -connect google.com:443 2>/dev/null | \
+  openssl x509 -noout -ext subjectAltName
+
+# Exercise 5: Check which TLS version is negotiated
+openssl s_client -connect example.com:443 -tls1_3 &lt; /dev/null 2>/dev/null | \
+  grep "Protocol"
+</code></pre>
+
+        <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
+        <p>PKI is the trust infrastructure that makes encrypted communication possible at internet scale. The certificate chain (Root CA → Intermediate → End-Entity) provides hierarchical trust, X.509 defines the universal certificate format, and ACME/Let's Encrypt automates the entire lifecycle. mTLS extends trust to both sides of a connection — essential for zero-trust architectures and service meshes. Master OpenSSL's inspection commands and you can debug any TLS issue you encounter.</p>
+
+        <div class="related-posts">
+            <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+            <div class="related-post-item"><h5 class="mb-2">Part 16: Cryptography Foundations</h5><p class="text-muted small mb-2">Symmetric/asymmetric encryption, hashing, digital signatures, and the cryptographic primitives that TLS builds upon.</p><a href="computing-systems-foundations-part16-cryptography.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a></div>
+            <div class="related-post-item"><h5 class="mb-2">Part 18: SSH Deep Dive</h5><p class="text-muted small mb-2">SSH key management, agent forwarding, tunnelling, jump hosts, and hardening — the secure remote access protocol built on the same cryptographic foundations.</p><a href="computing-systems-foundations-part18-ssh.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a></div>
+        </div>
+
+        <div class="series-nav">
+            <a href="computing-systems-foundations-part16-cryptography.html" class="series-nav-item prev"><span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span><span class="nav-title">Part 16: Cryptography Foundations</span></a>
+            <a href="computing-systems-foundations-part18-ssh.html" class="series-nav-item next"><span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span><span class="nav-title">Part 18: SSH Deep Dive</span></a>
+        </div>
+    </div></div></div></div></section>
+
+    <footer id="social-media"><div class="footer-v2-wrapper"><div class="footer-bar"><div class="fc-left"><div class="fc-brand-group"><div class="fc-brand-stack"><span></span><span></span><span></span></div><span class="fc-brand-name">Wasil Zafar</span></div><span class="fc-tagline">Consultant &amp; Cloud Architect</span></div><div class="fc-center"><a href="/">Home</a><a href="/disclaimer.html">Disclaimer</a><a href="/privacy-policy.html">Privacy</a><a href="/pages/contact.html">Contact</a></div><div class="fc-right"><a href="https://www.facebook.com/wasil.zafar/" target="_blank"><i class="fab fa-facebook-f"></i></a><a href="https://twitter.com/wasilzafar" target="_blank"><i class="fab fa-twitter"></i></a><a href="https://www.linkedin.com/in/wasilzafar" target="_blank"><i class="fab fa-linkedin-in"></i></a><a href="https://www.youtube.com/@wasilzafar" target="_blank"><i class="fab fa-youtube"></i></a><a href="https://www.instagram.com/itswzee/" target="_blank"><i class="fab fa-instagram"></i></a><a href="https://in.pinterest.com/wasilz/" target="_blank"><i class="fab fa-pinterest-p"></i></a><a href="mailto:wasil.zafar@gmail.com"><i class="fas fa-envelope"></i></a><a href="/feed.xml" target="_blank"><i class="fas fa-rss"></i></a></div></div><div class="footer-sub"><span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span><a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a></div></div></footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"></div>
+    <script src="../../../js/cookie-consent.js"></script><script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script><script src="../../../js/search.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="../../../js/path-progress.js"></script><script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

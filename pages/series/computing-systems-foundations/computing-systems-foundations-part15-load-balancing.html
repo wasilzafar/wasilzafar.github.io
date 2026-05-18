@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" /><meta http-equiv="X-UA-Compatible" content="IE=edge" /><meta name="robots" content="index, follow" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="L4 vs L7 load balancing, reverse proxy architecture, NGINX and HAProxy configuration, health checks, session persistence, and connection draining on Linux." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="load balancing, reverse proxy, NGINX, HAProxy, L4 load balancing, L7 load balancing, health checks, session persistence, connection draining, upstream servers" />
+    <meta property="og:title" content="Part 15: Load Balancing & Reverse Proxies" />
+    <meta property="og:description" content="How load balancers distribute traffic — L4 vs L7, NGINX and HAProxy configs, health checks, session persistence, and the architecture behind every production service." />
+    <meta property="og:type" content="article" /><meta property="article:published_time" content="2026-05-13" /><meta property="article:author" content="Wasil Zafar" /><meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/computing-systems-foundations/computing-systems-foundations-part15-load-balancing.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/computing-systems-foundations/computing-systems-foundations-part15-load-balancing-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/computing-systems-foundations/computing-systems-foundations-part15-load-balancing-tw.jpg" />
+    <title>Part 15: Load Balancing &amp; Reverse Proxies - Computing &amp; Systems Foundations</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/computing-systems-foundations/computing-systems-foundations-part15-load-balancing.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png"><link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{'ad_storage':'denied','analytics_storage':'denied','region':['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']});gtag('consent','default',{'ad_storage':'granted','analytics_storage':'granted'});gtag('set','url_passthrough',true);</script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <div id="cookieBanner" class="light display-bottom" style="display:none;"><div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div><div class="content-wrap"><div class="msg-wrap"><div class="title-wrap"><h4 style="margin:0;font-size:18px;color:var(--color-navy);font-weight:700;">Cookie Consent</h4></div><p style="font-size:14px;color:var(--color-navy);margin-bottom:15px;">We use cookies. See our <a href="/privacy-policy.html" style="color:var(--color-teal);">Privacy Policy</a>.</p><div id="cookieSettings" style="display:none;"></div><div id="cookieTypes" style="display:none;"></div></div><div class="btn-wrap"><button id="cookieAccept">Accept All</button><button id="cookieReject">Reject All</button><button id="cookieSave" style="display:none;">Save</button></div></div></div>
+    <div class="nav-v16-wrapper"><nav class="nav-v16"><a href="/" class="brand"><div class="brand-stack"><span></span><span></span><span></span></div><span class="brand-text">Wasil Zafar</span></a><button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()"><span></span><span></span><span></span></button><div class="links"><a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a><a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a><a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a><a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a><a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a><button class="nav-search-btn" onclick="openSearch()" aria-label="Search"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button></div></nav></div>
+
+    <section class="blog-hero">
+        <div class="container py-5"><div class="blog-header">
+            <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Computing &amp; Systems Foundations Series</a>
+            <h1 class="display-4 fw-bold mb-3">Part 15: Load Balancing &amp; Reverse Proxies</h1>
+            <div class="blog-meta"><span><i class="fas fa-calendar me-2"></i>May 13, 2026</span><span><i class="fas fa-user me-2"></i>Wasil Zafar</span><span class="reading-time"><i class="fas fa-clock me-1"></i>18 min read</span><button onclick="window.print()" class="print-btn"><i class="fas fa-print"></i> Print</button></div>
+            <p class="lead">How load balancers distribute traffic across backend servers — L4 vs L7 trade-offs, NGINX and HAProxy configuration, health checks, session persistence, and the architecture behind every production service.</p>
+        </div></div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc"><div class="toc-header"><h3><i class="fas fa-list me-2"></i>Table of Contents</h3><button class="closebtn" onclick="closeNav()">&times;</button></div>
+        <ol>
+            <li><a href="#why-load-balancing" onclick="closeNav()">Why Load Balancing?</a><ul><li><a href="#forward-vs-reverse" onclick="closeNav()">Forward vs Reverse Proxy</a></li></ul></li>
+            <li><a href="#l4-vs-l7" onclick="closeNav()">L4 vs L7 Load Balancing</a></li>
+            <li><a href="#algorithms" onclick="closeNav()">Load Balancing Algorithms</a></li>
+            <li><a href="#nginx" onclick="closeNav()">NGINX as a Reverse Proxy</a></li>
+            <li><a href="#haproxy" onclick="closeNav()">HAProxy Configuration</a></li>
+            <li><a href="#health-checks" onclick="closeNav()">Health Checks &amp; Graceful Shutdown</a></li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5"><div class="container"><div class="row"><div class="col-lg-8 mx-auto"><div class="blog-content">
+
+        <h2 id="why-load-balancing">Why Load Balancing?</h2>
+        <p>A single server has finite CPU, memory, and network capacity. Once traffic exceeds what one machine can handle, you need to distribute requests across multiple backend servers. A <strong>load balancer</strong> sits between clients and your server pool, routing each incoming request to a healthy backend based on a configurable algorithm.</p>
+
+        <p>Load balancing provides three critical capabilities: <strong>scalability</strong> (add more backends to handle more traffic), <strong>availability</strong> (if one backend dies, traffic routes to others), and <strong>maintainability</strong> (roll out deploys one server at a time without downtime).</p>
+
+        <div class="mermaid-container">
+            <div class="mermaid-label">Load Balancer Architecture with Health Checks</div>
+            <pre class="mermaid">
+flowchart TD
+    C1[Client A] --> LB[Load Balancer]
+    C2[Client B] --> LB
+    C3[Client C] --> LB
+
+    LB -->|Request 1| S1[Backend 1<br/>healthy ✓]
+    LB -->|Request 2| S2[Backend 2<br/>healthy ✓]
+    LB -->|Request 3| S3[Backend 3<br/>healthy ✓]
+
+    HC[Health Checker] -.->|GET /health| S1
+    HC -.->|GET /health| S2
+    HC -.->|GET /health| S3
+    HC -.->|status report| LB
+            </pre>
+        </div>
+
+        <h3 id="forward-vs-reverse">Forward vs Reverse Proxy</h3>
+        <p>A <strong>forward proxy</strong> sits in front of <em>clients</em> — it makes requests on their behalf (e.g., corporate proxy, VPN, Tor exit node). The server sees the proxy's IP, not the client's. A <strong>reverse proxy</strong> sits in front of <em>servers</em> — the client doesn't know which backend handled the request. Load balancers are reverse proxies with traffic distribution logic.</p>
+
+        <table class="table table-bordered table-sm">
+            <thead class="table-dark"><tr><th>Aspect</th><th>Forward Proxy</th><th>Reverse Proxy</th></tr></thead>
+            <tbody>
+                <tr><td>Sits in front of</td><td>Clients</td><td>Servers</td></tr>
+                <tr><td>Who configures it</td><td>Client-side (browser, OS)</td><td>Server-side (infrastructure)</td></tr>
+                <tr><td>Use cases</td><td>Anonymity, caching, filtering</td><td>Load balancing, SSL termination, caching</td></tr>
+                <tr><td>Server sees</td><td>Proxy's IP</td><td>Load balancer's IP</td></tr>
+                <tr><td>Examples</td><td>Squid, corporate proxy</td><td>NGINX, HAProxy, AWS ALB</td></tr>
+            </tbody>
+        </table>
+
+        <h2 id="l4-vs-l7">L4 vs L7 Load Balancing</h2>
+        <p>The "layer" in L4/L7 refers to the OSI model layer at which the load balancer inspects traffic to make routing decisions.</p>
+
+        <table class="table table-bordered table-sm">
+            <thead class="table-dark"><tr><th>Feature</th><th>L4 (Transport)</th><th>L7 (Application)</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Inspects</strong></td><td>TCP/UDP headers (IP, port)</td><td>HTTP headers, URL path, cookies, body</td></tr>
+                <tr><td><strong>Routing decisions</strong></td><td>Source/dest IP and port only</td><td>URL path, Host header, cookies, query params</td></tr>
+                <tr><td><strong>Performance</strong></td><td>Very fast — minimal parsing</td><td>Slower — must parse HTTP</td></tr>
+                <tr><td><strong>SSL termination</strong></td><td>Pass-through (backend handles TLS)</td><td>Terminates TLS at LB, forwards HTTP to backends</td></tr>
+                <tr><td><strong>Connection handling</strong></td><td>Forwards raw TCP streams</td><td>Establishes separate connections to backends</td></tr>
+                <tr><td><strong>Content-based routing</strong></td><td>No</td><td>Yes — route /api to API servers, /static to CDN</td></tr>
+                <tr><td><strong>WebSocket support</strong></td><td>Native (just TCP)</td><td>Requires upgrade handling</td></tr>
+                <tr><td><strong>Use cases</strong></td><td>Database proxying, gaming, raw TCP services</td><td>HTTP APIs, web apps, microservices</td></tr>
+                <tr><td><strong>Examples</strong></td><td>HAProxy TCP mode, AWS NLB, IPVS</td><td>NGINX, HAProxy HTTP mode, AWS ALB, Envoy</td></tr>
+            </tbody>
+        </table>
+
+        <div class="highlight-box">
+            <i class="fas fa-lightbulb me-2"></i>
+            <strong>Key Insight:</strong> L7 load balancers terminate the client's TCP connection and open a <em>new</em> connection to the backend. This means the backend sees the load balancer's IP as the source — not the client's. To preserve the original client IP, L7 load balancers inject <code>X-Forwarded-For</code> and <code>X-Real-IP</code> headers. Your backend application must read these headers (not the socket's remote address) for accurate client identification, rate limiting, and geo-routing.
+        </div>
+
+        <h2 id="algorithms">Load Balancing Algorithms</h2>
+        <table class="table table-bordered table-sm">
+            <thead class="table-dark"><tr><th>Algorithm</th><th>How It Works</th><th>Pros</th><th>Cons</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Round Robin</strong></td><td>Rotate sequentially through backends</td><td>Simple, even distribution when backends are equal</td><td>Ignores server capacity and current load</td></tr>
+                <tr><td><strong>Weighted Round Robin</strong></td><td>Assign weights — higher-capacity servers get more requests</td><td>Handles heterogeneous backends</td><td>Weights are static — doesn't adapt to real-time load</td></tr>
+                <tr><td><strong>Least Connections</strong></td><td>Route to the backend with fewest active connections</td><td>Adapts to real load — slow requests don't pile up</td><td>Doesn't account for connection cost variance</td></tr>
+                <tr><td><strong>IP Hash</strong></td><td>Hash the client IP → always routes to same backend</td><td>Session affinity without cookies</td><td>Uneven distribution if IP space is skewed</td></tr>
+                <tr><td><strong>Random</strong></td><td>Pick a random backend</td><td>No state needed, simple to implement</td><td>Can cause bursts on one server</td></tr>
+                <tr><td><strong>Consistent Hashing</strong></td><td>Hash ring — only affected keys remap when backends change</td><td>Minimal redistribution on scale events</td><td>Can be uneven without virtual nodes</td></tr>
+            </tbody>
+        </table>
+
+        <h2 id="nginx">NGINX as a Reverse Proxy</h2>
+        <p>NGINX is the most widely deployed reverse proxy and L7 load balancer. Its <code>upstream</code> block defines the server pool, and <code>proxy_pass</code> forwards requests to that pool.</p>
+
+<pre><code class="language-nginx"># /etc/nginx/conf.d/app-lb.conf
+# NGINX L7 reverse proxy with upstream pool
+
+upstream backend_pool {
+    # Load balancing algorithm (default: round-robin)
+    least_conn;
+
+    # Backend servers with optional weights
+    server 10.0.1.10:8080 weight=3;   # 3x more traffic
+    server 10.0.1.11:8080 weight=2;
+    server 10.0.1.12:8080 weight=1;
+
+    # Backup server — only used when all primary are down
+    server 10.0.1.99:8080 backup;
+
+    # Health check: mark server down after 3 failures
+    # max_fails + fail_timeout work together
+    server 10.0.1.10:8080 max_fails=3 fail_timeout=30s;
+
+    # Keep connections alive to backends (connection pooling)
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    server_name app.example.com;
+
+    location / {
+        proxy_pass http://backend_pool;
+
+        # Preserve original client information
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Connection pooling to upstream (requires keepalive in upstream)
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+
+        # Timeouts
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 30s;
+
+        # Retry on failure — try next server
+        proxy_next_upstream error timeout http_502 http_503;
+        proxy_next_upstream_tries 2;
+    }
+
+    # Route /api separately (content-based routing)
+    location /api/ {
+        proxy_pass http://backend_pool;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+</code></pre>
+
+<pre><code class="language-bash"># Test NGINX configuration syntax
+sudo nginx -t
+
+# Reload NGINX without dropping connections (graceful)
+sudo nginx -s reload
+
+# View active connections and upstream status
+curl http://localhost/nginx_status 2>/dev/null
+# (requires stub_status module enabled)
+
+# Test load balancing — send 10 requests, observe distribution
+for i in $(seq 1 10); do
+    curl -s http://app.example.com/ -o /dev/null -w "Request $i: %{http_code} (%{time_total}s)\n"
+done
+</code></pre>
+
+        <h2 id="haproxy">HAProxy Configuration</h2>
+        <p>HAProxy supports both L4 (TCP mode) and L7 (HTTP mode) load balancing. Its configuration uses <code>frontend</code> (client-facing listener), <code>backend</code> (server pool), and optional <code>listen</code> (combined frontend+backend) sections.</p>
+
+<pre><code class="language-bash"># /etc/haproxy/haproxy.cfg
+# HAProxy L7 load balancer configuration
+
+global
+    log /dev/log local0
+    maxconn 50000
+    user haproxy
+    group haproxy
+    daemon
+    stats socket /var/run/haproxy.sock mode 660 level admin
+
+defaults
+    log     global
+    mode    http
+    option  httplog
+    option  dontlognull
+    timeout connect 5s
+    timeout client  30s
+    timeout server  30s
+    retries 3
+    option  redispatch          # Retry on a different server on failure
+
+frontend http_front
+    bind *:80
+    bind *:443 ssl crt /etc/ssl/certs/app.pem
+
+    # Content-based routing using ACLs
+    acl is_api path_beg /api
+    acl is_static path_beg /static /images /css /js
+
+    use_backend api_servers if is_api
+    use_backend static_servers if is_static
+    default_backend app_servers
+
+backend app_servers
+    balance leastconn
+    option httpchk GET /health HTTP/1.1\r\nHost:\ localhost
+
+    # Session persistence via cookie
+    cookie SERVERID insert indirect nocache
+
+    server app1 10.0.1.10:8080 check cookie app1 weight 3
+    server app2 10.0.1.11:8080 check cookie app2 weight 2
+    server app3 10.0.1.12:8080 check cookie app3 weight 1
+
+backend api_servers
+    balance roundrobin
+    option httpchk GET /api/health
+
+    server api1 10.0.2.10:9090 check inter 5s fall 3 rise 2
+    server api2 10.0.2.11:9090 check inter 5s fall 3 rise 2
+
+backend static_servers
+    balance uri                  # Hash URI for cache efficiency
+    server cdn1 10.0.3.10:80 check
+    server cdn2 10.0.3.11:80 check
+
+# Stats page (monitoring dashboard)
+listen stats
+    bind *:8404
+    stats enable
+    stats uri /stats
+    stats refresh 5s
+    stats auth admin:secretpass
+</code></pre>
+
+<pre><code class="language-bash"># Validate HAProxy configuration
+haproxy -c -f /etc/haproxy/haproxy.cfg
+
+# Reload HAProxy without dropping connections
+sudo systemctl reload haproxy
+
+# View HAProxy stats via socket (real-time)
+echo "show stat" | sudo socat /var/run/haproxy.sock stdio | cut -d',' -f1,2,18 | column -t -s','
+
+# View backend server health
+echo "show servers state" | sudo socat /var/run/haproxy.sock stdio
+
+# Drain a server (stop sending new connections, finish existing)
+echo "set server app_servers/app1 state drain" | sudo socat /var/run/haproxy.sock stdio
+
+# Take a server offline for maintenance
+echo "set server app_servers/app1 state maint" | sudo socat /var/run/haproxy.sock stdio
+</code></pre>
+
+        <h2 id="health-checks">Health Checks &amp; Graceful Shutdown</h2>
+        <p>Health checks ensure traffic only routes to backends that can serve requests. Without them, the load balancer blindly sends traffic to crashed or overloaded servers.</p>
+
+<pre><code class="language-nginx"># NGINX active health checks (requires NGINX Plus or nginx_upstream_check_module)
+# For open-source NGINX, passive checks use max_fails + fail_timeout
+
+upstream backend_pool {
+    zone backend_zone 64k;         # Shared memory for health state
+
+    server 10.0.1.10:8080 max_fails=3 fail_timeout=30s;
+    server 10.0.1.11:8080 max_fails=3 fail_timeout=30s;
+    server 10.0.1.12:8080 max_fails=3 fail_timeout=30s;
+
+    # max_fails=3   → mark down after 3 consecutive failures
+    # fail_timeout=30s → check again after 30s; also defines the window
+    #                     for counting failures
+
+    keepalive 16;
+}
+
+# A simple /health endpoint on your backend (Node.js example)
+# app.get('/health', (req, res) => {
+#     if (db.isConnected() && cache.isReady()) {
+#         res.status(200).json({ status: 'healthy' });
+#     } else {
+#         res.status(503).json({ status: 'unhealthy' });
+#     }
+# });
+</code></pre>
+
+        <div class="highlight-box highlight-crimson">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Connection Draining During Deploys:</strong> When deploying a new version, don't just kill the old process. Instead: (1) Signal the load balancer to stop sending <em>new</em> requests to the backend (drain state), (2) Wait for in-flight requests to complete (drain timeout, typically 30-60s), (3) Then stop the process. Without connection draining, clients mid-request get 502 errors. In HAProxy: <code>set server backend/server1 state drain</code>. In NGINX: mark the server <code>down</code> in config and reload. In Kubernetes: the pod enters <code>Terminating</code> state and the <code>preStop</code> hook + <code>terminationGracePeriodSeconds</code> handle draining automatically.
+        </div>
+
+<pre><code class="language-bash"># Graceful shutdown pattern for a backend application
+# 1. Stop accepting new connections
+# 2. Finish processing in-flight requests
+# 3. Close database/cache connections
+# 4. Exit
+
+# Example: handling SIGTERM in a bash wrapper
+#!/bin/bash
+APP_PID=""
+
+start_app() {
+    /usr/bin/my-app --port 8080 &
+    APP_PID=$!
+}
+
+graceful_shutdown() {
+    echo "Received SIGTERM — draining connections..."
+    # Tell load balancer we're going away
+    curl -s http://localhost:8080/admin/drain -X POST
+    # Wait for in-flight requests (max 30s)
+    sleep 30
+    # Send SIGTERM to app
+    kill -TERM "$APP_PID"
+    wait "$APP_PID"
+    echo "Shutdown complete"
+    exit 0
+}
+
+trap graceful_shutdown SIGTERM SIGINT
+
+start_app
+wait "$APP_PID"
+</code></pre>
+
+        <div class="experiment-card">
+            <div class="experiment-meta"><span class="badge bg-teal"><i class="fas fa-dharmachakra me-1"></i>Kubernetes</span></div>
+            <h4>How Kubernetes Services Load Balance</h4>
+            <p>Kubernetes Services provide built-in L4 load balancing via <strong>kube-proxy</strong>, which runs on every node and programs traffic rules. In <strong>iptables mode</strong> (default), kube-proxy creates iptables rules that randomly distribute packets across pod endpoints — this is stateless, per-connection load balancing with no health checks at the proxy level (liveness/readiness probes handle health). In <strong>IPVS mode</strong>, kube-proxy uses Linux IPVS (kernel-level L4 LB) which supports round-robin, least connections, and weighted algorithms with O(1) performance for large endpoint lists. Service types: <code>ClusterIP</code> (internal only), <code>NodePort</code> (exposed on every node's IP), <code>LoadBalancer</code> (provisions cloud LB — e.g., AWS NLB/ALB, GCP LB). For L7 routing (path-based, host-based), use an <strong>Ingress controller</strong> (NGINX Ingress, Traefik, Envoy/Istio) which acts as an L7 reverse proxy inside the cluster.</p>
+            <div class="bias-tags"><span class="bias-tag">kube-proxy</span><span class="bias-tag">iptables</span><span class="bias-tag">IPVS</span><span class="bias-tag">Ingress</span></div>
+        </div>
+
+        <h2 id="exercises">Exercises</h2>
+<pre><code class="language-bash"># Exercise 1: Set up NGINX as a local load balancer
+# Start 3 simple HTTP servers on different ports
+python3 -m http.server 8001 --directory /tmp/s1 &
+python3 -m http.server 8002 --directory /tmp/s2 &
+python3 -m http.server 8003 --directory /tmp/s3 &
+# Create NGINX upstream config pointing to all 3, test with curl
+
+# Exercise 2: Observe round-robin distribution
+for i in $(seq 1 9); do
+    curl -s http://localhost/ -H "Host: app.local" | grep -o "s[0-9]"
+done
+# Should see s1, s2, s3, s1, s2, s3 ...
+
+# Exercise 3: Simulate a backend failure
+# Kill one of the python servers, then send requests
+# Verify NGINX routes around the dead backend
+
+# Exercise 4: Check HAProxy stats (if installed)
+curl -u admin:admin http://localhost:8404/stats?stats;csv
+
+# Exercise 5: View active connections per backend
+ss -tnp | grep ':808[0-9]' | awk '{print $5}' | sort | uniq -c | sort -rn
+</code></pre>
+
+        <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
+        <p>Load balancers are the gateway to horizontal scaling — they distribute traffic across multiple backends, route around failures, and enable zero-downtime deployments via connection draining. L4 load balancing is fast and simple (TCP forwarding), while L7 gives you content-based routing, header manipulation, and SSL termination. NGINX and HAProxy are the workhorses of production infrastructure — master their config and you can operate any service at scale. Health checks, session persistence, and graceful shutdown are the operational details that separate "works in dev" from "survives in production."</p>
+
+        <div class="related-posts">
+            <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+            <div class="related-post-item"><h5 class="mb-2">Part 14: Routing, NAT &amp; Firewalls</h5><p class="text-muted small mb-2">How packets find their way across networks — routing tables, NAT translation, and iptables/nftables firewall rules.</p><a href="computing-systems-foundations-part14-routing-nat-firewalls.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a></div>
+            <div class="related-post-item"><h5 class="mb-2">Part 16: Cryptography &amp; TLS</h5><p class="text-muted small mb-2">Symmetric vs asymmetric encryption, TLS handshake, certificate chains, and how HTTPS secures traffic end-to-end.</p><a href="computing-systems-foundations-part16-cryptography.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a></div>
+        </div>
+
+        <div class="series-nav">
+            <a href="computing-systems-foundations-part14-routing-nat-firewalls.html" class="series-nav-item prev"><span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span><span class="nav-title">Part 14: Routing, NAT &amp; Firewalls</span></a>
+            <a href="computing-systems-foundations-part16-cryptography.html" class="series-nav-item next"><span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span><span class="nav-title">Part 16: Cryptography &amp; TLS</span></a>
+        </div>
+    </div></div></div></div></section>
+
+    <footer id="social-media"><div class="footer-v2-wrapper"><div class="footer-bar"><div class="fc-left"><div class="fc-brand-group"><div class="fc-brand-stack"><span></span><span></span><span></span></div><span class="fc-brand-name">Wasil Zafar</span></div><span class="fc-tagline">Consultant &amp; Cloud Architect</span></div><div class="fc-center"><a href="/">Home</a><a href="/disclaimer.html">Disclaimer</a><a href="/privacy-policy.html">Privacy</a><a href="/pages/contact.html">Contact</a></div><div class="fc-right"><a href="https://www.facebook.com/wasil.zafar/" target="_blank"><i class="fab fa-facebook-f"></i></a><a href="https://twitter.com/wasilzafar" target="_blank"><i class="fab fa-twitter"></i></a><a href="https://www.linkedin.com/in/wasilzafar" target="_blank"><i class="fab fa-linkedin-in"></i></a><a href="https://www.youtube.com/@wasilzafar" target="_blank"><i class="fab fa-youtube"></i></a><a href="https://www.instagram.com/itswzee/" target="_blank"><i class="fab fa-instagram"></i></a><a href="https://in.pinterest.com/wasilz/" target="_blank"><i class="fab fa-pinterest-p"></i></a><a href="mailto:wasil.zafar@gmail.com"><i class="fas fa-envelope"></i></a><a href="/feed.xml" target="_blank"><i class="fas fa-rss"></i></a></div></div><div class="footer-sub"><span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span><a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a></div></div></footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"></div>
+    <script src="../../../js/cookie-consent.js"></script><script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script><script src="../../../js/search.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nginx.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="../../../js/path-progress.js"></script><script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

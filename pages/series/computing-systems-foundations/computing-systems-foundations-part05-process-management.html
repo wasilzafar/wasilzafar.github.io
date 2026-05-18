@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" /><meta http-equiv="X-UA-Compatible" content="IE=edge" /><meta name="robots" content="index, follow" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Deep dive into Linux process management — fork, exec, wait, process states, the CFS scheduler, signals, IPC mechanisms including pipes, sockets, and shared memory." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="linux process management, fork exec wait, process states, CFS scheduler, linux signals, IPC, pipes, unix sockets, shared memory, process lifecycle" />
+    <meta property="og:title" content="Part 5: Process Management — Lifecycle, Scheduling & IPC" />
+    <meta property="og:description" content="The complete Linux process lifecycle — how processes are created with fork/exec, the CFS scheduler, signal handling, and every IPC mechanism from pipes to shared memory." />
+    <meta property="og:type" content="article" /><meta property="article:published_time" content="2026-05-13" /><meta property="article:author" content="Wasil Zafar" /><meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/computing-systems-foundations/computing-systems-foundations-part05-process-management.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/computing-systems-foundations/computing-systems-foundations-part05-process-management-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/computing-systems-foundations/computing-systems-foundations-part05-process-management-tw.jpg" />
+    <title>Part 5: Process Management — Lifecycle, Scheduling & IPC - Computing & Systems Foundations</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/computing-systems-foundations/computing-systems-foundations-part05-process-management.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png"><link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{'ad_storage':'denied','analytics_storage':'denied','region':['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']});gtag('consent','default',{'ad_storage':'granted','analytics_storage':'granted'});gtag('set','url_passthrough',true);</script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <div id="cookieBanner" class="light display-bottom" style="display:none;"><div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div><div class="content-wrap"><div class="msg-wrap"><div class="title-wrap"><h4 style="margin:0;font-size:18px;color:var(--color-navy);font-weight:700;">Cookie Consent</h4></div><p style="font-size:14px;color:var(--color-navy);margin-bottom:15px;">We use cookies. See our <a href="/privacy-policy.html" style="color:var(--color-teal);">Privacy Policy</a>.</p><div id="cookieSettings" style="display:none;"></div><div id="cookieTypes" style="display:none;"></div></div><div class="btn-wrap"><button id="cookieAccept">Accept All</button><button id="cookieReject">Reject All</button><button id="cookieSave" style="display:none;">Save</button></div></div></div>
+    <div class="nav-v16-wrapper"><nav class="nav-v16"><a href="/" class="brand"><div class="brand-stack"><span></span><span></span><span></span></div><span class="brand-text">Wasil Zafar</span></a><button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()"><span></span><span></span><span></span></button><div class="links"><a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a><a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a><a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a><a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a><a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a><button class="nav-search-btn" onclick="openSearch()" aria-label="Search"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button></div></nav></div>
+
+    <section class="blog-hero">
+        <div class="container py-5"><div class="blog-header">
+            <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Computing &amp; Systems Foundations Series</a>
+            <h1 class="display-4 fw-bold mb-3">Part 5: Process Management — Lifecycle, Scheduling &amp; IPC</h1>
+            <div class="blog-meta"><span><i class="fas fa-calendar me-2"></i>May 13, 2026</span><span><i class="fas fa-user me-2"></i>Wasil Zafar</span><span class="reading-time"><i class="fas fa-clock me-1"></i>18 min read</span><button onclick="window.print()" class="print-btn"><i class="fas fa-print"></i> Print</button></div>
+            <p class="lead">How Linux creates, schedules, and terminates processes — the fork/exec model, the CFS scheduler, signals, and every IPC mechanism your applications use without knowing it.</p>
+        </div></div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc"><div class="toc-header"><h3><i class="fas fa-list me-2"></i>Table of Contents</h3><button class="closebtn" onclick="closeNav()">&times;</button></div>
+        <ol>
+            <li><a href="#process-lifecycle" onclick="closeNav()">Process Lifecycle</a><ul><li><a href="#fork-exec" onclick="closeNav()">fork() and exec()</a></li><li><a href="#wait-exit" onclick="closeNav()">wait() and Zombie Processes</a></li></ul></li>
+            <li><a href="#process-states" onclick="closeNav()">Process States</a></li>
+            <li><a href="#scheduling" onclick="closeNav()">The CFS Scheduler</a><ul><li><a href="#scheduling" onclick="closeNav()">Nice Values and Priority</a></li><li><a href="#cgroups-cpu" onclick="closeNav()">cgroups CPU Limits</a></li></ul></li>
+            <li><a href="#signals" onclick="closeNav()">Signals</a></li>
+            <li><a href="#ipc" onclick="closeNav()">Inter-Process Communication</a><ul><li><a href="#ipc" onclick="closeNav()">Pipes and FIFOs</a></li><li><a href="#sockets" onclick="closeNav()">Unix Domain Sockets</a></li><li><a href="#shm" onclick="closeNav()">Shared Memory</a></li></ul></li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5"><div class="container"><div class="row"><div class="col-lg-8 mx-auto"><div class="blog-content">
+
+        <h2 id="process-lifecycle">Process Lifecycle</h2>
+        <p>A process is a running program — an ELF binary loaded into memory with its own address space, file descriptor table, and CPU state. On Linux, <em>every</em> process except PID 1 (systemd/init) is created by another process. The family tree of processes stretches back to PID 1, which is the ancestor of all user-space processes.</p>
+
+        <div class="mermaid-container">
+            <div class="mermaid-label">Linux Process Lifecycle</div>
+            <pre class="mermaid">
+stateDiagram-v2
+    [*] --> Created: fork() called
+    Created --> Running: Scheduler selects process
+    Running --> Sleeping_Interruptible: Wait for I/O or event (e.g., read())
+    Running --> Sleeping_Uninterruptible: Wait for hardware I/O (cannot be interrupted)
+    Running --> Stopped: SIGSTOP received (Ctrl+Z)
+    Stopped --> Running: SIGCONT received (fg/bg)
+    Sleeping_Interruptible --> Running: Event occurs or signal received
+    Sleeping_Uninterruptible --> Running: I/O completes
+    Running --> Zombie: Process calls exit()
+    Zombie --> [*]: Parent calls wait() — entry removed from process table
+            </pre>
+        </div>
+
+        <h3 id="fork-exec">fork() and exec()</h3>
+        <p>Linux creates new processes using two system calls in sequence:</p>
+        <ul>
+            <li><strong>fork()</strong>: Creates an exact copy of the calling process. The child gets a new PID but inherits the parent's memory, file descriptors, and signal handlers. Memory is copied <em>lazily</em> via <strong>Copy-on-Write (CoW)</strong> — pages are shared read-only until one process writes to them, at which point a private copy is made.</li>
+            <li><strong>exec()</strong>: Replaces the current process's address space with a new program. The PID stays the same; the code, data, stack, and heap are replaced with the new program's.</li>
+        </ul>
+
+<pre><code class="language-bash"># Observe the fork/exec pattern in your shell
+# When you type a command, the shell:
+# 1. Calls fork() — creates a copy of itself
+# 2. The child calls exec() — replaces itself with the command binary
+# 3. The parent (shell) calls wait() — blocks until child exits
+
+# See all system calls a command makes (including fork/exec)
+strace -e trace=process ls /tmp 2>&1 | head -20
+# Look for: execve("/usr/bin/ls", ...) — that's the exec() call
+
+# See the parent/child relationship
+echo "Shell PID: $$"
+bash -c 'echo "Child PID: $$, Parent PID: $PPID"'
+# Child's PPID == Shell's PID
+
+# Observe fork in Python
+python3 -c "
+import os
+pid = os.fork()
+if pid == 0:
+    print(f'Child: PID={os.getpid()}, PPID={os.getppid()}')
+    os._exit(0)
+else:
+    print(f'Parent: PID={os.getpid()}, child_pid={pid}')
+    os.wait()  # Wait for child to finish
+"
+</code></pre>
+
+        <h3 id="wait-exit">wait() and Zombie Processes</h3>
+        <p>When a child process exits, its entry in the kernel's process table is not immediately removed. It becomes a <strong>zombie</strong> — it holds only its exit status, waiting for the parent to call <code>wait()</code> to retrieve it. Once the parent calls <code>wait()</code>, the zombie is fully removed.</p>
+
+        <div class="highlight-box highlight-crimson">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Zombie Process Leak:</strong> If a parent process never calls <code>wait()</code> (a common bug), zombie processes accumulate. They don't consume CPU or memory (just a PID table slot), but if enough accumulate, the system runs out of PIDs and can't create new processes. This is why container runtimes need a proper init process that reaps zombies — it's one of the reasons <code>tini</code> exists as a Docker init wrapper.
+        </div>
+
+<pre><code class="language-bash"># Observe zombie processes
+# Z = zombie in the STAT column
+ps aux | awk '$8 == "Z"'
+
+# Create a zombie deliberately (academic example — exits immediately)
+python3 -c "
+import os, time
+pid = os.fork()
+if pid == 0:
+    os._exit(0)  # Child exits immediately
+else:
+    print(f'Child {pid} is now a zombie (parent not calling wait yet)')
+    time.sleep(5)  # During these 5s, run: ps aux | grep Z
+    os.wait()      # Now reap the zombie
+    print('Zombie reaped')
+" &
+sleep 1 && ps aux | grep defunct | head -3
+</code></pre>
+
+        <h2 id="process-states">Process States</h2>
+        <table class="table table-bordered table-sm">
+            <thead class="table-dark"><tr><th>State</th><th>Code</th><th>Meaning</th><th>Example</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Running</strong></td><td>R</td><td>Currently executing on CPU or in run queue</td><td>Active computation</td></tr>
+                <tr><td><strong>Interruptible Sleep</strong></td><td>S</td><td>Waiting for event; can be woken by signal</td><td>Waiting for network I/O, user input</td></tr>
+                <tr><td><strong>Uninterruptible Sleep</strong></td><td>D</td><td>Waiting for hardware I/O; cannot be interrupted</td><td>Disk read in progress, NFS stall</td></tr>
+                <tr><td><strong>Stopped</strong></td><td>T</td><td>Paused by SIGSTOP signal</td><td>Ctrl+Z in terminal</td></tr>
+                <tr><td><strong>Zombie</strong></td><td>Z</td><td>Exited but parent hasn't called wait()</td><td>Bug in parent process</td></tr>
+                <tr><td><strong>Idle</strong></td><td>I</td><td>Kernel thread with no work to do</td><td>kworker threads when idle</td></tr>
+            </tbody>
+        </table>
+
+<pre><code class="language-bash"># See process states with ps
+ps aux | awk 'NR==1 || $8 ~ /[RSDT]/' | head -20
+# STAT column: R=running, S=sleeping, D=disk wait, T=stopped, Z=zombie
+# Additional flags: s=session leader, <=high priority, N=low priority, l=multithreaded, +=foreground
+
+# Count processes in each state
+ps -e -o stat= | sort | uniq -c | sort -rn
+
+# Processes in uninterruptible sleep (D state) — potential I/O bottleneck
+ps aux | awk '$8 == "D"'
+</code></pre>
+
+        <h2 id="scheduling">The CFS Scheduler</h2>
+        <p>Linux's <strong>CFS (Completely Fair Scheduler)</strong> tries to give every process an equal share of CPU time. It tracks each process's <strong>virtual runtime</strong> (vruntime) — the amount of CPU time the process has used, normalised by its priority. The scheduler always picks the process with the lowest vruntime — the one that has received the least CPU time relative to its fair share.</p>
+
+        <p>Process priority is controlled by <strong>nice values</strong>, ranging from -20 (highest priority) to +19 (lowest priority). Higher priority (lower nice value) means the process's vruntime accumulates more slowly, so it gets selected more often.</p>
+
+<pre><code class="language-bash"># View nice values of processes
+ps -eo pid,ni,cmd | head -20
+# NI column = nice value; PR = actual scheduler priority
+
+# Start a CPU-intensive process at low priority (nice +10)
+nice -n 10 python3 -c "
+while True: pass  # 100% CPU, but nice=10 so it yields to others
+" &
+LOW_PRI_PID=$!
+
+# Start another at normal priority
+python3 -c "
+import time; time.sleep(5)  # Not CPU intensive, for comparison
+" &
+
+# Change nice value of running process
+renice -n 15 -p $LOW_PRI_PID  # Make it even lower priority
+
+# Kill our test processes
+kill $LOW_PRI_PID 2>/dev/null
+
+# View CPU time consumed per process (via /proc)
+cat /proc/$$/status | grep -E "VmRSS|Threads|voluntary"
+
+# cgroups CPU quota (preview — covered fully in Part 21)
+# cat /sys/fs/cgroup/cpu/docker/<container_id>/cpu.cfs_quota_us
+</code></pre>
+
+        <h3 id="cgroups-cpu">cgroups CPU Limits</h3>
+        <p><strong>cgroups (control groups)</strong> allow the kernel to limit, account for, and isolate the resource usage (CPU, memory, I/O) of groups of processes. Docker container CPU limits are implemented via cgroups. When you run <code>docker run --cpus 0.5</code>, Docker sets the container's cgroup <code>cpu.cfs_quota_us</code> to half the period, restricting it to 50% of one CPU core — regardless of nice values.</p>
+
+        <h2 id="signals">Signals</h2>
+        <p>Signals are asynchronous notifications sent to a process. They're the primary way the OS and other processes communicate with a running process about events (user requesting exit, terminal resize, timer expiry, etc.).</p>
+
+        <table class="table table-bordered table-sm">
+            <thead class="table-dark"><tr><th>Signal</th><th>Number</th><th>Default Action</th><th>Common Use</th></tr></thead>
+            <tbody>
+                <tr><td>SIGHUP</td><td>1</td><td>Terminate</td><td>Daemon config reload (nginx, sshd)</td></tr>
+                <tr><td>SIGINT</td><td>2</td><td>Terminate</td><td>Ctrl+C — user interrupt</td></tr>
+                <tr><td>SIGQUIT</td><td>3</td><td>Core dump</td><td>Ctrl+\ — quit with core dump</td></tr>
+                <tr><td>SIGKILL</td><td>9</td><td>Terminate (uncatchable)</td><td>Force kill — cannot be caught or ignored</td></tr>
+                <tr><td>SIGSEGV</td><td>11</td><td>Core dump</td><td>Segmentation fault — invalid memory access</td></tr>
+                <tr><td>SIGTERM</td><td>15</td><td>Terminate</td><td>Graceful shutdown — catchable</td></tr>
+                <tr><td>SIGSTOP</td><td>19</td><td>Stop (uncatchable)</td><td>Pause process (Ctrl+Z)</td></tr>
+                <tr><td>SIGCONT</td><td>18</td><td>Continue</td><td>Resume stopped process</td></tr>
+                <tr><td>SIGCHLD</td><td>17</td><td>Ignore</td><td>Child process changed state</td></tr>
+                <tr><td>SIGUSR1/2</td><td>10/12</td><td>Terminate</td><td>User-defined — app-specific signals</td></tr>
+            </tbody>
+        </table>
+
+<pre><code class="language-bash"># Send signals to processes
+kill -TERM PID          # Graceful shutdown (default kill)
+kill -HUP $(pgrep nginx)   # Reload nginx config
+kill -9 PID             # Force kill (last resort only)
+kill -0 PID             # Check if process exists (no signal sent)
+
+# Signal handling in a shell script
+cleanup() {
+    echo "SIGTERM received — cleaning up..."
+    rm -f /tmp/my-lockfile
+    exit 0
+}
+trap cleanup SIGTERM SIGINT  # Register handler
+
+# Demonstrate signal handling in Python
+python3 -c "
+import signal, time
+
+def handler(signum, frame):
+    print(f'Caught signal {signum} — shutting down gracefully')
+    exit(0)
+
+signal.signal(signal.SIGTERM, handler)
+signal.signal(signal.SIGINT, handler)
+print(f'PID {__import__(\"os\").getpid()} — send SIGTERM to test')
+while True: time.sleep(1)
+" &
+PID=$!
+sleep 2
+kill -TERM $PID  # Should print graceful shutdown message
+wait $PID
+</code></pre>
+
+        <h2 id="ipc">Inter-Process Communication</h2>
+        <p>Processes are isolated by design — they can't access each other's memory. IPC mechanisms provide controlled, safe ways for processes to communicate and synchronise.</p>
+
+<pre><code class="language-bash"># === 1. Anonymous Pipes — unidirectional, parent-child only ===
+# The | operator in your shell creates anonymous pipes
+ls -la | grep ".conf"   # ls stdout → pipe → grep stdin
+
+# Named pipes (FIFOs) — work between unrelated processes
+mkfifo /tmp/my-pipe
+echo "hello from writer" > /tmp/my-pipe &   # Writer blocks until reader connects
+cat /tmp/my-pipe                              # Reader — unblocks both
+rm /tmp/my-pipe
+
+# === 2. Unix Domain Sockets — bidirectional, same machine ===
+# Used by: Docker (dockerd socket), systemd, X11, DBus, Postgres
+ls -la /var/run/*.sock 2>/dev/null   # List Unix sockets on system
+file /var/run/docker.sock 2>/dev/null
+# "socket" type file
+
+# Query Docker via its Unix socket directly
+curl --unix-socket /var/run/docker.sock http://localhost/version 2>/dev/null | python3 -m json.tool | head -10
+
+# === 3. Shared Memory ===
+# Fastest IPC — both processes map the same physical pages
+# Used by: databases (PostgreSQL shared_buffers), Redis, high-perf apps
+ipcs -m   # List POSIX/SysV shared memory segments
+# Or view via /dev/shm
+ls -lh /dev/shm/
+
+# === 4. Message Queues — async, buffered ===
+ipcs -q   # List SysV message queues
+
+# === Summary: Which IPC to use? ===
+# Pipe: simple parent-child, one direction, streaming
+# Unix socket: bidirectional, unrelated processes, same machine
+# Shared memory: highest throughput, needs synchronisation (mutexes)
+# Network socket: across machines (TCP/UDP — covered in Part 11)
+</code></pre>
+
+        <div class="experiment-card">
+            <div class="experiment-meta"><span class="badge bg-teal"><i class="fas fa-docker me-1"></i>Container Engineering</span></div>
+            <h4>The Docker Daemon Uses a Unix Socket</h4>
+            <p>When you run <code>docker ps</code>, the Docker CLI doesn't talk to dockerd over TCP — it sends HTTP requests over the Unix domain socket at <code>/var/run/docker.sock</code>. This is fast (no TCP overhead, no TLS), stays on the machine, and can be permission-controlled via file permissions on the socket file. When you mount <code>-v /var/run/docker.sock:/var/run/docker.sock</code> into a container, you're granting it full control over the Docker daemon — equivalent to root on the host. This is a major security concern in CI/CD pipelines.</p>
+            <div class="bias-tags"><span class="bias-tag">Docker Security</span><span class="bias-tag">Unix Sockets</span><span class="bias-tag">IPC</span></div>
+        </div>
+
+        <h2 id="exercises">Exercises</h2>
+<pre><code class="language-bash"># Exercise 1: Explore the process tree
+pstree -p | head -30   # See parent-child relationships
+# Note: systemd(1) is the root of all user processes
+
+# Exercise 2: Observe fork() in shell
+echo "My PID: $$"
+(echo "Subshell PID: $$, Parent: $PPID")
+# Subshell PPID should match parent PID
+
+# Exercise 3: Find zombie and D-state processes
+ps aux | awk '$8 == "Z" {print "ZOMBIE:", $0}'
+ps aux | awk '$8 == "D" {print "DISK WAIT:", $0}'
+
+# Exercise 4: Test signal handling
+sleep 60 &
+SLEEP_PID=$!
+echo "Sleep PID: $SLEEP_PID"
+kill -STOP $SLEEP_PID   # Pause it
+ps aux | grep $SLEEP_PID | grep -v grep   # Should show T state
+kill -CONT $SLEEP_PID   # Resume it
+kill $SLEEP_PID         # Terminate it
+
+# Exercise 5: View IPC resources on your system
+ipcs    # Show all IPC resources (shared memory, semaphores, message queues)
+ls /dev/shm/   # POSIX shared memory
+</code></pre>
+
+        <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
+        <p>Processes are the fundamental unit of execution in Linux. The fork/exec model creates all user processes from PID 1 down. The CFS scheduler shares CPU time fairly while respecting priority. Signals provide asynchronous communication. IPC mechanisms — pipes, Unix sockets, shared memory — enable coordination without breaking process isolation. All of this is the substrate on which containers, web servers, databases, and every other system software runs.</p>
+
+        <div class="related-posts">
+            <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+            <div class="related-post-item"><h5 class="mb-2">Part 4: Essential Linux Command Line</h5><p class="text-muted small mb-2">The tools for navigating, filtering, and managing the processes and files you just learned about.</p><a href="computing-systems-foundations-part04-linux-command-line.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a></div>
+            <div class="related-post-item"><h5 class="mb-2">Part 6: Memory Management</h5><p class="text-muted small mb-2">Virtual memory, page tables, the OOM killer, and how cgroups enforce memory limits — the other half of the resource equation.</p><a href="computing-systems-foundations-part06-memory-management.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a></div>
+        </div>
+
+        <div class="series-nav">
+            <a href="computing-systems-foundations-part04-linux-command-line.html" class="series-nav-item prev"><span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span><span class="nav-title">Part 4: Linux Command Line</span></a>
+            <a href="computing-systems-foundations-part06-memory-management.html" class="series-nav-item next"><span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span><span class="nav-title">Part 6: Memory Management</span></a>
+        </div>
+    </div></div></div></div></section>
+
+    <footer id="social-media"><div class="footer-v2-wrapper"><div class="footer-bar"><div class="fc-left"><div class="fc-brand-group"><div class="fc-brand-stack"><span></span><span></span><span></span></div><span class="fc-brand-name">Wasil Zafar</span></div><span class="fc-tagline">Consultant &amp; Cloud Architect</span></div><div class="fc-center"><a href="/">Home</a><a href="/disclaimer.html">Disclaimer</a><a href="/privacy-policy.html">Privacy</a><a href="/pages/contact.html">Contact</a></div><div class="fc-right"><a href="https://www.facebook.com/wasil.zafar/" target="_blank"><i class="fab fa-facebook-f"></i></a><a href="https://twitter.com/wasilzafar" target="_blank"><i class="fab fa-twitter"></i></a><a href="https://www.linkedin.com/in/wasilzafar" target="_blank"><i class="fab fa-linkedin-in"></i></a><a href="https://www.youtube.com/@wasilzafar" target="_blank"><i class="fab fa-youtube"></i></a><a href="https://www.instagram.com/itswzee/" target="_blank"><i class="fab fa-instagram"></i></a><a href="https://in.pinterest.com/wasilz/" target="_blank"><i class="fab fa-pinterest-p"></i></a><a href="mailto:wasil.zafar@gmail.com"><i class="fas fa-envelope"></i></a><a href="/feed.xml" target="_blank"><i class="fas fa-rss"></i></a></div></div><div class="footer-sub"><span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span><a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a></div></div></footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"></div>
+    <script src="../../../js/cookie-consent.js"></script><script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script><script src="../../../js/search.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="../../../js/path-progress.js"></script><script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

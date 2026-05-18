@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Deep dive into Kubernetes internals — API machinery, informers, controller architecture, scheduler internals, etcd, garbage collection, finalizers, and admission controllers." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="Kubernetes internals, API machinery, informers, SharedInformer, controller pattern, scheduler, etcd, garbage collection, finalizers, admission controllers, webhooks, GVR, GVK" />
+    <meta property="og:title" content="Part 11: Kubernetes Internals — Distributed Systems & Kubernetes Mastery" />
+    <meta property="og:description" content="Behind kubectl apply lies a sophisticated machinery of API groups, resource versioning, informers, work queues, and reconciliation loops. Understanding these internals transforms you from a Kubernetes user into a Kubernetes expert." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-05-14" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/distributed-systems-k8s/distributed-systems-k8s-part11-internals.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/distributed-systems-k8s/distributed-systems-k8s-part11-internals-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/distributed-systems-k8s/distributed-systems-k8s-part11-internals-tw.jpg" />
+
+    <title>Kubernetes Internals - Part 11 - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/distributed-systems-k8s/distributed-systems-k8s-part11-internals.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied',
+            'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', {
+            'ad_storage': 'granted', 'ad_user_data': 'granted',
+            'ad_personalization': 'granted', 'analytics_storage': 'granted'
+        });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});
+        var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
+        j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;
+        f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- GTM noscript -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <!-- Cookie Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20"><path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path></svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">We use cookies to enhance your browsing experience. See our <a href="/privacy-policy.html" style="color: var(--color-teal);">Privacy Policy</a>.</p>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept">Accept All</button>
+                <button id="cookieReject">Reject All</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <div class="nav-v16-wrapper">
+        <nav class="nav-v16">
+            <a href="/" class="brand">
+                <div class="brand-stack"><span></span><span></span><span></span></div>
+                <span class="brand-text">Wasil Zafar</span>
+            </a>
+            <button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="links">
+                <a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a>
+                <a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a>
+                <a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a>
+                <a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a>
+                <a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a>
+                <button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Blog Hero -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Distributed Systems &amp; Kubernetes Series</a>
+                <h1 class="display-4 fw-bold mb-3">Part 11: Kubernetes Internals</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>May 14, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>45 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Behind kubectl apply lies a sophisticated machinery of API groups, resource versioning, informers, work queues, and reconciliation loops. Understanding these internals transforms you from a Kubernetes user into a Kubernetes expert.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation Overlay -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#api-machinery" onclick="closeNav()">API Machinery</a>
+                <ul>
+                    <li><a href="#api-groups" onclick="closeNav()">API Groups &amp; Versions</a></li>
+                    <li><a href="#gvr-gvk" onclick="closeNav()">GVR vs GVK</a></li>
+                    <li><a href="#resource-versioning" onclick="closeNav()">Resource Versioning</a></li>
+                    <li><a href="#api-discovery" onclick="closeNav()">API Discovery &amp; Subresources</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#informer-pattern" onclick="closeNav()">The Informer Pattern</a>
+                <ul>
+                    <li><a href="#sharedinformers" onclick="closeNav()">SharedInformers</a></li>
+                    <li><a href="#listwatch" onclick="closeNav()">ListWatch Mechanism</a></li>
+                    <li><a href="#local-cache" onclick="closeNav()">Local Cache &amp; Indexers</a></li>
+                    <li><a href="#event-handlers" onclick="closeNav()">Event Handlers</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#controller-architecture" onclick="closeNav()">Controller Architecture</a>
+                <ul>
+                    <li><a href="#controller-pattern" onclick="closeNav()">Generic Controller Pattern</a></li>
+                    <li><a href="#work-queues" onclick="closeNav()">Work Queues &amp; Rate Limiting</a></li>
+                    <li><a href="#leader-election" onclick="closeNav()">Leader Election</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#scheduler-internals" onclick="closeNav()">Scheduler Internals</a>
+                <ul>
+                    <li><a href="#scheduling-framework" onclick="closeNav()">Scheduling Framework</a></li>
+                    <li><a href="#filter-score" onclick="closeNav()">Filter &amp; Score Plugins</a></li>
+                    <li><a href="#preemption" onclick="closeNav()">Preemption &amp; Priority</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#etcd-deep-dive" onclick="closeNav()">etcd Deep Dive</a>
+                <ul>
+                    <li><a href="#key-structure" onclick="closeNav()">Key Structure</a></li>
+                    <li><a href="#compaction-defrag" onclick="closeNav()">Compaction &amp; Defragmentation</a></li>
+                    <li><a href="#etcd-performance" onclick="closeNav()">Performance Tuning</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#garbage-collection" onclick="closeNav()">Garbage Collection &amp; Finalizers</a>
+                <ul>
+                    <li><a href="#owner-references" onclick="closeNav()">Owner References</a></li>
+                    <li><a href="#cascading-deletion" onclick="closeNav()">Cascading Deletion</a></li>
+                    <li><a href="#finalizers" onclick="closeNav()">Finalizers</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#admission-controllers" onclick="closeNav()">Admission Controllers</a>
+                <ul>
+                    <li><a href="#webhook-types" onclick="closeNav()">Mutating &amp; Validating Webhooks</a></li>
+                    <li><a href="#builtin-controllers" onclick="closeNav()">Built-in Controllers</a></li>
+                    <li><a href="#custom-webhooks" onclick="closeNav()">Writing Custom Webhooks</a></li>
+                </ul>
+            </li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                        <h2 id="api-machinery">API Machinery</h2>
+
+                        <p>The Kubernetes API server is not a monolithic endpoint — it's a collection of <strong>API groups</strong>, each containing versioned resources. Understanding this structure is essential for writing controllers, debugging API interactions, and working with CRDs.</p>
+
+                        <h3 id="api-groups">API Groups &amp; Versions</h3>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-book me-2"></i>
+                            <strong>Definition:</strong> An API Group is a logical collection of related resources that are versioned together. Groups allow the Kubernetes API to evolve without breaking backward compatibility — resources can be added, deprecated, and removed within a group independently of other groups.
+                        </div>
+
+                        <p>Every Kubernetes resource belongs to an API group. The "core" group (also called the legacy group) contains fundamental resources like Pods, Services, and ConfigMaps. Newer resources live in named groups like <code>apps</code>, <code>batch</code>, and <code>networking.k8s.io</code>.</p>
+
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>API Group</th>
+                                    <th>Path</th>
+                                    <th>Key Resources</th>
+                                    <th>Stable Version</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>core</code> (legacy)</td>
+                                    <td><code>/api/v1</code></td>
+                                    <td>Pod, Service, ConfigMap, Secret, PV, PVC, Namespace</td>
+                                    <td>v1</td>
+                                </tr>
+                                <tr>
+                                    <td><code>apps</code></td>
+                                    <td><code>/apis/apps/v1</code></td>
+                                    <td>Deployment, StatefulSet, DaemonSet, ReplicaSet</td>
+                                    <td>v1</td>
+                                </tr>
+                                <tr>
+                                    <td><code>batch</code></td>
+                                    <td><code>/apis/batch/v1</code></td>
+                                    <td>Job, CronJob</td>
+                                    <td>v1</td>
+                                </tr>
+                                <tr>
+                                    <td><code>networking.k8s.io</code></td>
+                                    <td><code>/apis/networking.k8s.io/v1</code></td>
+                                    <td>Ingress, IngressClass, NetworkPolicy</td>
+                                    <td>v1</td>
+                                </tr>
+                                <tr>
+                                    <td><code>rbac.authorization.k8s.io</code></td>
+                                    <td><code>/apis/rbac.authorization.k8s.io/v1</code></td>
+                                    <td>Role, ClusterRole, RoleBinding, ClusterRoleBinding</td>
+                                    <td>v1</td>
+                                </tr>
+                                <tr>
+                                    <td><code>storage.k8s.io</code></td>
+                                    <td><code>/apis/storage.k8s.io/v1</code></td>
+                                    <td>StorageClass, CSIDriver, VolumeAttachment</td>
+                                    <td>v1</td>
+                                </tr>
+                                <tr>
+                                    <td><code>autoscaling</code></td>
+                                    <td><code>/apis/autoscaling/v2</code></td>
+                                    <td>HorizontalPodAutoscaler</td>
+                                    <td>v2</td>
+                                </tr>
+                                <tr>
+                                    <td><code>policy</code></td>
+                                    <td><code>/apis/policy/v1</code></td>
+                                    <td>PodDisruptionBudget</td>
+                                    <td>v1</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <pre><code class="language-bash"># List all API groups available on the cluster
+kubectl api-versions
+
+# Explore resources in a specific group
+kubectl api-resources --api-group=apps
+# NAME          SHORTNAMES   APIVERSION   NAMESPACED   KIND
+# deployments   deploy       apps/v1      true         Deployment
+# daemonsets    ds           apps/v1      true         DaemonSet
+# replicasets   rs           apps/v1      true         ReplicaSet
+# statefulsets  sts          apps/v1      true         StatefulSet
+
+# View the raw API discovery document
+kubectl get --raw /apis | jq '.groups[].name'
+
+# List all resources in the core group
+kubectl api-resources --api-group=""</code></pre>
+
+                        <h3 id="gvr-gvk">GVR vs GVK</h3>
+
+                        <p>Two fundamental concepts identify resources in Kubernetes — <strong>GVK</strong> (Group-Version-Kind) identifies a <em>type</em> of resource, while <strong>GVR</strong> (Group-Version-Resource) identifies the <em>REST path</em> to access it.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Key Insight:</strong> GVK is what a resource <em>is</em> (its type in the type system). GVR is <em>how you access it</em> (its REST endpoint). The mapping between them is handled by a REST mapper. Kind is typically singular and PascalCase (<code>Deployment</code>), while Resource is plural and lowercase (<code>deployments</code>).
+                        </div>
+
+                        <pre><code class="language-bash"># GVK example: apps/v1, Kind=Deployment
+# GVR example: apps/v1, Resource=deployments
+
+# The REST path for a namespaced resource follows this pattern:
+# /apis/{group}/{version}/namespaces/{namespace}/{resource}/{name}
+# /apis/apps/v1/namespaces/default/deployments/nginx
+
+# For core group resources, the path omits /apis and the group:
+# /api/v1/namespaces/default/pods/my-pod
+
+# Access a specific deployment via raw API
+kubectl get --raw /apis/apps/v1/namespaces/default/deployments/nginx | jq '.metadata.name'
+
+# Subresources are accessed as nested paths:
+# /apis/apps/v1/namespaces/default/deployments/nginx/status
+# /apis/apps/v1/namespaces/default/deployments/nginx/scale
+kubectl get --raw /apis/apps/v1/namespaces/default/deployments/nginx/scale | jq .</code></pre>
+
+                        <h3 id="resource-versioning">Resource Versioning &amp; Optimistic Concurrency</h3>
+
+                        <p>Every Kubernetes object carries a <code>metadata.resourceVersion</code> field — an opaque string (typically the etcd revision number) that changes on every update. This enables <strong>optimistic concurrency control</strong>: the API server rejects updates where the submitted resourceVersion doesn't match the current stored version.</p>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Conflict Resolution:</strong> When you receive a <code>409 Conflict</code> response, it means another process modified the resource since you last read it. The correct pattern is: read → modify → write. If conflict occurs, re-read and retry. Never cache resourceVersion across long intervals.
+                        </div>
+
+                        <pre><code class="language-bash"># Observe resourceVersion changing on updates
+kubectl get pod nginx -o jsonpath='{.metadata.resourceVersion}'
+# Output: 15234
+
+kubectl label pod nginx env=prod
+kubectl get pod nginx -o jsonpath='{.metadata.resourceVersion}'
+# Output: 15235 (incremented)
+
+# Demonstrate optimistic concurrency conflict
+# Terminal 1: Get the resource
+kubectl get deployment nginx -o yaml > deployment.yaml
+# Terminal 2: Modify it (changes resourceVersion on server)
+kubectl scale deployment nginx --replicas=5
+# Terminal 1: Try to apply stale version
+kubectl apply -f deployment.yaml
+# Error: the object has been modified; please apply your changes to the latest version</code></pre>
+
+                        <h3 id="api-discovery">API Discovery &amp; Subresources</h3>
+
+                        <p>The API server exposes discovery endpoints that allow clients to dynamically determine which resources and operations are available. This is how <code>kubectl</code> auto-completes resource types and how controllers discover CRDs at runtime.</p>
+
+                        <p><strong>Subresources</strong> are secondary endpoints on a resource that handle specific operations:</p>
+
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Subresource</th>
+                                    <th>Path Suffix</th>
+                                    <th>Purpose</th>
+                                    <th>Used By</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>/status</code></td>
+                                    <td><code>…/pods/nginx/status</code></td>
+                                    <td>Separate RBAC for spec vs status updates</td>
+                                    <td>Controllers updating status without touching spec</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/scale</code></td>
+                                    <td><code>…/deployments/nginx/scale</code></td>
+                                    <td>Uniform scaling interface</td>
+                                    <td>HPA, kubectl scale</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/log</code></td>
+                                    <td><code>…/pods/nginx/log</code></td>
+                                    <td>Stream container logs</td>
+                                    <td>kubectl logs</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/exec</code></td>
+                                    <td><code>…/pods/nginx/exec</code></td>
+                                    <td>Execute commands in container</td>
+                                    <td>kubectl exec</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/portforward</code></td>
+                                    <td><code>…/pods/nginx/portforward</code></td>
+                                    <td>Tunnel TCP connections</td>
+                                    <td>kubectl port-forward</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/eviction</code></td>
+                                    <td><code>…/pods/nginx/eviction</code></td>
+                                    <td>Graceful pod eviction respecting PDBs</td>
+                                    <td>kubectl drain, descheduler</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h2 id="informer-pattern">The Informer Pattern</h2>
+
+                        <p>Informers are the backbone of the Kubernetes controller ecosystem. They solve a critical problem: how do you keep track of cluster state without overwhelming the API server with repeated list requests?</p>
+
+                        <h3 id="sharedinformers">SharedInformers</h3>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-book me-2"></i>
+                            <strong>Definition:</strong> A SharedInformer is a shared, in-process cache of Kubernetes objects that is kept in sync with the API server via a ListWatch. Multiple controllers can share the same informer instance, multiplexing event notifications without multiplying API server load.
+                        </div>
+
+                        <p>Without informers, every controller watching Deployments would independently list and watch the same resources — 10 controllers would mean 10x the API load. SharedInformers ensure a single watch connection per resource type per process, with events fanned out to all registered handlers.</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Informer Architecture — From API Server to Controller</div>
+                            <pre class="mermaid">
+flowchart LR
+    API[API Server] -->|List + Watch| R[Reflector]
+    R -->|Objects| DF[DeltaFIFO Queue]
+    DF -->|Pop| I[Informer]
+    I -->|Store| IX[Indexer / Cache]
+    I -->|Notify| EH1[Event Handler 1]
+    I -->|Notify| EH2[Event Handler 2]
+    I -->|Notify| EH3[Event Handler 3]
+    EH1 -->|Enqueue Key| WQ[Work Queue]
+    EH2 -->|Enqueue Key| WQ
+    WQ -->|Dequeue| RC[Reconcile Loop]
+    RC -->|Read| IX
+    RC -->|Write| API
+                            </pre>
+                        </div>
+
+                        <h3 id="listwatch">ListWatch Mechanism</h3>
+
+                        <p>The ListWatch mechanism is a two-phase synchronization protocol:</p>
+
+                        <ol>
+                            <li><strong>List</strong> — On startup, fetch all existing objects of the watched type. This populates the initial cache.</li>
+                            <li><strong>Watch</strong> — After listing, open a long-lived HTTP streaming connection. The API server pushes change events (ADDED, MODIFIED, DELETED) as they occur.</li>
+                        </ol>
+
+                        <pre><code class="language-bash"># Observe a watch stream directly (raw HTTP)
+kubectl get --raw '/api/v1/namespaces/default/pods?watch=true&resourceVersion=0' &
+
+# You'll see NDJSON events like:
+# {"type":"ADDED","object":{"kind":"Pod","metadata":{"name":"nginx",...},...}}
+# {"type":"MODIFIED","object":{"kind":"Pod","metadata":{"name":"nginx",...},...}}
+# {"type":"DELETED","object":{"kind":"Pod","metadata":{"name":"nginx",...},...}}
+
+# The watch starts from the given resourceVersion
+# If the version is too old, you get 410 Gone → triggers a full re-list</code></pre>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Watch Bookmark:</strong> Watch connections can be interrupted by network issues, API server restarts, or etcd compaction (410 Gone). The informer handles this automatically by re-listing from the last known resourceVersion. The <code>BOOKMARK</code> event type (opt-in) allows the server to periodically update the client's resourceVersion without sending full objects, reducing re-list data after reconnection.
+                        </div>
+
+                        <h3 id="local-cache">Local Cache &amp; Indexers</h3>
+
+                        <p>The Informer maintains a thread-safe local cache (the <strong>Indexer</strong>) that mirrors the API server's state. Controllers read from this cache instead of hitting the API server, providing microsecond-latency lookups for objects that would otherwise require network round-trips.</p>
+
+                        <pre><code class="language-bash"># The cache supports indexed lookups — common indexes include:
+# - By namespace: cache.MetaNamespaceIndexFunc
+# - By node name: custom indexer for pod-to-node mapping
+# - By label: custom indexer for label-based queries
+
+# Pseudocode showing cache interaction
+# controller reads from cache (fast, no API call):
+#   pod, exists, err := podIndexer.GetByKey("default/nginx")
+#
+# controller writes to API server (network call):
+#   _, err := clientset.CoreV1().Pods("default").Update(ctx, pod, metav1.UpdateOptions{})</code></pre>
+
+                        <h3 id="event-handlers">Event Handlers &amp; Resync</h3>
+
+                        <p>Event handlers are callbacks registered with the informer that fire when objects change. The three handler types map to watch event types:</p>
+
+                        <pre><code class="language-bash"># Go pseudocode — registering event handlers on a SharedInformer
+# informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+#     AddFunc: func(obj interface{}) {
+#         key, _ := cache.MetaNamespaceKeyFunc(obj)
+#         workqueue.Add(key)  // enqueue "namespace/name"
+#     },
+#     UpdateFunc: func(oldObj, newObj interface{}) {
+#         key, _ := cache.MetaNamespaceKeyFunc(newObj)
+#         workqueue.Add(key)
+#     },
+#     DeleteFunc: func(obj interface{}) {
+#         key, _ := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+#         workqueue.Add(key)
+#     },
+# })
+
+# Resync period: periodically re-queues ALL objects from cache
+# Purpose: catch missed events, ensure eventual consistency
+# Typical value: 30s to 10m (longer = less load, shorter = faster convergence)
+# informer.AddEventHandlerWithResyncPeriod(handler, 5*time.Minute)</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Why Informers Matter:</strong> A cluster with 10,000 pods and 50 controllers without informers would generate 500,000 list calls per sync interval. With SharedInformers, it's 1 watch connection per resource type — the API server sends events only when things change.
+                        </div>
+
+                        <h2 id="controller-architecture">Controller Architecture</h2>
+
+                        <p>Every Kubernetes controller follows the same architectural pattern: observe desired state (spec), compare with actual state, and take action to reconcile. This pattern is what makes Kubernetes self-healing and declarative.</p>
+
+                        <h3 id="controller-pattern">The Generic Controller Pattern</h3>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Generic Controller Reconciliation Loop</div>
+                            <pre class="mermaid">
+flowchart TD
+    INF[SharedInformer] -->|Event| EH[Event Handler]
+    EH -->|"key: namespace/name"| WQ[Work Queue]
+    WQ -->|Dequeue| W[Worker Goroutine]
+    W --> R{Reconcile}
+    R -->|Read desired state| CACHE[Informer Cache]
+    R -->|Read actual state| EXT[External System / API]
+    R -->|Diff| D{Desired == Actual?}
+    D -->|Yes| DONE[Done — Requeue after interval]
+    D -->|No| ACT[Take Action]
+    ACT -->|Create/Update/Delete| API[API Server]
+    ACT -->|Success| DONE
+    ACT -->|Error| RETRY[Requeue with backoff]
+    RETRY --> WQ
+                            </pre>
+                        </div>
+
+                        <pre><code class="language-bash"># Go pseudocode — the canonical controller reconciliation loop
+#
+# func (c *Controller) Run(workers int, stopCh <-chan struct{}) {
+#     defer c.workqueue.ShutDown()
+#
+#     // Wait for informer caches to sync before processing
+#     if !cache.WaitForCacheSync(stopCh, c.podsSynced, c.deploymentsSynced) {
+#         return
+#     }
+#
+#     // Launch worker goroutines
+#     for i := 0; i < workers; i++ {
+#         go wait.Until(c.runWorker, time.Second, stopCh)
+#     }
+#     <-stopCh
+# }
+#
+# func (c *Controller) runWorker() {
+#     for c.processNextWorkItem() {}
+# }
+#
+# func (c *Controller) processNextWorkItem() bool {
+#     key, shutdown := c.workqueue.Get()
+#     if shutdown { return false }
+#     defer c.workqueue.Done(key)
+#
+#     err := c.reconcile(key.(string))
+#     if err == nil {
+#         c.workqueue.Forget(key)  // success — reset retry count
+#         return true
+#     }
+#
+#     // Requeue with rate limiting (exponential backoff)
+#     c.workqueue.AddRateLimited(key)
+#     return true
+# }</code></pre>
+
+                        <h3 id="work-queues">Work Queues &amp; Rate Limiting</h3>
+
+                        <p>The work queue is the decoupling layer between event observation and reconciliation. It provides three critical guarantees:</p>
+
+                        <ol>
+                            <li><strong>Deduplication</strong> — If an object changes 10 times before it's processed, only one reconciliation occurs (using the latest state from cache)</li>
+                            <li><strong>Rate Limiting</strong> — Failed reconciliations are retried with exponential backoff (default: 5ms base, 1000s max)</li>
+                            <li><strong>Ordering</strong> — Items are processed in insertion order (FIFO), but re-queued items respect rate limits</li>
+                        </ol>
+
+                        <pre><code class="language-bash"># Go pseudocode — work queue rate limiter configuration
+#
+# // Default rate limiter: exponential backoff + overall rate limit
+# rateLimiter := workqueue.NewMaxOfRateLimiter(
+#     // Per-item exponential backoff: 5ms base, doubles each retry, max 1000s
+#     workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 1000*time.Second),
+#     // Overall rate: max 10 items/second, burst of 100
+#     &workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+# )
+#
+# queue := workqueue.NewRateLimitingQueue(rateLimiter)
+#
+# // After 5 consecutive failures for the same key:
+# // Retry delays: 5ms → 10ms → 20ms → 40ms → 80ms (exponential)</code></pre>
+
+                        <h3 id="leader-election">Leader Election for HA Controllers</h3>
+
+                        <p>In production, controllers run with multiple replicas for high availability. But only one replica should actively reconcile at any time — this is achieved through <strong>leader election</strong> using a Kubernetes Lease object.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>How It Works:</strong> Replicas compete to acquire a Lease (or ConfigMap/Endpoints). The winner becomes the leader and runs reconciliation loops. Other replicas stand by, watching the lease. If the leader fails to renew within the <code>leaseDuration</code>, a standby replica acquires leadership. Typical settings: lease duration 15s, renew deadline 10s, retry period 2s.
+                        </div>
+
+                        <pre><code class="language-yaml"># Leader election Lease object (created automatically by the framework)
+apiVersion: coordination.k8s.io/v1
+kind: Lease
+metadata:
+  name: my-controller-leader
+  namespace: kube-system
+spec:
+  holderIdentity: controller-pod-abc123    # Current leader's pod name
+  leaseDurationSeconds: 15                  # How long lease is valid
+  acquireTime: "2026-05-14T10:00:00Z"
+  renewTime: "2026-05-14T10:00:12Z"         # Last renewal timestamp
+  leaseTransitions: 3                       # Number of leader changes</code></pre>
+
+                        <h2 id="scheduler-internals">Scheduler Internals</h2>
+
+                        <p>The kube-scheduler assigns pods to nodes through a pluggable framework. The scheduling decision happens in two phases: <strong>filtering</strong> (which nodes <em>can</em> run the pod) and <strong>scoring</strong> (which node is <em>best</em>).</p>
+
+                        <h3 id="scheduling-framework">The Scheduling Framework</h3>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Scheduler Plugin Pipeline</div>
+                            <pre class="mermaid">
+flowchart LR
+    subgraph "Scheduling Cycle (per pod)"
+        QS[QueueSort] --> PF[PreFilter]
+        PF --> F[Filter]
+        F --> PFS[PostFilter]
+        PFS --> PS[PreScore]
+        PS --> S[Score]
+        S --> NS[NormalizeScore]
+        NS --> R[Reserve]
+    end
+    subgraph "Binding Cycle (async)"
+        R --> PB[PreBind]
+        PB --> B[Bind]
+        B --> POB[PostBind]
+    end
+                            </pre>
+                        </div>
+
+                        <p>The scheduling framework defines <strong>extension points</strong> where plugins hook into the decision process. Each extension point runs a set of plugins that can filter nodes out, score remaining candidates, or perform binding operations.</p>
+
+                        <h3 id="filter-score">Filter &amp; Score Plugins</h3>
+
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Plugin</th>
+                                    <th>Phase</th>
+                                    <th>Purpose</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>NodeResourcesFit</code></td>
+                                    <td>Filter + Score</td>
+                                    <td>Ensures node has sufficient CPU/memory; scores by resource utilization balance</td>
+                                </tr>
+                                <tr>
+                                    <td><code>NodeAffinity</code></td>
+                                    <td>Filter + Score</td>
+                                    <td>Enforces requiredDuringScheduling and scores preferredDuringScheduling affinities</td>
+                                </tr>
+                                <tr>
+                                    <td><code>PodTopologySpread</code></td>
+                                    <td>Filter + Score</td>
+                                    <td>Distributes pods across failure domains (zones, nodes) based on topology constraints</td>
+                                </tr>
+                                <tr>
+                                    <td><code>InterPodAffinity</code></td>
+                                    <td>Filter + Score</td>
+                                    <td>Enforces pod affinity/anti-affinity rules (co-location and spreading)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>TaintToleration</code></td>
+                                    <td>Filter + Score</td>
+                                    <td>Filters nodes with untolerated taints; scores by number of tolerated taints</td>
+                                </tr>
+                                <tr>
+                                    <td><code>VolumeBinding</code></td>
+                                    <td>Filter + Reserve</td>
+                                    <td>Checks PV availability in the node's zone; reserves PV bindings</td>
+                                </tr>
+                                <tr>
+                                    <td><code>NodePorts</code></td>
+                                    <td>Filter</td>
+                                    <td>Filters nodes where requested hostPorts are already in use</td>
+                                </tr>
+                                <tr>
+                                    <td><code>ImageLocality</code></td>
+                                    <td>Score</td>
+                                    <td>Prefers nodes that already have the required container images cached</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <pre><code class="language-bash"># Debug scheduler decisions for a pending pod
+kubectl get events --field-selector reason=FailedScheduling -n default
+
+# Verbose scheduler output (scheduler must be started with -v=10)
+# In managed clusters, check scheduler logs:
+kubectl logs -n kube-system -l component=kube-scheduler --tail=50
+
+# View which scheduler profiles are active
+kubectl get configmap -n kube-system kube-scheduler-config -o yaml 2>/dev/null || \
+  echo "Scheduler uses default configuration (no custom ConfigMap)"
+
+# Check pod scheduling annotations after binding
+kubectl get pod nginx -o jsonpath='{.metadata.annotations}' | jq .</code></pre>
+
+                        <h3 id="preemption">Preemption &amp; Priority Classes</h3>
+
+                        <p>When no node can accommodate a pod, the scheduler can <strong>preempt</strong> (evict) lower-priority pods to make room. This is controlled by PriorityClasses — cluster-wide objects that assign integer priorities to pods.</p>
+
+                        <pre><code class="language-yaml"># Define priority classes
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: critical-infrastructure
+value: 1000000              # Higher number = higher priority
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority   # or "Never" to disable preemption
+description: "For critical infrastructure components (monitoring, logging)"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: batch-low
+value: 100
+globalDefault: false
+preemptionPolicy: Never     # This class will never preempt others
+description: "Low-priority batch jobs that can wait"
+---
+# Using a PriorityClass in a pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: critical-monitor
+spec:
+  priorityClassName: critical-infrastructure
+  containers:
+  - name: monitor
+    image: prometheus:latest
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"</code></pre>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Preemption Warning:</strong> Preemption is disruptive — evicted pods are terminated with their grace period and must be rescheduled elsewhere. Always set PodDisruptionBudgets on critical workloads. Use <code>preemptionPolicy: Never</code> for batch jobs that should wait rather than evict production workloads.
+                        </div>
+
+                        <h2 id="etcd-deep-dive">etcd Deep Dive</h2>
+
+                        <p>etcd is Kubernetes' brain — a distributed key-value store that holds all cluster state. Understanding its internals is crucial for operating large clusters reliably.</p>
+
+                        <h3 id="key-structure">Key Structure</h3>
+
+                        <p>Kubernetes stores objects in etcd under a well-defined key hierarchy. The default prefix is <code>/registry/</code>:</p>
+
+                        <pre><code class="language-bash"># etcd key structure (requires direct etcd access — NOT recommended in production)
+# /registry/{resource-plural}/{namespace}/{name}
+# /registry/pods/default/nginx
+# /registry/deployments/kube-system/coredns
+# /registry/namespaces/default
+# /registry/clusterroles/admin        (cluster-scoped — no namespace segment)
+# /registry/services/specs/default/kubernetes
+# /registry/secrets/default/my-secret
+
+# In production, access etcd via the API server — direct etcd access bypasses RBAC
+# Only use etcdctl for disaster recovery or debugging:
+ETCDCTL_API=3 etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  get /registry/pods/default/nginx --print-value-only | \
+  auger decode    # Decode protobuf to readable format
+
+# List all keys under a prefix
+ETCDCTL_API=3 etcdctl get /registry/ --prefix --keys-only | head -20</code></pre>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-book me-2"></i>
+                            <strong>Serialization Format:</strong> Kubernetes stores objects in etcd using Protocol Buffers (protobuf) by default — not JSON. Protobuf is ~2x smaller and ~5x faster to serialize/deserialize than JSON. The <code>auger</code> tool can decode these binary values for debugging. The API server handles conversion between protobuf (storage) and JSON/YAML (client-facing).
+                        </div>
+
+                        <h3 id="compaction-defrag">Compaction &amp; Defragmentation</h3>
+
+                        <p>etcd is an MVCC (Multi-Version Concurrency Control) store — it keeps a history of all key revisions. Without periodic maintenance, this history grows unbounded and degrades performance.</p>
+
+                        <pre><code class="language-bash"># Check etcd database size and alarm status
+ETCDCTL_API=3 etcdctl endpoint status --write-out=table
+# +-------------------+--------+---------+---------+-----------+...
+# |     ENDPOINT      |   ID   | VERSION | DB SIZE | IS LEADER |
+# +-------------------+--------+---------+---------+-----------+...
+# | https://...:2379  | abc123 | 3.5.12  | 4.2 GB  |   true    |
+
+# Compact old revisions (keep only latest 10000 revisions)
+REVISION=$(ETCDCTL_API=3 etcdctl endpoint status --write-out=json | jq '.[0].Status.header.revision')
+ETCDCTL_API=3 etcdctl compact $((REVISION - 10000))
+
+# Defragment to reclaim disk space (compaction marks revisions as deleted but doesn't free space)
+ETCDCTL_API=3 etcdctl defrag --endpoints=https://127.0.0.1:2379
+
+# Check for NOSPACE alarm (etcd stops accepting writes at quota limit)
+ETCDCTL_API=3 etcdctl alarm list
+
+# Clear NOSPACE alarm after resolving (compact + defrag)
+ETCDCTL_API=3 etcdctl alarm disarm</code></pre>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>NOSPACE Alarm:</strong> When etcd's database exceeds its quota (default 2GB, recommended max 8GB), it raises a NOSPACE alarm and rejects all write operations. This makes the cluster effectively read-only — no pod scheduling, no deployments, no scaling. Monitor etcd DB size and set up alerts at 80% capacity. Recovery: compact + defrag + alarm disarm.
+                        </div>
+
+                        <h3 id="etcd-performance">Performance Tuning</h3>
+
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Default</th>
+                                    <th>Recommended</th>
+                                    <th>Impact</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>--quota-backend-bytes</code></td>
+                                    <td>2 GB</td>
+                                    <td>8 GB (max recommended)</td>
+                                    <td>Maximum DB size before NOSPACE alarm</td>
+                                </tr>
+                                <tr>
+                                    <td><code>--auto-compaction-mode</code></td>
+                                    <td>periodic</td>
+                                    <td>revision</td>
+                                    <td>"revision" keeps last N revisions; "periodic" compacts every M hours</td>
+                                </tr>
+                                <tr>
+                                    <td><code>--auto-compaction-retention</code></td>
+                                    <td>0 (disabled)</td>
+                                    <td>10000 (revisions) or "5m" (periodic)</td>
+                                    <td>How much history to keep</td>
+                                </tr>
+                                <tr>
+                                    <td><code>--snapshot-count</code></td>
+                                    <td>100000</td>
+                                    <td>10000 for faster recovery</td>
+                                    <td>Transactions between snapshots (WAL compaction trigger)</td>
+                                </tr>
+                                <tr>
+                                    <td>Disk type</td>
+                                    <td>—</td>
+                                    <td>SSD with fsync &lt; 10ms</td>
+                                    <td>etcd is fsync-heavy; spinning disks cause leader election storms</td>
+                                </tr>
+                                <tr>
+                                    <td>Network latency</td>
+                                    <td>—</td>
+                                    <td>&lt; 10ms between peers</td>
+                                    <td>High latency causes frequent elections and inconsistency</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h2 id="garbage-collection">Garbage Collection &amp; Finalizers</h2>
+
+                        <p>When you delete a Deployment, its ReplicaSets and Pods are cleaned up automatically. This isn't magic — it's the <strong>garbage collector</strong> following owner references through the object graph.</p>
+
+                        <h3 id="owner-references">Owner References</h3>
+
+                        <p>Owner references create a directed acyclic graph (DAG) of object ownership. When a parent is deleted, the garbage collector identifies and removes all dependents.</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Garbage Collection — Owner Reference Chain</div>
+                            <pre class="mermaid">
+flowchart TD
+    D[Deployment<br/>nginx] -->|owns| RS[ReplicaSet<br/>nginx-7d4f8b]
+    RS -->|owns| P1[Pod<br/>nginx-7d4f8b-abc]
+    RS -->|owns| P2[Pod<br/>nginx-7d4f8b-def]
+    RS -->|owns| P3[Pod<br/>nginx-7d4f8b-ghi]
+    D -->|delete| GC{Garbage Collector}
+    GC -->|"cascade: background"| RS
+    GC -->|"cascade: foreground"| P1
+    GC -->|"cascade: foreground"| P2
+    GC -->|"cascade: foreground"| P3
+                            </pre>
+                        </div>
+
+                        <pre><code class="language-yaml"># Owner reference as seen on a ReplicaSet owned by a Deployment
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: nginx-7d4f8b6c9f
+  namespace: default
+  ownerReferences:
+  - apiVersion: apps/v1
+    kind: Deployment
+    name: nginx
+    uid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+    controller: true          # This is THE managing controller
+    blockOwnerDeletion: true  # Participates in foreground cascading delete</code></pre>
+
+                        <pre><code class="language-bash"># Inspect owner references on a pod
+kubectl get pod nginx-7d4f8b6c9f-abc12 -o jsonpath='{.metadata.ownerReferences}' | jq .
+
+# Delete with explicit cascade policy
+kubectl delete deployment nginx --cascade=foreground   # Wait for all dependents to be deleted first
+kubectl delete deployment nginx --cascade=background   # Delete parent immediately, GC cleans up async (default)
+kubectl delete deployment nginx --cascade=orphan       # Delete parent only, leave dependents running</code></pre>
+
+                        <h3 id="cascading-deletion">Cascading Deletion Modes</h3>
+
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Mode</th>
+                                    <th>Behavior</th>
+                                    <th>Use Case</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Background</strong> (default)</td>
+                                    <td>Parent is deleted immediately. GC deletes dependents asynchronously.</td>
+                                    <td>Normal operations — fast deletion, eventual cleanup</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Foreground</strong></td>
+                                    <td>Parent enters "deletion in progress" state. GC deletes all dependents first, then removes parent.</td>
+                                    <td>When you need to guarantee cleanup before proceeding (migrations, replacements)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Orphan</strong></td>
+                                    <td>Parent is deleted. Dependents are left running with ownerReferences cleared.</td>
+                                    <td>Replacing a Deployment while keeping existing pods running</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h3 id="finalizers">Finalizers</h3>
+
+                        <p>Finalizers are metadata strings that <strong>block object deletion</strong> until a controller removes them. They provide a hook for cleanup logic that must complete before an object can be garbage collected.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>How Finalizers Work:</strong> When you delete an object with finalizers, Kubernetes sets <code>metadata.deletionTimestamp</code> but does NOT remove the object from etcd. The object remains "terminating" until all finalizers are removed. A controller watches for the deletionTimestamp, performs cleanup (external resources, DNS records, cloud load balancers), then removes its finalizer. Once all finalizers are cleared, the GC deletes the object.
+                        </div>
+
+                        <pre><code class="language-yaml"># Common finalizer patterns in Kubernetes
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: my-namespace
+  finalizers:
+  - kubernetes    # Ensures all resources in the namespace are deleted first
+
+---
+# Custom finalizer on a CRD instance
+apiVersion: databases.example.com/v1
+kind: PostgresCluster
+metadata:
+  name: prod-db
+  finalizers:
+  - databases.example.com/cleanup    # Controller deletes cloud DB before allowing object removal
+spec:
+  instances: 3
+  storage:
+    size: 100Gi</code></pre>
+
+                        <pre><code class="language-bash"># Debug stuck namespace deletion (common issue — stuck finalizers)
+kubectl get namespace stuck-ns -o json | jq '.spec.finalizers'
+# Output: ["kubernetes"]
+
+# Check which resources still exist in the namespace
+kubectl api-resources --verbs=list --namespaced -o name | \
+  xargs -n1 -I{} sh -c 'kubectl get {} -n stuck-ns 2>/dev/null && echo "Found: {}"'
+
+# DANGEROUS: Force-remove finalizer (only when cleanup is confirmed done)
+kubectl get namespace stuck-ns -o json | \
+  jq '.spec.finalizers = []' | \
+  kubectl replace --raw "/api/v1/namespaces/stuck-ns/finalize" -f -</code></pre>
+
+                        <h2 id="admission-controllers">Admission Controllers</h2>
+
+                        <p>Admission controllers intercept API requests <strong>after authentication and authorization</strong> but <strong>before persistence to etcd</strong>. They can validate requests (rejecting invalid ones) or mutate them (injecting defaults, sidecars, labels).</p>
+
+                        <h3 id="webhook-types">Mutating &amp; Validating Webhooks</h3>
+
+                        <p>The admission pipeline processes webhooks in two phases: <strong>mutating</strong> webhooks run first (and can modify the object), then <strong>validating</strong> webhooks run on the final mutated object (and can only accept or reject).</p>
+
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Can Modify Object?</th>
+                                    <th>Ordering</th>
+                                    <th>Common Uses</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>MutatingAdmissionWebhook</strong></td>
+                                    <td>Yes (via JSON patch)</td>
+                                    <td>Runs first, in order of webhook weight</td>
+                                    <td>Sidecar injection (Istio), default resource limits, label injection</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>ValidatingAdmissionWebhook</strong></td>
+                                    <td>No (accept/reject only)</td>
+                                    <td>Runs after all mutating webhooks</td>
+                                    <td>Policy enforcement (OPA/Gatekeeper), image allowlists, naming conventions</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h3 id="builtin-controllers">Built-in Admission Controllers</h3>
+
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Controller</th>
+                                    <th>Type</th>
+                                    <th>What It Does</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>NamespaceLifecycle</code></td>
+                                    <td>Validating</td>
+                                    <td>Prevents creating objects in terminating/non-existent namespaces</td>
+                                </tr>
+                                <tr>
+                                    <td><code>LimitRanger</code></td>
+                                    <td>Mutating + Validating</td>
+                                    <td>Injects default resource requests/limits, rejects pods exceeding limits</td>
+                                </tr>
+                                <tr>
+                                    <td><code>ResourceQuota</code></td>
+                                    <td>Validating</td>
+                                    <td>Rejects requests that would exceed namespace resource quotas</td>
+                                </tr>
+                                <tr>
+                                    <td><code>PodSecurity</code></td>
+                                    <td>Validating</td>
+                                    <td>Enforces Pod Security Standards (restricted, baseline, privileged)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>ServiceAccount</code></td>
+                                    <td>Mutating</td>
+                                    <td>Injects default service account token volume mount</td>
+                                </tr>
+                                <tr>
+                                    <td><code>DefaultStorageClass</code></td>
+                                    <td>Mutating</td>
+                                    <td>Adds default StorageClass to PVCs without one</td>
+                                </tr>
+                                <tr>
+                                    <td><code>MutatingAdmissionWebhook</code></td>
+                                    <td>Mutating</td>
+                                    <td>Calls external mutating webhook services</td>
+                                </tr>
+                                <tr>
+                                    <td><code>ValidatingAdmissionWebhook</code></td>
+                                    <td>Validating</td>
+                                    <td>Calls external validating webhook services</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h3 id="custom-webhooks">Writing Custom Admission Webhooks</h3>
+
+                        <p>A custom webhook is a web server that receives <code>AdmissionReview</code> requests from the API server and returns an <code>AdmissionResponse</code>. Here's the configuration that tells the API server when to invoke your webhook:</p>
+
+                        <pre><code class="language-yaml"># ValidatingWebhookConfiguration — reject pods without resource limits
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: require-resource-limits
+webhooks:
+- name: require-limits.example.com
+  admissionReviewVersions: ["v1"]
+  sideEffects: None
+  timeoutSeconds: 5
+  failurePolicy: Fail            # Reject request if webhook is unavailable
+  matchPolicy: Equivalent
+  clientConfig:
+    service:
+      name: admission-webhook
+      namespace: webhook-system
+      path: /validate-resource-limits
+    caBundle: LS0tLS1CRUdJTi...   # Base64-encoded CA cert
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+  namespaceSelector:
+    matchExpressions:
+    - key: enforce-limits
+      operator: In
+      values: ["true"]           # Only applies to namespaces with this label
+---
+# MutatingWebhookConfiguration — inject sidecar container
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: sidecar-injector
+webhooks:
+- name: sidecar.inject.example.com
+  admissionReviewVersions: ["v1"]
+  sideEffects: None
+  reinvocationPolicy: IfNeeded    # Re-invoke if another mutating webhook changed the object
+  timeoutSeconds: 10
+  failurePolicy: Ignore           # Don't block pod creation if webhook is down
+  clientConfig:
+    service:
+      name: sidecar-injector
+      namespace: injection-system
+      path: /inject
+    caBundle: LS0tLS1CRUdJTi...
+  rules:
+  - operations: ["CREATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+  objectSelector:
+    matchLabels:
+      inject-sidecar: "true"      # Only pods with this label</code></pre>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Webhook Availability:</strong> If your webhook is unavailable and <code>failurePolicy: Fail</code> is set, ALL matching API requests will be rejected — including system-critical pods. Always use <code>failurePolicy: Ignore</code> during initial rollout and narrow your <code>namespaceSelector</code> to exclude <code>kube-system</code>. Set short <code>timeoutSeconds</code> (3-5s) to avoid blocking the API server.
+                        </div>
+
+                        <pre><code class="language-bash"># Debug admission webhook issues
+kubectl get validatingwebhookconfigurations
+kubectl get mutatingwebhookconfigurations
+
+# Check if a webhook is rejecting requests
+kubectl get events --field-selector reason=FailedCreate
+# Warning  FailedCreate  admission webhook "require-limits.example.com" denied the request: ...
+
+# Test webhook connectivity from API server perspective
+kubectl logs -n webhook-system deploy/admission-webhook --tail=20
+
+# Temporarily disable a misbehaving webhook
+kubectl delete validatingwebhookconfiguration require-resource-limits</code></pre>
+
+                        <h2 id="exercises">Exercises</h2>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Exercise 1</span>
+                                <span>API Exploration</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h5>Explore the Kubernetes API Surface</h5>
+                                <p>Using only <code>kubectl get --raw</code> and <code>jq</code>, complete the following tasks:</p>
+                                <ol>
+                                    <li>List all API groups and their preferred versions</li>
+                                    <li>Find the GVR for CronJobs and construct the full REST path to list CronJobs in the <code>production</code> namespace</li>
+                                    <li>Retrieve the <code>/scale</code> subresource of a Deployment and modify its replica count via <code>kubectl replace --raw</code></li>
+                                    <li>Demonstrate optimistic concurrency by creating a conflict — two concurrent writes to the same ConfigMap</li>
+                                </ol>
+                            </div>
+                            <div class="experiment-tags">
+                                <span class="bias-tag">API groups</span>
+                                <span class="bias-tag">GVR</span>
+                                <span class="bias-tag">resourceVersion</span>
+                                <span class="bias-tag">subresources</span>
+                            </div>
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Exercise 2</span>
+                                <span>Controller Simulation</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h5>Build a Manual Reconciliation Loop</h5>
+                                <p>Simulate the controller pattern using shell scripting:</p>
+                                <ol>
+                                    <li>Write a bash script that watches for ConfigMap changes using <code>kubectl get --raw ...?watch=true</code></li>
+                                    <li>On each ADDED/MODIFIED event, extract the ConfigMap's data and write it to a local file</li>
+                                    <li>Implement a simple exponential backoff: if writing fails, wait 1s, 2s, 4s, 8s before retrying</li>
+                                    <li>Add deduplication: if the same key appears multiple times in the queue before processing, skip duplicates</li>
+                                </ol>
+                            </div>
+                            <div class="experiment-tags">
+                                <span class="bias-tag">watch</span>
+                                <span class="bias-tag">reconciliation</span>
+                                <span class="bias-tag">backoff</span>
+                                <span class="bias-tag">idempotency</span>
+                            </div>
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Exercise 3</span>
+                                <span>Scheduler Debugging</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h5>Diagnose and Fix Scheduling Failures</h5>
+                                <p>Create scenarios that demonstrate each scheduler failure mode:</p>
+                                <ol>
+                                    <li>Create a pod requesting 128 CPUs — diagnose the FailedScheduling event and identify which filter rejected it</li>
+                                    <li>Create two PriorityClasses (high=1000, low=100) and demonstrate preemption: fill a node with low-priority pods, then submit a high-priority pod</li>
+                                    <li>Configure a custom scheduler profile that disables the <code>ImageLocality</code> scoring plugin and verify the behavior difference</li>
+                                </ol>
+                            </div>
+                            <div class="experiment-tags">
+                                <span class="bias-tag">scheduling</span>
+                                <span class="bias-tag">preemption</span>
+                                <span class="bias-tag">priority</span>
+                                <span class="bias-tag">plugins</span>
+                            </div>
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Exercise 4</span>
+                                <span>Finalizer &amp; Webhook Lab</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h5>Implement Custom Garbage Collection and Admission Control</h5>
+                                <p>Combine finalizers with admission webhooks:</p>
+                                <ol>
+                                    <li>Create a ConfigMap with a custom finalizer. Write a controller (bash loop) that watches for deletionTimestamp, performs "cleanup" (logs a message), then removes the finalizer</li>
+                                    <li>Deploy a simple validating webhook (using a language of choice) that rejects pods with <code>latest</code> image tag</li>
+                                    <li>Demonstrate the orphan cascade policy: delete a Deployment with <code>--cascade=orphan</code> and verify pods continue running without owner references</li>
+                                </ol>
+                            </div>
+                            <div class="experiment-tags">
+                                <span class="bias-tag">finalizers</span>
+                                <span class="bias-tag">webhooks</span>
+                                <span class="bias-tag">garbage collection</span>
+                                <span class="bias-tag">cascade</span>
+                            </div>
+                        </div>
+
+                        <h2 id="conclusion">Conclusion</h2>
+
+                        <p>Understanding Kubernetes internals — API machinery, informers, controllers, the scheduler, etcd, garbage collection, and admission controllers — transforms your mental model from "kubectl does things" to understanding the precise mechanisms behind every operation. This knowledge is essential for:</p>
+
+                        <ul>
+                            <li><strong>Debugging complex failures</strong> — stuck deletions (finalizers), scheduling loops (plugin conflicts), stale state (informer cache lag)</li>
+                            <li><strong>Building operators</strong> — implementing the informer→queue→reconcile pattern correctly</li>
+                            <li><strong>Performance tuning</strong> — etcd compaction, informer resync intervals, webhook timeouts</li>
+                            <li><strong>Operating at scale</strong> — understanding why clusters with 5,000+ nodes need careful etcd tuning and rate limiting</li>
+                        </ul>
+
+                        <div class="series-next">
+                            <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                            <p>In <a href="distributed-systems-k8s-part12-crds-operators.html"><strong>Part 12: CRDs &amp; Operators</strong></a>, we'll apply everything from this article to build custom resources and controllers — extending Kubernetes with your own domain-specific APIs using the Operator pattern.</p>
+                        </div>
+
+                        <!-- Related Posts -->
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 6: Kubernetes Architecture</h5>
+                                <p class="text-muted small mb-2">Control plane components, kubelet, kube-proxy, and how the cluster's brain orchestrates workloads across nodes.</p>
+                                <a href="distributed-systems-k8s-part06-k8s-architecture.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 12: CRDs &amp; Operators</h5>
+                                <p class="text-muted small mb-2">Extend Kubernetes with custom resources, build operators using controller-runtime, and encode operational knowledge into software.</p>
+                                <a href="distributed-systems-k8s-part12-crds-operators.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 13: Day-2 Operations</h5>
+                                <p class="text-muted small mb-2">Monitoring, logging, upgrades, capacity management, and operational excellence for production Kubernetes.</p>
+                                <a href="distributed-systems-k8s-part13-operations.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                        <!-- Series Navigation -->
+                        <div class="series-nav">
+                            <a href="distributed-systems-k8s-part10-storage.html" class="series-nav-item prev">
+                                <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span>
+                                <span class="nav-title">Part 10: Kubernetes Storage</span>
+                            </a>
+                            <a href="distributed-systems-k8s-part12-crds-operators.html" class="series-nav-item next">
+                                <span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span>
+                                <span class="nav-title">Part 12: CRDs &amp; Operators</span>
+                            </a>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <!-- Footer -->
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left">
+                    <div class="fc-brand-group">
+                        <div class="fc-brand-stack"><span></span><span></span><span></span></div>
+                        <span class="fc-brand-name">Wasil Zafar</span>
+                    </div>
+                    <span class="fc-tagline">Consultant &amp; Cloud Architect</span>
+                </div>
+                <div class="fc-center">
+                    <a href="/">Home</a>
+                    <a href="/disclaimer.html">Disclaimer</a>
+                    <a href="/privacy-policy.html">Privacy</a>
+                    <a href="/pages/contact.html">Contact</a>
+                </div>
+                <div class="fc-right">
+                    <a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a>
+                    <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>
+                    <a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                    <a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a>
+                </div>
+            </div>
+            <div class="footer-sub">
+                <span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span>
+                <a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="../../../js/path-progress.js"></script>
+    <script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

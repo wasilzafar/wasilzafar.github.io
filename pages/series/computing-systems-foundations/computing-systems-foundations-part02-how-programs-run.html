@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="How programs actually run — from source code to CPU execution. Compilation, ELF binaries, dynamic linking, the loader, and how a process's memory is laid out in RAM." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="how programs run, ELF binary format, dynamic linking, shared libraries, program loader, process memory layout, compilation, executable, glibc, Linux" />
+    <meta property="og:title" content="Part 2: How Programs Actually Run — Computing & Systems Foundations" />
+    <meta property="og:description" content="From source code to CPU execution — compilation, ELF binaries, dynamic linking, and how the loader sets up a process in memory. The reality behind every program you run." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-05-13" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/computing-systems-foundations/computing-systems-foundations-part02-how-programs-run.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/computing-systems-foundations/computing-systems-foundations-part02-how-programs-run-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/computing-systems-foundations/computing-systems-foundations-part02-how-programs-run-tw.jpg" />
+
+    <title>Part 2: How Programs Actually Run - Computing & Systems Foundations</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/computing-systems-foundations/computing-systems-foundations-part02-how-programs-run.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied',
+            'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', {
+            'ad_storage': 'granted', 'ad_user_data': 'granted',
+            'ad_personalization': 'granted', 'analytics_storage': 'granted'
+        });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});
+        var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
+        j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;
+        f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- GTM noscript -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <!-- Cookie Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking "Accept All", you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;"></div>
+                <div id="cookieTypes" style="display: none;"></div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept">Accept All</button>
+                <button id="cookieReject">Reject All</button>
+                <button id="cookieSave" style="display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <div class="nav-v16-wrapper">
+        <nav class="nav-v16">
+            <a href="/" class="brand">
+                <div class="brand-stack"><span></span><span></span><span></span></div>
+                <span class="brand-text">Wasil Zafar</span>
+            </a>
+            <button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="links">
+                <a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a>
+                <a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a>
+                <a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a>
+                <a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a>
+                <a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a>
+                <button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Computing &amp; Systems Foundations Series</a>
+                <h1 class="display-4 fw-bold mb-3">Part 2: How Programs Actually Run</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>May 13, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>18 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">From source code to CPU — the complete journey through compilation, linking, loading, and the memory layout that every running process inhabits.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- TOC Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#lifecycle" onclick="closeNav()">The Program Lifecycle</a>
+                <ul>
+                    <li><a href="#lifecycle" onclick="closeNav()">From Text File to Running Process</a></li>
+                    <li><a href="#two-worlds" onclick="closeNav()">Compiled vs Interpreted Languages</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#compilation" onclick="closeNav()">Compilation — Four Phases</a>
+                <ul>
+                    <li><a href="#compilation" onclick="closeNav()">Preprocessing, Compilation, Assembly, Linking</a></li>
+                    <li><a href="#object-files" onclick="closeNav()">Object Files and Symbols</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#elf" onclick="closeNav()">The ELF Binary Format</a>
+                <ul>
+                    <li><a href="#elf" onclick="closeNav()">ELF Header and Sections</a></li>
+                    <li><a href="#sections" onclick="closeNav()">Key Sections: .text, .data, .bss, .rodata</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#linking" onclick="closeNav()">Static vs Dynamic Linking</a>
+                <ul>
+                    <li><a href="#linking" onclick="closeNav()">Static Linking — Self-Contained Binaries</a></li>
+                    <li><a href="#dynamic-linking" onclick="closeNav()">Dynamic Linking and Shared Libraries</a></li>
+                    <li><a href="#plt-got" onclick="closeNav()">PLT, GOT, and Lazy Binding</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#loader" onclick="closeNav()">The Loader — From File to Process</a>
+                <ul>
+                    <li><a href="#loader" onclick="closeNav()">exec() and the Kernel's Role</a></li>
+                    <li><a href="#ld-so" onclick="closeNav()">ld-linux.so — The Dynamic Linker</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#memory-layout" onclick="closeNav()">Process Memory Layout</a>
+                <ul>
+                    <li><a href="#memory-layout" onclick="closeNav()">Stack, Heap, BSS, Data, Text</a></li>
+                    <li><a href="#aslr" onclick="closeNav()">ASLR and Memory Randomisation</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#runtimes" onclick="closeNav()">Runtime Environments</a>
+                <ul>
+                    <li><a href="#runtimes" onclick="closeNav()">The JVM, CPython, and V8</a></li>
+                    <li><a href="#jit" onclick="closeNav()">JIT Compilation</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#exercises" onclick="closeNav()">Exercises</a>
+            </li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                        <h2 id="lifecycle">The Program Lifecycle</h2>
+
+                        <p>You type <code>python3 app.py</code> and press Enter. Within milliseconds your web server is listening on port 8080. But what happened in between? How does a text file of Python instructions become a process consuming CPU cycles and RAM? The answer involves more machinery than most developers ever see.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Why This Matters:</strong> Understanding how programs load explains container startup times, why microservices have cold-start latency, why some binaries are 5 MB and others 50 MB, what "shared libraries" and "dependency hell" actually mean at the binary level, and why Docker images benefit from minimal base images. It also illuminates a whole class of security vulnerabilities in how dynamic linking works.
+                        </div>
+
+                        <h3 id="two-worlds">Compiled vs Interpreted Languages</h3>
+
+                        <p>Programs are text written by humans — source code. But CPUs execute machine code: binary instructions like <code>0x48 0x89 0xE5</code> (which is <code>mov rbp, rsp</code> in x86-64 assembly). There are two primary strategies for bridging this gap:</p>
+
+                        <p><strong>Ahead-of-Time (AOT) Compilation</strong>: The source code is translated to machine code <em>before</em> the program runs. Languages like C, C++, Rust, and Go use this approach. The compiler runs once, producing a native binary. Execution is fast because the CPU runs the binary directly.</p>
+
+                        <p><strong>Interpretation / Just-in-Time (JIT) Compilation</strong>: The source code (or an intermediate bytecode) is translated to machine code <em>while</em> the program runs. Python, JavaScript, and Java use variations of this approach. The initial start-up may be slower, but modern runtimes use JIT compilation to approach native speeds for hot code paths.</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Compiled vs Interpreted Program Lifecycle</div>
+                            <pre class="mermaid">
+flowchart LR
+    subgraph Compiled["AOT Compiled (C, Go, Rust)"]
+        direction TB
+        SC1["Source Code (.c, .go, .rs)"]
+        BC1["Compiler (gcc, go build, rustc)"]
+        OBJ["Object Files (.o)"]
+        LNK["Linker (ld)"]
+        BIN["Native Binary (ELF)"]
+        EXE1["OS loads + executes directly"]
+        SC1 --> BC1 --> OBJ --> LNK --> BIN --> EXE1
+    end
+    subgraph Interpreted["Interpreted / JIT (Python, JVM, JS)"]
+        direction TB
+        SC2["Source Code (.py, .java, .js)"]
+        BC2["Bytecode Compiler"]
+        BYTE["Bytecode (.pyc, .class)"]
+        RT["Runtime (CPython, JVM, V8)"]
+        JIT2["JIT Compiler (optional)"]
+        EXE2["Machine Code Execution"]
+        SC2 --> BC2 --> BYTE --> RT --> JIT2 --> EXE2
+    end
+
+    style Compiled fill:#f8f9fa,stroke:#3B9797
+    style Interpreted fill:#f8f9fa,stroke:#16476A
+                            </pre>
+                        </div>
+
+                        <h2 id="compilation">Compilation — Four Phases</h2>
+
+                        <p>When you compile a C program with <code>gcc -o hello hello.c</code>, four distinct phases happen in sequence:</p>
+
+<pre><code class="language-bash"># Let's trace the compilation of a trivial C program
+# Create a simple program
+cat > /tmp/hello.c << 'EOF'
+#include <stdio.h>
+
+#define GREETING "Hello"
+
+int main() {
+    printf("%s, World!\n", GREETING);
+    return 0;
+}
+EOF
+
+# Phase 1: Preprocessing — expands macros, includes, #ifdef
+# Output: hello.i (preprocessed C, no macros)
+gcc -E /tmp/hello.c -o /tmp/hello.i
+wc -l /tmp/hello.i   # ~800 lines — stdio.h expanded!
+
+# Phase 2: Compilation — C source to assembly (.s)
+gcc -S /tmp/hello.i -o /tmp/hello.s
+cat /tmp/hello.s      # Human-readable assembly instructions
+
+# Phase 3: Assembly — assembly (.s) to machine code object file (.o)
+gcc -c /tmp/hello.s -o /tmp/hello.o
+file /tmp/hello.o     # "ELF 64-bit LSB relocatable object"
+nm /tmp/hello.o       # List symbols: U printf (undefined), T main (text)
+
+# Phase 4: Linking — combine .o files + libraries into executable
+gcc /tmp/hello.o -o /tmp/hello
+file /tmp/hello       # "ELF 64-bit LSB pie executable"
+</code></pre>
+
+                        <h3 id="object-files">Object Files and Symbols</h3>
+
+                        <p>Object files (<code>.o</code>) are the output of the compilation phase. Each source file compiles to one object file. An object file contains:</p>
+                        <ul>
+                            <li><strong>Machine code</strong> for the functions defined in that source file</li>
+                            <li><strong>Data</strong> for global and static variables</li>
+                            <li><strong>A symbol table</strong> listing all symbols the file defines and all symbols it references but doesn't define</li>
+                            <li><strong>Relocation entries</strong> — placeholders for addresses that can't be resolved until linking</li>
+                        </ul>
+
+                        <p>The linker's job is to take multiple object files and libraries, resolve all undefined symbol references, assign final memory addresses, and produce a single executable (or shared library).</p>
+
+                        <h2 id="elf">The ELF Binary Format</h2>
+
+                        <p>On Linux (and most Unix-like systems), executables, object files, and shared libraries all use the <strong>ELF format</strong> (Executable and Linkable Format). Understanding ELF is understanding the "native language" that the OS uses to load and run programs.</p>
+
+                        <p>An ELF file has three main structural elements:</p>
+                        <ol>
+                            <li><strong>ELF Header</strong> — at offset 0, always starts with magic bytes <code>0x7f E L F</code>. Describes the file type (executable, shared library, object file), architecture (x86-64, ARM64), entry point address, and locations of segment/section tables.</li>
+                            <li><strong>Program Header Table (Segments)</strong> — used by the OS loader. Describes which parts of the file should be mapped into memory, at what addresses, with what permissions (read/write/execute).</li>
+                            <li><strong>Section Header Table (Sections)</strong> — used by the linker and debugger. Describes fine-grained divisions of the file content.</li>
+                        </ol>
+
+<pre><code class="language-bash"># Inspect an ELF binary with readelf and objdump
+# First, create a simple binary to examine
+cat > /tmp/demo.c << 'EOF'
+#include <stdio.h>
+int global_var = 42;
+const char* message = "hello";
+int main() { printf("%s %d\n", message, global_var); return 0; }
+EOF
+gcc -o /tmp/demo /tmp/demo.c
+
+# View the ELF header — magic bytes, type, architecture, entry point
+readelf -h /tmp/demo | head -20
+
+# View program headers (segments) — how the OS maps the binary into memory
+readelf -l /tmp/demo
+
+# View section headers — .text, .data, .bss, .rodata etc.
+readelf -S /tmp/demo
+
+# View the symbol table — all named symbols with their addresses
+readelf -s /tmp/demo | grep -E "FUNC|OBJECT"
+
+# Disassemble the .text section (machine code -> assembly)
+objdump -d /tmp/demo | head -40
+</code></pre>
+
+                        <h3 id="sections">Key ELF Sections</h3>
+
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Section</th>
+                                    <th>Contents</th>
+                                    <th>Permissions</th>
+                                    <th>Example</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>.text</code></td>
+                                    <td>Compiled machine code</td>
+                                    <td>Read + Execute</td>
+                                    <td>Your function bodies</td>
+                                </tr>
+                                <tr>
+                                    <td><code>.rodata</code></td>
+                                    <td>Read-only data</td>
+                                    <td>Read only</td>
+                                    <td>String literals (<code>"Hello"</code>), const arrays</td>
+                                </tr>
+                                <tr>
+                                    <td><code>.data</code></td>
+                                    <td>Initialised global/static vars</td>
+                                    <td>Read + Write</td>
+                                    <td><code>int global = 42;</code></td>
+                                </tr>
+                                <tr>
+                                    <td><code>.bss</code></td>
+                                    <td>Uninitialised global/static vars</td>
+                                    <td>Read + Write (zeroed)</td>
+                                    <td><code>int counter;</code> (0 at startup)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>.plt</code></td>
+                                    <td>Procedure Linkage Table</td>
+                                    <td>Read + Execute</td>
+                                    <td>Stubs for dynamic library calls</td>
+                                </tr>
+                                <tr>
+                                    <td><code>.got</code></td>
+                                    <td>Global Offset Table</td>
+                                    <td>Read + Write (then Read)</td>
+                                    <td>Resolved addresses for shared lib functions</td>
+                                </tr>
+                                <tr>
+                                    <td><code>.dynamic</code></td>
+                                    <td>Dynamic linking info</td>
+                                    <td>Read</td>
+                                    <td>Required shared libs (NEEDED entries)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>.symtab</code></td>
+                                    <td>Symbol table</td>
+                                    <td>Read</td>
+                                    <td>Function/variable names and addresses</td>
+                                </tr>
+                                <tr>
+                                    <td><code>.debug_*</code></td>
+                                    <td>Debug information (DWARF)</td>
+                                    <td>Read</td>
+                                    <td>Source-line mappings (stripped in release builds)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Why .bss Exists:</strong> Uninitialised global variables (<code>static int counters[1000000]</code>) would waste 4 MB in the binary file if stored literally. Instead, <code>.bss</code> stores only the <em>size</em> of the region — the kernel zeroes the actual memory pages when loading the process. A 4 MB zeroed array adds only a few bytes to the binary on disk.
+                        </div>
+
+                        <h2 id="linking">Static vs Dynamic Linking</h2>
+
+                        <p>When your program calls <code>printf()</code>, where does that code come from? The answer depends on how the binary was linked.</p>
+
+                        <h3>Static Linking — Self-Contained Binaries</h3>
+
+                        <p>In static linking, all library code your program uses is <strong>copied directly into the final binary</strong> by the linker. The result is a self-contained executable that doesn't depend on any external library at runtime.</p>
+
+<pre><code class="language-bash"># Static vs dynamic binary comparison
+cat > /tmp/static_test.c << 'EOF'
+#include <stdio.h>
+int main() { printf("hello\n"); return 0; }
+EOF
+
+# Dynamic binary (default — links against shared libc)
+gcc -o /tmp/hello_dynamic /tmp/static_test.c
+ls -lh /tmp/hello_dynamic    # ~16 KB
+
+# Static binary (includes all library code)
+gcc -static -o /tmp/hello_static /tmp/static_test.c
+ls -lh /tmp/hello_static     # ~800 KB — all of libc included!
+
+# See what shared libraries a dynamic binary requires
+ldd /tmp/hello_dynamic
+# linux-vdso.so.1, libc.so.6, /lib64/ld-linux-x86-64.so.2
+
+ldd /tmp/hello_static
+# statically linked (no shared lib dependencies)
+</code></pre>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal"><i class="fas fa-docker me-1"></i>Container Engineering</span>
+                            </div>
+                            <h4>Static Linking and Scratch Containers</h4>
+                            <p>When you see a Docker image using <code>FROM scratch</code> (the empty base image), the application binary inside must be statically linked — because there's no C library or any other shared library in the image to link against at runtime. Go programs compile to statically linked binaries by default (on Linux), which is why Go is so popular for containerised microservices. A Go web server can run in a Docker image that's literally just the binary — 5-15 MB total image size.</p>
+                            <p>Languages like Python or Java can't use <code>FROM scratch</code> directly because they depend on the interpreter/JVM and its dependencies at runtime. This is why Python container images are typically 200 MB+ (python:slim) vs Go images that can be under 10 MB.</p>
+                            <div class="bias-tags">
+                                <span class="bias-tag">Docker</span>
+                                <span class="bias-tag">Go</span>
+                                <span class="bias-tag">Container Size</span>
+                            </div>
+                        </div>
+
+                        <h3 id="dynamic-linking">Dynamic Linking and Shared Libraries</h3>
+
+                        <p>In dynamic linking, the library code is <strong>not copied</strong> into the binary. Instead, the binary stores a reference to the library (e.g., <code>libc.so.6</code>), and the library is loaded by the OS at runtime when the program starts.</p>
+
+                        <p><strong>Advantages of dynamic linking:</strong></p>
+                        <ul>
+                            <li>Smaller binaries (the library exists once on disk, not in every binary)</li>
+                            <li>Shared memory: if 50 processes use <code>libc</code>, the OS maps the same physical memory pages into all 50 address spaces — only one copy in RAM</li>
+                            <li>Library updates without recompiling applications (e.g., a security patch to <code>libc</code> benefits all programs immediately)</li>
+                        </ul>
+
+                        <p><strong>Disadvantages:</strong></p>
+                        <ul>
+                            <li>"Dependency hell": if the required library version isn't installed, the program fails to start</li>
+                            <li>Slightly slower first call to each library function (resolved lazily at runtime)</li>
+                            <li>Security attack surface (LD_PRELOAD injection, rpath manipulation)</li>
+                        </ul>
+
+<pre><code class="language-bash"># Explore shared library dependencies
+# List all shared libraries a binary needs
+ldd /usr/bin/python3
+# Shows: libpython3.x.so, libm.so, libz.so, libc.so, ld-linux...
+
+# See which library provides a specific symbol
+# (useful when debugging "symbol not found" errors)
+nm -D /lib/x86_64-linux-gnu/libc.so.6 | grep " printf"
+
+# Check if a library is already loaded in memory (shared between processes)
+# Look at /proc/PID/maps for a running process
+cat /proc/self/maps | grep "\.so"
+
+# Inspect NEEDED entries (required libs) in an ELF binary
+readelf -d /usr/bin/python3 | grep NEEDED
+</code></pre>
+
+                        <h3 id="plt-got">PLT, GOT, and Lazy Binding</h3>
+
+                        <p>When dynamically linked code calls an external function (like <code>printf</code>), the address of that function isn't known at compile time — it depends on where <code>libc.so</code> is loaded in memory. The dynamic linker solves this via two data structures in every dynamically linked binary:</p>
+
+                        <ul>
+                            <li><strong>PLT (Procedure Linkage Table)</strong>: Stubs in the <code>.plt</code> section. When your code calls <code>printf</code>, it actually calls a PLT stub.</li>
+                            <li><strong>GOT (Global Offset Table)</strong>: A table of addresses in the <code>.got.plt</code> section. Initially, each GOT entry points back into the PLT (the resolver). After the first call, the entry is overwritten with the actual address of <code>printf</code> in <code>libc</code>.</li>
+                        </ul>
+
+                        <p>This is <strong>lazy binding</strong> — function addresses are resolved on first call, not all upfront at program start. The tradeoff: program startup is faster (don't resolve all symbols immediately), but the first call to each library function pays a small overhead for resolution.</p>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-shield-alt me-2"></i>
+                            <strong>Security Note — GOT Overwrite Attacks:</strong> Because the GOT is a writable table of function pointers, it has historically been a target for memory corruption exploits. An attacker who can write to the GOT can redirect a call to <code>printf()</code> to any function they choose, including a shell. Modern mitigations include <strong>RELRO</strong> (RELocation Read-Only) — the GOT is made read-only after all symbols are resolved — and <strong>Full RELRO</strong>, which resolves all symbols eagerly at startup (eliminating lazy binding) and makes the entire GOT read-only.
+                        </div>
+
+                        <h2 id="loader">The Loader — From File to Process</h2>
+
+                        <p>When you run a program (e.g., type <code>./hello</code> in a shell), the shell calls the <code>execve()</code> system call. This is the moment a file on disk becomes a running process. Here's what happens:</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">The Loader: From execve() to main()</div>
+                            <pre class="mermaid">
+sequenceDiagram
+    participant SH as Shell
+    participant KN as Kernel
+    participant LD as ld-linux.so (Dynamic Linker)
+    participant LB as Shared Libraries (libc, etc.)
+    participant PR as Program's main()
+
+    SH->>KN: execve("./hello", argv, envp)
+    KN->>KN: Read ELF header, check magic bytes
+    KN->>KN: Map ELF segments into new address space<br/>(LOAD segments → mmap with correct permissions)
+    KN->>LD: Map ld-linux.so (the dynamic linker)<br/>and jump to its entry point
+    LD->>LD: Parse .dynamic section<br/>Find all NEEDED shared libraries
+    LD->>LB: Load each shared library (mmap the .so files)
+    LD->>LD: Resolve all symbol references<br/>Update GOT entries with real addresses
+    LD->>LD: Run library initialisation code<br/>(.init_array, __libc_csu_init)
+    LD->>PR: Jump to program entry point<br/>(which calls main())
+    PR->>PR: Your code runs!
+                            </pre>
+                        </div>
+
+<pre><code class="language-bash"># See the dynamic linker in action
+# The LD_DEBUG environment variable enables verbose dynamic linker output
+
+# Show all libraries being loaded
+LD_DEBUG=libs /tmp/hello_dynamic 2>&1 | head -20
+
+# Show all symbol bindings being resolved
+LD_DEBUG=bindings /tmp/hello_dynamic 2>&1 | head -20
+
+# Show the entire loading process
+LD_DEBUG=all /tmp/hello_dynamic 2>&1 | head -50
+
+# Measure program startup overhead — how long before main() is called?
+# Use LD_DEBUG=statistics to see linker timing
+LD_DEBUG=statistics /tmp/hello_dynamic 2>&1
+</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>The vDSO:</strong> You may see <code>linux-vdso.so.1</code> in <code>ldd</code> output — it doesn't exist as a file on disk. The <strong>vDSO</strong> (virtual Dynamic Shared Object) is a small shared library that the kernel maps directly into every process's address space. It provides fast implementations of certain frequently-called syscalls (like <code>clock_gettime()</code>) that can be executed without actually crossing the user/kernel boundary — reducing the cost from ~100 ns to ~10 ns.
+                        </div>
+
+                        <h2 id="memory-layout">Process Memory Layout</h2>
+
+                        <p>Once the loader has done its work, the process's virtual address space has a well-defined layout. On a 64-bit Linux system, the address space is 128 TB, but only small portions are actually mapped:</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Process Virtual Address Space Layout (x86-64 Linux)</div>
+                            <pre class="mermaid">
+flowchart TD
+    A["<b>Kernel Space</b><br/>Top of address space<br/>Not accessible from user space<br/>(Page fault if accessed)"]
+    B["<b>Stack</b><br/>Grows downward<br/>Local variables, return addresses, saved registers<br/>Default 8 MB limit (ulimit -s)"]
+    C["<b>Memory-Mapped Region</b><br/>Shared libraries mapped here<br/>mmap() allocations<br/>(libc.so, libpthread.so, etc.)"]
+    D["<b>Heap</b><br/>Grows upward<br/>Dynamic allocations: malloc(), new<br/>Managed by the allocator (glibc malloc, jemalloc)"]
+    E["<b>.bss</b><br/>Uninitialised global/static vars<br/>(zero-filled by OS)"]
+    F["<b>.data</b><br/>Initialised global/static variables<br/>int x = 42;"]
+    G["<b>.rodata</b><br/>Read-only data: string literals, const arrays<br/>Attempting write → SIGSEGV"]
+    H["<b>.text</b><br/>Program machine code<br/>Read + Execute only<br/>Attempting write → SIGSEGV (W^X protection)"]
+
+    A --- B --- C --- D --- E --- F --- G --- H
+
+    style A fill:#132440,color:#fff
+    style B fill:#BF092F,color:#fff
+    style C fill:#16476A,color:#fff
+    style D fill:#3B9797,color:#fff
+    style E fill:#16476A,color:#fff
+    style F fill:#3B9797,color:#fff
+    style G fill:#16476A,color:#fff
+    style H fill:#132440,color:#fff
+                            </pre>
+                        </div>
+
+<pre><code class="language-bash"># Inspect the memory map of a running process
+# Start a long-running process
+python3 -c "import time; time.sleep(60)" &
+PID=$!
+
+# View its memory map: addr range, permissions, offset, device, inode, name
+cat /proc/$PID/maps
+
+# Summarise memory usage by category
+cat /proc/$PID/smaps_rollup
+
+# See the same information with human-readable sizes
+pmap -x $PID | tail -20
+
+kill $PID
+</code></pre>
+
+                        <h3 id="aslr">ASLR and Memory Randomisation</h3>
+
+                        <p><strong>ASLR</strong> (Address Space Layout Randomisation) is a security feature that randomises the base addresses of the stack, heap, and shared library mappings every time a program is launched. This makes it much harder for an attacker who knows they can cause a buffer overflow to predict what address their shellcode will end up at.</p>
+
+<pre><code class="language-bash"># Check if ASLR is enabled on your Linux system
+# 0 = disabled, 1 = partial, 2 = full ASLR
+cat /proc/sys/kernel/randomize_va_space   # Should be 2
+
+# Observe ASLR in action: the stack address changes each run
+for i in $(seq 1 5); do
+    python3 -c "import ctypes; print(hex(id(ctypes.c_int(1))))"
+done
+# You'll see different addresses each time
+
+# For testing, temporarily disable ASLR for one process
+setarch -R python3 -c "import ctypes; print(hex(id(ctypes.c_int(1))))"
+setarch -R python3 -c "import ctypes; print(hex(id(ctypes.c_int(1))))"
+# Same address both times
+</code></pre>
+
+                        <h2 id="runtimes">Runtime Environments</h2>
+
+                        <p>Not all programs are compiled AOT to native machine code. Many popular languages use a <strong>runtime environment</strong> — a managed execution engine that interprets or JIT-compiles the program while handling memory management, type checking, and other services.</p>
+
+                        <h3 id="jit">JIT Compilation — The Best of Both Worlds</h3>
+
+                        <p>Modern runtimes like V8 (JavaScript), the JVM (Java/Kotlin), and PyPy (Python) use <strong>Just-in-Time compilation</strong> to close the performance gap with native code:</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">JIT Compilation: V8 JavaScript Engine</div>
+                            <pre class="mermaid">
+flowchart LR
+    JS["JavaScript Source"] --> Parse["Parser<br/>(AST generation)"]
+    Parse --> Ignition["Ignition Interpreter<br/>(fast startup, generates bytecode)"]
+    Ignition -->|"Hot function detected<br/>(called many times)"| TurboFan
+    TurboFan["TurboFan JIT Compiler<br/>(optimised machine code)"] -->|"Type assumption violated<br/>(deoptimisation)"| Ignition
+    TurboFan --> Native["Native Machine Code<br/>(near C-speed performance)"]
+
+    style JS fill:#f8f9fa,stroke:#3B9797
+    style Ignition fill:#3B9797,color:#fff
+    style TurboFan fill:#BF092F,color:#fff
+    style Native fill:#132440,color:#fff
+                            </pre>
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal"><i class="fas fa-flask me-1"></i>Case Study</span>
+                            </div>
+                            <h4>CPython Is Not "Interpreted Python" — It's a Bytecode VM</h4>
+                            <p>Many developers think Python is "interpreted" in the sense that the source code is read and executed line-by-line like a script. This is not accurate. CPython:</p>
+                            <ol>
+                                <li>Compiles your <code>.py</code> file to CPython bytecode (<code>.pyc</code> files in <code>__pycache__/</code>)</li>
+                                <li>The CPython interpreter — itself a C program compiled to native binary — executes this bytecode in a loop</li>
+                                <li>Each bytecode instruction (LOAD_FAST, CALL_FUNCTION, etc.) dispatches to a C function</li>
+                            </ol>
+                            <p>This is why NumPy operations are "fast Python" — NumPy functions are implemented in C and called via the bytecode VM with minimal overhead. The slow part of Python is not the bytecode loop itself but the <em>overhead per Python object operation</em> (type checking, reference counting, dict lookups for attributes).</p>
+                            <div class="bias-tags">
+                                <span class="bias-tag">CPython</span>
+                                <span class="bias-tag">Bytecode</span>
+                                <span class="bias-tag">NumPy Performance</span>
+                            </div>
+                        </div>
+
+<pre><code class="language-bash"># Inspect CPython bytecode for a simple function
+python3 -c "
+import dis
+
+def factorial(n):
+    if n <= 1:
+        return 1
+    return n * factorial(n - 1)
+
+# Disassemble the function to CPython bytecode
+dis.dis(factorial)
+"
+# Output shows: LOAD_FAST (load local var), COMPARE_OP, JUMP_IF, BINARY_OP, etc.
+</code></pre>
+
+<pre><code class="language-bash"># View the .pyc bytecode cache files CPython generates
+python3 -c "import factorial_module" 2>/dev/null || true
+
+# Find a .pyc file and inspect its header
+find /usr/lib/python3* -name "*.pyc" -size +10k | head -1 | xargs python3 -c "
+import sys, marshal, dis, struct
+
+path = sys.argv[1]
+with open(path, 'rb') as f:
+    magic = f.read(16)  # magic + flags + timestamp + size
+    code = marshal.loads(f.read())
+print('Bytecode for:', path)
+dis.dis(code)
+" 2>/dev/null | head -30
+</code></pre>
+
+                        <h2 id="exercises">Exercises</h2>
+
+                        <p><strong>Exercise 1 — Explore Your Own Binary</strong></p>
+<pre><code class="language-bash"># Compile a C program and explore its ELF structure
+cat > /tmp/explore.c << 'EOF'
+#include <stdio.h>
+#include <stdlib.h>
+
+char global_init[] = "I am in .data";
+char global_uninit[100];  // will be in .bss
+const char* literal = "I am in .rodata";
+
+int main(int argc, char* argv[]) {
+    char* heap = malloc(100);  // heap allocation
+    printf("Stack var address: %p\n", &argc);
+    printf("Heap alloc address: %p\n", heap);
+    printf("Text (main) address: %p\n", (void*)main);
+    printf(".data address: %p\n", global_init);
+    printf(".rodata address: %p\n", literal);
+    printf(".bss address: %p\n", global_uninit);
+    free(heap);
+    return 0;
+}
+EOF
+gcc -o /tmp/explore /tmp/explore.c
+/tmp/explore
+# Observe how addresses match the virtual memory layout diagram
+</code></pre>
+
+                        <p><strong>Exercise 2 — Static vs Dynamic Size</strong></p>
+<pre><code class="language-bash"># Compare sizes and startup time of static vs dynamic binary
+cat > /tmp/bench.c << 'EOF'
+#include <stdio.h>
+#include <time.h>
+int main() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    printf("%ld.%09ld\n", ts.tv_sec, ts.tv_nsec);
+    return 0;
+}
+EOF
+
+gcc -O2 -o /tmp/bench_dynamic /tmp/bench.c
+gcc -O2 -static -o /tmp/bench_static /tmp/bench.c
+
+echo "=== File sizes ==="
+ls -lh /tmp/bench_dynamic /tmp/bench_static
+
+echo "=== Startup times (run 10x each) ==="
+for i in $(seq 1 10); do /tmp/bench_dynamic; done | awk '{sum+=$1} END{print "Dynamic avg:", sum/NR}'
+for i in $(seq 1 10); do /tmp/bench_static; done | awk '{sum+=$1} END{print "Static avg:", sum/NR}'
+</code></pre>
+
+                        <p><strong>Exercise 3 — Library Interception with LD_PRELOAD</strong></p>
+<pre><code class="language-bash"># LD_PRELOAD lets you inject a shared library before all others
+# This is used legitimately (e.g., tcmalloc, mimalloc for better malloc)
+# and maliciously (rootkit-style hooking)
+# Here we safely observe how it works
+
+# Create a shared library that wraps malloc
+cat > /tmp/track_malloc.c << 'EOF'
+#define _GNU_SOURCE
+#include <stdio.h>
+#include <dlfcn.h>
+#include <stdlib.h>
+
+void* malloc(size_t size) {
+    static void* (*real_malloc)(size_t) = NULL;
+    if (!real_malloc) real_malloc = dlsym(RTLD_NEXT, "malloc");
+    void* ptr = real_malloc(size);
+    fprintf(stderr, "malloc(%zu) = %p\n", size, ptr);
+    return ptr;
+}
+EOF
+gcc -shared -fPIC -o /tmp/track_malloc.so /tmp/track_malloc.c -ldl
+
+# Use LD_PRELOAD to inject our tracking malloc into any program
+LD_PRELOAD=/tmp/track_malloc.so python3 -c "x = [1,2,3]" 2>&1 | head -10
+</code></pre>
+
+                        <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
+
+                        <p>You now understand the complete journey from source code to a running process. The key concepts to carry forward:</p>
+
+                        <ul>
+                            <li><strong>Compilation is four phases</strong>: preprocessing, compilation, assembly, linking — each producing an intermediate artefact. <code>-E</code>, <code>-S</code>, <code>-c</code> flags stop GCC at each phase.</li>
+                            <li><strong>ELF is the universal binary format</strong> on Linux — <code>readelf</code> and <code>objdump</code> let you inspect any binary. Every Docker image is full of ELF files.</li>
+                            <li><strong>Dynamic linking saves memory but adds complexity</strong> — shared libraries, the dynamic linker (<code>ld-linux.so</code>), PLT/GOT, and the RELRO security hardening all exist to manage this.</li>
+                            <li><strong>The process memory layout is deterministic</strong> (modulo ASLR): text at the bottom, data/bss above, heap grows up, stack grows down, shared libraries somewhere in the middle.</li>
+                            <li><strong>Runtimes like CPython and the JVM</strong> are themselves native ELF binaries that implement a virtual machine — Python bytecode runs inside a C program.</li>
+                        </ul>
+
+                        <!-- Related Posts -->
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 1: What Is a Computer System?</h5>
+                                <p class="text-muted small mb-2">The layered mental model — CPU, memory hierarchy, interrupts, and system calls. The foundation this article builds on.</p>
+                                <a href="computing-systems-foundations-part01-what-is-a-computer-system.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 3: Linux Fundamentals — Architecture &amp; Philosophy</h5>
+                                <p class="text-muted small mb-2">Coming soon — the Linux kernel's structure, the init system, filesystem hierarchy, and why "everything is a file" shapes modern systems design.</p>
+                                <a href="index.html">Coming Soon — View Series <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Computing &amp; Systems Foundations — Full Series</h5>
+                                <p class="text-muted small mb-2">Browse all 24 parts covering Linux, networking, security, containers, and systems debugging.</p>
+                                <a href="index.html">View All Parts <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                        <!-- Series Navigation -->
+                        <div class="series-nav">
+                            <a href="computing-systems-foundations-part01-what-is-a-computer-system.html" class="series-nav-item prev">
+                                <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span>
+                                <span class="nav-title">Part 1: What Is a Computer System?</span>
+                            </a>
+                            <div class="series-nav-item next" style="visibility: hidden;">
+                                <span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span>
+                                <span class="nav-title"></span>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left">
+                    <div class="fc-brand-group">
+                        <div class="fc-brand-stack"><span></span><span></span><span></span></div>
+                        <span class="fc-brand-name">Wasil Zafar</span>
+                    </div>
+                    <span class="fc-tagline">Consultant &amp; Cloud Architect</span>
+                </div>
+                <div class="fc-center">
+                    <a href="/">Home</a>
+                    <a href="/disclaimer.html">Disclaimer</a>
+                    <a href="/privacy-policy.html">Privacy</a>
+                    <a href="/pages/contact.html">Contact</a>
+                </div>
+                <div class="fc-right">
+                    <a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a>
+                    <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>
+                    <a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                    <a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a>
+                    <a href="/feed.xml" target="_blank" title="RSS Feed"><i class="fas fa-rss"></i></a>
+                </div>
+            </div>
+            <div class="footer-sub">
+                <span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span>
+                <a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+    <!-- Fuse.js -->
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+
+    <!-- Prism.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+
+    <!-- Mermaid.js -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+
+    <!-- Learning Paths Progress Tracking -->
+    <script src="../../../js/path-progress.js"></script>
+    <!-- Quiz Widget -->
+    <script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

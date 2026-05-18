@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Explore container runtime internals — containerd's architecture, snapshotters, and content store, runc's kernel interactions, and the Kubernetes Container Runtime Interface (CRI)." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="containerd, runc, container runtime, CRI, Container Runtime Interface, snapshotter, OCI runtime, Kubernetes runtime" />
+    <meta property="og:title" content="Part 14: containerd & runc Deep Dive — Containers & Runtime Environments Mastery" />
+    <meta property="og:description" content="Explore container runtime internals — containerd's architecture, snapshotters, and content store, runc's kernel interactions, and the Kubernetes Container Runtime Interface (CRI)." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-05-14" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/containers-docker/containers-docker-part14-containerd-runc.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/containers-docker/containers-docker-part14-containerd-runc-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/containers-docker/containers-docker-part14-containerd-runc-tw.jpg" />
+
+    <title>Part 14: containerd & runc Deep Dive - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/containers-docker/containers-docker-part14-containerd-runc.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied',
+            'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', {
+            'ad_storage': 'granted', 'ad_user_data': 'granted',
+            'ad_personalization': 'granted', 'analytics_storage': 'granted'
+        });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});
+        var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
+        j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;
+        f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- GTM noscript -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking "Accept All", you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;"></div>
+                <div id="cookieTypes" style="display: none;"></div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept">Accept All</button>
+                <button id="cookieReject">Reject All</button>
+                <button id="cookieSave" style="display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <div class="nav-v16-wrapper">
+        <nav class="nav-v16">
+            <a href="/" class="brand">
+                <div class="brand-stack"><span></span><span></span><span></span></div>
+                <span class="brand-text">Wasil Zafar</span>
+            </a>
+            <button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="links">
+                <a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a>
+                <a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a>
+                <a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a>
+                <a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a>
+                <a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a>
+                <button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Containers & Runtime Environments Mastery Series</a>
+                <h1 class="display-4 fw-bold mb-3">Part 14: containerd & runc Deep Dive</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>May 14, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>28 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">When you type <code>docker run</code>, at least four processes collaborate to create your container: the Docker CLI, the Docker daemon (dockerd), containerd, and runc. This article peels back Docker's user-friendly surface to reveal the machinery underneath — the high-level runtime (containerd) that manages images, snapshots, and container metadata, and the low-level runtime (runc) that directly manipulates Linux kernel primitives to create isolated processes.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#runtime-stack" onclick="closeNav()">The Runtime Stack</a>
+                <ul>
+                    <li><a href="#runtime-stack" onclick="closeNav()">High vs Low-Level</a></li>
+                    <li><a href="#call-chain" onclick="closeNav()">Call Chain</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#containerd-architecture" onclick="closeNav()">containerd Architecture</a>
+                <ul>
+                    <li><a href="#containerd-architecture" onclick="closeNav()">Plugin System</a></li>
+                    <li><a href="#grpc-api" onclick="closeNav()">gRPC API</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#image-management" onclick="closeNav()">Image Management</a>
+            </li>
+            <li>
+                <a href="#snapshotters" onclick="closeNav()">Snapshotters</a>
+            </li>
+            <li>
+                <a href="#container-lifecycle" onclick="closeNav()">Container Lifecycle</a>
+            </li>
+            <li>
+                <a href="#containerd-shim" onclick="closeNav()">containerd-shim</a>
+            </li>
+            <li>
+                <a href="#runc-deep-dive" onclick="closeNav()">runc Deep Dive</a>
+                <ul>
+                    <li><a href="#runc-deep-dive" onclick="closeNav()">Commands</a></li>
+                    <li><a href="#runc-internals" onclick="closeNav()">Internals</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#runc-internals" onclick="closeNav()">runc Internals</a>
+            </li>
+            <li>
+                <a href="#oci-bundle" onclick="closeNav()">The OCI Bundle</a>
+            </li>
+            <li>
+                <a href="#cri" onclick="closeNav()">Container Runtime Interface</a>
+            </li>
+            <li>
+                <a href="#cri-o" onclick="closeNav()">CRI-O</a>
+            </li>
+            <li>
+                <a href="#alternative-runtimes" onclick="closeNav()">Alternative Runtimes</a>
+            </li>
+            <li>
+                <a href="#exercises" onclick="closeNav()">Exercises</a>
+            </li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion & Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                        <!-- Section 1: The Runtime Stack -->
+                        <h2 id="runtime-stack">The Runtime Stack</h2>
+
+                        <p>Container runtimes exist at two distinct levels, each with a clear responsibility boundary:</p>
+
+                        <ul>
+                            <li><strong>High-level runtimes</strong> (containerd, CRI-O) — Manage the complete container lifecycle: pulling images, managing storage, creating network namespaces, supervising container processes, and exposing APIs</li>
+                            <li><strong>Low-level runtimes</strong> (runc, crun, youki) — Execute a single operation: given an OCI bundle (rootfs + config.json), create a container process with the specified isolation. No image pulling, no networking, no supervision</li>
+                        </ul>
+
+                        <h3 id="call-chain">The Complete Call Chain</h3>
+
+                        <p>When you run <code>docker run nginx</code>, here's the actual chain of process invocations:</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Docker Run Call Chain</div>
+                            <pre class="mermaid">
+flowchart TD
+    A["docker CLI<br/>(client)"] -->|"REST API"| B["dockerd<br/>(Docker daemon)"]
+    B -->|"gRPC"| C["containerd<br/>(high-level runtime)"]
+    C -->|"exec"| D["containerd-shim<br/>(per-container process)"]
+    D -->|"exec"| E["runc<br/>(low-level runtime)"]
+    E -->|"clone() + exec()"| F["container process<br/>(nginx)"]
+
+    style A fill:#f8f9fa,stroke:#132440
+    style B fill:#f8f9fa,stroke:#132440
+    style C fill:#f0f9f9,stroke:#3B9797
+    style D fill:#f0f9f9,stroke:#3B9797
+    style E fill:#fff5f5,stroke:#BF092F
+    style F fill:#f8f9fa,stroke:#132440
+                            </pre>
+                        </div>
+
+                        <p>Each component has a distinct lifecycle and can be restarted independently:</p>
+
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Component</th>
+                                    <th>Responsibility</th>
+                                    <th>Can Restart Without Killing Containers?</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>docker CLI</td><td>User interface, command parsing</td><td>N/A (stateless client)</td></tr>
+                                <tr><td>dockerd</td><td>API server, image builds, compose, swarm</td><td>Yes (delegates to containerd)</td></tr>
+                                <tr><td>containerd</td><td>Image management, container metadata, task supervision</td><td>Yes (shims maintain containers)</td></tr>
+                                <tr><td>containerd-shim</td><td>Holds stdio, reaps exit codes, reports status</td><td>No (one per container)</td></tr>
+                                <tr><td>runc</td><td>Creates the container, then exits</td><td>N/A (short-lived process)</td></tr>
+                            </tbody>
+                        </table>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Key Insight:</strong> runc is <em>not</em> a daemon. It creates the container and immediately exits. The containerd-shim takes over as the parent process of the container. This is why you can upgrade runc without affecting running containers — it's only invoked during container creation.
+                        </div>
+
+                        <!-- Section 2: containerd Architecture -->
+                        <h2 id="containerd-architecture">containerd Architecture</h2>
+
+                        <p>containerd is a CNCF graduated project designed as an industry-standard container runtime. Unlike Docker's monolithic daemon, containerd is built around a <strong>plugin architecture</strong> where every major function is a plugin that can be swapped or extended.</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">containerd Component Architecture</div>
+                            <pre class="mermaid">
+flowchart TB
+    subgraph API["gRPC API Layer"]
+        A1[Images Service]
+        A2[Containers Service]
+        A3[Tasks Service]
+        A4[Content Service]
+        A5[Snapshots Service]
+        A6[Namespaces Service]
+    end
+    subgraph Plugins["Plugin Layer"]
+        P1[Runtime Plugin<br/>runc / kata / gvisor]
+        P2[Snapshotter Plugin<br/>overlayfs / native / btrfs]
+        P3[Content Store<br/>blob storage]
+        P4[Differ Plugin<br/>layer diffing]
+        P5[GC Plugin<br/>garbage collection]
+        P6[CRI Plugin<br/>Kubernetes interface]
+    end
+    subgraph Storage["Storage Layer"]
+        S1[(Content Store<br/>blobs by digest)]
+        S2[(Metadata Store<br/>BoltDB)]
+        S3[(Snapshots<br/>filesystem layers)]
+    end
+    API --> Plugins
+    Plugins --> Storage
+    style API fill:#f0f9f9,stroke:#3B9797
+    style Plugins fill:#f8f9fa,stroke:#132440
+    style Storage fill:#fff5f5,stroke:#BF092F
+                            </pre>
+                        </div>
+
+                        <h3 id="grpc-api">The gRPC API</h3>
+
+                        <p>containerd exposes all functionality through a gRPC API over a Unix socket (default: <code>/run/containerd/containerd.sock</code>). This API is the interface used by Docker, Kubernetes (via CRI plugin), and the <code>ctr</code> CLI.</p>
+
+<pre><code class="language-bash"># Check containerd is running
+sudo systemctl status containerd
+
+# containerd configuration file
+cat /etc/containerd/config.toml
+
+# List containerd plugins and their status
+sudo ctr plugins ls
+
+# Example output showing plugin types:
+# TYPE                                   ID                       PLATFORMS   STATUS
+# io.containerd.content.v1               content                  -           ok
+# io.containerd.snapshotter.v1           overlayfs                linux/amd64 ok
+# io.containerd.runtime.v2               task                     linux/amd64 ok
+# io.containerd.grpc.v1                  cri                      linux/amd64 ok
+# io.containerd.service.v1               containers-service       -           ok
+# io.containerd.service.v1               tasks-service            -           ok</code></pre>
+
+                        <p>containerd uses <strong>namespaces</strong> to isolate different clients. Docker's containers live in the <code>moby</code> namespace, Kubernetes uses the <code>k8s.io</code> namespace, and <code>ctr</code> uses <code>default</code> by default. This prevents Docker and Kubernetes from interfering with each other on the same node.</p>
+
+<pre><code class="language-bash"># List all containerd namespaces
+sudo ctr namespaces ls
+# NAME    LABELS
+# default
+# moby    (Docker containers live here)
+# k8s.io  (Kubernetes containers live here)
+
+# Work in a specific namespace
+sudo ctr -n moby containers ls
+sudo ctr -n k8s.io containers ls</code></pre>
+
+                        <!-- Section 3: Image Management -->
+                        <h2 id="image-management">containerd: Image Management</h2>
+
+                        <p>containerd's image management is built on top of its <strong>content store</strong> — a content-addressable blob storage that holds all image layers, manifests, and configurations referenced by their SHA256 digest.</p>
+
+<pre><code class="language-bash"># Pull an image with ctr (containerd's CLI)
+sudo ctr images pull docker.io/library/nginx:alpine
+# docker.io/library/nginx:alpine: resolved
+# index-sha256:... done
+# manifest-sha256:... done
+# layer-sha256:... done
+# config-sha256:... done
+# elapsed: 4.2 s
+
+# List pulled images
+sudo ctr images ls
+# REF                            TYPE                                DIGEST          SIZE
+# docker.io/library/nginx:alpine application/vnd.oci.image.index.v1 sha256:a1b2c3.. 44.2 MiB
+
+# Inspect image details
+sudo ctr images info docker.io/library/nginx:alpine
+
+# Check image content (layers, config)
+sudo ctr content ls | head -10
+# DIGEST                                                                  SIZE    AGE
+# sha256:a1b2c3d4e5f6...  7.6 kB  2 minutes
+# sha256:b2c3d4e5f6a1...  3.4 MB  2 minutes
+# sha256:c3d4e5f6a1b2...  28.1 MB 2 minutes
+
+# Read a specific blob from the content store
+sudo ctr content get sha256:a1b2c3d4e5f6... | jq .</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Content Store Location:</strong> By default, containerd stores all content at <code>/var/lib/containerd/io.containerd.content.v1.content/blobs/sha256/</code>. Each file is named by its SHA256 digest. This is pure content-addressable storage — identical blobs are stored exactly once regardless of how many images reference them.
+                        </div>
+
+                        <!-- Section 4: Snapshotters -->
+                        <h2 id="snapshotters">containerd: Snapshotters</h2>
+
+                        <p>Snapshotters are containerd's abstraction for preparing filesystem layers. They take the compressed tar layers from the content store and prepare them as mountable filesystem views. The snapshotter interface supports different backend technologies:</p>
+
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Snapshotter</th>
+                                    <th>Backend</th>
+                                    <th>Copy-on-Write</th>
+                                    <th>Best For</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><strong>overlayfs</strong></td><td>OverlayFS kernel module</td><td>Yes</td><td>Default, general purpose (Linux 4.0+)</td></tr>
+                                <tr><td><strong>native</strong></td><td>Plain directory copies</td><td>No</td><td>Filesystems without overlay support</td></tr>
+                                <tr><td><strong>btrfs</strong></td><td>Btrfs subvolumes</td><td>Yes (filesystem-level)</td><td>Btrfs-based systems</td></tr>
+                                <tr><td><strong>zfs</strong></td><td>ZFS clones</td><td>Yes (filesystem-level)</td><td>ZFS-based systems</td></tr>
+                                <tr><td><strong>devmapper</strong></td><td>Device mapper thin-provisioning</td><td>Yes (block-level)</td><td>AWS Firecracker, block storage</td></tr>
+                                <tr><td><strong>stargz</strong></td><td>Lazy-pulling eStargz images</td><td>Yes</td><td>Large images, fast startup</td></tr>
+                                <tr><td><strong>nydus</strong></td><td>Nydus image format</td><td>Yes</td><td>Container image acceleration</td></tr>
+                            </tbody>
+                        </table>
+
+<pre><code class="language-bash"># List all snapshots
+sudo ctr snapshots ls
+# KEY                                    PARENT                                 KIND
+# sha256:a1b2c3...                                                             Committed
+# sha256:b2c3d4...                       sha256:a1b2c3...                       Committed
+# sha256:c3d4e5...                       sha256:b2c3d4...                       Committed
+# nginx-container                        sha256:c3d4e5...                       Active
+
+# Inspect a snapshot's details (mounts, parent chain)
+sudo ctr snapshots info sha256:a1b2c3...
+# {
+#   "Kind": "Committed",
+#   "Name": "sha256:a1b2c3...",
+#   "Created": "2026-05-14T10:00:00Z",
+#   "Updated": "2026-05-14T10:00:00Z"
+# }
+
+# View mount instructions for a snapshot
+sudo ctr snapshots mounts /tmp/mnt nginx-container
+# mount -t overlay overlay -o
+#   lowerdir=/var/lib/containerd/.../sha256:c3d4e5...,
+#   upperdir=/var/lib/containerd/.../nginx-container/fs,
+#   workdir=/var/lib/containerd/.../nginx-container/work
+#   /tmp/mnt
+
+# Prepare a new active snapshot (writable layer)
+sudo ctr snapshots prepare my-new-layer sha256:c3d4e5...</code></pre>
+
+                        <p>The snapshot hierarchy mirrors the image layer stack. Each committed snapshot represents a read-only layer. An <em>active</em> snapshot is a writable layer created on top of committed parents — this is the container's writable layer where runtime changes are stored.</p>
+
+                        <!-- Section 5: Container Lifecycle -->
+                        <h2 id="container-lifecycle">containerd: Container Lifecycle</h2>
+
+                        <p>containerd distinguishes between a <strong>container</strong> (metadata object) and a <strong>task</strong> (running process). A container is a static record of <em>what</em> to run. A task is the <em>running instance</em> of that container. This separation allows you to create containers without starting them, and to re-create tasks from the same container definition.</p>
+
+<pre><code class="language-bash"># Pull an image first
+sudo ctr images pull docker.io/library/alpine:3.19
+
+# Create a container (metadata only — nothing running yet)
+sudo ctr containers create docker.io/library/alpine:3.19 my-alpine
+
+# List containers (note: no running process yet)
+sudo ctr containers ls
+# CONTAINER    IMAGE                             RUNTIME
+# my-alpine    docker.io/library/alpine:3.19     io.containerd.runc.v2
+
+# Inspect container metadata
+sudo ctr containers info my-alpine
+
+# Start a task (this creates the actual running process)
+sudo ctr tasks start -d my-alpine
+
+# List running tasks
+sudo ctr tasks ls
+# TASK        PID      STATUS
+# my-alpine   12345    RUNNING
+
+# Execute a command in the running task
+sudo ctr tasks exec --exec-id shell1 -t my-alpine /bin/sh
+
+# View task process metrics
+sudo ctr tasks metrics my-alpine
+
+# Kill the task (container metadata remains)
+sudo ctr tasks kill my-alpine
+
+# Delete the task
+sudo ctr tasks delete my-alpine
+
+# Delete the container (metadata)
+sudo ctr containers delete my-alpine</code></pre>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-book me-2"></i>
+                            <strong>Container vs Task:</strong> Think of it like a program (file on disk) vs a process (running instance). A container is the "recipe" — image reference, runtime config, snapshot. A task is the "execution" — PID, status, I/O streams. You can delete and recreate tasks without losing the container's configuration.
+                        </div>
+
+                        <!-- Section 6: containerd-shim -->
+                        <h2 id="containerd-shim">containerd-shim</h2>
+
+                        <p>The containerd-shim is a critical but often overlooked component. One shim process exists per container, serving as the direct parent of the container process. The shim exists for three reasons:</p>
+
+                        <ol>
+                            <li><strong>Daemon-less containers</strong> — The shim allows containerd to restart without killing running containers. The shim keeps the container alive independently.</li>
+                            <li><strong>Exit code reaping</strong> — In Linux, when a process exits, its parent must call <code>wait()</code> to collect the exit status. The shim is the parent that reaps the container process.</li>
+                            <li><strong>stdio management</strong> — The shim holds the container's stdin/stdout/stderr file descriptors and forwards them to logging systems (FIFO pipes or files).</li>
+                        </ol>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">containerd-shim Isolation Model</div>
+                            <pre class="mermaid">
+flowchart TB
+    subgraph Daemon["containerd daemon"]
+        CD[containerd process<br/>PID 1000]
+    end
+    subgraph Shims["Per-Container Shims"]
+        S1["shim (nginx)<br/>PID 2001"]
+        S2["shim (redis)<br/>PID 2002"]
+        S3["shim (postgres)<br/>PID 2003"]
+    end
+    subgraph Containers["Container Processes"]
+        C1["nginx<br/>PID 3001"]
+        C2["redis-server<br/>PID 3002"]
+        C3["postgres<br/>PID 3003"]
+    end
+    CD -.->|"gRPC over ttrpc"| S1
+    CD -.->|"gRPC over ttrpc"| S2
+    CD -.->|"gRPC over ttrpc"| S3
+    S1 -->|"parent of"| C1
+    S2 -->|"parent of"| C2
+    S3 -->|"parent of"| C3
+
+    style Daemon fill:#f0f9f9,stroke:#3B9797
+    style Shims fill:#f8f9fa,stroke:#132440
+    style Containers fill:#fff5f5,stroke:#BF092F
+                            </pre>
+                        </div>
+
+<pre><code class="language-bash"># View shim processes on a running system
+ps aux | grep containerd-shim
+# root  2001  containerd-shim-runc-v2 -namespace moby -id abc123...
+# root  2002  containerd-shim-runc-v2 -namespace moby -id def456...
+# root  2003  containerd-shim-runc-v2 -namespace moby -id ghi789...
+
+# Each shim's parent is PID 1 (init), NOT containerd
+# This is by design — allows containerd restart
+ps -o pid,ppid,comm -p 2001
+# PID   PPID  COMMAND
+# 2001  1     containerd-shim-runc-v2
+
+# Shim communicates with containerd via ttrpc (lightweight gRPC)
+# Socket location per container:
+ls /run/containerd/io.containerd.runtime.v2.task/moby/abc123.../
+# address  config.json  init.pid  log  log.json  shim.pid</code></pre>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Shim Version:</strong> containerd ships two shim versions: <code>containerd-shim</code> (v1, legacy) and <code>containerd-shim-runc-v2</code> (v2, current). The v2 shim uses ttrpc protocol, supports one shim per pod (not per container) in Kubernetes, and has better resource efficiency. Always use v2 — v1 is deprecated.
+                        </div>
+
+                        <!-- Section 7: runc Deep Dive -->
+                        <h2 id="runc-deep-dive">runc Deep Dive</h2>
+
+                        <p>runc is the <strong>OCI reference implementation</strong> — the canonical low-level container runtime originally extracted from Docker's codebase. Written in Go, it directly manipulates Linux kernel features (namespaces, cgroups, capabilities, seccomp) to create containers. It takes an OCI bundle as input and produces a running, isolated process.</p>
+
+<pre><code class="language-bash"># Check runc version and supported features
+runc --version
+# runc version 1.1.12
+# commit: v1.1.12-0-g51d5e946
+# spec: 1.1.0
+# go: go1.21.6
+# libseccomp: 2.5.4
+
+# Generate a default OCI config.json
+mkdir -p mycontainer/rootfs
+cd mycontainer
+runc spec
+# Creates config.json with sensible defaults
+
+# Create a rootfs from an Alpine image
+docker export $(docker create alpine:3.19) | tar -xC rootfs/
+
+# Create a container (does NOT start it)
+sudo runc create my-container
+# Container is now in "created" state
+
+# Check container state
+sudo runc state my-container
+# {
+#   "ociVersion": "1.1.0",
+#   "id": "my-container",
+#   "pid": 45678,
+#   "status": "created",
+#   "bundle": "/home/user/mycontainer",
+#   "rootfs": "/home/user/mycontainer/rootfs",
+#   "created": "2026-05-14T10:00:00.123456789Z"
+# }
+
+# Start the container (transitions to "running")
+sudo runc start my-container
+
+# List running containers managed by runc
+sudo runc list
+# ID              PID     STATUS   BUNDLE                          CREATED
+# my-container    45678   running  /home/user/mycontainer          2026-05-14T10:00:00Z
+
+# Execute a command in the running container
+sudo runc exec my-container ls /
+
+# Send a signal to the container
+sudo runc kill my-container SIGTERM
+
+# Delete the container
+sudo runc delete my-container</code></pre>
+
+                        <!-- Section 8: runc Internals -->
+                        <h2 id="runc-internals">runc Internals</h2>
+
+                        <p>When runc creates a container, it performs a carefully orchestrated sequence of kernel operations. Understanding this sequence reveals exactly what "creating a container" means at the system level:</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">runc Container Creation Sequence</div>
+                            <pre class="mermaid">
+sequenceDiagram
+    participant P as Parent (runc)
+    participant I as Init Process (runc init)
+    participant K as Kernel
+
+    P->>K: clone(CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWNET | CLONE_NEWUTS | CLONE_NEWIPC)
+    K-->>I: New process in new namespaces
+    I->>K: mount("none", "/", MS_REC|MS_PRIVATE)
+    I->>K: Setup mounts (/proc, /dev, /sys, tmpfs)
+    I->>K: pivot_root(rootfs, old_root)
+    I->>K: umount(old_root, MNT_DETACH)
+    I->>K: Set hostname (UTS namespace)
+    I->>K: Configure cgroups (memory, cpu, pids)
+    I->>K: Apply seccomp filter (BPF program)
+    I->>K: Drop capabilities (keep only allowed set)
+    I->>K: setuid/setgid (drop root if configured)
+    I->>P: Signal ready (via pipe)
+    P-->>I: Signal start (via pipe)
+    I->>K: exec(container_entrypoint)
+    Note over I: Init process replaced by<br/>application process
+                            </pre>
+                        </div>
+
+                        <h3>Step-by-Step Breakdown</h3>
+
+                        <ol>
+                            <li><strong>clone() with namespace flags</strong> — Creates a new process in fresh namespaces. <code>CLONE_NEWPID</code> gives it PID 1 inside the container. <code>CLONE_NEWNET</code> gives it an isolated network stack. <code>CLONE_NEWNS</code> gives it private mount points.</li>
+                            <li><strong>Mount propagation</strong> — Makes the mount namespace fully private so that mounts inside the container don't leak to the host and vice versa.</li>
+                            <li><strong>Setup special filesystems</strong> — Mounts <code>/proc</code> (process information scoped to PID namespace), <code>/dev</code> (minimal device nodes), <code>/sys</code> (read-only sysfs).</li>
+                            <li><strong>pivot_root()</strong> — Changes the root filesystem to the container's rootfs. Unlike <code>chroot</code>, pivot_root actually moves the old root out of scope, making it impossible to "escape" back to the host filesystem.</li>
+                            <li><strong>Cgroup configuration</strong> — Places the container process into appropriate cgroups to enforce resource limits (memory, CPU, PIDs, I/O bandwidth).</li>
+                            <li><strong>seccomp filter</strong> — Installs a BPF (Berkeley Packet Filter) program that intercepts system calls and blocks dangerous ones before they reach the kernel.</li>
+                            <li><strong>Capability drop</strong> — Linux capabilities split root's powers into ~40 discrete privileges. The container keeps only what it needs (typically: KILL, NET_BIND_SERVICE, AUDIT_WRITE).</li>
+                            <li><strong>exec()</strong> — The init process replaces itself with the actual container application. From this point, runc's code is gone — only the application code runs.</li>
+                        </ol>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-code me-2"></i>
+                            <strong>Why Two Processes?</strong> runc uses a "parent-child" or "double-fork" pattern. The parent process (runc) stays in the host namespaces and orchestrates. The child process (runc init) enters the new namespaces and sets up the container from the inside. They communicate via a pipe. This is necessary because some namespace operations can only be performed from <em>inside</em> the new namespace (e.g., you can only mount <code>/proc</code> for the new PID namespace from within it).
+                        </div>
+
+                        <!-- Section 9: The OCI Bundle -->
+                        <h2 id="oci-bundle">The OCI Bundle</h2>
+
+                        <p>An OCI bundle is the complete input to a low-level runtime. You can create one manually to understand exactly what runc receives from containerd:</p>
+
+<pre><code class="language-bash"># Create directory structure
+mkdir -p my-oci-bundle/rootfs
+
+# Option 1: Export a Docker image's filesystem
+docker export $(docker create busybox:latest) | tar -xC my-oci-bundle/rootfs/
+
+# Option 2: Build a minimal rootfs from scratch
+mkdir -p my-oci-bundle/rootfs/{bin,dev,proc,sys,tmp}
+cp /bin/busybox my-oci-bundle/rootfs/bin/
+cd my-oci-bundle/rootfs/bin && for cmd in sh ls cat echo ps mount; do ln -s busybox $cmd; done && cd ../../..
+
+# Generate the default config.json
+cd my-oci-bundle
+runc spec
+
+# Customize config.json: change the process
+# Edit config.json to set: "args": ["/bin/sh", "-c", "echo Hello from OCI bundle && ps aux"]
+
+# Run the container directly with runc
+sudo runc run my-first-oci-container
+
+# Verify the container ran in isolation
+sudo runc list</code></pre>
+
+                        <p>The minimal viable OCI bundle needs only:</p>
+
+                        <ul>
+                            <li>A directory (<code>rootfs/</code>) with at least one executable file</li>
+                            <li>A <code>config.json</code> that references that executable in <code>process.args</code></li>
+                        </ul>
+
+                        <p>Everything else in config.json — namespaces, mounts, cgroups, capabilities — provides isolation and resource control. Without them, you'd have a chrooted process with no real security boundary.</p>
+
+                        <!-- Section 10: Container Runtime Interface -->
+                        <h2 id="cri">Container Runtime Interface (CRI)</h2>
+
+                        <p>The <strong>Container Runtime Interface (CRI)</strong> is Kubernetes' abstraction layer for container runtimes. It's a gRPC protocol that defines how the kubelet (Kubernetes node agent) communicates with any container runtime, without knowing the implementation details.</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">CRI Architecture in Kubernetes</div>
+                            <pre class="mermaid">
+flowchart LR
+    subgraph K8s["Kubernetes Node"]
+        KL[kubelet]
+    end
+    subgraph CRI["CRI Protocol (gRPC)"]
+        RS[RuntimeService]
+        IS[ImageService]
+    end
+    subgraph Runtimes["CRI Implementations"]
+        CD[containerd<br/>+ CRI plugin]
+        CO[CRI-O]
+    end
+    subgraph Low["Low-Level"]
+        R1[runc]
+        R2[kata]
+    end
+    KL --> RS
+    KL --> IS
+    RS --> CD
+    RS --> CO
+    IS --> CD
+    IS --> CO
+    CD --> R1
+    CD --> R2
+    CO --> R1
+    style K8s fill:#f8f9fa,stroke:#132440
+    style CRI fill:#f0f9f9,stroke:#3B9797
+    style Runtimes fill:#f8f9fa,stroke:#132440
+    style Low fill:#fff5f5,stroke:#BF092F
+                            </pre>
+                        </div>
+
+                        <h3>CRI Services</h3>
+
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Service</th>
+                                    <th>Key Operations</th>
+                                    <th>Purpose</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><strong>RuntimeService</strong></td><td>RunPodSandbox, CreateContainer, StartContainer, StopContainer, RemoveContainer, ListContainers, ExecSync</td><td>Container lifecycle management</td></tr>
+                                <tr><td><strong>ImageService</strong></td><td>PullImage, ListImages, RemoveImage, ImageStatus, ImageFsInfo</td><td>Image operations</td></tr>
+                            </tbody>
+                        </table>
+
+<pre><code class="language-bash"># Use crictl to interact with the CRI directly
+# (crictl is the CRI equivalent of docker CLI)
+
+# Configure crictl to use containerd's CRI socket
+cat /etc/crictl.yaml
+# runtime-endpoint: unix:///run/containerd/containerd.sock
+# image-endpoint: unix:///run/containerd/containerd.sock
+
+# List pods (sandboxes)
+sudo crictl pods
+# POD ID    CREATED     STATE   NAME              NAMESPACE   ATTEMPT
+# abc123    2 hours ago Ready   nginx-pod         default     0
+
+# List containers
+sudo crictl ps
+# CONTAINER  IMAGE     CREATED     STATE     NAME    ATTEMPT  POD ID
+# def456     nginx     2 hours ago Running   nginx   0        abc123
+
+# Pull an image via CRI
+sudo crictl pull docker.io/library/nginx:alpine
+
+# Inspect a container
+sudo crictl inspect def456
+
+# View container logs
+sudo crictl logs def456
+
+# Execute a command in a container
+sudo crictl exec -it def456 /bin/sh</code></pre>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Why Kubernetes Dropped Docker:</strong> In Kubernetes 1.24, the "dockershim" was removed. Kubernetes didn't stop supporting Docker <em>images</em> — it stopped using Docker as a <em>runtime</em>. The problem: Docker doesn't implement CRI natively. The dockershim was an adapter that translated CRI calls to Docker API calls. This extra layer added complexity with no benefit — containerd (which Docker uses internally anyway) implements CRI directly. Removing the shim simplified the stack: kubelet → containerd → runc, instead of kubelet → dockershim → dockerd → containerd → runc.
+                        </div>
+
+                        <!-- Section 11: CRI-O -->
+                        <h2 id="cri-o">CRI-O</h2>
+
+                        <p><strong>CRI-O</strong> is an alternative high-level runtime purpose-built for Kubernetes. Unlike containerd (which serves Docker, Kubernetes, and standalone use), CRI-O is <em>only</em> designed to implement the CRI protocol. This focused scope makes it lighter and reduces attack surface.</p>
+
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Feature</th>
+                                    <th>containerd</th>
+                                    <th>CRI-O</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Primary Purpose</td><td>General-purpose container runtime</td><td>Kubernetes-only runtime</td></tr>
+                                <tr><td>CRI Support</td><td>Via built-in CRI plugin</td><td>Native (it <em>is</em> a CRI implementation)</td></tr>
+                                <tr><td>Docker Compatibility</td><td>Yes (Docker uses containerd)</td><td>No (Kubernetes only)</td></tr>
+                                <tr><td>CLI Tool</td><td><code>ctr</code>, <code>nerdctl</code></td><td><code>crictl</code> only</td></tr>
+                                <tr><td>Image Building</td><td>Supports BuildKit</td><td>No (use Buildah externally)</td></tr>
+                                <tr><td>Default Snapshotter</td><td>overlayfs</td><td>overlayfs</td></tr>
+                                <tr><td>Version Sync</td><td>Independent releases</td><td>Tracks Kubernetes versions (1.28, 1.29...)</td></tr>
+                                <tr><td>Maintained By</td><td>CNCF (graduated)</td><td>CNCF (incubating)</td></tr>
+                                <tr><td>Used By</td><td>Docker, AWS EKS, GKE, AKS</td><td>Red Hat OpenShift, Fedora CoreOS</td></tr>
+                            </tbody>
+                        </table>
+
+<pre><code class="language-bash"># CRI-O configuration
+cat /etc/crio/crio.conf
+
+# Key settings:
+# [crio.runtime]
+# default_runtime = "runc"
+# conmon_cgroup = "pod"
+#
+# [crio.runtime.runtimes.runc]
+# runtime_path = "/usr/bin/runc"
+# runtime_type = "oci"
+#
+# [crio.runtime.runtimes.kata]
+# runtime_path = "/usr/bin/kata-runtime"
+# runtime_type = "oci"
+# privileged_without_host_devices = true
+
+# Check CRI-O status
+sudo systemctl status crio
+
+# CRI-O also uses crictl for interaction
+sudo crictl --runtime-endpoint unix:///var/run/crio/crio.sock pods</code></pre>
+
+                        <!-- Section 12: Alternative Runtimes -->
+                        <h2 id="alternative-runtimes">Alternative Runtimes</h2>
+
+                        <p>OCI compliance enables a rich ecosystem of alternative low-level runtimes, each optimised for different use cases:</p>
+
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Runtime</th>
+                                    <th>Language</th>
+                                    <th>Key Differentiator</th>
+                                    <th>Startup Overhead</th>
+                                    <th>Use Case</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><strong>runc</strong></td><td>Go</td><td>Reference implementation, battle-tested</td><td>~100ms</td><td>General purpose, default everywhere</td></tr>
+                                <tr><td><strong>crun</strong></td><td>C</td><td>2× faster startup, 50% less memory</td><td>~50ms</td><td>Performance-critical, Podman default</td></tr>
+                                <tr><td><strong>youki</strong></td><td>Rust</td><td>Memory safety, no GC pauses</td><td>~60ms</td><td>Security-focused, emerging alternative</td></tr>
+                                <tr><td><strong>kata-containers</strong></td><td>Go/Rust</td><td>Runs each container in a lightweight VM</td><td>~500ms</td><td>Multi-tenant clouds, untrusted workloads</td></tr>
+                                <tr><td><strong>gVisor (runsc)</strong></td><td>Go</td><td>User-space kernel intercepts all syscalls</td><td>~150ms</td><td>Defence in depth, Google Cloud Run</td></tr>
+                                <tr><td><strong>Firecracker</strong></td><td>Rust</td><td>MicroVM with minimal device model</td><td>~125ms</td><td>AWS Lambda, AWS Fargate</td></tr>
+                                <tr><td><strong>WasmEdge</strong></td><td>C++/Rust</td><td>WebAssembly runtime as OCI runtime</td><td>~1ms</td><td>Lightweight serverless, edge computing</td></tr>
+                            </tbody>
+                        </table>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Architecture Decision</span>
+                                <span>Runtime Selection</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h5>Choosing a Runtime: Decision Matrix</h5>
+                                <p>The choice of runtime depends on your threat model and performance requirements:</p>
+                                <ul>
+                                    <li><strong>Single-tenant, trusted workloads</strong> → runc or crun (maximum performance, namespace isolation is sufficient)</li>
+                                    <li><strong>Multi-tenant, untrusted workloads</strong> → kata-containers or gVisor (additional VM/kernel boundary between tenants)</li>
+                                    <li><strong>Serverless/FaaS platforms</strong> → Firecracker (fast VM boot, minimal overhead, strong isolation for function execution)</li>
+                                    <li><strong>Edge computing, plugins</strong> → WasmEdge (sub-millisecond startup, sandboxed execution, language-agnostic)</li>
+                                    <li><strong>Maximum startup performance</strong> → crun (C implementation, no garbage collector, minimal overhead)</li>
+                                </ul>
+                                <p><strong>Key principle:</strong> All OCI-compliant runtimes run the <em>same images</em>. Your choice of runtime is independent of your image format. You can switch runtimes per workload in Kubernetes using <code>RuntimeClass</code> resources.</p>
+                            </div>
+                            <div class="experiment-tags">
+                                <span class="bias-tag">Architecture</span>
+                                <span class="bias-tag">Security</span>
+                                <span class="bias-tag">Performance</span>
+                            </div>
+                        </div>
+
+<pre><code class="language-yaml"># Kubernetes RuntimeClass: run specific pods with kata-containers
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: kata
+handler: kata
+overhead:
+  podFixed:
+    memory: "160Mi"
+    cpu: "250m"
+scheduling:
+  nodeSelector:
+    kubernetes.io/runtime: kata
+---
+# Use the RuntimeClass in a Pod spec
+apiVersion: v1
+kind: Pod
+metadata:
+  name: untrusted-workload
+spec:
+  runtimeClassName: kata
+  containers:
+  - name: app
+    image: untrusted-image:latest
+    resources:
+      limits:
+        memory: "256Mi"
+        cpu: "500m"</code></pre>
+
+                        <!-- Section 13: Exercises -->
+                        <h2 id="exercises">Exercises</h2>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Hands-On</span>
+                                <span>30 minutes</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h5>Exercise 1: Run a Container with runc Directly</h5>
+                                <p>Bypass Docker entirely and create a container using only runc:</p>
+<pre><code class="language-bash"># Create the OCI bundle structure
+mkdir -p runc-exercise/rootfs
+cd runc-exercise
+
+# Extract Alpine's filesystem
+docker export $(docker create alpine:3.19) | tar -xC rootfs/
+
+# Generate config.json
+runc spec
+
+# Edit config.json to run a custom command
+# Change "args": ["sh"] to "args": ["/bin/sh", "-c", "echo PID: $$ && hostname && cat /proc/self/cgroup"]
+
+# Run the container
+sudo runc run exercise-container
+
+# In another terminal, check the container state
+sudo runc state exercise-container
+sudo runc list</code></pre>
+                            </div>
+                            <div class="experiment-tags">
+                                <span class="bias-tag">runc</span>
+                                <span class="bias-tag">OCI Bundle</span>
+                            </div>
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Hands-On</span>
+                                <span>25 minutes</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h5>Exercise 2: Explore containerd with ctr</h5>
+                                <p>Use containerd's native CLI to pull images, create containers, and manage tasks:</p>
+<pre><code class="language-bash"># Pull an image directly through containerd
+sudo ctr images pull docker.io/library/busybox:latest
+
+# Create a container (metadata only)
+sudo ctr containers create docker.io/library/busybox:latest my-busybox
+
+# Start a task with a specific command
+sudo ctr tasks start -d my-busybox /bin/sh -c "while true; do date; sleep 5; done"
+
+# List tasks and check PID
+sudo ctr tasks ls
+
+# Exec into the running task
+sudo ctr tasks exec --exec-id debug -t my-busybox /bin/sh
+
+# View the container's snapshot
+sudo ctr snapshots ls | grep busybox
+
+# Cleanup
+sudo ctr tasks kill my-busybox
+sudo ctr tasks delete my-busybox
+sudo ctr containers delete my-busybox</code></pre>
+                            </div>
+                            <div class="experiment-tags">
+                                <span class="bias-tag">containerd</span>
+                                <span class="bias-tag">ctr</span>
+                                <span class="bias-tag">Tasks</span>
+                            </div>
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Hands-On</span>
+                                <span>20 minutes</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h5>Exercise 3: Trace the Runtime Stack</h5>
+                                <p>Start a Docker container and observe the entire process hierarchy:</p>
+<pre><code class="language-bash"># Start a long-running container
+docker run -d --name trace-test nginx:alpine
+
+# Find all related processes
+CONTAINER_PID=$(docker inspect trace-test --format '{{.State.Pid}}')
+echo "Container PID: $CONTAINER_PID"
+
+# Show the full process tree
+pstree -p $CONTAINER_PID -s
+# systemd(1)───containerd(1234)───containerd-shim(5678)───nginx(9012)───nginx(9013)
+
+# Verify the shim is the parent
+ps -o pid,ppid,comm -p $CONTAINER_PID
+# PID    PPID  COMMAND
+# 9012   5678  nginx
+
+# Check the shim's parent (should be PID 1, not containerd)
+ps -o pid,ppid,comm -p 5678
+# PID    PPID  COMMAND
+# 5678   1     containerd-shim
+
+# Cleanup
+docker rm -f trace-test</code></pre>
+                            </div>
+                            <div class="experiment-tags">
+                                <span class="bias-tag">Process Tree</span>
+                                <span class="bias-tag">Shim</span>
+                                <span class="bias-tag">Debugging</span>
+                            </div>
+                        </div>
+
+                        <!-- Section 14: Conclusion -->
+                        <h2 id="conclusion">Conclusion & Next Steps</h2>
+
+                        <p>The container runtime stack is a masterpiece of separation of concerns. containerd handles the "what" — managing images, snapshots, and container metadata. runc handles the "how" — creating isolated processes using Linux kernel primitives. The containerd-shim bridges them, providing daemon-less container survival and exit code reaping.</p>
+
+                        <p>Key takeaways:</p>
+
+                        <ul>
+                            <li><strong>containerd</strong> is a high-level runtime managing the full container lifecycle: images (content store), filesystem preparation (snapshotters), and process supervision (tasks)</li>
+                            <li><strong>runc</strong> is a short-lived process that creates containers from OCI bundles using clone(), pivot_root(), cgroups, seccomp, and capabilities — then exits</li>
+                            <li><strong>containerd-shim</strong> is the per-container process that parents the container, enabling daemon restarts without killing workloads</li>
+                            <li><strong>CRI</strong> abstracts runtime differences away from Kubernetes, enabling containerd and CRI-O to be interchangeable</li>
+                            <li><strong>Alternative runtimes</strong> (kata, gVisor, crun) provide different trade-offs between isolation strength and performance, all using the same OCI image format</li>
+                        </ul>
+
+                        <!-- Next in Series -->
+                        <div class="series-next">
+                            <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                            <p>In <a href="containers-docker-part15-security-fundamentals.html"><strong>Part 15: Security Fundamentals</strong></a>, we'll explore the security model that makes containers safe — from Linux capabilities and seccomp profiles to AppArmor/SELinux policies, rootless containers, and image signing. You'll learn to harden containers for production and understand the threat models that inform runtime design decisions.</p>
+                        </div>
+
+                        <!-- Related Posts -->
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 13: OCI Standards & Specifications</h5>
+                                <p class="text-muted small mb-2">The Open Container Initiative runtime, image, and distribution specifications that standardise the container ecosystem.</p>
+                                <a href="containers-docker-part13-oci-standards.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 5: Docker Architecture & Components</h5>
+                                <p class="text-muted small mb-2">How Docker's client-server architecture connects CLI, daemon, containerd, and runc into a cohesive system.</p>
+                                <a href="containers-docker-part05-docker-architecture.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 19: Container Orchestration</h5>
+                                <p class="text-muted small mb-2">How Kubernetes, Docker Swarm, and orchestration platforms manage containerised applications at scale.</p>
+                                <a href="containers-docker-part19-orchestration.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                        <!-- Series Navigation -->
+                        <div class="series-nav">
+                            <a href="containers-docker-part13-oci-standards.html" class="series-nav-item prev">
+                                <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span>
+                                <span class="nav-title">Part 13: OCI Standards & Specifications</span>
+                            </a>
+                            <a href="containers-docker-part15-security-fundamentals.html" class="series-nav-item next">
+                                <span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span>
+                                <span class="nav-title">Part 15: Security Fundamentals</span>
+                            </a>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left">
+                    <div class="fc-brand-group">
+                        <div class="fc-brand-stack"><span></span><span></span><span></span></div>
+                        <span class="fc-brand-name">Wasil Zafar</span>
+                    </div>
+                    <span class="fc-tagline">Consultant &amp; Cloud Architect</span>
+                </div>
+                <div class="fc-center">
+                    <a href="/">Home</a>
+                    <a href="/disclaimer.html">Disclaimer</a>
+                    <a href="/privacy-policy.html">Privacy</a>
+                    <a href="/pages/contact.html">Contact</a>
+                </div>
+                <div class="fc-right">
+                    <a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a>
+                    <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>
+                    <a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                    <a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a>
+                    <a href="/feed.xml" target="_blank" title="RSS Feed"><i class="fas fa-rss"></i></a>
+                </div>
+            </div>
+            <div class="footer-sub">
+                <span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span>
+                <a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+    <!-- Fuse.js Search -->
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <!-- PrismJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-docker.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <!-- Mermaid.js -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <!-- Learning Paths Progress -->
+    <script src="../../../js/path-progress.js"></script>
+    <!-- Quiz Widget -->
+    <script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

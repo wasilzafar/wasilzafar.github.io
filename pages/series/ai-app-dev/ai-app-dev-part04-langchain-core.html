@@ -7,9 +7,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
     <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
-    <meta name="description" content="Master LangChain core concepts including LCEL pipe operator, Runnable protocol, Sequential/Transform/Router chains, output parsers, tool integration with @tool decorator, callbacks, tracing, and framework comparisons." />
+    <meta name="description" content="Master LangChain core concepts including LCEL pipe operator, Runnable protocol, Sequential/Transform/Router chains, output parsers, tool integration with @tool decorator, callbacks, tracing, framework comparisons, and the LangChain 1.0 create_agent API with middleware system." />
     <meta name="author" content="Wasil Zafar" />
-    <meta name="keywords" content="LangChain, LCEL, LangChain Expression Language, Runnable protocol, chains, SequentialChain, TransformChain, RouterChain, output parsers, tool integration, @tool decorator, callbacks, tracing, LangSmith, LlamaIndex, Haystack, AI app development" />
+    <meta name="keywords" content="LangChain, LCEL, LangChain Expression Language, Runnable protocol, chains, SequentialChain, TransformChain, RouterChain, output parsers, tool integration, @tool decorator, callbacks, tracing, LangSmith, LlamaIndex, Haystack, AI app development, create_agent, middleware, LangChain 1.0" />
     <meta property="og:title" content="AI Application Development Mastery Part 4: LangChain Core Concepts" />
     <meta property="og:description" content="Master LCEL, chains, output parsers, tool integration, callbacks, and tracing. Includes LangChain vs LlamaIndex vs Haystack comparison." />
     <meta property="og:type" content="article" />
@@ -280,6 +280,14 @@
                 <ul>
                     <li><a href="#langchain-vs-llamaindex" onclick="closeNav()">LangChain vs LlamaIndex vs Haystack</a></li>
                     <li><a href="#choosing-framework" onclick="closeNav()">When to Use Which Framework</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#langchain-1-update" onclick="closeNav()">LangChain 1.0 Update</a>
+                <ul>
+                    <li><a href="#create-agent-overview" onclick="closeNav()">The create_agent Entry Point</a></li>
+                    <li><a href="#middleware-overview" onclick="closeNav()">Middleware Architecture</a></li>
+                    <li><a href="#migration-notes" onclick="closeNav()">Migration Notes</a></li>
                 </ul>
             </li>
             <li><a href="#exercises" onclick="closeNav()">Exercises & Self-Assessment</a></li>
@@ -2076,6 +2084,87 @@ result = haystack_rag.run({
 print(result["llm"]["replies"][0])</code></pre>
 
                     <p>Notice how LlamaIndex requires the fewest lines for a basic RAG pipeline — that is its sweet spot. LangChain offers maximum composability with the pipe operator. Haystack provides the most explicit data flow with named connections.</p>
+                </div>
+
+                <!-- Section: LangChain 1.0 Update -->
+                <div id="langchain-1-update" class="blog-content mt-5">
+                    <h2><i class="fas fa-bolt me-2 text-crimson"></i>May 2026 Update: LangChain 1.0</h2>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Major Release:</strong> LangChain 1.0 consolidates the framework around a <strong>graph-based agent runtime</strong> powered by LangGraph. The LCEL patterns and chains taught above remain valid for data pipelines, but agent construction now uses the unified <code>create_agent</code> API with a composable middleware system. See <a href="ai-app-dev-part07-agents-core.html#may-2026-update">Part 7 §7</a> for full coverage.
+                    </div>
+
+                    <h3 id="create-agent-overview">The <code>create_agent</code> Entry Point</h3>
+
+                    <p>LangChain 1.0 introduces <code>create_agent</code> as the single entry point for building agents. It replaces <code>create_react_agent</code>, <code>create_tool_calling_agent</code>, and <code>AgentExecutor</code> with a unified API that builds a LangGraph graph under the hood. Model identifiers use a <code>provider:model</code> string format with auto-inference:</p>
+
+                    <pre><code class="language-python"># pip install -qU langchain
+from langchain.agents import create_agent
+from langchain.tools import tool
+
+@tool
+def search(query: str) -> str:
+    """Search for information."""
+    return f"Results for: {query}"
+
+# Model identifier string — provider auto-inferred
+agent = create_agent(
+    "gpt-5.4",          # Resolves to "openai:gpt-5.4"
+    tools=[search],
+    system_prompt="You are a helpful assistant."
+)
+
+# Input/output is message-based (LangGraph Graph API)
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "Search for AI trends"}]}
+)</code></pre>
+
+                    <h3 id="middleware-overview">Middleware Architecture</h3>
+
+                    <p>The middleware system replaces callback handlers and <code>AgentExecutor</code> configuration with composable decorators that intercept agent execution at key points:</p>
+
+                    <pre><code class="language-python"># pip install -qU langchain
+from langchain.agents import create_agent
+from langchain.agents.middleware import (
+    before_model, after_model, wrap_model_call,
+    wrap_tool_call, dynamic_prompt
+)
+
+# Example: Add guardrails and cost tracking as middleware
+@before_model
+def trim_messages(state, runtime):
+    """Keep only the last 20 messages to prevent context overflow."""
+    if len(state["messages"]) > 20:
+        return {"messages": state["messages"][-20:]}
+
+@wrap_tool_call
+def retry_on_failure(request, handler):
+    """Retry failed tools once before returning error."""
+    try:
+        return handler(request)
+    except Exception:
+        return handler(request)  # One retry
+
+agent = create_agent(
+    "anthropic:claude-sonnet-4-20250514",
+    tools=[search],
+    middleware=[trim_messages, retry_on_failure]
+)</code></pre>
+
+                    <h3 id="migration-notes">Migration Notes</h3>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Key Migration Points:</strong>
+                        <ul class="mb-0">
+                            <li><strong>LCEL chains</strong> still work — they’re the foundation for data pipelines, RAG, and structured prompting</li>
+                            <li><strong>Agents</strong> now use <code>create_agent</code> instead of <code>AgentExecutor</code> — the old API remains in <code>langchain-classic</code></li>
+                            <li><strong>Custom state</strong> must be <code>TypedDict</code> (Pydantic models and dataclasses are no longer supported for agent state)</li>
+                            <li><strong>Callbacks</strong> still work but <strong>middleware</strong> is preferred for agent customization</li>
+                            <li><strong>Message-based I/O</strong>: agents take <code>{"messages": [...]}</code> instead of <code>{"input": "..."}</code></li>
+                        </ul>
+                    </div>
                 </div>
 
                 <!-- Exercises -->

@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Deep dive into Kubernetes networking — the flat networking model, CNI plugins (Calico, Cilium, Flannel), pod-to-pod communication, cluster DNS, network namespaces, and network policies for traffic control." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="Kubernetes networking, CNI plugins, Calico, Cilium, Flannel, pod networking, network policies, cluster DNS, CoreDNS, network namespaces" />
+    <meta property="og:title" content="Part 8: Kubernetes Networking — Distributed Systems & Kubernetes Mastery" />
+    <meta property="og:description" content="The flat networking model, CNI plugins (Calico, Cilium, Flannel), pod-to-pod communication, and network policies for traffic control." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-05-14" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/distributed-systems-k8s/distributed-systems-k8s-part08-networking.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/distributed-systems-k8s/distributed-systems-k8s-part08-networking-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/distributed-systems-k8s/distributed-systems-k8s-part08-networking-tw.jpg" />
+
+    <title>Kubernetes Networking - Part 8 - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/distributed-systems-k8s/distributed-systems-k8s-part08-networking.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied',
+            'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', {
+            'ad_storage': 'granted', 'ad_user_data': 'granted',
+            'ad_personalization': 'granted', 'analytics_storage': 'granted'
+        });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});
+        var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
+        j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;
+        f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- GTM noscript -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <!-- Cookie Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20"><path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path></svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">We use cookies to enhance your browsing experience. See our <a href="/privacy-policy.html" style="color: var(--color-teal);">Privacy Policy</a>.</p>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept">Accept All</button>
+                <button id="cookieReject">Reject All</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <div class="nav-v16-wrapper">
+        <nav class="nav-v16">
+            <a href="/" class="brand">
+                <div class="brand-stack"><span></span><span></span><span></span></div>
+                <span class="brand-text">Wasil Zafar</span>
+            </a>
+            <button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="links">
+                <a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a>
+                <a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a>
+                <a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a>
+                <a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a>
+                <a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a>
+                <button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Blog Hero -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Distributed Systems &amp; Kubernetes Series</a>
+                <h1 class="display-4 fw-bold mb-3">Part 8: Kubernetes Networking</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>May 14, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>45 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article">
+                        <i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Kubernetes networking is deceptively simple on the surface — every pod gets an IP, every pod can reach every other pod. But underneath, a sophisticated stack of virtual networks, tunnels, and routing rules makes this possible.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation Overlay -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#networking-model" onclick="closeNav()">The Kubernetes Networking Model</a>
+                <ul>
+                    <li><a href="#four-requirements" onclick="closeNav()">Four Fundamental Requirements</a></li>
+                    <li><a href="#ip-allocation" onclick="closeNav()">IP Address Allocation</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#pod-networking" onclick="closeNav()">Pod-to-Pod Communication</a>
+                <ul>
+                    <li><a href="#same-node" onclick="closeNav()">Same Node Communication</a></li>
+                    <li><a href="#cross-node" onclick="closeNav()">Cross-Node Communication</a></li>
+                    <li><a href="#network-namespaces" onclick="closeNav()">Network Namespaces &amp; veth Pairs</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#cni" onclick="closeNav()">CNI Plugins</a>
+                <ul>
+                    <li><a href="#cni-interface" onclick="closeNav()">The CNI Interface</a></li>
+                    <li><a href="#calico" onclick="closeNav()">Calico</a></li>
+                    <li><a href="#cilium" onclick="closeNav()">Cilium</a></li>
+                    <li><a href="#flannel" onclick="closeNav()">Flannel</a></li>
+                    <li><a href="#cni-comparison" onclick="closeNav()">CNI Comparison</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#network-policies" onclick="closeNav()">Network Policies</a>
+                <ul>
+                    <li><a href="#default-allow" onclick="closeNav()">Default Allow &amp; Zero Trust</a></li>
+                    <li><a href="#policy-rules" onclick="closeNav()">Ingress &amp; Egress Rules</a></li>
+                    <li><a href="#policy-patterns" onclick="closeNav()">Common Policy Patterns</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#dns-deep-dive" onclick="closeNav()">Cluster DNS (CoreDNS)</a>
+                <ul>
+                    <li><a href="#dns-resolution" onclick="closeNav()">DNS Resolution Flow</a></li>
+                    <li><a href="#dns-debugging" onclick="closeNav()">DNS Debugging</a></li>
+                </ul>
+            </li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                        <h2 id="networking-model">The Kubernetes Networking Model</h2>
+
+                        <h3 id="four-requirements">Four Fundamental Requirements</h3>
+
+                        <p>Kubernetes imposes a simple but strict networking model. Every implementation (CNI plugin) must satisfy these four requirements:</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>The Four Rules:</strong>
+                            <ol>
+                                <li>Every pod gets its own unique IP address</li>
+                                <li>Pods on the same node can communicate without NAT</li>
+                                <li>Pods on different nodes can communicate without NAT</li>
+                                <li>Agents on a node (kubelet, kube-proxy) can communicate with all pods on that node</li>
+                            </ol>
+                            This creates a "flat network" — every pod can reach every other pod directly by IP, regardless of which node it's on. No port mapping, no NAT, no network address translation between pods.
+                        </div>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Kubernetes Flat Networking Model</div>
+                            <pre class="mermaid">
+flowchart TD
+    subgraph Node-1 [Node 1 — 192.168.1.10]
+        P1[Pod A<br/>10.244.1.2]
+        P2[Pod B<br/>10.244.1.3]
+    end
+    subgraph Node-2 [Node 2 — 192.168.1.11]
+        P3[Pod C<br/>10.244.2.2]
+        P4[Pod D<br/>10.244.2.3]
+    end
+    
+    P1 <-->|Direct IP, no NAT| P2
+    P1 <-->|Direct IP, no NAT| P3
+    P2 <-->|Direct IP, no NAT| P4
+    P3 <-->|Direct IP, no NAT| P4
+                            </pre>
+                        </div>
+
+                        <h3 id="ip-allocation">IP Address Allocation</h3>
+
+                        <p>Kubernetes uses three separate IP ranges (CIDRs) that must not overlap:</p>
+
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Network</th>
+                                    <th>Typical CIDR</th>
+                                    <th>Purpose</th>
+                                    <th>Managed By</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Node network</td>
+                                    <td>192.168.0.0/16</td>
+                                    <td>Physical/VM node IPs</td>
+                                    <td>Infrastructure (DHCP, cloud)</td>
+                                </tr>
+                                <tr>
+                                    <td>Pod network</td>
+                                    <td>10.244.0.0/16</td>
+                                    <td>Pod IP addresses</td>
+                                    <td>CNI plugin</td>
+                                </tr>
+                                <tr>
+                                    <td>Service network</td>
+                                    <td>10.96.0.0/12</td>
+                                    <td>ClusterIP Services (virtual)</td>
+                                    <td>kube-proxy / iptables</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <pre><code class="language-bash"># View the three network ranges in a cluster:
+
+# Node network:
+kubectl get nodes -o wide
+# NAME       INTERNAL-IP     STATUS
+# master-1   192.168.1.10    Ready
+# worker-1   192.168.1.11    Ready
+# worker-2   192.168.1.12    Ready
+
+# Pod network (CIDR per node):
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.podCIDR}{"\n"}{end}'
+# master-1  10.244.0.0/24   (256 pod IPs for this node)
+# worker-1  10.244.1.0/24
+# worker-2  10.244.2.0/24
+
+# Service network:
+kubectl cluster-info dump | grep -m 1 service-cluster-ip-range
+# --service-cluster-ip-range=10.96.0.0/12
+
+# Pod IPs:
+kubectl get pods -o wide
+# NAME           IP            NODE
+# nginx-abc12    10.244.1.15   worker-1
+# redis-def34    10.244.2.22   worker-2</code></pre>
+
+                        <h2 id="pod-networking">Pod-to-Pod Communication</h2>
+
+                        <h3 id="same-node">Same Node Communication</h3>
+
+                        <p>When two pods on the same node communicate, traffic flows through a virtual bridge (typically <code>cbr0</code> or <code>cni0</code>) — never leaving the host:</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Same-Node Pod Communication via Bridge</div>
+                            <pre class="mermaid">
+flowchart TD
+    subgraph Node [Worker Node]
+        subgraph NS1 [Pod A Network Namespace]
+            E1[eth0: 10.244.1.2]
+        end
+        subgraph NS2 [Pod B Network Namespace]
+            E2[eth0: 10.244.1.3]
+        end
+        V1[veth-pod-a] --- BR[Bridge cni0<br/>10.244.1.1]
+        V2[veth-pod-b] --- BR
+        E1 --- V1
+        E2 --- V2
+    end
+                            </pre>
+                        </div>
+
+                        <pre><code class="language-bash"># Observe same-node networking from inside a node:
+
+# List bridge interfaces:
+ip link show type bridge
+# 3: cni0: <BROADCAST,MULTICAST,UP> mtu 1500 state UP
+
+# List virtual ethernet pairs connected to the bridge:
+bridge link show
+# 5: vethXXXXXX@if4: <BROADCAST,MULTICAST,UP> master cni0
+# 7: vethYYYYYY@if6: <BROADCAST,MULTICAST,UP> master cni0
+
+# See the bridge's IP (gateway for pods on this node):
+ip addr show cni0
+# inet 10.244.1.1/24 scope global cni0
+
+# From inside Pod A (10.244.1.2), reach Pod B (10.244.1.3):
+# Traffic path: Pod A eth0 → veth → cni0 bridge → veth → Pod B eth0
+# All within the kernel — extremely fast (no network hops)</code></pre>
+
+                        <h3 id="cross-node">Cross-Node Communication</h3>
+
+                        <p>When pods on different nodes communicate, the CNI plugin must route traffic across the physical network. Different CNI plugins use different strategies:</p>
+
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Strategy</th>
+                                    <th>How It Works</th>
+                                    <th>CNI Example</th>
+                                    <th>Overhead</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Overlay (VXLAN)</td>
+                                    <td>Encapsulate pod packets inside UDP between nodes</td>
+                                    <td>Flannel, Calico (optional)</td>
+                                    <td>~50 bytes per packet</td>
+                                </tr>
+                                <tr>
+                                    <td>Direct routing (BGP)</td>
+                                    <td>Program host routes so nodes know pod CIDRs</td>
+                                    <td>Calico (default), Cilium</td>
+                                    <td>Zero (native routing)</td>
+                                </tr>
+                                <tr>
+                                    <td>Cloud native</td>
+                                    <td>Use cloud VPC routing tables</td>
+                                    <td>AWS VPC CNI, Azure CNI</td>
+                                    <td>Zero (VPC-native)</td>
+                                </tr>
+                                <tr>
+                                    <td>eBPF</td>
+                                    <td>Kernel-level packet processing</td>
+                                    <td>Cilium</td>
+                                    <td>Minimal (bypass iptables)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h3 id="network-namespaces">Network Namespaces &amp; veth Pairs</h3>
+
+                        <p>Each pod gets its own Linux network namespace — an isolated network stack with its own interfaces, routing table, and IP addresses. The pod's namespace connects to the host via a virtual ethernet (veth) pair:</p>
+
+                        <pre><code class="language-bash"># Inspect pod network namespace:
+
+# Find the pod's container ID:
+CONTAINER_ID=$(kubectl get pod nginx-pod -o jsonpath='{.status.containerStatuses[0].containerID}' | cut -d'/' -f3)
+
+# Get the network namespace path:
+PID=$(crictl inspect $CONTAINER_ID | jq .info.pid)
+ls -la /proc/$PID/ns/net
+
+# Enter the pod's network namespace:
+nsenter -t $PID -n ip addr show
+# 1: lo: <LOOPBACK,UP> inet 127.0.0.1/8
+# 3: eth0@if7: <BROADCAST,UP> inet 10.244.1.15/24
+#    ↑ This "if7" means the other end is interface index 7 on the host
+
+# From the host, find the matching veth:
+ip link show | grep "^7:"
+# 7: veth12345678@if3: <BROADCAST,UP> master cni0
+
+# The veth pair:
+# Pod namespace: eth0 (index 3) ←→ Host: veth12345678 (index 7)
+# Connected to bridge cni0 on the host side</code></pre>
+
+                        <h2 id="cni">CNI Plugins</h2>
+
+                        <h3 id="cni-interface">The CNI Interface</h3>
+
+                        <p>The Container Network Interface (CNI) is a specification that defines how network plugins interact with container runtimes. When kubelet creates a pod, it calls the CNI plugin to set up networking:</p>
+
+                        <pre><code class="language-bash"># CNI plugin lifecycle:
+# 1. kubelet creates pod sandbox (pause container)
+# 2. kubelet calls CNI ADD — plugin assigns IP, creates veth, sets routes
+# 3. Pod runs with networking configured
+# 4. Pod terminates → kubelet calls CNI DEL — plugin cleans up
+
+# CNI configuration location:
+ls /etc/cni/net.d/
+# 10-calico.conflist  (or 10-flannel.conflist, etc.)
+
+# CNI binary location:
+ls /opt/cni/bin/
+# bandwidth  bridge  calico  calico-ipam  flannel  host-local  loopback  portmap
+
+# Example CNI config (Calico):
+cat /etc/cni/net.d/10-calico.conflist
+# {
+#   "name": "k8s-pod-network",
+#   "cniVersion": "0.3.1",
+#   "plugins": [
+#     { "type": "calico", "datastore_type": "kubernetes", ... },
+#     { "type": "bandwidth", ... },
+#     { "type": "portmap", ... }
+#   ]
+# }</code></pre>
+
+                        <h3 id="calico">Calico</h3>
+
+                        <p>Calico is the most popular CNI plugin for production Kubernetes. It uses BGP routing by default (no overlay, no encapsulation overhead) and provides powerful network policies:</p>
+
+                        <pre><code class="language-bash"># Calico architecture:
+# - calico-node (DaemonSet): runs on every node
+#   - Felix: programs routes and network policies into iptables/eBPF
+#   - BIRD: BGP daemon, advertises pod routes to other nodes
+# - calico-kube-controllers: watches Kubernetes API for policy changes
+# - calico-typha (optional): API proxy for large clusters (500+ nodes)
+
+# Check Calico status:
+kubectl get pods -n calico-system
+# NAME                                      READY   STATUS
+# calico-node-abc12                         1/1     Running
+# calico-node-def34                         1/1     Running
+# calico-kube-controllers-6f7g8h9j-xyz99   1/1     Running
+
+# Calico node status:
+kubectl exec -n calico-system calico-node-abc12 -- calico-node -bird-ready
+# calico/node is ready.
+
+# View BGP peering:
+kubectl exec -n calico-system calico-node-abc12 -- birdcl show protocols
+# BIRD 2.0.8 ready.
+# Name       Proto    State  Info
+# node_192_168_1_11  BGP  up     Established
+# node_192_168_1_12  BGP  up     Established</code></pre>
+
+                        <h3 id="cilium">Cilium</h3>
+
+                        <p>Cilium uses eBPF (extended Berkeley Packet Filter) to implement networking and security at the Linux kernel level — bypassing iptables entirely for dramatically better performance at scale:</p>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Why eBPF Matters:</strong> Traditional CNI plugins rely on iptables rules, which are processed linearly (O(n)). With 10,000 Services, every packet traverses 10,000+ rules. Cilium uses eBPF hash maps in the kernel (O(1) lookup) — performance doesn't degrade regardless of cluster size. It also provides L7 visibility (HTTP, gRPC, Kafka headers) without sidecars.
+                        </div>
+
+                        <pre><code class="language-bash"># Cilium provides:
+# - eBPF-based networking (no iptables, O(1) routing)
+# - L3/L4/L7 network policies (filter by HTTP path, gRPC method)
+# - Transparent encryption (WireGuard or IPsec)
+# - Hubble: distributed observability (network flow logs)
+# - Service mesh (without sidecars)
+
+# Check Cilium status:
+cilium status
+# KVStore:     Ok   Disabled
+# Kubernetes:  Ok   1.30 (v1.30.0)
+# Nodes:       5/5 reachable
+# IPAM:        10.0.0.0/8 available
+# Encryption:  WireGuard (Enabled)
+
+# View network flows with Hubble:
+hubble observe --namespace production --protocol http
+# TIMESTAMP          SOURCE              DESTINATION         TYPE    VERDICT
+# May 14 10:23:45   payment/pod-abc     inventory/pod-def   HTTP    FORWARDED
+#                   GET /api/v1/stock → 200 OK (4.2ms)</code></pre>
+
+                        <h3 id="flannel">Flannel</h3>
+
+                        <p>Flannel is the simplest CNI plugin — it only provides basic connectivity (no network policies). It uses VXLAN overlay by default, encapsulating pod traffic in UDP packets between nodes:</p>
+
+                        <pre><code class="language-bash"># Flannel: simplicity over features
+# - VXLAN overlay (encapsulates packets)
+# - No network policy support (use with Calico for policies)
+# - Minimal resource usage
+# - Best for: learning, small clusters, simple requirements
+
+# Flannel components:
+# - flanneld DaemonSet on each node
+# - Stores subnet allocation in Kubernetes API (or etcd)
+# - Creates flannel.1 VXLAN interface on each node
+
+# Check Flannel:
+kubectl get pods -n kube-flannel
+# NAME                    READY   STATUS
+# kube-flannel-ds-abc12   1/1     Running
+# kube-flannel-ds-def34   1/1     Running
+
+# VXLAN interface on each node:
+ip link show flannel.1
+# flannel.1: <BROADCAST,MULTICAST,UP> mtu 1450 type vxlan</code></pre>
+
+                        <h3 id="cni-comparison">CNI Comparison</h3>
+
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Feature</th>
+                                    <th>Calico</th>
+                                    <th>Cilium</th>
+                                    <th>Flannel</th>
+                                    <th>AWS VPC CNI</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Routing</td>
+                                    <td>BGP (native)</td>
+                                    <td>eBPF / VXLAN</td>
+                                    <td>VXLAN overlay</td>
+                                    <td>VPC native</td>
+                                </tr>
+                                <tr>
+                                    <td>Network Policies</td>
+                                    <td>L3/L4 + L7 (enterprise)</td>
+                                    <td>L3/L4/L7 (native)</td>
+                                    <td>None</td>
+                                    <td>L3/L4 (with Calico)</td>
+                                </tr>
+                                <tr>
+                                    <td>Encryption</td>
+                                    <td>WireGuard</td>
+                                    <td>WireGuard / IPsec</td>
+                                    <td>None</td>
+                                    <td>VPC encryption</td>
+                                </tr>
+                                <tr>
+                                    <td>Performance</td>
+                                    <td>Excellent</td>
+                                    <td>Best (eBPF)</td>
+                                    <td>Good</td>
+                                    <td>Excellent</td>
+                                </tr>
+                                <tr>
+                                    <td>Complexity</td>
+                                    <td>Medium</td>
+                                    <td>Medium-High</td>
+                                    <td>Low</td>
+                                    <td>Low (AWS only)</td>
+                                </tr>
+                                <tr>
+                                    <td>Best for</td>
+                                    <td>General production</td>
+                                    <td>Large scale, security</td>
+                                    <td>Learning, simple needs</td>
+                                    <td>AWS EKS</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h2 id="network-policies">Network Policies</h2>
+
+                        <h3 id="default-allow">Default Allow &amp; Zero Trust</h3>
+
+                        <p>By default, Kubernetes allows all traffic between all pods — any pod can talk to any other pod in the cluster. Network Policies let you restrict this to implement zero-trust networking:</p>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Security Critical:</strong> Without Network Policies, a compromised pod can reach every other pod and service in the cluster — including databases, secrets stores, and the API server. In production, implement a default-deny policy for every namespace and explicitly allow only required communication paths.
+                        </div>
+
+                        <pre><code class="language-yaml"># Default deny all ingress traffic in a namespace:
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: production
+spec:
+  podSelector: {}    # Applies to ALL pods in namespace
+  policyTypes:
+  - Ingress          # Block all incoming traffic
+  # No ingress rules = deny everything</code></pre>
+
+                        <h3 id="policy-rules">Ingress &amp; Egress Rules</h3>
+
+                        <pre><code class="language-yaml"># Allow specific traffic to the payment service:
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-payment-traffic
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: payment       # This policy applies to payment pods
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow traffic FROM the API gateway only
+  - from:
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow traffic FROM monitoring (different namespace)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          team: platform
+      podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 9090
+  egress:
+  # Allow connections TO the database
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow DNS (required for service discovery)
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53</code></pre>
+
+                        <h3 id="policy-patterns">Common Policy Patterns</h3>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal text-white">Best Practice</span>
+                                <span>Network Policy Strategy</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h5>Production Network Policy Approach</h5>
+                                <ol>
+                                    <li><strong>Default deny:</strong> Apply deny-all ingress and egress per namespace</li>
+                                    <li><strong>Allow DNS:</strong> Every pod needs DNS — allow egress to kube-dns</li>
+                                    <li><strong>Allow required paths:</strong> Explicitly allow each service-to-service path</li>
+                                    <li><strong>Allow monitoring:</strong> Prometheus scraping from monitoring namespace</li>
+                                    <li><strong>Allow ingress controller:</strong> External traffic from ingress namespace</li>
+                                </ol>
+                                <p>This creates a "whitelist" model — only explicitly allowed traffic flows. Any new service must have its policies defined before it can communicate.</p>
+                            </div>
+                            <div class="experiment-tags">
+                                <span class="bias-tag">Zero Trust</span>
+                                <span class="bias-tag">Microsegmentation</span>
+                                <span class="bias-tag">Defence in Depth</span>
+                            </div>
+                        </div>
+
+                        <h2 id="dns-deep-dive">Cluster DNS (CoreDNS)</h2>
+
+                        <h3 id="dns-resolution">DNS Resolution Flow</h3>
+
+                        <p>CoreDNS runs as a Deployment in the kube-system namespace and provides DNS resolution for all Services and Pods in the cluster:</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">DNS Resolution in Kubernetes</div>
+                            <pre class="mermaid">
+sequenceDiagram
+    participant Pod as Application Pod
+    participant Res as Pod's /etc/resolv.conf
+    participant DNS as CoreDNS (10.96.0.10)
+    participant API as Kubernetes API
+    
+    Pod->>Res: Resolve "payment-svc"
+    Res->>DNS: Query payment-svc.default.svc.cluster.local
+    DNS->>API: Look up Service endpoints
+    API->>DNS: ClusterIP: 10.96.45.12
+    DNS->>Pod: A record: 10.96.45.12
+    Pod->>Pod: Connect to 10.96.45.12:80
+                            </pre>
+                        </div>
+
+                        <pre><code class="language-bash"># Every pod gets DNS configured automatically:
+kubectl exec nginx-pod -- cat /etc/resolv.conf
+# nameserver 10.96.0.10             ← CoreDNS ClusterIP
+# search default.svc.cluster.local svc.cluster.local cluster.local
+# ndots:5
+
+# The "search" line enables short names:
+# "payment-svc" → tries payment-svc.default.svc.cluster.local first
+# "payment-svc.production" → tries payment-svc.production.svc.cluster.local
+
+# DNS record types Kubernetes creates:
+# A record:    payment-svc.default.svc.cluster.local → 10.96.45.12
+# SRV record:  _http._tcp.payment-svc.default.svc.cluster.local → port 80
+# PTR record:  12.45.96.10.in-addr.arpa → payment-svc.default.svc.cluster.local
+
+# Headless Service DNS (returns pod IPs directly):
+# A record:    postgres-headless.default.svc.cluster.local → 10.244.1.5, 10.244.2.8
+# A record:    postgres-0.postgres-headless.default.svc.cluster.local → 10.244.1.5
+
+# CoreDNS configuration:
+kubectl get configmap coredns -n kube-system -o yaml</code></pre>
+
+                        <h3 id="dns-debugging">DNS Debugging</h3>
+
+                        <pre><code class="language-bash"># DNS debugging toolkit:
+
+# 1. Test DNS resolution from inside a pod:
+kubectl run dns-test --image=busybox:1.36 --rm -it -- nslookup payment-svc
+# Server:    10.96.0.10
+# Address:   10.96.0.10:53
+# Name:      payment-svc.default.svc.cluster.local
+# Address:   10.96.45.12
+
+# 2. Test with dig for detailed output:
+kubectl run dig-test --image=tutum/dnsutils --rm -it -- dig payment-svc.default.svc.cluster.local
+
+# 3. Check CoreDNS pod health:
+kubectl get pods -n kube-system -l k8s-app=kube-dns
+kubectl logs -n kube-system -l k8s-app=kube-dns --tail=20
+
+# 4. Common DNS issues:
+# - Pod stuck in ContainerCreating → CNI plugin failing
+# - DNS resolution timeout → CoreDNS pods not running or overloaded
+# - "NXDOMAIN" → Service name typo or wrong namespace
+# - ndots:5 causing slow resolution → set dnsConfig in pod spec
+
+# 5. Override DNS config for specific pods:
+# spec:
+#   dnsPolicy: ClusterFirst
+#   dnsConfig:
+#     options:
+#     - name: ndots
+#       value: "2"    # Reduce DNS lookups for external names</code></pre>
+
+                        <h2 id="exercises">Exercises</h2>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-pencil-alt me-2"></i>
+                            <strong>Exercise 1 — Network Exploration:</strong> Deploy two pods on different nodes. Use <code>kubectl exec</code> to: (a) Check the pod's IP and default route, (b) Ping the other pod by IP, (c) Trace the route between them, (d) Identify which CNI plugin your cluster uses and how it routes cross-node traffic.
+                        </div>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-pencil-alt me-2"></i>
+                            <strong>Exercise 2 — Network Policy Lab:</strong> Create a 3-tier application (frontend, backend, database). Apply a default-deny policy. Then create policies that only allow: frontend → backend (port 8080), backend → database (port 5432), and nothing else. Verify that direct frontend → database access is blocked.
+                        </div>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-pencil-alt me-2"></i>
+                            <strong>Exercise 3 — DNS Investigation:</strong> Create a Service and a Headless Service for the same set of pods. Compare the DNS responses: (a) What does <code>nslookup my-service</code> return? (b) What does <code>nslookup my-headless-service</code> return? (c) How would a client use each?
+                        </div>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-pencil-alt me-2"></i>
+                            <strong>Exercise 4 — CNI Internals:</strong> SSH into a worker node and explore: (a) List all network namespaces, (b) Find the veth pair for a specific pod, (c) Examine the bridge interface, (d) Check iptables rules created by kube-proxy for a Service. Document the packet path from one pod to another.
+                        </div>
+
+                        <h2 id="conclusion">Conclusion</h2>
+
+                        <p>Kubernetes networking creates an elegant abstraction — a flat network where every pod can reach every other pod — but the implementation underneath is sophisticated. Key takeaways:</p>
+
+                        <ul>
+                            <li><strong>Flat network model:</strong> Every pod gets a unique IP, no NAT between pods</li>
+                            <li><strong>CNI plugins handle the complexity:</strong> Choose based on your needs — Calico for general use, Cilium for scale/security, Flannel for simplicity</li>
+                            <li><strong>Network Policies are essential:</strong> Default-deny + explicit allow = zero-trust networking</li>
+                            <li><strong>DNS is automatic:</strong> CoreDNS provides service discovery without manual configuration</li>
+                            <li><strong>Three separate CIDRs:</strong> Node, Pod, and Service networks must not overlap</li>
+                        </ul>
+
+                        <p>In Part 9, we'll build on this networking foundation with Services, Ingress controllers, and Service Mesh — the higher-level abstractions that expose your applications to the outside world and manage inter-service communication.</p>
+
+                        <!-- Related Posts -->
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 7: Kubernetes Object Model</h5>
+                                <p class="text-muted small mb-2">Pods, Deployments, Services, ConfigMaps, and declarative YAML manifests.</p>
+                                <a href="distributed-systems-k8s-part07-object-model.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 9: Services, Ingress &amp; Service Mesh</h5>
+                                <p class="text-muted small mb-2">Ingress controllers, Istio, Linkerd, mTLS, and traffic management.</p>
+                                <a href="distributed-systems-k8s-part09-services-ingress-mesh.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 14: Kubernetes Security</h5>
+                                <p class="text-muted small mb-2">RBAC, pod security, network policies, admission controllers, and secrets management.</p>
+                                <a href="distributed-systems-k8s-part14-security.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                        <!-- Series Navigation -->
+                        <div class="series-nav">
+                            <a href="distributed-systems-k8s-part07-object-model.html" class="series-nav-item prev">
+                                <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span>
+                                <span class="nav-title">Part 7: Kubernetes Object Model</span>
+                            </a>
+                            <a href="distributed-systems-k8s-part09-services-ingress-mesh.html" class="series-nav-item next">
+                                <span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span>
+                                <span class="nav-title">Part 9: Services, Ingress &amp; Service Mesh</span>
+                            </a>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <!-- Footer -->
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left">
+                    <div class="fc-brand-group">
+                        <div class="fc-brand-stack"><span></span><span></span><span></span></div>
+                        <span class="fc-brand-name">Wasil Zafar</span>
+                    </div>
+                    <span class="fc-tagline">Consultant &amp; Cloud Architect</span>
+                </div>
+                <div class="fc-center">
+                    <a href="/">Home</a>
+                    <a href="/disclaimer.html">Disclaimer</a>
+                    <a href="/privacy-policy.html">Privacy</a>
+                    <a href="/pages/contact.html">Contact</a>
+                </div>
+                <div class="fc-right">
+                    <a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a>
+                    <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>
+                    <a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                    <a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a>
+                </div>
+            </div>
+            <div class="footer-sub">
+                <span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span>
+                <a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="../../../js/path-progress.js"></script>
+    <script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

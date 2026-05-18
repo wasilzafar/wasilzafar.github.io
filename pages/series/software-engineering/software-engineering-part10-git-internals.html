@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Explore Git's internal architecture — blobs, trees, commits, tags, the content-addressable object store, SHA-1 hashing, packfiles, and the directed acyclic graph." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="git internals, git object model, blob, tree, commit, SHA-1, DAG, directed acyclic graph, git plumbing, content-addressable storage" />
+    <meta property="og:title" content="Part 10: Git Internals — The Object Model &amp; DAG" />
+    <meta property="og:description" content="Explore Git's internal architecture — blobs, trees, commits, tags, the content-addressable object store, SHA-1 hashing, packfiles, and the directed acyclic graph." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-05-13" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/software-engineering/software-engineering-part10-git-internals.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/software-engineering/software-engineering-part10-git-internals-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/software-engineering/software-engineering-part10-git-internals-tw.jpg" />
+
+    <title>Part 10: Git Internals — The Object Model &amp; DAG - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/software-engineering/software-engineering-part10-git-internals.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied',
+            'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', {
+            'ad_storage': 'granted', 'ad_user_data': 'granted',
+            'ad_personalization': 'granted', 'analytics_storage': 'granted'
+        });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});
+        var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
+        j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;
+        f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- GTM noscript -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <!-- Cookie Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking "Accept All", you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;"></div>
+                <div id="cookieTypes" style="display: none;"></div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept">Accept All</button>
+                <button id="cookieReject">Reject All</button>
+                <button id="cookieSave" style="display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <div class="nav-v16-wrapper">
+        <nav class="nav-v16">
+            <a href="/" class="brand">
+                <div class="brand-stack"><span></span><span></span><span></span></div>
+                <span class="brand-text">Wasil Zafar</span>
+            </a>
+            <button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="links">
+                <a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a>
+                <a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a>
+                <a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a>
+                <a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a>
+                <a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a>
+                <button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Software Engineering &amp; Delivery Mastery Series</a>
+                <h1 class="display-4 fw-bold mb-3">Part 10: Git Internals — The Object Model &amp; DAG</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>May 13, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>40 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Most developers use Git without understanding how it actually works. This article takes you inside the engine — the content-addressable object store, the four object types, the directed acyclic graph, and what really happens when you type git commit. Understanding the plumbing transforms you from a Git user into a Git power user.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#introduction" onclick="closeNav()">Introduction</a>
+                <ul>
+                    <li><a href="#introduction" onclick="closeNav()">Porcelain vs Plumbing</a></li>
+                    <li><a href="#why-internals" onclick="closeNav()">Why Learn Internals</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#content-addressable" onclick="closeNav()">Content-Addressable Storage</a>
+                <ul>
+                    <li><a href="#content-addressable" onclick="closeNav()">SHA-1 Hashing</a></li>
+                    <li><a href="#immutability" onclick="closeNav()">Immutability &amp; Deduplication</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#four-objects" onclick="closeNav()">The Four Object Types</a>
+                <ul>
+                    <li><a href="#blob" onclick="closeNav()">Blob</a></li>
+                    <li><a href="#tree" onclick="closeNav()">Tree</a></li>
+                    <li><a href="#commit-object" onclick="closeNav()">Commit</a></li>
+                    <li><a href="#tag-object" onclick="closeNav()">Tag</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#dag" onclick="closeNav()">The DAG</a>
+                <ul>
+                    <li><a href="#dag" onclick="closeNav()">Directed Acyclic Graph</a></li>
+                    <li><a href="#dag-branching" onclick="closeNav()">Branching &amp; Merging in the DAG</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#references" onclick="closeNav()">References</a>
+                <ul>
+                    <li><a href="#references" onclick="closeNav()">Branches as Pointers</a></li>
+                    <li><a href="#head-pointer" onclick="closeNav()">HEAD</a></li>
+                    <li><a href="#refs-directory" onclick="closeNav()">The refs/ Directory</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#git-directory" onclick="closeNav()">The .git Directory</a>
+                <ul>
+                    <li><a href="#git-directory" onclick="closeNav()">Directory Walkthrough</a></li>
+                    <li><a href="#index-file" onclick="closeNav()">The Index File</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#packfiles" onclick="closeNav()">Packfiles &amp; Garbage Collection</a>
+                <ul>
+                    <li><a href="#packfiles" onclick="closeNav()">Delta Compression</a></li>
+                    <li><a href="#gc" onclick="closeNav()">git gc</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#operations-internally" onclick="closeNav()">How Operations Work Internally</a>
+                <ul>
+                    <li><a href="#operations-internally" onclick="closeNav()">git add</a></li>
+                    <li><a href="#commit-internally" onclick="closeNav()">git commit</a></li>
+                    <li><a href="#branch-internally" onclick="closeNav()">git branch</a></li>
+                    <li><a href="#merge-internally" onclick="closeNav()">git merge</a></li>
+                </ul>
+            </li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                        <!-- Section 1: Introduction -->
+                        <h2 id="introduction">Introduction — Porcelain vs Plumbing</h2>
+
+                        <p>Git divides its commands into two categories: <strong>porcelain</strong> (user-facing commands like <code>git commit</code>, <code>git branch</code>, <code>git merge</code>) and <strong>plumbing</strong> (low-level commands like <code>git hash-object</code>, <code>git cat-file</code>, <code>git update-ref</code>). Porcelain commands are designed for humans. Plumbing commands reveal what's actually happening underneath.</p>
+
+                        <h3 id="why-internals">Why Understanding Internals Matters</h3>
+
+                        <p>When you understand Git's internals, several things happen:</p>
+
+                        <ul>
+                            <li><strong>You stop fearing Git</strong> — Merge conflicts, detached HEAD, and "rebase gone wrong" become solvable puzzles, not mysterious catastrophes</li>
+                            <li><strong>You debug faster</strong> — When something goes wrong, you know exactly where to look (<code>.git/refs/</code>, <code>.git/objects/</code>, <code>git reflog</code>)</li>
+                            <li><strong>You make better decisions</strong> — Knowing that branches are 41-byte files makes you comfortable creating 50 branches. Knowing that rebase rewrites SHA-1s explains why it's dangerous on shared branches</li>
+                            <li><strong>You can recover from anything</strong> — Almost nothing in Git is truly lost. Understanding the object store and reflog means you can recover from almost any mistake</li>
+                        </ul>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Key Insight:</strong> Git is fundamentally a <em>content-addressable filesystem</em> with a version control user interface built on top. Once you understand the filesystem, the user interface (porcelain commands) becomes completely predictable.
+                        </div>
+
+                        <!-- Section 2: Content-Addressable Storage -->
+                        <h2 id="content-addressable">Content-Addressable Storage</h2>
+
+                        <p>At its core, Git is a <strong>key-value store</strong>. You give it content, it returns a unique key (a SHA-1 hash). Later, you give it the key, it returns the content. Every piece of data in Git — every file version, every directory listing, every commit — is stored as an <strong>object</strong> identified by its SHA-1 hash.</p>
+
+                        <h3>SHA-1 Hashing</h3>
+
+                        <p>SHA-1 produces a 40-character hexadecimal string (160 bits) from any input. The same input <em>always</em> produces the same hash. Different inputs produce different hashes (with astronomically low collision probability). This gives Git three powerful properties:</p>
+
+                        <ul>
+                            <li><strong>Integrity</strong> — If a single byte changes in any object, its hash changes. Corruption is immediately detectable</li>
+                            <li><strong>Deduplication</strong> — If two files have identical content, they produce the same hash and Git stores them only once</li>
+                            <li><strong>Immutability</strong> — You cannot modify an object without changing its hash. Objects are permanent once created</li>
+                        </ul>
+
+                        <pre><code class="language-bash"># Demonstrate content-addressable storage
+# Hash a string without storing it
+echo "Hello, Git internals!" | git hash-object --stdin
+# Output: a specific SHA-1 hash (e.g., 7e5d5e5...)
+
+# Hash and store it in the Git object database
+echo "Hello, Git internals!" | git hash-object -w --stdin
+# Output: same hash, but now the object is stored in .git/objects/
+
+# Verify the object exists
+# The hash is split: first 2 chars = directory, rest = filename
+find .git/objects -type f | head -5
+
+echo "Content-addressable storage demonstrated"
+</code></pre>
+
+                        <h3 id="immutability">Immutability &amp; Deduplication</h3>
+
+                        <pre><code class="language-bash"># Deduplication in action
+# Create two files with identical content
+echo "shared content" > file1.txt
+echo "shared content" > file2.txt
+
+# Stage both files
+git add file1.txt file2.txt
+
+# Check: both files point to the SAME blob object
+git ls-files --stage
+# Output shows both have the same SHA-1 hash
+# Git stores the content only ONCE, regardless of filename
+
+echo "Deduplication demonstrated — same content = same hash"
+</code></pre>
+
+                        <!-- Section 3: The Four Object Types -->
+                        <h2 id="four-objects">The Four Object Types</h2>
+
+                        <p>Git's entire data model consists of just four object types. Everything Git does — every commit, every branch, every tag, every file version — is built from these four primitives.</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Git Object Model — How Objects Reference Each Other</div>
+                            <pre class="mermaid">
+flowchart TD
+    C[Commit Object<br/>author, message, timestamp] --> T[Tree Object<br/>directory listing]
+    C --> CP[Parent Commit]
+    T --> B1[Blob<br/>file1.txt content]
+    T --> B2[Blob<br/>file2.txt content]
+    T --> ST[Subtree<br/>src/ directory]
+    ST --> B3[Blob<br/>main.js content]
+    TAG[Tag Object<br/>v1.0.0] --> C
+                            </pre>
+                        </div>
+
+                        <h3 id="blob">Blob — File Content</h3>
+
+                        <p>A <strong>blob</strong> (binary large object) stores the raw content of a file. Crucially, it does <em>not</em> store the filename, permissions, or any metadata — just the bytes. The filename is stored in the tree object that references the blob.</p>
+
+                        <pre><code class="language-bash"># Create a file and commit it
+echo "print('hello world')" > hello.py
+git add hello.py
+git commit -m "add hello.py"
+
+# Find the blob for hello.py
+# First, get the tree of the latest commit
+git cat-file -p HEAD
+# Shows: tree <hash>, parent <hash>, author, committer, message
+
+# Look at the tree
+git cat-file -p HEAD^{tree}
+# Shows: 100644 blob <hash>    hello.py
+
+# Look at the blob itself — just raw file content
+git cat-file -p <blob-hash>
+# Output: print('hello world')
+
+# Check the type and size
+git cat-file -t <blob-hash>   # Output: blob
+git cat-file -s <blob-hash>   # Output: 22 (bytes)
+
+echo "Blob exploration complete"
+</code></pre>
+
+                        <h3 id="tree">Tree — Directory Listing</h3>
+
+                        <p>A <strong>tree</strong> object represents a directory. It contains a list of entries, each mapping a filename (plus permissions) to either a blob (file) or another tree (subdirectory). Trees are how Git reconstructs the full directory structure from content-addressed blobs.</p>
+
+                        <pre><code class="language-bash"># Create a directory structure
+mkdir -p src/utils
+echo "export const add = (a, b) => a + b;" > src/utils/math.js
+echo "import { add } from './utils/math';" > src/index.js
+git add .
+git commit -m "add src directory structure"
+
+# Inspect the top-level tree
+git ls-tree HEAD
+# Output:
+# 040000 tree <hash>    src
+
+# Inspect the src/ subtree
+git ls-tree HEAD:src
+# Output:
+# 100644 blob <hash>    index.js
+# 040000 tree <hash>    utils
+
+# Inspect the src/utils/ subtree
+git ls-tree HEAD:src/utils
+# Output:
+# 100644 blob <hash>    math.js
+
+echo "Tree hierarchy explored"
+</code></pre>
+
+                        <h3 id="commit-object">Commit — The Snapshot Record</h3>
+
+                        <p>A <strong>commit</strong> object ties everything together. It contains: (1) a pointer to a tree object (the project snapshot), (2) pointers to parent commit(s), (3) author and committer with timestamps, and (4) the commit message. The commit is what makes Git a version control system rather than just a filesystem.</p>
+
+                        <pre><code class="language-bash"># Inspect a commit object in full detail
+git cat-file -p HEAD
+
+# Output:
+# tree 4b825dc642cb6eb9a060e54bf899d69f4c3e4b30
+# parent a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
+# author Wasil Zafar <wasil@example.com> 1715600000 +0100
+# committer Wasil Zafar <wasil@example.com> 1715600000 +0100
+#
+# add src directory structure
+
+# Key observations:
+# - "tree" points to the root tree (entire project state at this commit)
+# - "parent" points to the previous commit (absent for initial commit)
+# - Merge commits have TWO parent lines
+# - author = who wrote the code; committer = who applied it
+
+echo "Commit object structure examined"
+</code></pre>
+
+                        <h3 id="tag-object">Tag — Named Reference with Metadata</h3>
+
+                        <p>Git supports two types of tags: <strong>lightweight</strong> (just a pointer, like a branch that doesn't move) and <strong>annotated</strong> (a full object with tagger, date, message, and optional GPG signature).</p>
+
+                        <pre><code class="language-bash"># Create a lightweight tag (just a ref, no object)
+git tag v0.1.0
+
+# Create an annotated tag (creates a tag object)
+git tag -a v1.0.0 -m "First stable release"
+
+# Inspect the annotated tag object
+git cat-file -p v1.0.0
+# Output:
+# object <commit-hash>    (the commit being tagged)
+# type commit
+# tag v1.0.0
+# tagger Wasil Zafar <wasil@example.com> 1715600000 +0100
+#
+# First stable release
+
+# See where the tag refs are stored
+cat .git/refs/tags/v0.1.0     # Contains: commit hash directly
+cat .git/refs/tags/v1.0.0     # Contains: tag object hash
+
+echo "Tag types demonstrated"
+</code></pre>
+
+                        <!-- Section 4: The DAG -->
+                        <h2 id="dag">The DAG (Directed Acyclic Graph)</h2>
+
+                        <p>Commits in Git form a <strong>Directed Acyclic Graph (DAG)</strong>. Each commit points to its parent(s). "Directed" means edges have direction (child → parent). "Acyclic" means you can never follow parent pointers in a circle back to where you started. This structure enables Git's powerful branching and merging.</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">A Git DAG with Branches and a Merge</div>
+                            <pre class="mermaid">
+gitGraph
+    commit id: "A" tag: "initial"
+    commit id: "B"
+    commit id: "C"
+    branch feature
+    commit id: "D"
+    commit id: "E"
+    checkout main
+    commit id: "F"
+    commit id: "G"
+    merge feature id: "H" tag: "v1.0"
+    commit id: "I"
+                            </pre>
+                        </div>
+
+                        <h3 id="dag-branching">Branching &amp; Merging in the DAG</h3>
+
+                        <p>In the DAG model:</p>
+
+                        <ul>
+                            <li><strong>A branch</strong> is simply a named pointer to one node (commit) in the graph</li>
+                            <li><strong>Creating a branch</strong> adds a new pointer — no new nodes are created</li>
+                            <li><strong>Committing</strong> adds a new node with an edge to the current node, then moves the branch pointer forward</li>
+                            <li><strong>Merging</strong> creates a new node with <em>two</em> parent edges (two incoming edges in the DAG)</li>
+                            <li><strong>Reachability</strong> — A commit is "on" a branch if you can reach it by following parent pointers from the branch tip</li>
+                        </ul>
+
+                        <pre><code class="language-bash"># Visualise the DAG in your terminal
+git log --oneline --graph --all --decorate
+
+# Example output:
+# *   H (HEAD -> main, tag: v1.0) Merge feature into main
+# |\
+# | * E (feature) Add search results page
+# | * D Add search input component
+# * | G Fix header padding
+# * | F Update navigation links
+# |/
+# * C Add user authentication
+# * B Set up project structure
+# * A Initial commit
+
+echo "DAG visualisation demonstrated"
+</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Key Insight:</strong> The "acyclic" property is what makes Git's history meaningful. Because you can never create a cycle (a commit cannot be its own ancestor), you can always trace any commit back to the initial commit by following parent pointers. This gives Git a clear, unambiguous notion of "what came before what."
+                        </div>
+
+                        <!-- Section 5: References -->
+                        <h2 id="references">References — Human-Friendly Names for Hashes</h2>
+
+                        <p>Nobody wants to remember <code>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2</code>. References (refs) are human-readable names that point to commit hashes. Branches, tags, and HEAD are all references.</p>
+
+                        <h3>Branches as Pointers</h3>
+
+                        <pre><code class="language-bash"># A branch is literally a file containing a commit hash
+cat .git/refs/heads/main
+# Output: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
+
+# That's it. A branch is a 41-byte file (40 hex chars + newline)
+# When you commit, Git just overwrites this file with the new commit's hash
+
+# List all branch references
+ls .git/refs/heads/
+# Output: main, feature/auth, feature/search, ...
+
+echo "Branches are just files containing commit hashes"
+</code></pre>
+
+                        <h3 id="head-pointer">HEAD — Where You Are</h3>
+
+                        <pre><code class="language-bash"># HEAD tells Git which branch you're on
+cat .git/HEAD
+# Normal output: ref: refs/heads/main
+# This means HEAD points to the "main" branch
+
+# When you checkout a branch, HEAD changes to point to that branch
+git checkout feature/auth
+cat .git/HEAD
+# Output: ref: refs/heads/feature/auth
+
+# Detached HEAD: when you checkout a specific commit (not a branch)
+git checkout a1b2c3d
+cat .git/HEAD
+# Output: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
+# HEAD points directly to a commit, not a branch reference
+
+echo "HEAD pointer states demonstrated"
+</code></pre>
+
+                        <h3 id="refs-directory">The refs/ Directory Structure</h3>
+
+                        <pre><code class="language-bash"># Explore the full refs directory structure
+find .git/refs -type f
+
+# Typical structure:
+# .git/refs/
+# ├── heads/           ← Local branches
+# │   ├── main
+# │   └── feature/auth
+# ├── remotes/         ← Remote-tracking branches
+# │   └── origin/
+# │       ├── main
+# │       └── feature/auth
+# ├── tags/            ← Tags
+# │   ├── v1.0.0
+# │   └── v0.1.0
+# └── stash            ← Stash reference
+
+# The packed-refs file stores refs efficiently when there are many
+cat .git/packed-refs
+
+echo "Refs directory structure explored"
+</code></pre>
+
+                        <!-- Section 6: The .git Directory -->
+                        <h2 id="git-directory">The .git Directory — A Complete Tour</h2>
+
+                        <p>The <code>.git</code> directory <em>is</em> the repository. Everything else in your project folder is just the working directory (a checked-out version of one commit). If you delete everything except <code>.git/</code>, you can reconstruct the entire project from any point in history.</p>
+
+                        <pre><code class="language-bash"># List the .git directory contents
+ls -la .git/
+
+# Key files and directories:
+# HEAD          — Points to the current branch
+# config        — Repository-specific configuration
+# description   — Used by GitWeb (rarely relevant)
+# hooks/        — Client-side and server-side hook scripts
+# index         — The staging area (binary file)
+# info/         — Global excludes (alternative to .gitignore)
+# objects/      — ALL content (blobs, trees, commits, tags)
+# refs/         — Branch and tag pointers
+# logs/         — Reflog history (for recovery)
+# packed-refs   — Compressed refs for efficiency
+
+echo ".git directory overview shown"
+</code></pre>
+
+                        <pre><code class="language-bash"># The objects directory — where ALL data lives
+ls .git/objects/
+# You'll see directories named with 2-character hex prefixes:
+# 0a/ 0b/ 1f/ 2c/ ... a1/ b2/ ff/ info/ pack/
+
+# Each object is stored as: .git/objects/XX/YYYYYY...
+# Where XX = first 2 chars of SHA-1, YYYYYY = remaining 38 chars
+
+# Count total objects in the repository
+git count-objects
+# Output: X objects, Y kilobytes
+
+# More detailed stats
+git count-objects -v
+
+echo "Objects directory explored"
+</code></pre>
+
+                        <h3 id="index-file">The Index (Staging Area) File</h3>
+
+                        <pre><code class="language-bash"># The index is a binary file — use git commands to inspect it
+# List everything in the staging area
+git ls-files --stage
+
+# Output format:
+# <mode> <hash> <stage-number> <filename>
+# 100644 a1b2c3... 0 README.md
+# 100644 d4e5f6... 0 src/index.js
+# 100755 g7h8i9... 0 scripts/deploy.sh
+
+# The stage number (0) means no conflict
+# During a merge conflict, you'll see stages 1, 2, 3:
+# Stage 1 = common ancestor, Stage 2 = ours, Stage 3 = theirs
+
+echo "Index file inspection demonstrated"
+</code></pre>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal"><i class="fas fa-microscope me-1"></i>Deep Dive</span>
+                            </div>
+                            <h4>The .git/hooks/ Directory</h4>
+                            <p>The hooks directory contains sample scripts for Git lifecycle events: <code>pre-commit</code>, <code>pre-push</code>, <code>commit-msg</code>, <code>post-merge</code>, and more. These are local to each clone (not shared via push/pull). Teams use tools like Husky (Node.js) or pre-commit (Python) to share hook configurations via the repository itself. Hooks enable powerful automation: running linters before commit, validating commit message format, running tests before push, and sending notifications after merge.</p>
+                            <div class="bias-tags">
+                                <span class="bias-tag">Automation</span>
+                                <span class="bias-tag">Pre-commit</span>
+                                <span class="bias-tag">CI/CD</span>
+                            </div>
+                        </div>
+
+                        <!-- Section 7: Packfiles & GC -->
+                        <h2 id="packfiles">Packfiles &amp; Garbage Collection</h2>
+
+                        <p>Storing every version of every file as a separate compressed object works for small repositories, but would be enormously wasteful for large ones. Git solves this with <strong>packfiles</strong> — a compressed format that stores objects using <strong>delta compression</strong> (storing only the differences between similar objects).</p>
+
+                        <h3>Delta Compression</h3>
+
+                        <p>When Git packs objects, it finds objects that are similar (e.g., different versions of the same file) and stores one full copy plus deltas (diffs) for the others. This dramatically reduces storage. A 10MB file that changes by 1 line per commit stores ~10MB for the first version and a few bytes for each subsequent version.</p>
+
+                        <pre><code class="language-bash"># Check repository size before packing
+git count-objects -v
+# Look for: size-pack (kilobytes in packfiles)
+# And: count (number of loose objects)
+
+# Manually trigger garbage collection (packing)
+git gc
+
+# Check size after packing — typically much smaller
+git count-objects -v
+
+# List packfile contents
+git verify-pack -v .git/objects/pack/pack-*.idx | head -20
+# Shows: hash type size size-in-pack offset [depth base-hash]
+# Objects with a "depth" > 0 are stored as deltas
+
+echo "Packfiles and gc demonstrated"
+</code></pre>
+
+                        <h3 id="gc">When Does Git GC Run?</h3>
+
+                        <p>Git runs garbage collection automatically when:</p>
+
+                        <ul>
+                            <li>The number of loose objects exceeds ~6700 (configurable via <code>gc.auto</code>)</li>
+                            <li>The number of packfiles exceeds 50 (configurable via <code>gc.autoPackLimit</code>)</li>
+                            <li>You explicitly run <code>git gc</code></li>
+                        </ul>
+
+                        <p>GC also removes <strong>unreachable objects</strong> — objects that no branch, tag, or reflog entry points to. By default, these are kept for 2 weeks (<code>gc.pruneExpire</code>) before deletion, giving you time to recover from mistakes.</p>
+
+                        <!-- Section 8: How Operations Work Internally -->
+                        <h2 id="operations-internally">How Operations Work Internally</h2>
+
+                        <p>Now that you understand the object model, let's see what actually happens under the hood when you run common Git commands.</p>
+
+                        <h3>git add — What Really Happens</h3>
+
+                        <pre><code class="language-bash"># When you run: git add myfile.txt
+# Git does the following internally:
+
+# 1. Compute SHA-1 of the file content
+git hash-object myfile.txt
+# Output: e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+
+# 2. Compress and store the content as a blob object
+git hash-object -w myfile.txt
+# Now exists: .git/objects/e6/9de29bb2d1d6434b8b29ae775ad8c2e48c5391
+
+# 3. Update the index (staging area) with the new blob hash
+git update-index --add --cacheinfo 100644 e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 myfile.txt
+
+# That's it! 'git add' = hash content + store blob + update index
+
+echo "git add internals demonstrated"
+</code></pre>
+
+                        <h3 id="commit-internally">git commit — What Really Happens</h3>
+
+                        <pre><code class="language-bash"># When you run: git commit -m "my message"
+# Git does the following internally:
+
+# 1. Create a tree object from the current index
+git write-tree
+# Output: 4b825dc642cb6eb9a060e54bf899d69f4c3e4b30
+
+# 2. Create a commit object pointing to that tree
+# (with parent = current HEAD commit, author, committer, message)
+echo "my message" | git commit-tree 4b825dc... -p HEAD
+# Output: <new-commit-hash>
+
+# 3. Update the current branch ref to point to the new commit
+git update-ref refs/heads/main <new-commit-hash>
+
+# Summary: git commit = write-tree + commit-tree + update-ref
+
+echo "git commit internals demonstrated"
+</code></pre>
+
+                        <h3 id="branch-internally">git branch — What Really Happens</h3>
+
+                        <pre><code class="language-bash"># When you run: git branch feature/new-thing
+# Git literally creates a file:
+
+# Equivalent to:
+echo "$(git rev-parse HEAD)" > .git/refs/heads/feature/new-thing
+
+# That's ALL a branch is — a file containing a commit hash
+# It takes microseconds and zero disk space (41 bytes)
+
+# When you switch branches:
+# git checkout feature/new-thing
+# Git does:
+# 1. Update HEAD to reference the new branch
+echo "ref: refs/heads/feature/new-thing" > .git/HEAD
+# 2. Update the working directory to match that commit's tree
+
+echo "git branch internals demonstrated"
+</code></pre>
+
+                        <h3 id="merge-internally">git merge — What Really Happens</h3>
+
+                        <pre><code class="language-bash"># When you run: git merge feature/done
+# Git does the following:
+
+# 1. Find the merge base (common ancestor)
+git merge-base main feature/done
+# Output: <ancestor-commit-hash>
+
+# 2. Create a three-way diff:
+#    - ancestor → main (what changed on main)
+#    - ancestor → feature/done (what changed on feature)
+
+# 3. Apply both sets of changes to create a merged tree
+#    - If changes don't overlap: automatic merge
+#    - If changes conflict: pause and ask for manual resolution
+
+# 4. Create a merge commit with TWO parents
+# git commit-tree <merged-tree> -p <main-tip> -p <feature-tip>
+
+# 5. Update the branch pointer
+# The result: a new commit with two parent edges in the DAG
+
+echo "git merge internals demonstrated"
+</code></pre>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal"><i class="fas fa-flask me-1"></i>Experiment</span>
+                            </div>
+                            <h4>Build a Commit Manually with Plumbing Commands</h4>
+                            <p>You can create a commit <em>without ever using porcelain commands</em>. Try this sequence: (1) <code>echo "content" | git hash-object -w --stdin</code> to create a blob, (2) <code>git update-index --add --cacheinfo 100644 &lt;hash&gt; file.txt</code> to add it to the index, (3) <code>git write-tree</code> to create a tree from the index, (4) <code>echo "message" | git commit-tree &lt;tree-hash&gt;</code> to create a commit, (5) <code>git update-ref refs/heads/main &lt;commit-hash&gt;</code> to update the branch. Congratulations — you just did what <code>git add</code> + <code>git commit</code> does, one plumbing command at a time.</p>
+                            <div class="bias-tags">
+                                <span class="bias-tag">Plumbing</span>
+                                <span class="bias-tag">Manual Commit</span>
+                                <span class="bias-tag">Hands-On</span>
+                            </div>
+                        </div>
+
+                        <!-- Section 9: Exercises -->
+                        <h2 id="exercises">Exercises</h2>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal"><i class="fas fa-pencil-alt me-1"></i>Exercise 1</span>
+                            </div>
+                            <h4>Manual Object Creation</h4>
+                            <p>Without using <code>git add</code> or <code>git commit</code>, create a commit using only plumbing commands: <code>git hash-object -w</code>, <code>git update-index</code>, <code>git write-tree</code>, <code>git commit-tree</code>, and <code>git update-ref</code>. Verify the result with <code>git log</code> and <code>git cat-file -p</code>.</p>
+                            <div class="bias-tags">
+                                <span class="bias-tag">Plumbing</span>
+                                <span class="bias-tag">Object Store</span>
+                            </div>
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal"><i class="fas fa-pencil-alt me-1"></i>Exercise 2</span>
+                            </div>
+                            <h4>Explore .git</h4>
+                            <p>Create a new repository with at least 5 commits across 2 branches. Then explore the .git directory: (1) Read HEAD and verify it matches your current branch. (2) Read the branch ref file and verify it matches <code>git log -1</code>. (3) Use <code>git cat-file -p</code> to walk from the latest commit → tree → blobs. (4) Count objects before and after <code>git gc</code>.</p>
+                            <div class="bias-tags">
+                                <span class="bias-tag">.git Directory</span>
+                                <span class="bias-tag">Exploration</span>
+                            </div>
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal"><i class="fas fa-pencil-alt me-1"></i>Exercise 3</span>
+                            </div>
+                            <h4>Trace a Commit's Full Object Chain</h4>
+                            <p>Pick any commit in a repository. Using only <code>git cat-file -p</code>, trace the full chain: commit → tree → subtrees → blobs. Draw a diagram showing all objects and their relationships. How many total objects does a single commit reference?</p>
+                            <div class="bias-tags">
+                                <span class="bias-tag">Object Graph</span>
+                                <span class="bias-tag">cat-file</span>
+                            </div>
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal"><i class="fas fa-pencil-alt me-1"></i>Exercise 4</span>
+                            </div>
+                            <h4>Draw the DAG</h4>
+                            <p>Create a repository with this history: (1) 3 commits on main, (2) branch "feature-a" from commit 2 with 2 commits, (3) branch "feature-b" from commit 3 with 1 commit, (4) merge feature-a into main, (5) merge feature-b into main. Draw the DAG by hand showing all commits with arrows to their parents. Verify your drawing matches <code>git log --oneline --graph --all</code>.</p>
+                            <div class="bias-tags">
+                                <span class="bias-tag">DAG</span>
+                                <span class="bias-tag">Graph Theory</span>
+                            </div>
+                        </div>
+
+                        <!-- Section 10: Conclusion -->
+                        <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
+
+                        <p>You've now seen behind the curtain. Git is not magic — it's an elegant content-addressable filesystem with a version control interface. The four object types (blob, tree, commit, tag), the DAG structure, and the reference system explain <em>everything</em> Git does. Every porcelain command is just a convenient wrapper around creating objects and updating references.</p>
+
+                        <p>Key takeaways:</p>
+
+                        <ul>
+                            <li><strong>Everything is an object</strong> — Identified by SHA-1, stored in .git/objects/, immutable once created</li>
+                            <li><strong>Four types explain all</strong> — Blob (content), Tree (directory), Commit (snapshot + metadata), Tag (named annotation)</li>
+                            <li><strong>The DAG is the history</strong> — Commits form a directed acyclic graph via parent pointers</li>
+                            <li><strong>Branches are just files</strong> — 41 bytes pointing to a commit hash. Cheap and disposable</li>
+                            <li><strong>HEAD tells Git where you are</strong> — Points to a branch (normal) or a commit (detached)</li>
+                            <li><strong>Packfiles optimise storage</strong> — Delta compression for similar objects; gc automates packing</li>
+                            <li><strong>git add = hash + store + index</strong>; <strong>git commit = write-tree + commit-tree + update-ref</strong></li>
+                            <li><strong>Almost nothing is truly lost</strong> — The reflog and GC grace period mean recovery is almost always possible</li>
+                        </ul>
+
+                        <div class="series-next">
+                            <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                            <p>In <a href="software-engineering-part11-git-workflows.html"><strong>Part 11: Git Workflows — Trunk-Based, GitFlow &amp; Beyond</strong></a>, we'll apply this knowledge to team collaboration. You'll learn how teams organise their branching strategies, the trade-offs between GitFlow and trunk-based development, pull request workflows, and how to choose the right model for your team size and release cadence.</p>
+                        </div>
+
+                        <!-- Related Posts -->
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 9: Git &amp; Version Control Foundations</h5>
+                                <p class="text-muted small mb-2">Master Git from first principles — repositories, commits, branches, merging, rebasing, and conflict resolution.</p>
+                                <a href="software-engineering-part09-git-version-control.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 11: Git Workflows — Trunk-Based, GitFlow &amp; Beyond</h5>
+                                <p class="text-muted small mb-2">Team branching strategies, pull request workflows, and choosing the right model for your team size and release cadence.</p>
+                                <a href="software-engineering-part11-git-workflows.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 1: Software Delivery Mental Models &amp; the SDLC</h5>
+                                <p class="text-muted small mb-2">The foundational mental models that govern how software moves safely into production.</p>
+                                <a href="software-engineering-part01-delivery-mental-models.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                        <!-- Series Navigation -->
+                        <div class="series-nav">
+                            <a href="software-engineering-part09-git-version-control.html" class="series-nav-item prev">
+                                <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span>
+                                <span class="nav-title">Part 9: Git &amp; Version Control</span>
+                            </a>
+                            <a href="software-engineering-part11-git-workflows.html" class="series-nav-item next">
+                                <span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span>
+                                <span class="nav-title">Part 11: Git Workflows</span>
+                            </a>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left">
+                    <div class="fc-brand-group">
+                        <div class="fc-brand-stack"><span></span><span></span><span></span></div>
+                        <span class="fc-brand-name">Wasil Zafar</span>
+                    </div>
+                    <span class="fc-tagline">Consultant &amp; Cloud Architect</span>
+                </div>
+                <div class="fc-center">
+                    <a href="/">Home</a>
+                    <a href="/disclaimer.html">Disclaimer</a>
+                    <a href="/privacy-policy.html">Privacy</a>
+                    <a href="/pages/contact.html">Contact</a>
+                </div>
+                <div class="fc-right">
+                    <a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a>
+                    <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>
+                    <a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                    <a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a>
+                    <a href="/feed.xml" target="_blank" title="RSS Feed"><i class="fas fa-rss"></i></a>
+                </div>
+            </div>
+            <div class="footer-sub">
+                <span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span>
+                <a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+    <!-- Fuse.js Search -->
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <!-- Prism.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <!-- Mermaid.js -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <!-- Learning Paths -->
+    <script src="../../../js/path-progress.js"></script>
+    <!-- Quiz Widget -->
+    <script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

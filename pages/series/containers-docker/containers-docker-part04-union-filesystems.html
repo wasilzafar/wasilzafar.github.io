@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Understand how OverlayFS, copy-on-write semantics, and image layering make Docker containers lightweight and efficient. Build your mental model of container filesystems." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="OverlayFS, union filesystem, Docker layers, copy-on-write, container images, image layering, filesystem, AUFS" />
+    <meta property="og:title" content="Part 4: Union File Systems & Image Layering — Containers & Runtime Environments Mastery" />
+    <meta property="og:description" content="Understand how OverlayFS, copy-on-write semantics, and image layering make Docker containers lightweight and efficient. Build your mental model of container filesystems." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-05-14" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/containers-docker/containers-docker-part04-union-filesystems.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/containers-docker/containers-docker-part04-union-filesystems-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/containers-docker/containers-docker-part04-union-filesystems-tw.jpg" />
+
+    <title>Part 4: Union File Systems & Image Layering - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/containers-docker/containers-docker-part04-union-filesystems.html" />
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <!-- Prism.js Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <!-- Google Consent Mode v2 -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied',
+            'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', {
+            'ad_storage': 'granted', 'ad_user_data': 'granted',
+            'ad_personalization': 'granted', 'analytics_storage': 'granted'
+        });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});
+        var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
+        j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;
+        f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <!-- GTM noscript -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <!-- GDPR Cookie Consent Banner -->
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path>
+            </svg>
+        </div>
+        <div class="content-wrap">
+            <div class="msg-wrap">
+                <div class="title-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20">
+                        <path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path>
+                    </svg>
+                    <h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4>
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">
+                    We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic.
+                    By clicking "Accept All", you consent to our use of cookies. See our
+                    <a href="/privacy-policy.html" style="color: var(--color-teal); border-bottom: 1px dotted var(--color-teal);">Privacy Policy</a>
+                    for more information.
+                </p>
+                <div id="cookieSettings" style="display: none;"></div>
+                <div id="cookieTypes" style="display: none;"></div>
+            </div>
+            <div class="btn-wrap">
+                <button id="cookieAccept">Accept All</button>
+                <button id="cookieReject">Reject All</button>
+                <button id="cookieSave" style="display: none;">Save Preferences</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <div class="nav-v16-wrapper">
+        <nav class="nav-v16">
+            <a href="/" class="brand">
+                <div class="brand-stack"><span></span><span></span><span></span></div>
+                <span class="brand-text">Wasil Zafar</span>
+            </a>
+            <button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="links">
+                <a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a>
+                <a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a>
+                <a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a>
+                <a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a>
+                <a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a>
+                <button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Containers & Runtime Environments Mastery Series</a>
+                <h1 class="display-4 fw-bold mb-3">Part 4: Union File Systems & Image Layering</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>May 14, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>22 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Containers don't carry entire operating system copies — they share base layers and only store what's different. This magic is powered by union file systems and copy-on-write semantics, which make images lightweight, fast to distribute, and incredibly space-efficient.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation TOC -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#why-special-filesystems" onclick="closeNav()">Why Special Filesystems?</a>
+                <ul>
+                    <li><a href="#why-special-filesystems" onclick="closeNav()">The Problem</a></li>
+                    <li><a href="#overlay-analogy" onclick="closeNav()">The Overlay Analogy</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#union-concepts" onclick="closeNav()">Union Filesystem Concepts</a>
+                <ul>
+                    <li><a href="#union-concepts" onclick="closeNav()">Layer Merging</a></li>
+                    <li><a href="#layer-visibility" onclick="closeNav()">Layer Visibility Rules</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#overlayfs" onclick="closeNav()">OverlayFS Deep Dive</a>
+                <ul>
+                    <li><a href="#overlayfs" onclick="closeNav()">Components</a></li>
+                    <li><a href="#overlayfs-hands-on" onclick="closeNav()">Hands-On OverlayFS</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#copy-on-write" onclick="closeNav()">Copy-on-Write Semantics</a>
+                <ul>
+                    <li><a href="#copy-on-write" onclick="closeNav()">Read-Through & Copy-Up</a></li>
+                    <li><a href="#whiteouts" onclick="closeNav()">Whiteout Files</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#docker-layers" onclick="closeNav()">Docker Image Layers</a>
+                <ul>
+                    <li><a href="#docker-layers" onclick="closeNav()">Layer Creation</a></li>
+                    <li><a href="#inspecting-layers" onclick="closeNav()">Inspecting Layers</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#layer-sharing" onclick="closeNav()">Layer Sharing & Deduplication</a>
+            </li>
+            <li>
+                <a href="#writable-layer" onclick="closeNav()">The Writable Container Layer</a>
+            </li>
+            <li>
+                <a href="#storage-drivers" onclick="closeNav()">Alternative Storage Drivers</a>
+            </li>
+            <li>
+                <a href="#performance" onclick="closeNav()">Performance Implications</a>
+            </li>
+            <li>
+                <a href="#exercises" onclick="closeNav()">Exercises</a>
+            </li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion & Next Steps</a></li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                        <!-- Section 1: Why Containers Need Special Filesystems -->
+                        <h2 id="why-special-filesystems">Why Containers Need Special Filesystems</h2>
+
+                        <p>Consider the fundamental challenge: you want to run 50 containers on a single host, each running a different application but all based on Ubuntu 22.04. The Ubuntu base filesystem is approximately 78 MB compressed (about 200 MB uncompressed). A naive approach would require 50 × 200 MB = 10 GB of disk space just for identical base OS files. This is wildly inefficient — those 50 copies of <code>/usr/bin/bash</code>, <code>/lib/x86_64-linux-gnu/libc.so.6</code>, and thousands of other files are byte-for-byte identical.</p>
+
+                        <p>Virtual machines solved this differently (each VM carries its own full filesystem), but containers needed something smarter. The solution is a <strong>union filesystem</strong> — a filesystem that presents a unified view of multiple directory trees (layers) stacked on top of each other, where only the differences between layers need to be stored.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-map me-2"></i>
+                            <strong>The Transparent Overlay Analogy:</strong> Imagine a printed paper map of a city (the base layer). You place a transparent acetate sheet on top and draw your custom route with a marker (the upper layer). When you look down, you see both the original map and your additions as one unified image. You haven't modified the original map — it's still pristine underneath. Multiple people can each have their own acetate sheet over the same printed map, each drawing different routes, without affecting each other. This is exactly how union filesystems work.
+                        </div>
+
+                        <h3 id="overlay-analogy">The Core Innovation</h3>
+
+                        <p>Union filesystems provide three key innovations that make containers practical:</p>
+
+                        <ul>
+                            <li><strong>Space efficiency</strong> — Shared base layers are stored once on disk, regardless of how many containers use them</li>
+                            <li><strong>Fast startup</strong> — Creating a new container doesn't require copying the entire filesystem; it only creates a thin writable layer</li>
+                            <li><strong>Efficient distribution</strong> — Pulling an image only downloads layers not already present on the host</li>
+                        </ul>
+
+                        <!-- Section 2: Union Filesystem Concepts -->
+                        <h2 id="union-concepts">Union Filesystem Concepts</h2>
+
+                        <p>A union filesystem merges multiple directory trees (called <em>branches</em> or <em>layers</em>) into a single coherent view. The key rules that govern this merge are:</p>
+
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Rule</th>
+                                    <th>Description</th>
+                                    <th>Example</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Upper takes priority</td>
+                                    <td>If a file exists in multiple layers, the uppermost version wins</td>
+                                    <td>Custom <code>/etc/nginx.conf</code> overrides base layer's default</td>
+                                </tr>
+                                <tr>
+                                    <td>Directory merge</td>
+                                    <td>Directories with the same name are merged, showing all entries</td>
+                                    <td><code>/usr/bin/</code> shows files from all layers combined</td>
+                                </tr>
+                                <tr>
+                                    <td>Lower layers read-only</td>
+                                    <td>Only the topmost layer is writable; lower layers are immutable</td>
+                                    <td>Original base image is never modified by running containers</td>
+                                </tr>
+                                <tr>
+                                    <td>Deletion via whiteout</td>
+                                    <td>Removing a lower-layer file creates a special marker in the upper layer</td>
+                                    <td>Deleting <code>/var/log/apt</code> creates a whiteout, hiding the original</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Union Filesystem Layer Stacking</div>
+                            <pre class="mermaid">
+flowchart TB
+    subgraph merged["Merged View (what the container sees)"]
+        M1["/bin/bash"]
+        M2["/app/server.js"]
+        M3["/etc/nginx.conf (custom)"]
+        M4["/var/log/ (empty)"]
+    end
+
+    subgraph upper["Upper Layer (writable — container changes)"]
+        U1["/etc/nginx.conf (modified)"]
+        U2[".wh.var_log (whiteout)"]
+    end
+
+    subgraph mid["Middle Layer (read-only — application)"]
+        A1["/app/server.js"]
+        A2["/app/package.json"]
+    end
+
+    subgraph lower["Lower Layer (read-only — base OS)"]
+        L1["/bin/bash"]
+        L2["/etc/nginx.conf (default)"]
+        L3["/var/log/apt/"]
+    end
+
+    lower --> mid --> upper --> merged
+                            </pre>
+                        </div>
+
+                        <h3 id="layer-visibility">Layer Visibility Rules</h3>
+
+                        <p>When a process in a container accesses a file path, the union filesystem resolves it by searching layers from top to bottom:</p>
+
+                        <ol>
+                            <li><strong>Check upper (writable) layer first</strong> — If the file exists here, return it immediately (even if it's a whiteout marker indicating deletion)</li>
+                            <li><strong>Check middle layers in order</strong> — Search read-only layers from newest to oldest</li>
+                            <li><strong>Check base layer last</strong> — If found nowhere else, look in the bottommost layer</li>
+                            <li><strong>Return ENOENT</strong> — If not found in any layer, report "file not found"</li>
+                        </ol>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-graduation-cap me-2"></i>
+                            <strong>Historical Context:</strong> Union filesystems aren't new to containers. The concept dates back to the Plan 9 operating system (Bell Labs, 1992) and was first implemented in Linux as <strong>UnionFS</strong> (2003), followed by <strong>AUFS</strong> (Another Union File System, 2006) which Docker originally used. <strong>OverlayFS</strong> was merged into the Linux kernel mainline in version 3.18 (December 2014), making it the default choice today because it doesn't require out-of-tree patches.
+                        </div>
+
+                        <!-- Section 3: OverlayFS Deep Dive -->
+                        <h2 id="overlayfs">OverlayFS Deep Dive</h2>
+
+                        <p>OverlayFS (also written as <code>overlay</code> or <code>overlay2</code> in Docker's storage driver terminology) is the dominant union filesystem in modern container runtimes. It's built into the Linux kernel, requires no additional packages, and provides excellent performance characteristics for container workloads.</p>
+
+                        <p>OverlayFS operates with four directory components:</p>
+
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Component</th>
+                                    <th>Mount Option</th>
+                                    <th>Description</th>
+                                    <th>Docker Mapping</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>lowerdir</strong></td>
+                                    <td><code>lowerdir=</code></td>
+                                    <td>One or more read-only directories (colon-separated, bottom-to-top)</td>
+                                    <td>Image layers (base OS, dependencies, application code)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>upperdir</strong></td>
+                                    <td><code>upperdir=</code></td>
+                                    <td>Single writable directory where all modifications are stored</td>
+                                    <td>Container's writable layer (ephemeral)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>workdir</strong></td>
+                                    <td><code>workdir=</code></td>
+                                    <td>Scratch space for atomic operations (same filesystem as upperdir)</td>
+                                    <td>Internal work directory managed by Docker</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>merged</strong></td>
+                                    <td>mount point</td>
+                                    <td>The unified view presented to processes (the "result")</td>
+                                    <td>Container's root filesystem (<code>/</code>)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h3 id="overlayfs-hands-on">Hands-On: Building an OverlayFS Mount</h3>
+
+                        <p>Let's manually create an OverlayFS mount to understand exactly what Docker does under the hood:</p>
+
+                        <pre><code class="language-bash"># Create the directory structure
+mkdir -p /tmp/overlay-demo/{lower,upper,work,merged}
+
+# Populate the "base image" (lower layer)
+echo "I am the base OS config" > /tmp/overlay-demo/lower/config.txt
+echo "#!/bin/bash\necho hello" > /tmp/overlay-demo/lower/app.sh
+mkdir -p /tmp/overlay-demo/lower/logs
+echo "old log entry" > /tmp/overlay-demo/lower/logs/access.log
+
+# Mount the overlay filesystem
+sudo mount -t overlay overlay \
+    -o lowerdir=/tmp/overlay-demo/lower,\
+upperdir=/tmp/overlay-demo/upper,\
+workdir=/tmp/overlay-demo/work \
+    /tmp/overlay-demo/merged
+
+# Verify: the merged view shows lower layer content
+ls /tmp/overlay-demo/merged/
+# Output: app.sh  config.txt  logs
+
+cat /tmp/overlay-demo/merged/config.txt
+# Output: I am the base OS config</code></pre>
+
+                        <pre><code class="language-bash"># Now modify a file through the merged view
+echo "I am the MODIFIED config" > /tmp/overlay-demo/merged/config.txt
+
+# Create a new file
+echo "new data" > /tmp/overlay-demo/merged/newfile.txt
+
+# Delete a file from the lower layer
+rm /tmp/overlay-demo/merged/logs/access.log
+
+# Inspect what happened in the upper layer
+ls -la /tmp/overlay-demo/upper/
+# Output: config.txt  newfile.txt  logs/
+
+cat /tmp/overlay-demo/upper/config.txt
+# Output: I am the MODIFIED config
+
+# The lower layer is UNTOUCHED
+cat /tmp/overlay-demo/lower/config.txt
+# Output: I am the base OS config
+
+# Check for whiteout file (character device 0,0)
+ls -la /tmp/overlay-demo/upper/logs/
+# Output: c--------- 1 root root 0, 0 ... access.log  (whiteout!)
+
+# Clean up
+sudo umount /tmp/overlay-demo/merged</code></pre>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal"><i class="fas fa-flask me-1"></i>Key Insight</span>
+                            </div>
+                            <h4>The Lower Layer is Sacred</h4>
+                            <p>No matter what operations the container performs — modifying files, creating new ones, deleting existing ones — the lower layer (image) is <strong>never</strong> touched. All changes are captured in the upper layer. This is the fundamental guarantee that makes image sharing possible: one hundred containers can all use the same base image layers simultaneously because none of them can modify those layers.</p>
+                            <p>When you <code>docker commit</code> a container, what actually happens is that the upper layer's contents are frozen and become a new read-only layer in a new image.</p>
+                            <div class="bias-tags">
+                                <span class="bias-tag">Immutability</span>
+                                <span class="bias-tag">Layer Sharing</span>
+                                <span class="bias-tag">Image Integrity</span>
+                            </div>
+                        </div>
+
+                        <!-- Section 4: Copy-on-Write Semantics -->
+                        <h2 id="copy-on-write">Copy-on-Write Semantics</h2>
+
+                        <p>Copy-on-Write (CoW) is the strategy OverlayFS uses to provide writable access to files that originate in read-only lower layers. The name describes the policy: a file is only copied to the writable layer at the moment it is first written to — never before.</p>
+
+                        <p>There are three fundamental operations:</p>
+
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Operation</th>
+                                    <th>What Happens</th>
+                                    <th>Performance Cost</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Read-through</strong></td>
+                                    <td>File is read directly from the lower layer — no copy needed</td>
+                                    <td>Near-zero (direct passthrough)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Copy-up</strong></td>
+                                    <td>File is copied entirely from lower to upper layer before the first write</td>
+                                    <td>One-time cost proportional to file size</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Whiteout</strong></td>
+                                    <td>A character device (0,0) or <code>.wh.</code> prefixed file marks deletion</td>
+                                    <td>Negligible (creates tiny marker file)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Copy-on-Write Decision Flow</div>
+                            <pre class="mermaid">
+flowchart TD
+    A["Process requests file operation"] --> B{"Operation type?"}
+    B -->|"READ"| C{"File in upper layer?"}
+    C -->|"Yes"| D["Read from upper layer"]
+    C -->|"No"| E["Read directly from lower layer<br/>(read-through, zero cost)"]
+
+    B -->|"WRITE"| F{"File already in upper layer?"}
+    F -->|"Yes"| G["Write directly to upper layer"]
+    F -->|"No"| H["COPY-UP: Copy entire file<br/>from lower → upper layer"]
+    H --> I["Write modification to<br/>the new upper-layer copy"]
+
+    B -->|"DELETE"| J{"File origin?"}
+    J -->|"Upper layer only"| K["Simply remove from upper"]
+    J -->|"Lower layer"| L["Create whiteout marker<br/>in upper layer"]
+
+    style H fill:#BF092F,color:#fff
+    style E fill:#3B9797,color:#fff
+    style L fill:#132440,color:#fff
+                            </pre>
+                        </div>
+
+                        <h3 id="whiteouts">Whiteout Files and Opaque Directories</h3>
+
+                        <p>When a container deletes a file that exists in a lower (read-only) layer, the filesystem can't actually remove it — the lower layer is immutable. Instead, OverlayFS creates a <strong>whiteout file</strong> in the upper layer that effectively hides the original:</p>
+
+                        <pre><code class="language-bash"># OverlayFS uses character devices with major:minor 0:0 as whiteouts
+# When you delete /etc/motd from a lower layer:
+ls -la /var/lib/docker/overlay2/&lt;container-id&gt;/diff/etc/
+# c--------- 1 root root 0, 0 May 14 10:00 motd
+
+# For opaque directories (hide ALL content of a lower-layer directory):
+# A file named .wh..wh..opq is created in the upper layer directory
+ls -la /var/lib/docker/overlay2/&lt;container-id&gt;/diff/var/cache/
+# -r--r--r-- 1 root root 0 May 14 10:00 .wh..wh..opq</code></pre>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Copy-Up Gotcha:</strong> The copy-up operation copies the <em>entire</em> file, even if you only modify one byte. This means modifying a single character in a 500 MB database file will copy all 500 MB to the upper layer. This is why Docker best practices discourage storing large, frequently-modified files in the container filesystem — use volumes instead. The copy-up also includes all metadata (permissions, xattrs, timestamps).
+                        </div>
+
+                        <!-- Section 5: Docker Image Layers -->
+                        <h2 id="docker-layers">Docker Image Layers</h2>
+
+                        <p>Every Docker image is composed of an ordered stack of read-only layers. Each layer represents a set of filesystem changes (files added, modified, or deleted) relative to the layer below it. When Docker builds an image from a Dockerfile, most instructions create a new layer:</p>
+
+                        <ul>
+                            <li><code>FROM ubuntu:22.04</code> — Sets the base layers (the Ubuntu image itself is multiple layers)</li>
+                            <li><code>RUN apt-get update && apt-get install -y nginx</code> — Creates a layer with the installed packages</li>
+                            <li><code>COPY ./app /usr/share/nginx/html</code> — Creates a layer with your application files</li>
+                            <li><code>CMD ["nginx", "-g", "daemon off;"]</code> — Only adds metadata, no filesystem layer</li>
+                        </ul>
+
+                        <h3 id="inspecting-layers">Inspecting Image Layers</h3>
+
+                        <pre><code class="language-bash"># View the layers of an image with their sizes
+docker history nginx:latest
+# IMAGE          CREATED       CREATED BY                                      SIZE
+# 3b25b682ea82   2 weeks ago   CMD ["nginx" "-g" "daemon off;"]                0B
+# &lt;missing&gt;      2 weeks ago   STOPSIGNAL SIGQUIT                              0B
+# &lt;missing&gt;      2 weeks ago   EXPOSE map[80/tcp:{}]                           0B
+# &lt;missing&gt;      2 weeks ago   ENTRYPOINT ["/docker-entrypoint.sh"]            0B
+# &lt;missing&gt;      2 weeks ago   COPY file:xxx in /docker-entrypoint.d           4.62kB
+# &lt;missing&gt;      2 weeks ago   COPY file:xxx in /docker-entrypoint.d           3.02kB
+# &lt;missing&gt;      2 weeks ago   COPY file:xxx in /docker-entrypoint.sh          1.62kB
+# &lt;missing&gt;      2 weeks ago   RUN /bin/sh -c set -x ...                      61.1MB
+# &lt;missing&gt;      2 weeks ago   ENV PKG_RELEASE=1~bookworm                      0B
+# &lt;missing&gt;      2 weeks ago   ENV NJS_VERSION=0.8.4                           0B
+# &lt;missing&gt;      2 weeks ago   ENV NGINX_VERSION=1.25.5                        0B
+# &lt;missing&gt;      3 weeks ago   /bin/sh -c #(nop) CMD ["bash"]                  0B
+# &lt;missing&gt;      3 weeks ago   /bin/sh -c #(nop) ADD file:xxx in /             74.8MB</code></pre>
+
+                        <pre><code class="language-bash"># Inspect the detailed layer information (content-addressable storage)
+docker image inspect nginx:latest --format '{{json .RootFS}}' | jq .
+# {
+#   "Type": "layers",
+#   "Layers": [
+#     "sha256:2edcec3590a4ec7...",   ← Debian base (74.8 MB)
+#     "sha256:e379e8aedd4d72...",   ← nginx installation (61.1 MB)
+#     "sha256:b8d6e692a25e11...",   ← entrypoint script
+#     "sha256:f1db227348d0a5...",   ← config files
+#     "sha256:32ce5f6a5106ec...",   ← more config
+#     "sha256:d73e673c3f132e...",   ← final config
+#     "sha256:9a1f56e408ebbc..."    ← latest changes
+#   ]
+# }</code></pre>
+
+                        <pre><code class="language-bash"># Examine the actual filesystem content of each layer on disk
+# Docker stores layers in /var/lib/docker/overlay2/
+ls /var/lib/docker/overlay2/
+# Output shows content-addressed directories for each layer
+
+# View the diff (changes) in a specific layer
+ls /var/lib/docker/overlay2/&lt;layer-hash&gt;/diff/
+# Shows only the files added/modified in that specific layer</code></pre>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal"><i class="fas fa-microscope me-1"></i>Deep Dive</span>
+                            </div>
+                            <h4>Content-Addressable Storage</h4>
+                            <p>Docker uses <strong>content-addressable storage</strong> — each layer is identified by the SHA256 hash of its contents. This means:</p>
+                            <ul>
+                                <li>Two identical layers (same files, same permissions) always produce the same hash</li>
+                                <li>Layers can be safely deduplicated — if two images share a layer hash, only one copy exists on disk</li>
+                                <li>Layer integrity is guaranteed — if the content changes, the hash changes</li>
+                                <li>Pull operations can skip layers that already exist locally (matching by hash)</li>
+                            </ul>
+                            <p>This is why image pulls are often faster than expected — if you already have <code>ubuntu:22.04</code> layers cached, pulling another image based on the same Ubuntu version reuses those layers entirely.</p>
+                            <div class="bias-tags">
+                                <span class="bias-tag">SHA256</span>
+                                <span class="bias-tag">Deduplication</span>
+                                <span class="bias-tag">Content-Addressable</span>
+                            </div>
+                        </div>
+
+                        <!-- Section 6: Layer Sharing & Deduplication -->
+                        <h2 id="layer-sharing">Layer Sharing & Deduplication</h2>
+
+                        <p>Layer sharing is one of Docker's most powerful efficiency features. When multiple images share the same base layers, those layers are stored only once on disk and shared across all images and containers that reference them.</p>
+
+                        <pre><code class="language-bash"># Check disk usage and shared layers
+docker system df -v
+# TYPE           TOTAL    ACTIVE   SIZE      RECLAIMABLE
+# Images         12       5        4.235GB   2.1GB (49%)
+# Containers     5        3        125.4MB   45.2MB (36%)
+# Local Volumes  8        4        890MB     445MB (50%)
+# Build Cache    23       0        1.2GB     1.2GB
+
+# Detailed image breakdown showing SHARED SIZE
+docker system df -v | head -20
+# REPOSITORY    TAG     IMAGE ID     CREATED    SIZE      SHARED SIZE   UNIQUE SIZE
+# myapp         latest  abc123       1h ago     450MB     350MB         100MB
+# nginx         latest  def456       2w ago     187MB     187MB         0B
+# node          18      ghi789       3w ago     350MB     74.8MB        275.2MB</code></pre>
+
+                        <pre><code class="language-bash"># Demonstrate layer sharing: pull two images with the same base
+docker pull node:18-slim
+# 18-slim: Pulling from library/node
+# bd159e379b3b: Already exists    ← Shared Debian layer!
+# 28b2c5b2ea8e: Pull complete     ← Node-specific layer
+# ...
+
+docker pull python:3.11-slim
+# 3.11-slim: Pulling from library/python
+# bd159e379b3b: Already exists    ← Same shared Debian layer!
+# a1b2c3d4e5f6: Pull complete     ← Python-specific layer
+# ...</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-chart-pie me-2"></i>
+                            <strong>Real-World Savings:</strong> In a typical microservices deployment with 20 services all based on <code>node:18-slim</code>, the base layer (~80 MB) is stored once, not 20 times. That's 80 MB on disk instead of 1.6 GB — a 95% saving on base layer storage. The same applies to container runtime memory: shared read-only layers use shared page cache entries, meaning the kernel caches the file data once for all containers accessing the same layer content.
+                        </div>
+
+                        <!-- Section 7: The Writable Container Layer -->
+                        <h2 id="writable-layer">The Writable Container Layer</h2>
+
+                        <p>When Docker creates a container from an image, it adds one thin writable layer on top of the image's read-only layers. This is called the <strong>container layer</strong> (or the <strong>diff</strong>). All filesystem modifications made by the running container — file writes, package installations, log files, temp files — are stored here and only here.</p>
+
+                        <pre><code class="language-bash"># Start a container and make changes
+docker run -d --name demo nginx:latest
+
+# Check the container's filesystem usage
+docker inspect demo --format '{{.GraphDriver.Data.UpperDir}}'
+# /var/lib/docker/overlay2/abc123.../diff
+
+# See what's in the writable layer (initially almost empty)
+sudo ls /var/lib/docker/overlay2/abc123.../diff/
+# (empty or minimal runtime files)
+
+# Now write some data inside the container
+docker exec demo sh -c 'echo "hello" > /tmp/myfile.txt'
+docker exec demo sh -c 'apt-get update > /dev/null 2>&1'
+
+# Check the writable layer again — all changes are here
+sudo ls /var/lib/docker/overlay2/abc123.../diff/
+# tmp/  var/
+
+sudo du -sh /var/lib/docker/overlay2/abc123.../diff/
+# 28M   (the apt-get update cached files)</code></pre>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-skull-crossbones me-2"></i>
+                            <strong>Ephemeral by Design:</strong> When a container is removed (<code>docker rm</code>), its writable layer is <strong>permanently deleted</strong>. Any data written to the container filesystem that isn't stored in a volume is gone forever. This is intentional — containers are designed to be disposable. Production applications should write persistent data to named volumes or bind mounts, never to the container layer.
+                        </div>
+
+                        <pre><code class="language-bash"># Prove the ephemeral nature
+docker run --name temp-demo alpine sh -c 'echo "important data" > /data.txt'
+docker start temp-demo  # restart to verify
+docker exec temp-demo cat /data.txt
+# important data  (still there — same container)
+
+docker rm temp-demo     # remove the container
+docker run --name temp-demo alpine cat /data.txt
+# cat: can't open '/data.txt': No such file or directory
+# The data is GONE — new container, new empty writable layer</code></pre>
+
+                        <!-- Section 8: Alternative Storage Drivers -->
+                        <h2 id="storage-drivers">Alternative Storage Drivers</h2>
+
+                        <p>While <code>overlay2</code> is the default and recommended storage driver for Docker, alternatives exist for specific use cases or legacy systems:</p>
+
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Driver</th>
+                                    <th>Status</th>
+                                    <th>Backing Filesystem</th>
+                                    <th>Key Feature</th>
+                                    <th>Limitation</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>overlay2</strong></td>
+                                    <td>Default, recommended</td>
+                                    <td>ext4, xfs</td>
+                                    <td>In-kernel, no patches needed, fast</td>
+                                    <td>Limited to 128 lower layers</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>AUFS</strong></td>
+                                    <td>Deprecated (removed in Docker 24+)</td>
+                                    <td>ext4, xfs</td>
+                                    <td>First union FS Docker used; mature</td>
+                                    <td>Not in mainline kernel; requires patches</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>btrfs</strong></td>
+                                    <td>Supported</td>
+                                    <td>btrfs only</td>
+                                    <td>Native snapshots, compression, checksumming</td>
+                                    <td>Requires btrfs filesystem on host</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>zfs</strong></td>
+                                    <td>Supported</td>
+                                    <td>ZFS only</td>
+                                    <td>Enterprise features: dedup, compression, snapshots</td>
+                                    <td>Heavy memory usage; complex setup</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>devicemapper</strong></td>
+                                    <td>Deprecated</td>
+                                    <td>Block device</td>
+                                    <td>Works without specific filesystem requirements</td>
+                                    <td>Complex, slower, loopback mode unreliable</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>fuse-overlayfs</strong></td>
+                                    <td>Rootless mode</td>
+                                    <td>Any</td>
+                                    <td>Works in user namespaces (rootless Docker)</td>
+                                    <td>Slower than kernel overlay2 (FUSE overhead)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <pre><code class="language-bash"># Check which storage driver Docker is currently using
+docker info --format '{{.Driver}}'
+# overlay2
+
+# View detailed storage driver information
+docker info | grep -A5 "Storage Driver"
+# Storage Driver: overlay2
+#  Backing Filesystem: extfs
+#  Supports d_type: true
+#  Using metacopy: false
+#  Native Overlay Diff: true
+#  userxattr: false</code></pre>
+
+                        <pre><code class="language-json">// Configure storage driver in /etc/docker/daemon.json
+{
+    "storage-driver": "overlay2",
+    "storage-opts": [
+        "overlay2.override_kernel_check=true",
+        "overlay2.size=20G"
+    ]
+}</code></pre>
+
+                        <!-- Section 9: Performance Implications -->
+                        <h2 id="performance">Performance Implications</h2>
+
+                        <p>Understanding the performance characteristics of union filesystems is essential for building efficient container images and running performant containers:</p>
+
+                        <h3>Read Performance</h3>
+
+                        <p><strong>Reads are fast</strong> — almost as fast as native filesystem access. When reading a file from a lower layer, OverlayFS passes through directly to the underlying filesystem with minimal overhead. The kernel page cache still works normally, so frequently-accessed files remain cached in memory.</p>
+
+                        <h3>Write Performance (Copy-Up Cost)</h3>
+
+                        <p>The <strong>first write</strong> to a lower-layer file incurs the copy-up penalty. Subsequent writes to the same file are fast (writing directly to the upper layer copy). The cost depends on file size:</p>
+
+                        <ul>
+                            <li><strong>Small files</strong> (configs, scripts): Copy-up is near-instantaneous</li>
+                            <li><strong>Large files</strong> (databases, logs): Copy-up can be expensive (must copy entire file)</li>
+                            <li><strong>Very large files</strong> (500 MB+ data files): Severe penalty — this is why volumes exist</li>
+                        </ul>
+
+                        <h3>Delete Performance (Whiteouts)</h3>
+
+                        <p>Deletions create tiny whiteout files — nearly free in terms of I/O. However, whiteouts do consume inode entries, and excessive whiteouts in deeply layered images can slow directory listings.</p>
+
+                        <h3>Best Practices for Dockerfile Ordering</h3>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-rocket me-2"></i>
+                            <strong>Layer Ordering Rule:</strong> Place instructions that change <em>least frequently</em> at the top of your Dockerfile, and instructions that change <em>most frequently</em> at the bottom. This maximises layer cache reuse during rebuilds. Since Docker invalidates all layers after the first changed layer, a change in an early layer forces all subsequent layers to rebuild.
+                        </div>
+
+                        <pre><code class="language-docker"># BAD: Copying source code (changes often) before installing deps (changes rarely)
+FROM node:18-slim
+COPY . /app                    # ← Changes every commit
+RUN npm install                # ← Forced to reinstall every time!
+CMD ["node", "server.js"]
+
+# GOOD: Install dependencies first (cached), copy source last
+FROM node:18-slim
+COPY package*.json /app/       # ← Changes only when deps change
+RUN npm install                # ← Cached on most rebuilds!
+COPY . /app                    # ← Only this layer rebuilds on code changes
+CMD ["node", "server.js"]</code></pre>
+
+                        <pre><code class="language-docker"># GOOD: Combine RUN commands to minimize layers and reduce image size
+FROM ubuntu:22.04
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        nginx \
+        curl \
+        ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+# Single layer: install + cleanup = smaller image
+
+# BAD: Separate RUN commands (cleanup doesn't help — data is in earlier layer)
+FROM ubuntu:22.04
+RUN apt-get update
+RUN apt-get install -y nginx curl ca-certificates
+RUN rm -rf /var/lib/apt/lists/*
+# Three layers: the rm only hides files with whiteouts, doesn't recover space!</code></pre>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal"><i class="fas fa-exclamation-circle me-1"></i>Common Mistake</span>
+                            </div>
+                            <h4>The "Delete Doesn't Save Space" Trap</h4>
+                            <p>A frequent mistake by Docker beginners is believing that deleting files in a later <code>RUN</code> instruction reduces image size. It doesn't — it creates whiteout markers that <em>hide</em> the files but the original layer still contains them. The only way to truly save space is to combine the install and cleanup in the <strong>same</strong> <code>RUN</code> instruction.</p>
+                            <pre><code class="language-bash"># Prove it: build these two Dockerfiles and compare sizes
+# Version A: separate layers
+echo 'FROM ubuntu:22.04
+RUN dd if=/dev/zero of=/bigfile bs=1M count=100
+RUN rm /bigfile' | docker build -t test-separate -
+docker image ls test-separate
+# REPOSITORY      TAG     SIZE
+# test-separate   latest  278MB  (100MB wasted!)
+
+# Version B: single layer
+echo 'FROM ubuntu:22.04
+RUN dd if=/dev/zero of=/bigfile bs=1M count=100 && rm /bigfile' | docker build -t test-combined -
+docker image ls test-combined
+# REPOSITORY      TAG     SIZE
+# test-combined   latest  78MB   (no waste!)</code></pre>
+                            <div class="bias-tags">
+                                <span class="bias-tag">Image Size</span>
+                                <span class="bias-tag">Layer Bloat</span>
+                                <span class="bias-tag">Best Practice</span>
+                            </div>
+                        </div>
+
+                        <!-- Section 10: Exercises -->
+                        <h2 id="exercises">Exercises</h2>
+
+                        <ol>
+                            <li><strong>Manual OverlayFS Experiment</strong> — On a Linux system (or VM), create an OverlayFS mount as shown in this article. Create files in the lower layer, modify them through the merged view, and verify that the lower layer remains unchanged. Create a file in the merged view, then find it in the upper layer. Delete a lower-layer file and inspect the whiteout character device.</li>
+                            <li><strong>Layer Inspection Challenge</strong> — Pull the <code>nginx:latest</code> image and use <code>docker history</code> and <code>docker image inspect</code> to document every layer, its size, and the instruction that created it. Then navigate to <code>/var/lib/docker/overlay2/</code> and find the actual directories on disk. Browse the <code>diff/</code> contents of each layer to see what files were added.</li>
+                            <li><strong>Layer Sharing Test</strong> — Pull both <code>python:3.11-slim</code> and <code>node:18-slim</code> (both based on Debian). Run <code>docker system df -v</code> and identify the shared layers. Calculate the actual disk savings from layer deduplication versus storing each image independently.</li>
+                            <li><strong>Image Size Optimisation</strong> — Write a Dockerfile that installs <code>build-essential</code> (to compile something), compiles a simple C program, then removes <code>build-essential</code>. First write it with separate <code>RUN</code> instructions, then rewrite as a single <code>RUN</code>. Compare the final image sizes and document the difference. Finally, use a multi-stage build (preview of Part 8) for maximum efficiency.</li>
+                        </ol>
+
+                        <!-- Conclusion -->
+                        <h2 id="conclusion">Conclusion & Next Steps</h2>
+
+                        <p>Union file systems and copy-on-write semantics are the third pillar of container technology (alongside namespaces and cgroups). They solve the fundamental storage challenge: giving each container its own writeable filesystem without the overhead of full copies.</p>
+
+                        <p>Key takeaways from this article:</p>
+
+                        <ul>
+                            <li>Union filesystems merge multiple directory trees into a single unified view using layers</li>
+                            <li>OverlayFS is the default storage driver — it uses lowerdir (read-only layers), upperdir (writable), workdir (scratch), and merged (unified view)</li>
+                            <li>Copy-on-write means reads are cheap (passthrough), first writes have a copy-up cost, and deletes create whiteout markers</li>
+                            <li>Docker images are ordered stacks of read-only layers identified by SHA256 content hashes</li>
+                            <li>Layer sharing means the same base image stored once serves unlimited containers</li>
+                            <li>The container layer is ephemeral — use volumes for persistent data</li>
+                            <li>Dockerfile instruction ordering critically affects build cache performance and image size</li>
+                        </ul>
+
+                        <p>With namespaces (isolation), cgroups (resource limits), and union filesystems (efficient storage) understood, you now have a complete picture of the Linux kernel primitives that power containers. In Part 5, we'll rise above these primitives to explore the <strong>Docker architecture</strong> — how the CLI, daemon, containerd, and runc orchestrate all these kernel features into a usable platform.</p>
+
+                        <!-- Next in Series -->
+                        <div class="series-next">
+                            <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                            <p>In <a href="containers-docker-part05-docker-architecture.html"><strong>Part 5: Docker Architecture & Core Concepts</strong></a>, we will explore how Docker Engine's components — CLI, daemon, containerd, and runc — work together to transform kernel primitives into the container platform you use daily.</p>
+                        </div>
+
+                        <!-- Related Posts -->
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 3: Control Groups — Resource Management</h5>
+                                <p class="text-muted small mb-2">Master Linux cgroups for CPU, memory, I/O, and process limits — the resource budgeting backbone of containers.</p>
+                                <a href="containers-docker-part03-control-groups.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 5: Docker Architecture & Core Concepts</h5>
+                                <p class="text-muted small mb-2">Explore the Docker Engine — CLI, daemon, containerd, runc — and how kernel primitives become a usable platform.</p>
+                                <a href="containers-docker-part05-docker-architecture.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5 class="mb-2">Part 7: Dockerfile Fundamentals</h5>
+                                <p class="text-muted small mb-2">Learn how FROM, RUN, COPY, CMD, and ENTRYPOINT create image layers and define container behaviour.</p>
+                                <a href="containers-docker-part07-dockerfile-fundamentals.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                        <!-- Series Navigation -->
+                        <div class="series-nav">
+                            <a href="containers-docker-part03-control-groups.html" class="series-nav-item prev">
+                                <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span>
+                                <span class="nav-title">Part 3: Control Groups</span>
+                            </a>
+                            <a href="containers-docker-part05-docker-architecture.html" class="series-nav-item next">
+                                <span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span>
+                                <span class="nav-title">Part 5: Docker Architecture</span>
+                            </a>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left">
+                    <div class="fc-brand-group">
+                        <div class="fc-brand-stack"><span></span><span></span><span></span></div>
+                        <span class="fc-brand-name">Wasil Zafar</span>
+                    </div>
+                    <span class="fc-tagline">Consultant &amp; Cloud Architect</span>
+                </div>
+                <div class="fc-center">
+                    <a href="/">Home</a>
+                    <a href="/disclaimer.html">Disclaimer</a>
+                    <a href="/privacy-policy.html">Privacy</a>
+                    <a href="/pages/contact.html">Contact</a>
+                </div>
+                <div class="fc-right">
+                    <a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a>
+                    <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>
+                    <a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                    <a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a>
+                    <a href="/feed.xml" target="_blank" title="RSS Feed"><i class="fas fa-rss"></i></a>
+                </div>
+            </div>
+            <div class="footer-sub">
+                <span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span>
+                <a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Cookie Consent JS -->
+    <script src="../../../js/cookie-consent.js"></script>
+    <!-- Main JS -->
+    <script src="../../../js/main.js"></script>
+    <!-- Fuse.js Search -->
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <!-- PrismJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-docker.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <!-- Mermaid.js -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <!-- Learning Paths Progress -->
+    <script src="../../../js/path-progress.js"></script>
+    <!-- Quiz Widget -->
+    <script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" /><meta http-equiv="X-UA-Compatible" content="IE=edge" /><meta name="robots" content="index, follow" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="How containers actually work under the hood — Linux namespaces, cgroups, OverlayFS, seccomp, building a container from scratch with unshare, and how Docker puts it all together." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="containers, Linux namespaces, cgroups, OverlayFS, Docker internals, unshare, container runtime, OCI, seccomp, rootfs, container from scratch" />
+    <meta property="og:title" content="Part 21: How Containers Actually Work — Namespaces & cgroups" />
+    <meta property="og:description" content="Containers are not VMs — they're processes with isolation. Learn the Linux kernel features that make containers possible: namespaces, cgroups, OverlayFS, and seccomp." />
+    <meta property="og:type" content="article" /><meta property="article:published_time" content="2026-05-13" /><meta property="article:author" content="Wasil Zafar" /><meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/computing-systems-foundations/computing-systems-foundations-part21-containers.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/computing-systems-foundations/computing-systems-foundations-part21-containers-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/computing-systems-foundations/computing-systems-foundations-part21-containers-tw.jpg" />
+    <title>Part 21: How Containers Actually Work — Namespaces &amp; cgroups - Computing &amp; Systems Foundations</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/computing-systems-foundations/computing-systems-foundations-part21-containers.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png"><link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{'ad_storage':'denied','analytics_storage':'denied','region':['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']});gtag('consent','default',{'ad_storage':'granted','analytics_storage':'granted'});gtag('set','url_passthrough',true);</script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <div id="cookieBanner" class="light display-bottom" style="display:none;"><div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div><div class="content-wrap"><div class="msg-wrap"><div class="title-wrap"><h4 style="margin:0;font-size:18px;color:var(--color-navy);font-weight:700;">Cookie Consent</h4></div><p style="font-size:14px;color:var(--color-navy);margin-bottom:15px;">We use cookies. See our <a href="/privacy-policy.html" style="color:var(--color-teal);">Privacy Policy</a>.</p><div id="cookieSettings" style="display:none;"></div><div id="cookieTypes" style="display:none;"></div></div><div class="btn-wrap"><button id="cookieAccept">Accept All</button><button id="cookieReject">Reject All</button><button id="cookieSave" style="display:none;">Save</button></div></div></div>
+    <div class="nav-v16-wrapper"><nav class="nav-v16"><a href="/" class="brand"><div class="brand-stack"><span></span><span></span><span></span></div><span class="brand-text">Wasil Zafar</span></a><button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()"><span></span><span></span><span></span></button><div class="links"><a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a><a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a><a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a><a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a><a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a><button class="nav-search-btn" onclick="openSearch()" aria-label="Search"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button></div></nav></div>
+
+    <section class="blog-hero">
+        <div class="container py-5"><div class="blog-header">
+            <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Computing &amp; Systems Foundations Series</a>
+            <h1 class="display-4 fw-bold mb-3">Part 21: How Containers Actually Work — Namespaces &amp; cgroups</h1>
+            <div class="blog-meta"><span><i class="fas fa-calendar me-2"></i>May 13, 2026</span><span><i class="fas fa-user me-2"></i>Wasil Zafar</span><span class="reading-time"><i class="fas fa-clock me-1"></i>20 min read</span><button onclick="window.print()" class="print-btn"><i class="fas fa-print"></i> Print</button></div>
+            <p class="lead">Containers are not VMs — they're processes with kernel-enforced isolation. Understand the Linux primitives that make containers possible: namespaces, cgroups, OverlayFS, and seccomp.</p>
+        </div></div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc"><div class="toc-header"><h3><i class="fas fa-list me-2"></i>Table of Contents</h3><button class="closebtn" onclick="closeNav()">&times;</button></div>
+        <ol>
+            <li><a href="#containers-vs-vms" onclick="closeNav()">Containers vs VMs</a></li>
+            <li><a href="#namespaces" onclick="closeNav()">Linux Namespaces</a><ul><li><a href="#pid-namespace" onclick="closeNav()">PID Namespace</a></li><li><a href="#net-namespace" onclick="closeNav()">NET Namespace</a></li><li><a href="#mnt-namespace" onclick="closeNav()">MNT Namespace</a></li><li><a href="#uts-namespace" onclick="closeNav()">UTS Namespace</a></li><li><a href="#ipc-namespace" onclick="closeNav()">IPC Namespace</a></li><li><a href="#user-namespace" onclick="closeNav()">USER Namespace</a></li><li><a href="#cgroup-namespace" onclick="closeNav()">CGROUP Namespace</a></li></ul></li>
+            <li><a href="#cgroups" onclick="closeNav()">cgroups — Resource Limits</a><ul><li><a href="#cpu-limits" onclick="closeNav()">CPU Limits</a></li><li><a href="#memory-limits" onclick="closeNav()">Memory Limits</a></li><li><a href="#io-limits" onclick="closeNav()">I/O Limits</a></li></ul></li>
+            <li><a href="#overlayfs" onclick="closeNav()">OverlayFS — The Container Filesystem</a></li>
+            <li><a href="#from-scratch" onclick="closeNav()">Building a Container from Scratch</a></li>
+            <li><a href="#docker-architecture" onclick="closeNav()">Docker Architecture</a><ul><li><a href="#containerd-runc" onclick="closeNav()">containerd, runc, OCI</a></li></ul></li>
+            <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5"><div class="container"><div class="row"><div class="col-lg-8 mx-auto"><div class="blog-content">
+
+        <h2 id="containers-vs-vms">Containers vs VMs</h2>
+        <p>A <strong>virtual machine</strong> emulates an entire hardware stack — each VM runs its own kernel, its own OS, its own init system. A <strong>container</strong> is just a regular Linux process with restricted visibility and limited resources, sharing the host kernel. This distinction explains why containers start in milliseconds (no boot sequence) and use megabytes of overhead (no guest kernel).</p>
+
+        <div class="mermaid-container">
+            <div class="mermaid-label">VMs vs Containers — Architecture Comparison</div>
+            <pre class="mermaid">
+flowchart TD
+    subgraph VM["Virtual Machine"]
+        VA[App A] --> GOS1[Guest OS]
+        VB[App B] --> GOS2[Guest OS]
+        GOS1 --> HV[Hypervisor]
+        GOS2 --> HV
+        HV --> HOS1[Host OS]
+        HOS1 --> HW1[Hardware]
+    end
+
+    subgraph CT["Container"]
+        CA[App A] --> CR[Container Runtime]
+        CB[App B] --> CR
+        CR --> HOS2[Host OS / Shared Kernel]
+        HOS2 --> HW2[Hardware]
+    end
+            </pre>
+        </div>
+
+        <div class="highlight-box">
+            <i class="fas fa-lightbulb me-2"></i>
+            <strong>Key Insight:</strong> Containers share the host kernel. This means a kernel exploit inside a container can compromise the host. VMs provide stronger isolation because the hypervisor mediates all hardware access through a separate kernel. Choose VMs for multi-tenant workloads requiring hard security boundaries; choose containers for fast, lightweight deployment where you control the workload.
+        </div>
+
+        <h2 id="namespaces">Linux Namespaces</h2>
+        <p><strong>Namespaces</strong> partition kernel resources so that one set of processes sees one set of resources, and another set sees a different set. Each container gets its own namespaces — its own PID tree, its own network stack, its own filesystem mounts — while the kernel remains shared.</p>
+
+        <table class="table table-bordered table-sm">
+            <thead class="table-dark"><tr><th>Namespace</th><th>Isolates</th><th>Kernel Flag</th><th>Effect</th></tr></thead>
+            <tbody>
+                <tr><td><strong>PID</strong></td><td>Process IDs</td><td><code>CLONE_NEWPID</code></td><td>Container's init is PID 1; host PIDs invisible</td></tr>
+                <tr><td><strong>NET</strong></td><td>Network stack</td><td><code>CLONE_NEWNET</code></td><td>Own interfaces, IPs, routes, iptables rules</td></tr>
+                <tr><td><strong>MNT</strong></td><td>Mount points</td><td><code>CLONE_NEWNS</code></td><td>Own filesystem tree; host mounts invisible</td></tr>
+                <tr><td><strong>UTS</strong></td><td>Hostname &amp; domain</td><td><code>CLONE_NEWUTS</code></td><td>Container has its own hostname</td></tr>
+                <tr><td><strong>IPC</strong></td><td>System V IPC, POSIX MQs</td><td><code>CLONE_NEWIPC</code></td><td>Shared memory / semaphores isolated per container</td></tr>
+                <tr><td><strong>USER</strong></td><td>UIDs / GIDs</td><td><code>CLONE_NEWUSER</code></td><td>UID 0 inside maps to unprivileged UID on host</td></tr>
+                <tr><td><strong>CGROUP</strong></td><td>cgroup root view</td><td><code>CLONE_NEWCGROUP</code></td><td>Container sees its own cgroup as the root</td></tr>
+            </tbody>
+        </table>
+
+        <h3 id="pid-namespace">PID Namespace</h3>
+<pre><code class="language-bash"># Create a new PID namespace — the process inside sees itself as PID 1
+sudo unshare --pid --fork --mount-proc bash -c '
+    echo "My PID: $$"
+    echo "Processes visible:"
+    ps aux
+'
+# Output: PID 1 is bash — it cannot see host processes
+
+# View namespaces of a running process
+ls -la /proc/self/ns/
+# Shows: cgroup, ipc, mnt, net, pid, pid_for_children, user, uts
+
+# Compare namespaces of two processes
+sudo readlink /proc/1/ns/pid       # Host init PID namespace
+sudo readlink /proc/$(pgrep dockerd)/ns/pid  # dockerd's namespace (same as host)
+</code></pre>
+
+        <h3 id="net-namespace">NET Namespace</h3>
+<pre><code class="language-bash"># Create an isolated network namespace
+sudo ip netns add mycontainer
+
+# List network namespaces
+ip netns list
+
+# Run a command inside the network namespace
+sudo ip netns exec mycontainer ip link show
+# Only sees: lo (loopback) — no eth0, no host interfaces
+
+# Create a veth pair to connect namespaces
+sudo ip link add veth-host type veth peer name veth-ct
+sudo ip link set veth-ct netns mycontainer
+
+# Assign IPs
+sudo ip addr add 10.0.0.1/24 dev veth-host
+sudo ip link set veth-host up
+sudo ip netns exec mycontainer ip addr add 10.0.0.2/24 dev veth-ct
+sudo ip netns exec mycontainer ip link set veth-ct up
+sudo ip netns exec mycontainer ip link set lo up
+
+# Ping across namespaces
+ping -c 1 10.0.0.2   # Works! Traffic flows over the veth pair
+
+# Cleanup
+sudo ip netns del mycontainer
+</code></pre>
+
+        <h3 id="mnt-namespace">MNT Namespace</h3>
+<pre><code class="language-bash"># Mount namespace gives the process its own filesystem view
+sudo unshare --mount bash -c '
+    # Mounts here are invisible to the host
+    mount -t tmpfs tmpfs /tmp
+    echo "secret" > /tmp/hidden.txt
+    cat /tmp/hidden.txt   # "secret" — only visible in this namespace
+    mount | grep tmpfs | tail -3
+'
+# After exit: /tmp/hidden.txt does not exist on the host
+</code></pre>
+
+        <h3 id="uts-namespace">UTS Namespace</h3>
+<pre><code class="language-bash"># UTS namespace isolates hostname
+sudo unshare --uts bash -c '
+    hostname mycontainer
+    echo "Inside: $(hostname)"
+'
+echo "Host: $(hostname)"
+# Container sees "mycontainer", host is unchanged
+</code></pre>
+
+        <h3 id="ipc-namespace">IPC Namespace</h3>
+<pre><code class="language-bash"># IPC namespace isolates System V shared memory, semaphores, message queues
+sudo unshare --ipc bash -c '
+    ipcs -a    # Empty — no IPC objects visible from host
+    # Create a shared memory segment (only visible in this namespace)
+    ipcmk -M 1024
+    ipcs -m    # Shows the new segment
+'
+ipcs -m    # Host does not see the segment created inside
+</code></pre>
+
+        <h3 id="user-namespace">USER Namespace</h3>
+<pre><code class="language-bash"># User namespace remaps UIDs — root inside ≠ root outside
+unshare --user --map-root-user bash -c '
+    echo "Inside I am: $(whoami) (UID=$(id -u))"
+    cat /proc/self/uid_map
+    # 0  1000  1 — UID 0 inside maps to UID 1000 on host
+'
+echo "Outside I am: $(whoami) (UID=$(id -u))"
+</code></pre>
+
+        <h3 id="cgroup-namespace">CGROUP Namespace</h3>
+<pre><code class="language-bash"># Cgroup namespace makes the process see its cgroup as the root
+# Without it, container processes can see the full cgroup hierarchy
+cat /proc/self/cgroup   # Shows full path on host
+
+sudo unshare --cgroup bash -c '
+    cat /proc/self/cgroup   # Shows "/" — thinks it is at the root
+'
+</code></pre>
+
+        <h2 id="cgroups">cgroups — Resource Limits</h2>
+        <p><strong>Control groups (cgroups)</strong> limit, account for, and isolate the resource usage of process groups. While namespaces control <em>what</em> a process can see, cgroups control <em>how much</em> it can use. Linux uses cgroups v2 (unified hierarchy) on modern systems.</p>
+
+        <h3 id="cpu-limits">CPU Limits</h3>
+<pre><code class="language-bash"># cgroups v2: limit a process to 50% of one CPU core
+# Create a cgroup
+sudo mkdir -p /sys/fs/cgroup/mycontainer
+
+# Set CPU limit: 50ms out of every 100ms period = 50% of one core
+echo "50000 100000" | sudo tee /sys/fs/cgroup/mycontainer/cpu.max
+
+# Move current shell into the cgroup
+echo $$ | sudo tee /sys/fs/cgroup/mycontainer/cgroup.procs
+
+# Verify — run a CPU-intensive task and observe throttling
+stress --cpu 1 --timeout 5 &
+cat /sys/fs/cgroup/mycontainer/cpu.stat
+# throttled_usec shows time the process was throttled
+
+# Docker equivalent:
+# docker run --cpus=0.5 ubuntu stress --cpu 1 --timeout 5
+</code></pre>
+
+        <h3 id="memory-limits">Memory Limits</h3>
+<pre><code class="language-bash"># Limit memory to 100MB
+echo "104857600" | sudo tee /sys/fs/cgroup/mycontainer/memory.max
+
+# View current memory usage
+cat /sys/fs/cgroup/mycontainer/memory.current
+
+# View OOM kill count
+cat /sys/fs/cgroup/mycontainer/memory.events
+# oom_kill shows how many times the OOM killer triggered
+
+# Set memory.high for throttling before hard kill
+echo "83886080" | sudo tee /sys/fs/cgroup/mycontainer/memory.high
+# At 80MB: kernel reclaims aggressively (slow but alive)
+# At 100MB (memory.max): OOM kill
+
+# Docker equivalent:
+# docker run --memory=100m --memory-reservation=80m ubuntu
+</code></pre>
+
+        <h3 id="io-limits">I/O Limits</h3>
+<pre><code class="language-bash"># Limit disk I/O to 10MB/s write on device 8:0 (sda)
+echo "8:0 wbps=10485760" | sudo tee /sys/fs/cgroup/mycontainer/io.max
+
+# View I/O statistics for the cgroup
+cat /sys/fs/cgroup/mycontainer/io.stat
+# Shows: rbytes, wbytes, rios, wios, dbytes, dios
+
+# Docker equivalent:
+# docker run --device-write-bps /dev/sda:10mb ubuntu dd if=/dev/zero of=/tmp/test bs=1M count=100
+</code></pre>
+
+        <h2 id="overlayfs">OverlayFS — The Container Filesystem</h2>
+        <p><strong>OverlayFS</strong> is a union filesystem that layers a writable <em>upper</em> directory on top of read-only <em>lower</em> directories. Container images are stacks of read-only layers; when a container writes a file, the change goes to the upper (container-specific) layer without modifying the image layers below. This enables efficient sharing — 100 containers from the same image share the same lower layers on disk.</p>
+
+<pre><code class="language-bash"># Create an OverlayFS manually — simulating how Docker layers work
+mkdir -p /tmp/overlay/{lower,upper,work,merged}
+
+# Populate the "base image" layer
+echo "I am from the image" > /tmp/overlay/lower/base.txt
+echo "config=default" > /tmp/overlay/lower/config.txt
+
+# Mount the overlay
+sudo mount -t overlay overlay \
+    -o lowerdir=/tmp/overlay/lower,upperdir=/tmp/overlay/upper,workdir=/tmp/overlay/work \
+    /tmp/overlay/merged
+
+# The merged view shows the lower layer contents
+cat /tmp/overlay/merged/base.txt      # "I am from the image"
+cat /tmp/overlay/merged/config.txt    # "config=default"
+
+# Write a new file — goes to the upper layer only
+echo "container data" > /tmp/overlay/merged/new.txt
+ls /tmp/overlay/upper/   # new.txt exists here (copy-up on write)
+
+# Modify an existing file — copy-up: original stays in lower, copy in upper
+echo "config=custom" > /tmp/overlay/merged/config.txt
+cat /tmp/overlay/lower/config.txt   # Still "config=default" (unchanged)
+cat /tmp/overlay/upper/config.txt   # "config=custom" (the overlay)
+
+# Cleanup
+sudo umount /tmp/overlay/merged
+rm -rf /tmp/overlay
+</code></pre>
+
+        <h2 id="from-scratch">Building a Container from Scratch</h2>
+        <p>A "container" is nothing more than: (1) namespaces for isolation, (2) a root filesystem, (3) cgroups for resource limits, and (4) seccomp/capabilities for syscall filtering. Let's build one with basic Linux tools.</p>
+
+        <div class="experiment-card">
+            <div class="experiment-meta"><span class="badge bg-teal"><i class="fas fa-flask me-1"></i>Hands-On Lab</span></div>
+            <h4>From unshare to Docker — Building a Container by Hand</h4>
+            <p>This step-by-step lab creates a minimal container using only Linux syscalls and command-line tools — no Docker required. You'll create namespaces, set up a root filesystem, mount <code>/proc</code>, configure cgroups, and exec into the isolated environment. This is exactly what <code>runc</code> does under the hood.</p>
+            <div class="bias-tags"><span class="bias-tag">unshare</span><span class="bias-tag">chroot</span><span class="bias-tag">cgroups</span><span class="bias-tag">namespaces</span></div>
+        </div>
+
+<pre><code class="language-bash"># Step 1: Download a minimal rootfs (Alpine Linux — ~3MB)
+mkdir -p /tmp/mycontainer/rootfs
+cd /tmp/mycontainer
+curl -sL https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86_64/alpine-minirootfs-3.19.1-x86_64.tar.gz \
+    | tar -xz -C rootfs
+
+# Step 2: Create cgroup for resource limits
+sudo mkdir -p /sys/fs/cgroup/mycontainer
+echo "50000 100000" | sudo tee /sys/fs/cgroup/mycontainer/cpu.max    # 50% CPU
+echo "67108864" | sudo tee /sys/fs/cgroup/mycontainer/memory.max     # 64MB RAM
+
+# Step 3: Launch with all namespaces isolated
+sudo unshare \
+    --pid \
+    --net \
+    --mount \
+    --uts \
+    --ipc \
+    --cgroup \
+    --fork \
+    bash -c '
+        # Step 4: Move into our cgroup
+        echo $$ > /sys/fs/cgroup/mycontainer/cgroup.procs
+
+        # Step 5: Set hostname
+        hostname mycontainer
+
+        # Step 6: Set up the rootfs
+        mount --bind rootfs rootfs
+        cd rootfs
+
+        # Step 7: Mount essential filesystems
+        mount -t proc proc proc/
+        mount -t sysfs sys sys/
+        mount -t tmpfs tmp tmp/
+
+        # Step 8: Pivot into the new root
+        mkdir -p .old_root
+        pivot_root . .old_root
+        cd /
+        umount -l /.old_root
+        rmdir /.old_root
+
+        # Step 9: We are now "inside" the container
+        echo "Hostname: $(hostname)"
+        echo "PID: $$"
+        echo "Processes:"
+        ps aux
+        echo "Filesystem:"
+        ls /
+        echo "Memory limit:"
+        cat /sys/fs/cgroup/memory.max 2>/dev/null || echo "(cgroup ns)"
+    '
+
+# Cleanup
+sudo rmdir /sys/fs/cgroup/mycontainer 2>/dev/null
+rm -rf /tmp/mycontainer
+</code></pre>
+
+        <div class="highlight-box highlight-crimson">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Never Run Containers as --privileged:</strong> The <code>--privileged</code> flag disables all security restrictions — it gives the container full access to all host devices, disables seccomp filtering, grants all Linux capabilities, and removes AppArmor/SELinux confinement. A process inside a <code>--privileged</code> container can mount the host filesystem, load kernel modules, and escape trivially. Use <code>--cap-add</code> to grant only the specific capabilities needed, and <code>--security-opt seccomp=profile.json</code> for fine-grained syscall filtering.
+        </div>
+
+        <h2 id="docker-architecture">Docker Architecture</h2>
+        <p>Docker is not a monolith — it's a stack of components following the <strong>OCI (Open Container Initiative)</strong> specification. Understanding the layers helps you debug container issues and choose alternatives (Podman, containerd+nerdctl, CRI-O).</p>
+
+        <div class="mermaid-container">
+            <div class="mermaid-label">Docker Architecture — Component Stack</div>
+            <pre class="mermaid">
+flowchart TD
+    CLI["docker CLI"] -->|REST API| D["dockerd\n(Docker daemon)"]
+    D -->|gRPC| CTD["containerd\n(container lifecycle)"]
+    CTD -->|OCI spec| SHIM["containerd-shim"]
+    SHIM -->|fork/exec| RUNC["runc\n(OCI runtime)"]
+    RUNC -->|clone() + namespaces\n+ cgroups + pivot_root| CP["Container Process\n(your app)"]
+
+    CTD -.->|Image pull/push| REG["Registry\n(Docker Hub, ECR, etc.)"]
+    CTD -.->|Snapshots| OFS["OverlayFS\n(image layers)"]
+            </pre>
+        </div>
+
+        <h3 id="containerd-runc">containerd, runc, OCI</h3>
+        <p><strong>containerd</strong> manages the full container lifecycle: image pull, storage (snapshots), container creation, and task execution. <strong>runc</strong> is the low-level OCI runtime that actually creates the Linux namespaces, sets up cgroups, and execs the container process. The <strong>OCI runtime spec</strong> defines a JSON config (<code>config.json</code>) that any runtime can consume — this is why runc, crun, youki, and gVisor are interchangeable.</p>
+
+<pre><code class="language-bash"># See what Docker uses under the hood
+docker info | grep -E "Runtime|Storage|Cgroup"
+# Default Runtime: runc
+# Storage Driver: overlay2
+# Cgroup Driver: systemd (or cgroupfs)
+
+# Inspect a container's namespaces and cgroups
+CONTAINER_ID=$(docker run -d --name test-ns alpine sleep 3600)
+PID=$(docker inspect --format '{{.State.Pid}}' $CONTAINER_ID)
+
+# View the container's namespaces
+sudo ls -la /proc/$PID/ns/
+# cgroup, ipc, mnt, net, pid, user, uts — all different from host
+
+# View its cgroup
+cat /proc/$PID/cgroup
+# 0::/system.slice/docker-<id>.scope (systemd) or /docker/<id> (cgroupfs)
+
+# View resource limits set by Docker
+cat /sys/fs/cgroup/system.slice/docker-${CONTAINER_ID}*/memory.max
+cat /sys/fs/cgroup/system.slice/docker-${CONTAINER_ID}*/cpu.max
+
+# Enter a container's namespaces with nsenter
+sudo nsenter --target $PID --pid --net --mount -- ps aux
+# You see only the container's processes
+
+# Cleanup
+docker rm -f test-ns
+</code></pre>
+
+<pre><code class="language-bash"># Use runc directly (bypassing Docker entirely)
+mkdir -p /tmp/oci-bundle/rootfs
+cd /tmp/oci-bundle
+
+# Create a rootfs
+docker export $(docker create alpine) | tar -C rootfs -xf -
+
+# Generate OCI config.json
+runc spec
+
+# View the generated config (namespaces, mounts, cgroups defined here)
+cat config.json | python3 -m json.tool | head -50
+# "namespaces": [{"type": "pid"}, {"type": "network"}, ...]
+# "linux": {"resources": {"memory": {"limit": ...}}}
+
+# Run the container with runc
+sudo runc run my-container
+# You're now inside an OCI container — no Docker needed
+
+# Cleanup
+sudo runc delete my-container
+rm -rf /tmp/oci-bundle
+</code></pre>
+
+        <h2 id="exercises">Exercises</h2>
+<pre><code class="language-bash"># Exercise 1: Create a PID namespace and verify isolation
+sudo unshare --pid --fork --mount-proc ps aux
+# You should see only 2 processes: unshare and ps
+
+# Exercise 2: View namespaces of a Docker container
+docker run -d --name ex-ns alpine sleep 60
+docker inspect --format '{{.State.Pid}}' ex-ns | xargs -I{} sudo ls -la /proc/{}/ns/
+docker rm -f ex-ns
+
+# Exercise 3: Set a memory limit with cgroups v2
+sudo mkdir -p /sys/fs/cgroup/exercise
+echo "52428800" | sudo tee /sys/fs/cgroup/exercise/memory.max   # 50MB
+echo $$ | sudo tee /sys/fs/cgroup/exercise/cgroup.procs
+cat /sys/fs/cgroup/exercise/memory.current
+# Move back: echo $$ | sudo tee /sys/fs/cgroup/cgroup.procs
+sudo rmdir /sys/fs/cgroup/exercise
+
+# Exercise 4: Create an OverlayFS and test copy-on-write
+mkdir -p /tmp/ex-ov/{lower,upper,work,merged}
+echo "original" > /tmp/ex-ov/lower/file.txt
+sudo mount -t overlay overlay -o lowerdir=/tmp/ex-ov/lower,upperdir=/tmp/ex-ov/upper,workdir=/tmp/ex-ov/work /tmp/ex-ov/merged
+echo "modified" > /tmp/ex-ov/merged/file.txt
+cat /tmp/ex-ov/lower/file.txt   # Still "original"
+cat /tmp/ex-ov/upper/file.txt   # "modified" (copy-up)
+sudo umount /tmp/ex-ov/merged &amp;&amp; rm -rf /tmp/ex-ov
+
+# Exercise 5: Compare Docker overhead vs VM
+docker run --rm alpine cat /proc/version   # Same kernel as host!
+</code></pre>
+
+        <h2 id="conclusion">Conclusion &amp; Next Steps</h2>
+        <p>Containers are built from four Linux kernel primitives: <strong>namespaces</strong> (what a process can see), <strong>cgroups</strong> (how much it can use), <strong>OverlayFS</strong> (layered filesystem), and <strong>seccomp/capabilities</strong> (which syscalls are allowed). Docker, Podman, and CRI-O are all just orchestrators that call <code>clone()</code> with the right flags, create cgroup directories, set up an overlay mount, and exec your process. Understanding these primitives makes container debugging, security hardening, and performance tuning straightforward — because under every <code>docker run</code> is just a Linux process.</p>
+
+        <div class="related-posts">
+            <h3><i class="fas fa-book-reader me-2"></i>Continue the Series</h3>
+            <div class="related-post-item"><h5 class="mb-2">Part 20: Secrets Management</h5><p class="text-muted small mb-2">How to store, rotate, and inject secrets securely — environment variables, vaults, sealed secrets, and SOPS.</p><a href="computing-systems-foundations-part20-secrets.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a></div>
+            <div class="related-post-item"><h5 class="mb-2">Part 22: Kubernetes Networking</h5><p class="text-muted small mb-2">Pod-to-pod communication, Services, Ingress, CNI plugins, and the network model that makes Kubernetes work.</p><a href="computing-systems-foundations-part22-k8s-networking.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a></div>
+        </div>
+
+        <div class="series-nav">
+            <a href="computing-systems-foundations-part20-secrets.html" class="series-nav-item prev"><span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span><span class="nav-title">Part 20: Secrets Management</span></a>
+            <a href="computing-systems-foundations-part22-k8s-networking.html" class="series-nav-item next"><span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span><span class="nav-title">Part 22: Kubernetes Networking</span></a>
+        </div>
+    </div></div></div></div></section>
+
+    <footer id="social-media"><div class="footer-v2-wrapper"><div class="footer-bar"><div class="fc-left"><div class="fc-brand-group"><div class="fc-brand-stack"><span></span><span></span><span></span></div><span class="fc-brand-name">Wasil Zafar</span></div><span class="fc-tagline">Consultant &amp; Cloud Architect</span></div><div class="fc-center"><a href="/">Home</a><a href="/disclaimer.html">Disclaimer</a><a href="/privacy-policy.html">Privacy</a><a href="/pages/contact.html">Contact</a></div><div class="fc-right"><a href="https://www.facebook.com/wasil.zafar/" target="_blank"><i class="fab fa-facebook-f"></i></a><a href="https://twitter.com/wasilzafar" target="_blank"><i class="fab fa-twitter"></i></a><a href="https://www.linkedin.com/in/wasilzafar" target="_blank"><i class="fab fa-linkedin-in"></i></a><a href="https://www.youtube.com/@wasilzafar" target="_blank"><i class="fab fa-youtube"></i></a><a href="https://www.instagram.com/itswzee/" target="_blank"><i class="fab fa-instagram"></i></a><a href="https://in.pinterest.com/wasilz/" target="_blank"><i class="fab fa-pinterest-p"></i></a><a href="mailto:wasil.zafar@gmail.com"><i class="fas fa-envelope"></i></a><a href="/feed.xml" target="_blank"><i class="fas fa-rss"></i></a></div></div><div class="footer-sub"><span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span><a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a></div></div></footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"></div>
+    <script src="../../../js/cookie-consent.js"></script><script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script><script src="../../../js/search.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="../../../js/path-progress.js"></script><script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

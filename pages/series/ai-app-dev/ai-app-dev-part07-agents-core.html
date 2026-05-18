@@ -7,9 +7,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
     <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
-    <meta name="description" content="Master AI agents — the core of modern AI applications. Learn agent vs chain distinctions, tool usage (APIs, databases, code execution), agent types (ReAct, OpenAI function-calling, tool-calling), LangChain implementation with create_react_agent and AgentExecutor, decision loops, memory, error handling, and debugging." />
+    <meta name="description" content="Master AI agents — the core of modern AI applications. Learn agent vs chain distinctions, tool usage (APIs, databases, code execution), agent types (ReAct, tool-calling), LangChain implementation with create_agent and middleware, structured output strategies (ToolStrategy, ProviderStrategy), dynamic model/tool selection, memory, error handling, and debugging." />
     <meta name="author" content="Wasil Zafar" />
-    <meta name="keywords" content="AI agents, ReAct agent, LangChain agents, tool-calling, function-calling, AgentExecutor, create_react_agent, agent memory, agent debugging, AI app development, LLM agents, tool usage, agent types" />
+    <meta name="keywords" content="AI agents, ReAct agent, LangChain agents, tool-calling, create_agent, middleware, structured output, ToolStrategy, ProviderStrategy, dynamic model selection, agent memory, agent debugging, AI app development, LLM agents, tool usage, agent types" />
     <meta property="og:title" content="AI Application Development Mastery Part 7: Agents — Core of Modern AI Apps" />
     <meta property="og:description" content="Build intelligent AI agents that reason, use tools, and take autonomous action. Master ReAct, tool-calling, AgentExecutor, memory, and debugging." />
     <meta property="og:type" content="article" />
@@ -278,6 +278,15 @@
                     <li><a href="#common-failures" onclick="closeNav()">Common Agent Failures</a></li>
                     <li><a href="#debugging-techniques" onclick="closeNav()">Debugging Techniques</a></li>
                     <li><a href="#langsmith-tracing" onclick="closeNav()">LangSmith Tracing</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#may-2026-update" onclick="closeNav()">May 2026 Update</a>
+                <ul>
+                    <li><a href="#create-agent-api" onclick="closeNav()">The create_agent API</a></li>
+                    <li><a href="#middleware-system" onclick="closeNav()">Middleware System</a></li>
+                    <li><a href="#structured-output" onclick="closeNav()">Structured Output</a></li>
+                    <li><a href="#dynamic-model-tools" onclick="closeNav()">Dynamic Models & Tools</a></li>
                 </ul>
             </li>
             <li><a href="#exercises" onclick="closeNav()">Exercises & Self-Assessment</a></li>
@@ -1528,7 +1537,241 @@ for run in runs:
                     </div>
                 </div>
 
-                <!-- Section 7: Exercises -->
+                <!-- Section 7: May 2026 Update -->
+                <div id="may-2026-update" class="blog-content mt-5">
+                    <h2><i class="fas fa-bolt me-2 text-crimson"></i>May 2026 Update: LangChain 1.0 &amp; the New Agent API</h2>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Major API Change:</strong> As of LangChain 1.0, the <code>create_react_agent</code> / <code>create_tool_calling_agent</code> + <code>AgentExecutor</code> pattern shown in earlier sections is superseded by the unified <code>create_agent</code> API. The old APIs still work (via <code>langchain-classic</code>) but new projects should use <code>create_agent</code> with the middleware system described below.
+                    </div>
+
+                    <p>LangChain 1.0 introduces a fundamentally simpler agent API that consolidates all agent types into a single entry point. Under the hood, <code>create_agent</code> builds a <strong>LangGraph-based graph</strong> with nodes for model calls, tool execution, and middleware — giving you the same ReAct loop as before, but with a composable middleware architecture for customization.</p>
+
+                    <h3 id="create-agent-api">7.1 The <code>create_agent</code> API</h3>
+
+                    <p>The new <code>create_agent</code> function replaces all previous agent constructors. You pass a model (as a string identifier or instance), tools, and an optional system prompt — no separate <code>AgentExecutor</code> needed:</p>
+
+                    <pre><code class="language-python"># pip install -qU langchain "langchain[openai]"
+from langchain.agents import create_agent
+from langchain.tools import tool
+
+@tool
+def get_weather(city: str) -> str:
+    """Get weather for a given city."""
+    return f"It's always sunny in {city}!"
+
+@tool
+def calculate(expression: str) -> str:
+    """Evaluate a math expression."""
+    import math
+    safe = {k: v for k, v in math.__dict__.items() if not k.startswith("__")}
+    return str(eval(expression, {"__builtins__": {}}, safe))
+
+# Model identifier string — provider is auto-inferred
+agent = create_agent(
+    "openai:gpt-5.4",
+    tools=[get_weather, calculate],
+    system_prompt="You are a helpful assistant. Be concise and accurate."
+)
+
+# Invoke — same as LangGraph's graph.invoke()
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "What's the weather in Tokyo?"}]}
+)
+print(result["messages"][-1].content_blocks)</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Key Difference:</strong> With <code>create_agent</code>, input/output is <strong>message-based</strong> (<code>{"messages": [...]}</code>) rather than the old <code>{"input": "...", "chat_history": []}</code> pattern. The agent follows the LangGraph <a href="https://docs.langchain.com/oss/python/langgraph/graph-api" target="_blank">Graph API</a> — you can use <code>invoke</code>, <code>stream</code>, and all graph methods directly.
+                    </div>
+
+                    <p>Model identifiers support auto-inference — <code>"gpt-5.4"</code> resolves to <code>"openai:gpt-5.4"</code>, <code>"claude-sonnet-4-20250514"</code> resolves to <code>"anthropic:claude-sonnet-4-20250514"</code>. For full control, pass a model instance directly:</p>
+
+                    <pre><code class="language-python"># pip install -qU langchain langchain-anthropic
+from langchain.agents import create_agent
+from langchain_anthropic import ChatAnthropic
+
+model = ChatAnthropic(
+    model="claude-sonnet-4-20250514",
+    temperature=0.1,
+    max_tokens=4096,
+    timeout=30
+)
+
+agent = create_agent(
+    model,
+    tools=[get_weather, calculate],
+    system_prompt="You are a helpful assistant.",
+    name="research_assistant"  # Used as node ID in multi-agent graphs
+)</code></pre>
+
+                    <h3 id="middleware-system">7.2 The Middleware System</h3>
+
+                    <p>The most powerful addition in LangChain 1.0 is the <strong>middleware system</strong>. Middleware intercepts the agent's execution at key points — before/after model calls, around tool execution, and for dynamic prompt generation — without modifying core agent logic. This replaces the old patterns of subclassing <code>AgentExecutor</code> or writing custom callback handlers.</p>
+
+                    <pre><code class="language-python"># pip install -qU langchain "langchain[openai]"
+from langchain.agents import create_agent
+from langchain.agents.middleware import (
+    wrap_model_call, wrap_tool_call, dynamic_prompt,
+    ModelRequest, ModelResponse
+)
+from langchain.messages import ToolMessage
+
+# --- Middleware 1: Dynamic system prompt based on user role ---
+@dynamic_prompt
+def role_based_prompt(request: ModelRequest) -> str:
+    """Generate system prompt based on runtime context."""
+    user_role = request.runtime.context.get("user_role", "user")
+    base = "You are a helpful research assistant."
+    if user_role == "expert":
+        return f"{base} Provide detailed technical responses with citations."
+    elif user_role == "beginner":
+        return f"{base} Explain concepts simply. Avoid jargon."
+    return base
+
+# --- Middleware 2: Tool error handling with custom messages ---
+@wrap_tool_call
+def handle_tool_errors(request, handler):
+    """Catch tool failures and return friendly error messages."""
+    try:
+        return handler(request)
+    except Exception as e:
+        return ToolMessage(
+            content=f"Tool error: {str(e)}. Please try a different approach.",
+            tool_call_id=request.tool_call["id"]
+        )
+
+# --- Middleware 3: Cost tracking ---
+@wrap_model_call
+def track_costs(request: ModelRequest, handler) -> ModelResponse:
+    """Log token usage for every model call."""
+    response = handler(request)
+    usage = response.response_metadata.get("usage", {})
+    print(f"Tokens: {usage.get('total_tokens', 'N/A')}")
+    return response
+
+# Compose middleware into the agent
+agent = create_agent(
+    "openai:gpt-5.4",
+    tools=[get_weather, calculate],
+    middleware=[role_based_prompt, handle_tool_errors, track_costs]
+)
+
+# Pass runtime context when invoking
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "Explain quantum computing"}]},
+    context={"user_role": "beginner"}
+)</code></pre>
+
+                    <div class="experiment-card">
+                        <div class="card-meta mb-2">
+                            <span class="badge bg-teal text-white"><i class="fas fa-layer-group me-1"></i>Middleware Decorators</span>
+                        </div>
+                        <h4>Available Middleware Hooks</h4>
+                        <table class="table table-bordered">
+                            <thead><tr><th>Decorator</th><th>When It Runs</th><th>Use Case</th></tr></thead>
+                            <tbody>
+                                <tr><td><code>@before_model</code></td><td>Before each model call</td><td>Message trimming, context injection</td></tr>
+                                <tr><td><code>@after_model</code></td><td>After each model call</td><td>Content filtering, guardrails</td></tr>
+                                <tr><td><code>@wrap_model_call</code></td><td>Wraps the full model call</td><td>Dynamic model selection, cost tracking</td></tr>
+                                <tr><td><code>@wrap_tool_call</code></td><td>Wraps each tool execution</td><td>Error handling, retry logic, logging</td></tr>
+                                <tr><td><code>@dynamic_prompt</code></td><td>Before first model call</td><td>Runtime system prompt generation</td></tr>
+                            </tbody>
+                        </table>
+                        <div class="bias-tags">
+                            <span class="bias-tag">Middleware</span>
+                            <span class="bias-tag">LangChain 1.0</span>
+                            <span class="bias-tag">Extensibility</span>
+                        </div>
+                    </div>
+
+                    <h3 id="structured-output">7.3 Structured Output Strategies</h3>
+
+                    <p>When you need the agent to return data in a specific format (not just free text), LangChain 1.0 provides two strategies via the <code>response_format</code> parameter:</p>
+
+                    <pre><code class="language-python"># pip install -qU langchain "langchain[openai]" pydantic
+from pydantic import BaseModel
+from langchain.agents import create_agent
+from langchain.agents.structured_output import ToolStrategy, ProviderStrategy
+
+# Define the output schema
+class ResearchResult(BaseModel):
+    topic: str
+    summary: str
+    key_findings: list[str]
+    confidence: float
+
+# Strategy 1: ToolStrategy — uses artificial tool calling (works with any model)
+agent_tool = create_agent(
+    "openai:gpt-5.4-mini",
+    tools=[get_weather],
+    response_format=ToolStrategy(ResearchResult)
+)
+
+# Strategy 2: ProviderStrategy — uses native structured output (more reliable)
+agent_provider = create_agent(
+    "openai:gpt-5.4",
+    response_format=ProviderStrategy(ResearchResult)
+)
+
+# As of LangChain 1.0, passing a schema directly defaults to ProviderStrategy
+# with ToolStrategy fallback:
+agent_auto = create_agent(
+    "openai:gpt-5.4",
+    response_format=ResearchResult  # Auto-selects best strategy
+)
+
+result = agent_auto.invoke(
+    {"messages": [{"role": "user", "content": "Research quantum computing trends"}]}
+)
+print(result["structured_response"])
+# ResearchResult(topic='Quantum Computing', summary='...', ...)</code></pre>
+
+                    <h3 id="dynamic-model-tools">7.4 Dynamic Model &amp; Tool Selection</h3>
+
+                    <p>One of the most powerful middleware patterns is <strong>dynamic model selection</strong> — choosing different models based on conversation complexity, cost budgets, or task type. Similarly, <strong>dynamic tool selection</strong> lets you filter which tools are available based on authentication state, user permissions, or conversation stage:</p>
+
+                    <pre><code class="language-python"># pip install -qU langchain langchain-openai
+from langchain_openai import ChatOpenAI
+from langchain.agents import create_agent
+from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+
+# --- Dynamic Model Selection ---
+fast_model = ChatOpenAI(model="gpt-5.4-mini")
+power_model = ChatOpenAI(model="gpt-5.4")
+
+@wrap_model_call
+def select_model_by_complexity(request: ModelRequest, handler) -> ModelResponse:
+    """Route to a more powerful model for complex conversations."""
+    message_count = len(request.state["messages"])
+    if message_count > 10:
+        return handler(request.override(model=power_model))
+    return handler(request.override(model=fast_model))
+
+# --- Dynamic Tool Selection ---
+@wrap_model_call
+def filter_tools_by_auth(request: ModelRequest, handler) -> ModelResponse:
+    """Only expose sensitive tools to authenticated users."""
+    is_auth = request.state.get("authenticated", False)
+    if not is_auth:
+        safe_tools = [t for t in request.tools if t.name.startswith("public_")]
+        return handler(request.override(tools=safe_tools))
+    return handler(request)
+
+agent = create_agent(
+    fast_model,  # Default model
+    tools=[get_weather, calculate],
+    middleware=[select_model_by_complexity, filter_tools_by_auth]
+)</code></pre>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Migration Guide:</strong> Existing code using <code>create_react_agent</code> / <code>create_tool_calling_agent</code> + <code>AgentExecutor</code> continues to work via the <code>langchain-classic</code> package. For new projects, use <code>create_agent</code> with middleware. The key changes: (1) input is <code>{"messages": [...]}</code> not <code>{"input": "..."}</code>, (2) no separate <code>AgentExecutor</code> wrapper needed, (3) custom state schemas must be <code>TypedDict</code> (not Pydantic), (4) all customization goes through middleware instead of callback handlers.
+                    </div>
+                </div>
+
+                <!-- Section 8: Exercises -->
                 <div id="exercises" class="blog-content mt-5">
                     <h2><i class="fas fa-pencil-alt me-2 text-teal"></i>Exercises & Self-Assessment</h2>
 
@@ -1678,7 +1921,8 @@ for run in runs:
                         <li><strong>The Agent Decision Loop</strong> — Think, Act, Observe, Repeat — is the universal pattern underlying all agent architectures</li>
                         <li><strong>Tool Usage</strong> — APIs, databases, and code execution tools give agents the ability to interact with the real world beyond text generation</li>
                         <li><strong>Agent Types</strong> — ReAct (text-based reasoning), function-calling (OpenAI-specific), and tool-calling (universal) each have distinct trade-offs</li>
-                        <li><strong>LangChain Implementation</strong> — <code>create_tool_calling_agent</code> + <code>AgentExecutor</code> is the recommended production approach</li>
+                        <li><strong>LangChain Implementation</strong> — The unified <code>create_agent</code> API (LangChain 1.0) replaces the older <code>AgentExecutor</code> pattern with a middleware-based architecture</li>
+                        <li><strong>Middleware &amp; Structured Output</strong> — Decorators like <code>@wrap_model_call</code> and <code>@dynamic_prompt</code> enable dynamic model routing, guardrails, and structured output via <code>ToolStrategy</code>/<code>ProviderStrategy</code></li>
                         <li><strong>Agent Memory</strong> — Sliding window, summary, and vector-based strategies each serve different use cases</li>
                         <li><strong>Error Handling & Debugging</strong> — Max iterations, timeouts, parsing error handling, and LangSmith tracing are essential for reliability</li>
                     </ul>

@@ -7,9 +7,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
     <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
-    <meta name="description" content="Master the LangChain Deep Agents SDK — create_deep_agent() API, the agent harness, context engineering, virtual filesystem backends, sandboxes, subagents for task delegation, human-in-the-loop permissions, long-term memory, skills system, real-time streaming, custom tools, middleware, and structured output." />
+    <meta name="description" content="Master the LangChain Deep Agents SDK — create_deep_agent() API, the agent harness, context engineering, virtual filesystem backends, sandboxes, subagents for task delegation, human-in-the-loop permissions, long-term memory, skills system, real-time streaming, custom tools, middleware, and structured output. Updated May 2026 with v0.6: code interpreter, harness profiles, DeltaChannel, ContextHubBackend, streaming v3, and Managed Deep Agents." />
     <meta name="author" content="Wasil Zafar" />
-    <meta name="keywords" content="Deep Agents, LangChain, create_deep_agent, agent harness, context engineering, subagents, sandboxes, streaming, human-in-the-loop, skills, memory, filesystem backends, LangGraph, autonomous agents, AI application development, custom tools, middleware, structured output, response_format, wrap_tool_call" />
+    <meta name="keywords" content="Deep Agents, LangChain, create_deep_agent, agent harness, context engineering, subagents, sandboxes, streaming, human-in-the-loop, skills, memory, filesystem backends, LangGraph, autonomous agents, AI application development, custom tools, middleware, structured output, response_format, wrap_tool_call, code interpreter, harness profiles, DeltaChannel, ContextHubBackend, Managed Deep Agents, streaming v3" />
     <meta property="og:title" content="AI Application Development Mastery Part 9: Deep Agents & Autonomous Systems" />
     <meta property="og:description" content="Build autonomous agents with the LangChain Deep Agents SDK. Master the agent harness, context engineering, sandboxes, subagents, human-in-the-loop, skills, streaming, custom tools, middleware, and structured output." />
     <meta property="og:type" content="article" />
@@ -250,6 +250,17 @@
                     <li><a href="#middleware-stack" onclick="closeNav()">Built-in Middleware Stack</a></li>
                     <li><a href="#tool-call-middleware" onclick="closeNav()">Custom Tool Call Middleware</a></li>
                     <li><a href="#structured-output" onclick="closeNav()">Structured Output</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#v06-update" onclick="closeNav()">Deep Agents v0.6 Update</a>
+                <ul>
+                    <li><a href="#code-interpreter" onclick="closeNav()">Code Interpreter</a></li>
+                    <li><a href="#harness-profiles" onclick="closeNav()">Harness Profiles</a></li>
+                    <li><a href="#delta-channels" onclick="closeNav()">DeltaChannel</a></li>
+                    <li><a href="#context-hub-backend" onclick="closeNav()">ContextHub Backend</a></li>
+                    <li><a href="#streaming-v3" onclick="closeNav()">Streaming v3</a></li>
+                    <li><a href="#managed-deep-agents" onclick="closeNav()">Managed Deep Agents</a></li>
                 </ul>
             </li>
             <li><a href="#exercises" onclick="closeNav()">Exercises & Challenges</a></li>
@@ -1747,6 +1758,201 @@ flowchart TD
     G --> G1["StateBackend<br/>StoreBackend<br/>CompositeBackend<br/>Sandbox"]
     K --> K1["Pydantic BaseModel<br/>→ structured_response"]
                             </pre>
+                        </div>
+                    </div>
+
+                    <!-- Section 9: Deep Agents v0.6 Update -->
+                    <div id="v06-update" class="blog-content mt-5">
+                        <h2><i class="fas fa-bolt me-2 text-crimson"></i>Deep Agents v0.6 Update (May 2026)</h2>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-rocket me-2"></i>
+                            <strong>Released May 13, 2026:</strong> Deep Agents v0.6 introduces five major capabilities: a code interpreter for programmatic tool calling, harness profiles for open-weight model support, DeltaChannel for efficient checkpoint storage, ContextHubBackend for versioned agent context, and streaming v3 with typed event projections. These updates were announced at <a href="https://www.langchain.com/blog/interrupt-2026-overview" target="_blank">Interrupt 2026</a>.
+                        </div>
+
+                        <h3 id="code-interpreter">9.1 Code Interpreter &amp; Programmatic Tool Calling</h3>
+
+                        <p>The code interpreter gives agents a <strong>lightweight JavaScript runtime</strong> (QuickJS) where they can compose tool calls, manage intermediate state, and filter what returns to the model context. This enables <strong>Programmatic Tool Calling (PTC)</strong> — instead of the model making one tool call per turn and waiting for the result, it writes code that orchestrates multiple tool calls, processes results, and returns only what matters. This reduces token consumption and avoidable model round trips.</p>
+
+                        <pre><code class="language-python"># pip install deepagents[quickjs]
+from deepagents import create_deep_agent
+from langchain_quickjs import REPLMiddleware
+
+# Add the code interpreter as middleware
+agent = create_deep_agent(
+    model="openai:gpt-5.4",
+    middleware=[REPLMiddleware()],
+    system_prompt="Use the interpreter to compose tool calls efficiently."
+)
+
+# The agent can now write code like this inside the interpreter:
+# const topics = ["retrieval", "memory", "evaluation"];
+# const reports = await Promise.all(
+#   topics.map(topic =>
+#     tools.task({
+#       description: `Research ${topic} and return 3 findings.`,
+#       subagent_type: "general-purpose"
+#     })
+#   )
+# );
+# reports.join("\n\n");</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb"></i>
+                            <strong>Key Insight:</strong> PTC is <strong>model-agnostic</strong> — any model that can write JavaScript benefits from it, including open-weight models like DeepSeek and Qwen. Anthropic popularized this pattern as an API behavior, but with the interpreter it works with any model. The interpreter also enables <strong>recursive workflows</strong> where agents maintain a queue of questions, call subagents, and expand the frontier based on results.
+                        </div>
+
+                        <h3 id="harness-profiles">9.2 Harness Profiles for Open-Weight Models</h3>
+
+                        <p>Open-weight models like <strong>Kimi K2.6</strong>, <strong>GLM 5.1</strong>, and <strong>DeepSeek V4</strong> are now viable for production agent work at <strong>20×+ lower cost</strong> than closed frontier models. The challenge is that each model is post-trained on different tool-calling formats and prompt conventions. A <strong>harness profile</strong> captures per-model overrides for the system prompt, tool descriptions, and middleware as a named, versionable unit:</p>
+
+                        <pre><code class="language-python"># pip install deepagents langchain-google-genai
+from deepagents import create_deep_agent
+
+# Built-in profiles ship for major models — strong performance is the default
+agent = create_deep_agent(
+    model="baseten:zai-org/GLM-5",  # Open-weight model at fraction of frontier cost
+    middleware=[REPLMiddleware()],
+)
+
+# In LangChain's own benchmarks, harness-layer changes alone moved:
+# - gpt-5.2-codex: 52.8% → 66.5% on Terminal-Bench 2.0 (Top 30 → Top 5)
+# - gpt-5.3-codex: +20% on tau2-bench
+# - opus-4.7: +10% on tau2-bench
+# Across tau2-bench, prompts and middleware can move scores 10-20 points
+# without changing the model.</code></pre>
+
+                        <h3 id="delta-channels">9.3 DeltaChannel — Efficient Checkpoint Storage</h3>
+
+                        <p>As agents run longer (dozens to hundreds of steps), the default full-snapshot checkpointing model causes storage to grow at <strong>O(N²)</strong> because each checkpoint contains everything from all previous steps. <code>DeltaChannel</code> is a new LangGraph 1.2 primitive that stores only the <strong>diff</strong> at each step, with periodic full snapshots every K steps. For Deep Agents, both <code>messages</code> and <code>files</code> are delta-backed by default in v0.6:</p>
+
+                        <pre><code class="language-python"># DeltaChannel is ON by default in deepagents v0.6
+# No configuration required — just upgrade:
+# pip install -U deepagents
+
+# Benchmark results (simulated 200-turn multi-file coding session):
+# Without DeltaChannel: 5.27 GB checkpoint storage
+# With DeltaChannel:    129 MB (41× reduction)
+
+# For custom LangGraph state, you can use DeltaChannel directly:
+from typing_extensions import Annotated
+from langgraph.channels.delta import DeltaChannel
+
+def append(state: list[str], writes: list[list[str]]) -> list[str]:
+    return state + [item for batch in writes for item in batch]
+
+from typing import TypedDict
+
+class MyAgentState(TypedDict):
+    items: Annotated[
+        list[str],
+        DeltaChannel(reducer=append, snapshot_frequency=50)
+    ]</code></pre>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Reducer Contract:</strong> <code>DeltaChannel</code> requires <strong>batching-invariant</strong> reducers: <code>reducer(reducer(s, [w1, w2]), [w3, w4]) == reducer(s, [w1, w2, w3, w4])</code>. The new signature is <code>reducer(state: T, writes: list[T]) -> T</code> (receives all writes since last load in one call). If your reducer violates batching-invariance, delta channel state will silently diverge from a full snapshot.
+                        </div>
+
+                        <h3 id="context-hub-backend">9.4 ContextHub Backend</h3>
+
+                        <p><strong>Context Hub</strong> is a LangSmith-backed versioned filesystem for Deep Agents. It stores the <code>AGENTS.md</code> files, skills, policies, and memories that shape agent behavior — so improvements from one run carry forward to the next. Writes land as commits with history, review, and environment tagging (<code>dev</code>/<code>staging</code>/<code>prod</code>):</p>
+
+                        <pre><code class="language-python"># pip install deepagents langsmith
+from deepagents import create_deep_agent
+from deepagents.backends import ContextHubBackend, CompositeBackend, StateBackend
+
+# Option 1: Use Context Hub as the entire filesystem backend
+agent = create_deep_agent(
+    model="google_genai:gemini-3.1-pro-preview",
+    backend=ContextHubBackend("my-agent"),
+)
+
+# Option 2: Scope just /memories/ to Hub, keep rest thread-scoped
+agent = create_deep_agent(
+    model="google_genai:gemini-3.1-pro-preview",
+    backend=CompositeBackend(
+        default=StateBackend(),
+        routes={
+            "/memories/": ContextHubBackend("my-agent"),
+        },
+    ),
+)
+
+# Reads are served from cache; writes are committed back to the Hub repo.
+# If the repo doesn't exist yet, the first write creates it.
+# Requires LANGSMITH_API_KEY environment variable.</code></pre>
+
+                        <h3 id="streaming-v3">9.5 Streaming v3 — Typed Event Projections</h3>
+
+                        <p>The new streaming v3 protocol replaces raw event parsing with <strong>typed, subscribable projections</strong> for messages, tool calls, subagents, reasoning blocks, and custom channels. Frontend integrations ship for React, Vue, Svelte, and Angular:</p>
+
+                        <pre><code class="language-python"># pip install deepagents
+from deepagents import create_deep_agent
+
+agent = create_deep_agent(
+    model="anthropic:claude-sonnet-4-20250514",
+    tools=[get_weather],
+)
+
+# Streaming v3 — typed projections instead of raw events
+stream = agent.stream_events(
+    {"messages": [{"role": "user", "content": "Research LangChain streaming"}]},
+    version="v3",
+)
+
+# Subscribe to message text deltas
+for message in stream.messages:
+    for delta in message.text:
+        print(delta, end="", flush=True)
+
+# Subscribe to subagent progress
+for subagent in stream.subagents:
+    print(f"\n[{subagent.name}] {subagent.status}")
+    for message in subagent.messages:
+        for delta in message.text:
+            print(delta, end="", flush=True)</code></pre>
+
+                        <div class="experiment-card">
+                            <div class="card-meta mb-2">
+                                <span class="badge bg-teal text-white"><i class="fas fa-globe me-1"></i>Frontend Integrations</span>
+                            </div>
+                            <h4>Framework-Specific Streaming Packages (v1)</h4>
+                            <table class="table table-bordered">
+                                <thead><tr><th>Framework</th><th>Package</th><th>Key Features</th></tr></thead>
+                                <tbody>
+                                    <tr><td>React</td><td><code>@langchain/react</code></td><td>Hooks for message streaming, tool call rendering</td></tr>
+                                    <tr><td>Vue</td><td><code>@langchain/vue</code></td><td>Composables for reactive agent state</td></tr>
+                                    <tr><td>Svelte</td><td><code>@langchain/svelte</code></td><td>Stores for streamed agent events</td></tr>
+                                    <tr><td>Angular</td><td><code>@langchain/angular</code></td><td>Services and observables for agent streams</td></tr>
+                                </tbody>
+                            </table>
+                            <div class="bias-tags">
+                                <span class="bias-tag">Streaming v3</span>
+                                <span class="bias-tag">Frontend</span>
+                                <span class="bias-tag">Agent Protocol</span>
+                            </div>
+                        </div>
+
+                        <h3 id="managed-deep-agents">9.6 Managed Deep Agents</h3>
+
+                        <p><strong>Managed Deep Agents</strong> provides an API-first hosted runtime for creating, running, and operating deep agents in LangSmith. No need to stand up your own agent server — define agents using the familiar Deep Agents project structure, manage them through the <code>/v1/deepagents</code> API, and inspect every run in LangSmith:</p>
+
+                        <pre><code class="language-python"># Managed Deep Agents — create and run agents via LangSmith API
+# Key features:
+# - Durable threads, streaming runs, checkpointing
+# - Human-in-the-loop workflows for long-running tasks
+# - Agent context/files: AGENTS.md, skills/, subagents/, tools.json
+# - Context Hub for memory, operating notes, user preferences
+# - Sandbox-backed execution for code, shell, file I/O
+
+# Deploy via LangSmith CLI:
+# langsmith agents create my-agent --project-dir ./my-agent/
+# langsmith agents run my-agent --message "Analyze this dataset"</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb"></i>
+                            <strong>When to Use Managed vs. Self-Hosted:</strong> Use <strong>Managed Deep Agents</strong> when you want zero-infrastructure deployment with built-in observability. Use <strong>self-hosted</strong> (LangGraph Platform or custom) when you need full control over the runtime, custom networking, or on-premise data residency requirements.
                         </div>
                     </div>
 

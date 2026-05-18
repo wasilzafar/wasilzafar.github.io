@@ -7,9 +7,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
     <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
-    <meta name="description" content="Master LangGraph for building stateful agent workflows with graph-based architectures. Learn StateGraph, conditional routing, state management, persistence, subgraphs, human-in-the-loop, streaming modes, durable execution with checkpointers, and application structure with langgraph.json." />
+    <meta name="description" content="Master LangGraph for building stateful agent workflows with graph-based architectures. Learn StateGraph, conditional routing, state management, persistence, subgraphs, human-in-the-loop, streaming modes, durable execution with checkpointers, DeltaChannel for efficient storage, and application structure with langgraph.json." />
     <meta name="author" content="Wasil Zafar" />
-    <meta name="keywords" content="LangGraph, StateGraph, stateful agents, agent workflows, graph-based AI, nodes edges, conditional routing, MemorySaver, PostgresSaver, human-in-the-loop, subgraphs, streaming, durable execution, langgraph.json, application structure, LangChain, workflow orchestration" />
+    <meta name="keywords" content="LangGraph, StateGraph, stateful agents, agent workflows, graph-based AI, nodes edges, conditional routing, MemorySaver, PostgresSaver, human-in-the-loop, subgraphs, streaming, durable execution, langgraph.json, application structure, LangChain, workflow orchestration, DeltaChannel, checkpoint storage, streaming v3" />
     <meta property="og:title" content="AI Application Development Mastery Part 8: LangGraph — Stateful Agent Workflows" />
     <meta property="og:description" content="Build stateful, cyclic agent workflows with LangGraph. Master StateGraph, conditional edges, persistence, subgraphs, and human-in-the-loop patterns." />
     <meta property="og:type" content="article" />
@@ -305,6 +305,13 @@
                     <li><a href="#langgraph-json" onclick="closeNav()">langgraph.json Config</a></li>
                     <li><a href="#directory-layout" onclick="closeNav()">Directory Layout</a></li>
                     <li><a href="#deployment" onclick="closeNav()">Deployment</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#langgraph-1-2-update" onclick="closeNav()">LangGraph 1.2 Update</a>
+                <ul>
+                    <li><a href="#delta-channel-primitive" onclick="closeNav()">DeltaChannel Primitive</a></li>
+                    <li><a href="#streaming-v3-protocol" onclick="closeNav()">Streaming v3 Protocol</a></li>
                 </ul>
             </li>
             <li><a href="#exercises" onclick="closeNav()">Exercises & Self-Assessment</a></li>
@@ -2249,6 +2256,80 @@ docker run -p 8000:8000 \
                             <li><strong>Monitoring</strong> — LangSmith tracing enabled for observability</li>
                         </ul>
                     </div>
+                </div>
+
+                <!-- Section: LangGraph 1.2 Update -->
+                <div id="langgraph-1-2-update" class="blog-content mt-5">
+                    <h2><i class="fas fa-bolt me-2 text-crimson"></i>May 2026 Update: LangGraph 1.2</h2>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-rocket me-2"></i>
+                        <strong>Released May 2026:</strong> LangGraph 1.2 introduces <code>DeltaChannel</code> — a new channel primitive that changes how accumulating state fields are checkpointed. This is especially impactful for long-running agents where checkpoint storage was growing at O(N²). See the <a href="https://www.langchain.com/blog/delta-channels-evolving-agent-runtime" target="_blank">full writeup</a> for benchmarks.
+                    </div>
+
+                    <h3 id="delta-channel-primitive">DeltaChannel — Efficient Checkpoint Storage</h3>
+
+                    <p>The default LangGraph checkpointing model writes a <strong>full snapshot</strong> of agent state at every step. For append-only fields like <code>messages</code>, checkpoint N contains everything from steps 1 through N, causing storage to grow at <strong>O(N²)</strong>. For a coding agent running 200 turns, that’s <strong>5.3 GB</strong> of checkpoint storage.</p>
+
+                    <p><code>DeltaChannel</code> stores only the <strong>diff</strong> at each step, with periodic full snapshots every K steps (default: 1000). This bounds resume latency while keeping storage flat. The same 200-turn session: <strong>129 MB</strong> (41× reduction).</p>
+
+                    <pre><code class="language-python"># pip install -U langgraph>=1.2
+from typing import TypedDict
+from typing_extensions import Annotated
+from langgraph.channels.delta import DeltaChannel
+
+# The new reducer contract: receives ALL writes since last load in one batch
+def append_messages(state: list[dict], writes: list[list[dict]]) -> list[dict]:
+    """Batching-invariant reducer for message accumulation."""
+    return state + [msg for batch in writes for msg in batch]
+
+class AgentState(TypedDict):
+    # DeltaChannel replaces the default snapshot channel
+    messages: Annotated[
+        list[dict],
+        DeltaChannel(
+            reducer=append_messages,
+            snapshot_frequency=50  # Full snapshot every 50 steps
+        )
+    ]
+    # Regular fields still work as before
+    iteration_count: int
+
+# Use in StateGraph as normal — DeltaChannel is transparent
+from langgraph.graph import StateGraph
+
+graph = StateGraph(AgentState)
+# ... add nodes and edges as usual</code></pre>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Reducer Contract:</strong> <code>DeltaChannel</code> requires <strong>batching-invariant</strong> reducers: <code>reducer(reducer(s, [w1, w2]), [w3, w4])</code> must equal <code>reducer(s, [w1, w2, w3, w4])</code>. The new signature is <code>reducer(state: T, writes: list[T]) -> T</code>. If your reducer violates this, state will silently diverge from full snapshots. Existing threads migrate transparently — the first new checkpoint after upgrade begins writing deltas.
+                    </div>
+
+                    <h3 id="streaming-v3-protocol">Streaming v3 — Typed Event Projections</h3>
+
+                    <p>LangGraph 1.2 also introduces <strong>streaming v3</strong>, which replaces raw event parsing with typed, subscribable projections. Instead of filtering through all events, you subscribe to exactly what your application needs — messages from a specific subagent, tool calls, custom channels, or events within a particular namespace:</p>
+
+                    <pre><code class="language-python"># Streaming v3 — typed projections
+stream = graph.stream_events(
+    {"messages": [{"role": "user", "content": "Research AI trends"}]},
+    version="v3",
+)
+
+# Subscribe to message text deltas only
+for message in stream.messages:
+    for delta in message.text:
+        print(delta, end="", flush=True)
+
+# Subscribe to tool call events
+for tool_call in stream.tool_calls:
+    print(f"Tool: {tool_call.name}({tool_call.args})")
+
+# Frontend framework integrations (v1):
+# @langchain/react — hooks for message streaming
+# @langchain/vue   — composables for reactive agent state
+# @langchain/svelte — stores for streamed events
+# @langchain/angular — services and observables</code></pre>
                 </div>
 
                 <!-- Section 11: Exercises -->
