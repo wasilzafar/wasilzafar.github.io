@@ -26,6 +26,22 @@
 
     // ─── Utilities ───────────────────────────────────────────────────────────────
 
+    // Format explanation text: split into one line per tag, replace position-based
+    // [Why X fails] labels with neutral [Incorrect option] so shuffled positions don't
+    // confuse users who see e.g. "[Why B fails]" when B is their correct answer.
+    function formatExplanation(text) {
+        return text.split('\n')
+            .filter(function(line) { return line.trim(); })
+            .map(function(line) {
+                line = line
+                    .replace(/\[Why [A-D] fails\]/g, '<strong class="fb-tag fb-tag-wrong">[Incorrect option]</strong>')
+                    .replace(/\[Correct\]/g, '<strong class="fb-tag fb-tag-correct">[Correct]</strong>')
+                    .replace(/\[Principle\]/g, '<strong class="fb-tag fb-tag-principle">[Principle]</strong>');
+                return '<div class="fb-line">' + line + '</div>';
+            })
+            .join('');
+    }
+
     function shuffle(arr) {
         var a = arr.slice();
         for (var i = a.length - 1; i > 0; i--) {
@@ -96,18 +112,23 @@
     // ─── Init ────────────────────────────────────────────────────────────────────
 
     function init() {
-        var series = detectSeries();
+        var config = window.ASSESSMENT_CONFIG || null;
+        var series = config ? config.series : detectSeries();
+        var quizPath = config ? (config.quizPath || 'quiz.json') : 'quiz.json';
+
         if (!series) return;
         state.series = series;
+        if (config && config.examMode !== undefined) state.examMode = config.examMode;
 
         cacheDom();
 
-        fetch('quiz.json')
+        fetch(quizPath)
             .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
             .then(function(data) {
                 state.salt = data.security && data.security.salt || '';
                 state.title = data.title || series;
                 state.questions = data.questions || [];
+                if (data.examMetadata) state.examMetadata = data.examMetadata;
                 if (els.questionCount) els.questionCount.textContent = state.questions.length;
                 setupStart();
             })
@@ -154,18 +175,36 @@
         els.resultScreen.classList.add('d-none');
         els.questionScreen.classList.remove('d-none');
 
-        // Start timer
-        state.timerInterval = setInterval(function() {
-            state.elapsed = Math.floor((Date.now() - state.startTime) / 1000);
-            if (els.timer) els.timer.textContent = formatTime(state.elapsed);
-        }, 1000);
+        // Expose state for exam-mode navigation
+        window._practiceExamQuestions = state.questions;
+        window._practiceExamTotal = state.questions.length;
+        window._practiceExamCurrent = 0;
+        window._practiceExamShowQuestion = showCurrentQuestion;
+        window._practiceExamFinish = finishAssessment;
+
+        // Start timer (hidden in exam mode — exam has its own countdown)
+        if (!window._examModeActive) {
+            state.timerInterval = setInterval(function() {
+                state.elapsed = Math.floor((Date.now() - state.startTime) / 1000);
+                if (els.timer) els.timer.textContent = formatTime(state.elapsed);
+            }, 1000);
+        }
 
         showCurrentQuestion();
     }
 
     function showCurrentQuestion() {
+        // Sync exam-mode navigation state
+        if (window._examModeActive) {
+            state.current = window._practiceExamCurrent || 0;
+        }
+        window._practiceExamCurrent = state.current;
+
         var q = state.questions[state.current];
         var total = state.questions.length;
+
+        // Expose current qid for flag button
+        window._currentQid = q ? q.id : null;
 
         // Progress
         var pct = Math.round(((state.current) / total) * 100);
@@ -201,6 +240,8 @@
     }
 
     function nextQuestion() {
+        // In exam mode, next is handled by examNavNext — this only runs in practice mode
+        if (window._examModeActive) return;
         state.current++;
         if (state.current >= state.questions.length) {
             finishAssessment();
@@ -455,16 +496,52 @@
             default: ok = parseInt(ans) === correct;
         }
 
-        recordAnswer(ok, q);
+        recordAnswer(ok, q, ans);
     }
 
-    function recordAnswer(ok, q) {
+    function recordAnswer(ok, q, userAns) {
+        // In exam mode: buffer answer silently, allow navigation without locking UI
+        if (window._examModeActive) {
+            if (!window._examAnswerBuffer) window._examAnswerBuffer = {};
+            window._examAnswerBuffer[q.id] = ok;
+            // Still push so results work after submit
+            var existing = state.answers.findIndex(function(a) { return a.qid === q.id; });
+            var entry = { qid: q.id, correct: ok, difficulty: q.difficulty, type: q.type };
+            if (existing >= 0) { state.answers[existing] = entry; } else { state.answers.push(entry); }
+            return; // No feedback shown during exam mode
+        }
+
         state.answers.push({
             qid: q.id,
             correct: ok,
             difficulty: q.difficulty,
             type: q.type
         });
+
+        // Mark MCQ options: green = correct answer, red = user's wrong choice
+        var MCQ_TYPES = ['mcq', 'scenario', 'diagnosis', 'debug', 'architecture', 'ethical'];
+        if (MCQ_TYPES.indexOf(q.type) !== -1) {
+            var correctIdx = decode(q.answer, state.salt);
+            var userIdx = (userAns !== undefined) ? parseInt(userAns) : -1;
+            els.qInput.querySelectorAll('.assess-opt').forEach(function(opt) {
+                var v = parseInt(opt.getAttribute('data-v'));
+                if (v === correctIdx) {
+                    opt.classList.add('opt-correct');
+                } else if (!ok && v === userIdx) {
+                    opt.classList.add('opt-wrong');
+                }
+            });
+        }
+
+        // Build "Your answer" snippet for wrong MCQ answers
+        var yourAnswerHtml = '';
+        if (!ok && userAns !== undefined && MCQ_TYPES.indexOf(q.type) !== -1) {
+            var uIdx = parseInt(userAns);
+            if (!isNaN(uIdx) && q.options && q.options[uIdx] !== undefined) {
+                var optLabel = typeof q.options[uIdx] === 'string' ? q.options[uIdx] : q.options[uIdx].label;
+                yourAnswerHtml = '<div class="fb-your-answer"><i class="fas fa-times-circle me-1"></i><strong>Your answer:</strong> ' + escapeHtml(optLabel) + '</div>';
+            }
+        }
 
         // Show feedback
         var isEthical = q.type === 'ethical';
@@ -474,7 +551,8 @@
                 '<i class="fas ' + (ok ? 'fa-check-circle' : 'fa-times-circle') + ' me-2"></i>' +
                 '<strong>' + (isEthical ? 'Thoughtful response!' : (ok ? 'Correct!' : 'Incorrect')) + '</strong>' +
             '</div>' +
-            (q.explanation ? '<p class="assess-fb-exp">' + q.explanation + '</p>' : '');
+            yourAnswerHtml +
+            (q.explanation ? '<div class="assess-fb-exp">' + formatExplanation(q.explanation) + '</div>' : '');
 
         // Disable inputs
         els.qInput.querySelectorAll('input, button, .assess-opt, .assess-tf-btn').forEach(function(el) {
@@ -515,6 +593,11 @@
 
         // Save results
         saveResults(pct, correct, total);
+
+        // Trigger readiness analytics if hook is available
+        if (typeof window._buildReadinessBlock === 'function') {
+            window._buildReadinessBlock(state.answers, state.questions);
+        }
     }
 
     function getGrade(pct) {
