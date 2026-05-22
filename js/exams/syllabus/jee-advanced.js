@@ -31,6 +31,7 @@ window.ExamSyllabus['jee-advanced'] = {
                 { id: 'adv-chem-physical-electro', title: 'Physical Chemistry — Electrochemistry & Kinetics', difficulty: 4, estimatedHours: 18, weight: 1.2, tags: ['chemistry', 'physical'] },
                 { id: 'adv-chem-physical-atomic', title: 'Physical Chemistry — Atomic Structure & Bonding', difficulty: 3, estimatedHours: 14, tags: ['chemistry', 'physical'] },
                 { id: 'adv-chem-physical-solutions', title: 'Physical Chemistry — Solutions & Colligative Properties', difficulty: 3, estimatedHours: 12, tags: ['chemistry', 'physical'] },
+                { id: 'adv-chem-physical-solid', title: 'Physical Chemistry — Solid State & Surface Chemistry', difficulty: 3, estimatedHours: 10, tags: ['chemistry', 'physical'] },
                 { id: 'adv-chem-organic-goc', title: 'Organic Chemistry — GOC & Reaction Mechanisms', difficulty: 5, estimatedHours: 30, weight: 1.3, tags: ['chemistry', 'organic'] },
                 { id: 'adv-chem-organic-named', title: 'Organic Chemistry — Named Reactions & Synthesis', difficulty: 4, estimatedHours: 22, weight: 1.3, tags: ['chemistry', 'organic'] },
                 { id: 'adv-chem-inorganic-periodic', title: 'Inorganic Chemistry — Periodicity & Bonding', difficulty: 3, estimatedHours: 14, tags: ['chemistry', 'inorganic'] },
