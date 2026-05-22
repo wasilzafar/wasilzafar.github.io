@@ -15,6 +15,7 @@ window.ExamSyllabus['jee-main'] = {
             name: 'Physics',
             type: 'compulsory',
             topics: [
+                { id: 'phy-units', title: 'Units, Measurements & Dimensional Analysis', difficulty: 1, estimatedHours: 6, tags: ['general'] },
                 { id: 'phy-mechanics-kinematics', title: 'Kinematics (1D & 2D)', difficulty: 2, estimatedHours: 12, weight: 1.3, tags: ['mechanics'] },
                 { id: 'phy-mechanics-laws', title: 'Laws of Motion & Friction', difficulty: 3, estimatedHours: 14, weight: 1.3, tags: ['mechanics'] },
                 { id: 'phy-mechanics-work', title: 'Work, Energy & Power', difficulty: 2, estimatedHours: 10, weight: 1.3, tags: ['mechanics'] },
@@ -32,7 +33,8 @@ window.ExamSyllabus['jee-main'] = {
                 { id: 'phy-emwaves', title: 'EM Waves', difficulty: 1, estimatedHours: 4, tags: ['waves'] },
                 { id: 'phy-optics', title: 'Ray & Wave Optics', difficulty: 3, estimatedHours: 14, tags: ['optics'] },
                 { id: 'phy-modern', title: 'Modern Physics (Dual Nature, Atoms, Nuclei)', difficulty: 3, estimatedHours: 12, tags: ['modern'] },
-                { id: 'phy-semiconductor', title: 'Semiconductor Electronics', difficulty: 2, estimatedHours: 6, tags: ['modern'] }
+                { id: 'phy-semiconductor', title: 'Semiconductor Electronics', difficulty: 2, estimatedHours: 6, tags: ['modern'] },
+                { id: 'phy-experimental', title: 'Experimental Skills & Error Analysis', difficulty: 2, estimatedHours: 8, tags: ['practical'] }
             ]
         },
         {
@@ -40,6 +42,7 @@ window.ExamSyllabus['jee-main'] = {
             name: 'Chemistry',
             type: 'compulsory',
             topics: [
+                { id: 'chem-basic', title: 'Mole Concept, Stoichiometry & Basic Concepts', difficulty: 2, estimatedHours: 10, weight: 1.2, tags: ['physical'] },
                 { id: 'chem-atomic', title: 'Atomic Structure & Chemical Bonding', difficulty: 3, estimatedHours: 14, weight: 1.2, tags: ['physical'] },
                 { id: 'chem-states', title: 'States of Matter & Solutions', difficulty: 2, estimatedHours: 10, weight: 1.2, tags: ['physical'] },
                 { id: 'chem-thermo', title: 'Chemical Thermodynamics', difficulty: 3, estimatedHours: 12, weight: 1.2, tags: ['physical'] },
@@ -58,7 +61,8 @@ window.ExamSyllabus['jee-main'] = {
                 { id: 'chem-alcohols', title: 'Alcohols, Phenols & Ethers', difficulty: 2, estimatedHours: 8, weight: 1.3, tags: ['organic'] },
                 { id: 'chem-carbonyl', title: 'Aldehydes, Ketones & Carboxylic Acids', difficulty: 3, estimatedHours: 12, weight: 1.3, tags: ['organic'] },
                 { id: 'chem-nitrogen', title: 'Amines & Nitrogen Compounds', difficulty: 2, estimatedHours: 8, weight: 1.3, tags: ['organic'] },
-                { id: 'chem-biomolecules', title: 'Biomolecules & Polymers', difficulty: 1, estimatedHours: 5, weight: 1.3, tags: ['organic'] }
+                { id: 'chem-biomolecules', title: 'Biomolecules & Polymers', difficulty: 1, estimatedHours: 5, weight: 1.3, tags: ['organic'] },
+                { id: 'chem-practical', title: 'Practical Chemistry (Titrations, Salt Analysis, Preparations)', difficulty: 2, estimatedHours: 6, tags: ['practical'] }
             ]
         },
         {
