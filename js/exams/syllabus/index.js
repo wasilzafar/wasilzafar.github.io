@@ -36,6 +36,7 @@ window.SyllabusRegistry = {
     'sa-pro': { name: 'AWS SA Professional', file: 'sa-pro.js' },
     'az-305': { name: 'AZ-305 Azure Architect', file: 'az-305.js' },
     'ccie': { name: 'CCIE Enterprise', file: 'ccie.js' },
+    'claude-architect': { name: 'Claude Certified Architect – Foundations', file: 'claude-architect.js' },
     // Asia
     'gaokao': { name: 'Gaokao', file: 'gaokao.js' },
     'csat': { name: 'CSAT (수능)', file: 'csat.js' },
