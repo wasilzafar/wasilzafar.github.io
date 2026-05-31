@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Deep dive into the Anthropic Messages API: system prompts as a separate parameter, multi-turn conversations, content blocks architecture (TextBlock, ToolUseBlock, ToolResultBlock, ThinkingBlock), stop_reason handling, streaming with SSE, and token counting." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="Anthropic Messages API, Claude API, content blocks, TextBlock, ToolUseBlock, ToolResultBlock, ThinkingBlock, stop_reason, streaming, SSE, token counting, multi-turn, system prompts" />
+    <meta property="og:title" content="Anthropic SDK Track Part 2: Messages API &amp; Content Blocks" />
+    <meta property="og:description" content="Master the Claude Messages API — system prompts, multi-turn conversations, content block architecture, streaming, stop_reason, and token management." />
+    <meta property="og:type" content="article" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/favicon_io/android-chrome-512x512.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="article:published_time" content="2026-05-22" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>Anthropic SDK Track Part 2: Messages API &amp; Content Blocks - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/ai-app-dev-xtreme/ai-app-dev-sdk-anthropic-part02-messages-api.html" />
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied',
+            'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', {
+            'ad_storage': 'granted', 'ad_user_data': 'granted',
+            'ad_personalization': 'granted', 'analytics_storage': 'granted'
+        });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <script>
+        (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});
+        var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
+        j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;
+        f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <div class="nav-v16-wrapper">
+        <nav class="nav-v16">
+            <a href="/" class="brand"><div class="brand-stack"><span></span><span></span><span></span></div><span class="brand-text">Wasil Zafar</span></a>
+            <button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()"><span></span><span></span><span></span></button>
+            <div class="links">
+                <a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a>
+                <a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a>
+                <a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a>
+                <a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a>
+                <a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a>
+                <button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Back to AI App Dev Series
+                </a>
+                <h1 class="display-4 fw-bold mb-3">Anthropic SDK Track Part 2: Messages API &amp; Content Blocks</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>May 22, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>45 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Explore the Claude Messages API in depth &mdash; system prompts as a separate parameter, multi-turn conversations, the content block architecture (TextBlock, ToolUseBlock, ToolResultBlock, ThinkingBlock), stop_reason handling, streaming with Server-Sent Events, and token management.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- TOC Toggle -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header"><h3><i class="fas fa-list me-2"></i>Table of Contents</h3><button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button></div>
+        <ol>
+            <li><a href="#messages-create" onclick="closeNav()">Messages Create</a>
+                <ul>
+                    <li><a href="#request-anatomy" onclick="closeNav()">Request Anatomy</a></li>
+                    <li><a href="#system-prompts" onclick="closeNav()">System Prompts</a></li>
+                    <li><a href="#multi-turn" onclick="closeNav()">Multi-Turn Conversations</a></li>
+                </ul>
+            </li>
+            <li><a href="#content-blocks" onclick="closeNav()">Content Blocks</a>
+                <ul>
+                    <li><a href="#text-block" onclick="closeNav()">TextBlock</a></li>
+                    <li><a href="#tool-use-block" onclick="closeNav()">ToolUseBlock</a></li>
+                    <li><a href="#tool-result-block" onclick="closeNav()">ToolResultBlock</a></li>
+                    <li><a href="#thinking-block" onclick="closeNav()">ThinkingBlock</a></li>
+                    <li><a href="#multimodal-blocks" onclick="closeNav()">Multimodal Input (Image &amp; Document)</a></li>
+                </ul>
+            </li>
+            <li><a href="#stop-reason" onclick="closeNav()">Stop Reason</a>
+                <ul>
+                    <li><a href="#stop-values" onclick="closeNav()">Stop Reason Values</a></li>
+                    <li><a href="#stop-sequences" onclick="closeNav()">Custom Stop Sequences</a></li>
+                </ul>
+            </li>
+            <li><a href="#streaming" onclick="closeNav()">Streaming</a>
+                <ul>
+                    <li><a href="#sse-events" onclick="closeNav()">SSE Event Types</a></li>
+                    <li><a href="#stream-helpers" onclick="closeNav()">SDK Stream Helpers</a></li>
+                </ul>
+            </li>
+            <li><a href="#token-management" onclick="closeNav()">Token Management</a>
+                <ul>
+                    <li><a href="#usage-object" onclick="closeNav()">Usage Object</a></li>
+                    <li><a href="#count-tokens" onclick="closeNav()">Count Tokens API</a></li>
+                </ul>
+            </li>
+            <li><a href="#count-tokens-adv" onclick="closeNav()">Count Tokens &amp; Advanced Patterns</a>
+                <ul>
+                    <li><a href="#count-tokens-api" onclick="closeNav()">Count Tokens Endpoint</a></li>
+                    <li><a href="#multi-turn-patterns" onclick="closeNav()">Multi-Turn Patterns</a></li>
+                    <li><a href="#beta-headers" onclick="closeNav()">Beta Features &amp; Headers</a></li>
+                </ul>
+            </li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>What You&rsquo;ll Learn:</strong> The Messages API is the single endpoint you&rsquo;ll use for everything in Claude &mdash; from simple questions to complex multi-turn conversations with tool use. This article teaches you how the API works under the hood: message roles, content blocks, stop reasons, streaming, and the conversation patterns that make Claude powerful.
+                    </div>
+
+                    <h2 id="messages-create"><i class="fas fa-envelope me-2 text-teal"></i>1. Messages Create</h2>
+
+                    <p>The <code>messages.create()</code> endpoint is the core of the Claude API. Every interaction &mdash; whether a simple question, a multi-turn conversation, or an agentic tool-use loop &mdash; flows through this single endpoint. Understanding its anatomy is essential for everything that follows in this track.</p>
+
+                    <h3 id="request-anatomy">1.1 Request Anatomy</h3>
+
+                    <p>A Messages API request requires three mandatory fields: <code>model</code>, <code>max_tokens</code>, and <code>messages</code>. The system prompt is passed as a separate top-level parameter (not inside the messages array), which is a key architectural difference from OpenAI.</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Complete request anatomy with all common parameters
+response = client.messages.create(
+    model="claude-sonnet-4-6",   # Required: model ID
+    max_tokens=1024,                     # Required: output token limit
+    system="You are a helpful coding assistant. Be concise.", # Optional: system prompt
+    messages=[                           # Required: conversation messages
+        {"role": "user", "content": "Explain Python decorators in 3 sentences."}
+    ],
+    temperature=0.7,                     # Optional: 0.0-1.0 (default 1.0)
+    # Note: temperature and top_p are mutually exclusive — use one or the other
+    stop_sequences=["---"],              # Optional: custom stop strings
+    metadata={"user_id": "user-123"}     # Optional: for abuse tracking
+)
+
+print(response.content[0].text)
+print(f"Model: {response.model}")
+print(f"Stop reason: {response.stop_reason}")
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Key Difference from OpenAI:</strong> In the Anthropic API, <code>system</code> is a <em>separate top-level parameter</em>, not a message with <code>role: "system"</code>. This architectural choice keeps system instructions clearly separated from conversation history, making it easier to apply prompt caching and maintain clean message arrays.
+                    </div>
+
+                    <h3 id="system-prompts">1.2 System Prompts</h3>
+
+                    <p>System prompts define Claude&rsquo;s behavior, persona, and constraints. They can be a simple string or an array of content blocks (useful for prompt caching). The system prompt is processed before any messages and shapes all subsequent responses.</p>
+
+                    <p>Here is the simple string form &mdash; suitable for most applications:</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Simple string system prompt
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=512,
+    system="You are a senior Python developer. Provide production-ready code with error handling. Never use print() for logging — use the logging module.",
+    messages=[
+        {"role": "user", "content": "Write a function to retry HTTP requests with exponential backoff."}
+    ]
+)
+print(response.content[0].text)
+</code></pre>
+
+                    <p>For advanced use cases, pass the system prompt as an array of content blocks with <code>cache_control</code> markers to enable <strong>prompt caching</strong>. Prompt caching lets Anthropic reuse previously processed prompt prefixes so subsequent requests can read that prefix from cache instead of reprocessing it from scratch. This usually reduces latency and drops cache-read cost to 10% of the base input-token price for the cached portion. It&rsquo;s ideal for scenarios where the same large system prompt, few-shot examples, or reference documents are sent repeatedly across many requests &mdash; such as a support bot with a large knowledge base that handles hundreds of conversations per hour:</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Build a large system prompt.
+# Prompt-caching minimums are model/platform dependent: for example,
+# Sonnet 4.6 can cache prefixes at 1,024+ tokens, while some models require more.
+# In production this would be your full coding guidelines, API reference, or knowledge base.
+large_guidelines = """You are an expert code reviewer for our FastAPI + SQLAlchemy application.
+
+## Review Guidelines
+
+### Security Rules
+1. All database queries MUST use parameterized statements — never string interpolation
+2. Validate all user input with Pydantic v2 models before processing
+3. Check authorization on every endpoint — never rely on frontend-only auth
+4. Sanitize file uploads: check MIME type, size limits, and scan for malware
+5. Never log sensitive data (passwords, tokens, PII) — use field-level masking
+6. Use HTTPS-only cookies with SameSite=Strict for session management
+7. Rate limit all public endpoints (use slowapi or custom middleware)
+8. Validate Content-Type headers to prevent CSRF on JSON endpoints
+9. Implement CORS with explicit origin allowlist — never use wildcard in production
+10. Hash passwords with bcrypt (cost factor 12+) — never store plaintext or MD5
+
+### Code Quality Standards
+1. Maximum function length: 30 lines — split into helpers if longer
+2. All functions must have type hints on parameters and return values
+3. Use dependency injection via FastAPI's Depends() for shared logic
+4. Database sessions must use async context managers (no manual close)
+5. Use Pydantic v2 model_validator for cross-field validation
+6. Prefer SQLAlchemy 2.0 select() syntax over legacy Query API
+7. All endpoints must return proper HTTP status codes (201 for creation, 204 for deletion)
+8. Use structured logging (JSON format) with correlation IDs per request
+9. Docstrings required on all public functions — use Google style format
+10. No magic numbers — use named constants or configuration values
+
+### Performance Requirements
+1. Add database indexes for all columns used in WHERE clauses
+2. Use eager loading (selectinload/joinedload) to prevent N+1 queries
+3. Paginate all list endpoints (max 100 items per page)
+4. Cache expensive computations with Redis (TTL based on data volatility)
+5. Use connection pooling (pool_size=20, max_overflow=10 for production)
+6. Background tasks for operations taking more than 500ms
+7. Compress responses over 1KB with gzip middleware
+8. Use async database drivers (asyncpg for PostgreSQL) — never block event loop
+9. Implement query timeout limits (30s max) to prevent long-running queries
+10. Profile slow endpoints with OpenTelemetry spans — alert if p95 exceeds 200ms
+
+### Architecture Patterns
+1. Repository pattern for data access — never use db.session directly in routes
+2. Service layer for business logic — routes only handle HTTP concerns
+3. Domain events for cross-service communication (avoid tight coupling)
+4. Use Alembic migrations for ALL schema changes — never alter tables manually
+5. Feature flags for gradual rollouts (use LaunchDarkly or custom implementation)
+6. Circuit breaker pattern for external service calls (prevent cascade failures)
+7. Idempotency keys for all mutation endpoints (prevent duplicate processing)
+8. CQRS pattern for read-heavy endpoints — separate read/write models
+9. Event sourcing for audit-critical domains (payments, permissions)
+10. API versioning via URL prefix (/v1/, /v2/) — never break existing contracts
+
+### Testing Standards
+1. Unit tests for all service layer functions (mock external dependencies)
+2. Integration tests for database operations (use test database with fixtures)
+3. API tests for all endpoints (test happy path, validation errors, auth failures)
+4. Minimum 80% code coverage on new code — block PR if coverage drops
+5. Use factories (factory_boy) for test data — never hardcode fixtures
+6. Test async code with pytest-asyncio — verify proper await handling
+7. Load tests for all public endpoints — verify p99 latency under 500ms at 100 RPS
+8. Security tests: SQL injection, XSS, IDOR, broken auth (use OWASP ZAP)
+9. Contract tests for inter-service APIs — verify schema compatibility
+10. Chaos tests monthly: kill random pods, inject latency, corrupt responses
+
+### Error Handling
+1. Use custom exception classes inheriting from a base AppException
+2. Global exception handler must return consistent error response format
+3. Include correlation_id in all error responses for debugging
+4. Log full stack trace for 500 errors, structured context for 400 errors
+5. Never expose internal error details to clients (generic message + error code)
+6. Retry transient failures (network, database timeout) with exponential backoff
+7. Dead letter queue for failed async jobs — alert after 3 consecutive failures
+8. Graceful degradation: return cached/stale data when downstream services are down
+9. Health check endpoint (/health) must verify database connectivity and return 503 if down
+10. Structured error codes: ERR_{DOMAIN}_{CODE} format (e.g., ERR_AUTH_TOKEN_EXPIRED)
+
+### API Design Standards
+1. Use plural nouns for resource endpoints (/users, /orders, not /user, /order)
+2. Nested resources for parent-child: /users/{id}/orders (max 2 levels deep)
+3. Filter via query params: ?status=active&sort=-created_at&limit=20
+4. Return 422 for validation errors with field-level detail array
+5. Use ETags for cache validation on GET endpoints
+6. Implement cursor-based pagination for large datasets (not offset-based)
+7. Rate limit response headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
+8. Consistent datetime format: ISO 8601 with timezone (2024-01-15T10:30:00Z)
+
+Provide specific line references and severity ratings (critical/warning/info) for each finding.
+End your review with a summary table: | Line | Severity | Issue | Fix |"""
+
+# ✅ CACHED: On Sonnet 4.6, this large block (~1500 tokens) exceeds the cache minimum.
+# First call writes to cache; subsequent calls can read the cached prefix.
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    system=[
+        {
+            "type": "text",
+            "text": large_guidelines,
+            "cache_control": {"type": "ephemeral"}  # ← marks for caching
+        }
+    ],
+    messages=[
+        {"role": "user", "content": "Review this endpoint:\n\n@app.post('/users')\nasync def create_user(name: str, email: str, db: Session = Depends(get_db)):\n    user = User(name=name, email=email)\n    db.add(user)\n    db.commit()\n    return {'id': user.id}"}
+    ]
+)
+
+print("--- First call (cache creation) ---")
+print(f"Cache created: {getattr(response.usage, 'cache_creation_input_tokens', 0)} tokens")
+print(f"Cache read: {getattr(response.usage, 'cache_read_input_tokens', 0)} tokens")
+print(f"Input tokens: {response.usage.input_tokens}")
+
+# Second call with SAME system prompt — cache is now active
+response2 = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    system=[
+        {
+            "type": "text",
+            "text": large_guidelines,  # Same content → cache hit
+            "cache_control": {"type": "ephemeral"}
+        }
+    ],
+    messages=[
+        {"role": "user", "content": "Review this endpoint:\n\n@app.get('/users/{user_id}')\nasync def get_user(user_id: int, db: Session = Depends(get_db)):\n    return db.query(User).filter(User.id == user_id).first()"}
+    ]
+)
+
+print("\n--- Second call (cache read) ---")
+print(f"Cache created: {getattr(response2.usage, 'cache_creation_input_tokens', 0)} tokens")
+print(f"Cache read: {getattr(response2.usage, 'cache_read_input_tokens', 0)} tokens")
+print(f"Input tokens: {response2.usage.input_tokens}")
+# Expected: cache_read > 0, cache_creation = 0 (already cached)
+print(f"\nReview: {response2.content[0].text[:200]}...")
+</code></pre>
+
+                    <p>Running this code produces the following output &mdash; notice how the first call creates the cache (1,374 tokens written) and the second call reads from it (1,374 tokens at 90% discount, only 68 fresh input tokens):</p>
+
+<pre><code class="language-bash">--- First call (cache creation) ---
+Cache created: 1374 tokens
+Cache read: 0 tokens
+Input tokens: 82
+
+--- Second call (cache read) ---
+Cache created: 0 tokens
+Cache read: 1374 tokens
+Input tokens: 68
+
+Review: ## Code Review: `GET /users/{user_id}`
+
+### Finding 1 — Missing Authorization Check
+**Line 2 | Severity: CRITICAL**
+
+Any authenticated (or unauthenticated) caller can fetch any user's record by guessi...
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <strong>Minimum Size Requirement:</strong> Prompt caching has a <em>model- and platform-dependent</em> minimum length. On Claude Sonnet 4.6, cached prefixes can begin at <strong>1,024 tokens</strong>, while some other models and platforms require larger prefixes. In the example above, the detailed guidelines are long enough for a cache write on Sonnet 4.6, so the first call writes tokens to cache (<code>cache_creation_input_tokens &gt; 0</code>) and the second call can read them back (<code>cache_read_input_tokens &gt; 0</code>). The default cache lifetime is 5 minutes and is refreshed on reuse; Anthropic also offers a 1-hour TTL option.
+                    </div>
+
+                    <h3 id="multi-turn">1.3 Multi-Turn Conversations</h3>
+
+                    <p>Multi-turn conversations are built by appending messages with alternating <code>user</code> and <code>assistant</code> roles. The full conversation history is passed with every request &mdash; Claude is stateless and does not retain context between API calls.</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Build a multi-turn conversation
+conversation = [
+    {"role": "user", "content": "What is a Python context manager?"},
+    {"role": "assistant", "content": "A context manager is an object that defines the runtime context for a `with` statement. It implements `__enter__()` and `__exit__()` methods to set up and tear down resources automatically."},
+    {"role": "user", "content": "Show me a custom one for database connections."}
+]
+
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    system="You are a Python instructor. Use type hints in all code examples.",
+    messages=conversation
+)
+
+# Append the response to continue the conversation
+conversation.append({"role": "assistant", "content": response.content[0].text})
+conversation.append({"role": "user", "content": "Now add error handling and connection pooling."})
+
+# Next turn with full history
+response2 = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    system="You are a Python instructor. Use type hints in all code examples.",
+    messages=conversation
+)
+print(response2.content[0].text)
+</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Stateless API:</strong> Claude does not remember previous requests. You must pass the complete conversation history with every API call. For long conversations, this means managing token usage carefully &mdash; see Part 12 (Context Preservation) for strategies.
+                    </div>
+
+                    <h2 id="content-blocks"><i class="fas fa-cubes me-2 text-teal"></i>2. Content Blocks Architecture</h2>
+
+                    <p>Unlike simpler APIs that return plain text, the Claude Messages API uses a <strong>content blocks</strong> architecture. Each response is an array of typed blocks, enabling rich interactions where Claude can mix text with tool calls, thinking, and structured data in a single response.</p>
+
+                    <div class="mermaid-container">
+                        <div class="mermaid-label">Content Block Types</div>
+                        <pre class="mermaid">
+flowchart LR
+    R["response.content"] --> T["TextBlock"]
+    R --> TU["ToolUseBlock"]
+    R --> TH["ThinkingBlock"]
+    T --> |"type: text"| T1["text: string"]
+    TU --> |"type: tool_use"| TU1["id + name + input"]
+    TH --> |"type: thinking"| TH1["thinking: string"]
+    M["messages[].content"] --> IM["ImageBlock"]
+    M --> DOC["DocumentBlock"]
+    IM --> |"type: image"| IM1["source: base64 or url"]
+    DOC --> |"type: document"| DOC1["source: base64 PDF"]
+                        </pre>
+                    </div>
+
+                    <h3 id="text-block">2.1 TextBlock</h3>
+
+                    <p>The most common content block. Contains Claude&rsquo;s text response. A response may contain multiple TextBlocks when mixed with other block types.</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=256,
+    messages=[{"role": "user", "content": "Say hello in three languages."}]
+)
+
+# Access the text content
+for block in response.content:
+    if block.type == "text":
+        print(block.text)
+
+# Shorthand for single-block responses
+print(response.content[0].text)
+</code></pre>
+
+                    <h3 id="tool-use-block">2.2 ToolUseBlock</h3>
+
+                    <p>When Claude decides to call a tool, it emits a <code>ToolUseBlock</code> containing the tool name, a unique ID, and the input arguments as a JSON object. The <code>stop_reason</code> will be <code>"tool_use"</code> indicating you need to execute the tool and return results.</p>
+
+<pre><code class="language-python">import anthropic
+import json
+
+client = anthropic.Anthropic()
+
+# Define tools available to Claude
+tools = [
+    {
+        "name": "get_weather",
+        "description": "Get the current weather for a location. Use this when the user asks about weather conditions.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "location": {"type": "string", "description": "City name, e.g. 'London, UK'"},
+                "units": {"type": "string", "enum": ["celsius", "fahrenheit"], "description": "Temperature units"}
+            },
+            "required": ["location"]
+        }
+    }
+]
+
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    tools=tools,
+    messages=[{"role": "user", "content": "What's the weather in Tokyo?"}]
+)
+
+# Inspect the response — Claude will emit a ToolUseBlock
+for block in response.content:
+    if block.type == "tool_use":
+        print(f"Tool: {block.name}")
+        print(f"ID: {block.id}")
+        print(f"Input: {json.dumps(block.input, indent=2)}")
+        # Output:
+        # Tool: get_weather
+        # ID: toolu_01ABC123...
+        # Input: {"location": "Tokyo", "units": "celsius"}
+
+print(f"Stop reason: {response.stop_reason}")  # "tool_use"
+</code></pre>
+
+                    <h3 id="tool-result-block">2.3 ToolResultBlock</h3>
+
+                    <p>After executing a tool, return the results by adding an <code>assistant</code> message (with the ToolUseBlock) followed by a <code>user</code> message containing a <code>tool_result</code> content block. The <code>tool_use_id</code> links the result back to the original tool call.</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# After receiving a ToolUseBlock, execute the tool and return results
+# This continues the conversation from the previous example
+messages = [
+    {"role": "user", "content": "What's the weather in Tokyo?"},
+    {
+        "role": "assistant",
+        "content": [
+            {
+                "type": "tool_use",
+                "id": "toolu_01ABC123",
+                "name": "get_weather",
+                "input": {"location": "Tokyo", "units": "celsius"}
+            }
+        ]
+    },
+    {
+        "role": "user",
+        "content": [
+            {
+                "type": "tool_result",
+                "tool_use_id": "toolu_01ABC123",  # Must match the tool_use id
+                "content": "Temperature: 22°C, Condition: Partly cloudy, Humidity: 65%"
+            }
+        ]
+    }
+]
+
+# Claude will now generate a natural language response incorporating the tool result
+# Define the tool so Claude knows the schema
+tools = [{
+    "name": "get_weather",
+    "description": "Get weather for a location.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "location": {"type": "string"},
+            "units": {"type": "string", "enum": ["celsius", "fahrenheit"]}
+        },
+        "required": ["location"]
+    }
+}]
+
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=512,
+    tools=tools,
+    messages=messages
+)
+
+print(response.content[0].text)
+# "The weather in Tokyo is currently 22°C (partly cloudy) with 65% humidity."
+print(response.stop_reason)  # "end_turn" — Claude is done
+</code></pre>
+
+                    <h3 id="thinking-block">2.4 ThinkingBlock</h3>
+
+                    <p>When extended thinking is enabled, Claude&rsquo;s internal reasoning appears as <code>ThinkingBlock</code> content before the final answer. This is useful for complex reasoning tasks and debugging. See Part 14 (Extended Thinking) for full coverage.</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Enable extended thinking
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=16000,
+    thinking={
+        "type": "enabled",
+        "budget_tokens": 10000  # Token budget for thinking
+    },
+    messages=[{"role": "user", "content": "Solve: If 3x + 7 = 22, what is x?"}]
+)
+
+# Response contains ThinkingBlock(s) followed by TextBlock(s)
+for block in response.content:
+    if block.type == "thinking":
+        print(f"[Thinking]: {block.thinking[:200]}...")
+    elif block.type == "text":
+        print(f"[Answer]: {block.text}")
+</code></pre>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-shield-alt"></i>
+                        <strong>RedactedThinkingBlock:</strong> Occasionally, Claude&rsquo;s thinking content may be filtered for safety. In this case you&rsquo;ll receive a block with <code>type: "redacted_thinking"</code> instead of <code>"thinking"</code>. Always check for both types when processing extended thinking responses: <code>if block.type == "redacted_thinking": print("[Redacted]")</code>.
+                    </div>
+
+                    <h3 id="multimodal-blocks">2.5 Multimodal Input Blocks (Image &amp; Document)</h3>
+
+                    <p>Claude supports multimodal input through specialized content blocks in the <code>messages</code> array. Instead of passing a plain string for the <code>content</code> field, provide an array of content blocks mixing text with images or documents. These are <em>input</em> blocks (sent by the user), not response blocks.</p>
+
+                    <h4>ImageBlock &mdash; Vision Input</h4>
+
+                    <p>Send images for Claude to analyze via base64 encoding or a public URL. Supported formats: JPEG, PNG, GIF, WebP. Maximum size: 20MB per image, up to 20 images per request.</p>
+
+<pre><code class="language-python">import anthropic
+import base64
+from pathlib import Path
+
+client = anthropic.Anthropic()
+
+# Option 1: Base64-encoded image from file
+image_data = base64.standard_b64encode(Path("screenshot.png").read_bytes()).decode("utf-8")
+
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    messages=[
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": image_data
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": "What does this screenshot show? Identify any UI issues."
+                }
+            ]
+        }
+    ]
+)
+
+print(response.content[0].text)
+</code></pre>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Option 2: Image from URL (no download/encoding needed)
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    messages=[
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "url",
+                        "url": "https://example.com/architecture-diagram.png"
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": "Review this architecture diagram. Are there any single points of failure?"
+                }
+            ]
+        }
+    ]
+)
+
+print(response.content[0].text)
+print(f"Input tokens: {response.usage.input_tokens}")  # Images consume ~1,600 tokens per 1568x1568 tile
+</code></pre>
+
+                    <h4>DocumentBlock &mdash; PDF Input</h4>
+
+                    <p>Send PDF documents for Claude to read and analyze. The document is passed as base64-encoded content. Claude can extract text, tables, charts, and images from PDFs &mdash; useful for contract review, report analysis, and document Q&amp;A.</p>
+
+<pre><code class="language-python">import anthropic
+import base64
+from pathlib import Path
+
+client = anthropic.Anthropic()
+
+# Send a PDF for analysis
+pdf_data = base64.standard_b64encode(Path("api-spec.pdf").read_bytes()).decode("utf-8")
+
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=4096,
+    messages=[
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "application/pdf",
+                        "data": pdf_data
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": "Summarize the breaking changes in this API specification. List each change with the affected endpoint."
+                }
+            ]
+        }
+    ]
+)
+
+print(response.content[0].text)
+print(f"Input tokens: {response.usage.input_tokens}")
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Token Cost for Multimodal:</strong> Images are tokenized by tile &mdash; roughly 1,600 tokens per 1568&times;1568 pixel tile. A typical screenshot costs ~1,600&ndash;3,200 tokens. PDFs are tokenized per page (~1,500&ndash;3,000 tokens/page depending on density). Use <code>client.messages.count_tokens()</code> to measure exact costs before sending large documents. These input blocks support <code>cache_control</code> for prompt caching &mdash; ideal when asking multiple questions about the same document.
+                    </div>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="meta-category"><i class="fas fa-flask me-1"></i>Real-World Application</span>
+                        </div>
+                        <div class="experiment-content">
+                            <h4>Real-Time Medical Triage Assistant</h4>
+                            <p>A healthcare platform used streaming + multi-turn conversations to build a symptom checker that asks follow-up questions before suggesting next steps. Key: maintaining context across turns and using <code>stop_reason</code> to detect when Claude needs more info vs. is ready to conclude. The system achieved 92% concordance with nurse triage decisions while reducing average wait times by 6 minutes.</p>
+                        </div>
+                        <div class="experiment-tags"><span class="bias-tag">Streaming</span><span class="bias-tag">Multi-Turn</span><span class="bias-tag">Healthcare</span></div>
+                    </div>
+
+                    <h2 id="stop-reason"><i class="fas fa-stop-circle me-2 text-teal"></i>3. Stop Reason</h2>
+
+                    <p>The <code>stop_reason</code> field tells you <em>why</em> Claude stopped generating. This is critical for agentic applications where you need to know whether to continue the loop (tool_use) or present the final answer (end_turn).</p>
+
+                    <h3 id="stop-values">3.1 Stop Reason Values</h3>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-dark">
+                                <tr><th>Value</th><th>Meaning</th><th>Action</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>"end_turn"</code></td><td>Claude finished its response naturally</td><td>Present response to user</td></tr>
+                                <tr><td><code>"tool_use"</code></td><td>Claude wants to call one or more tools</td><td>Execute tools, return results, continue loop</td></tr>
+                                <tr><td><code>"max_tokens"</code></td><td>Hit the max_tokens limit</td><td>Increase limit or continue in next request</td></tr>
+                                <tr><td><code>"stop_sequence"</code></td><td>Hit a custom stop sequence</td><td>Process output up to that point</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p>Here is how to branch on stop_reason in an application — the foundation of agentic loop control (covered deeply in Part 3):</p>
+
+<pre><code class="language-python">import anthropic
+import json
+
+client = anthropic.Anthropic()
+
+# Define a tool for this example
+tools = [{
+    "name": "get_weather",
+    "description": "Get weather for a location.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"location": {"type": "string"}},
+        "required": ["location"]
+    }
+}]
+
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    tools=tools,
+    messages=[{"role": "user", "content": "Look up the weather and tell me what to wear."}]
+)
+
+# Branch based on stop_reason
+if response.stop_reason == "end_turn":
+    # Claude is done — present the final answer
+    print("Final:", response.content[0].text)
+
+elif response.stop_reason == "tool_use":
+    # Claude wants to call a tool — execute it and continue
+    tool_blocks = [b for b in response.content if b.type == "tool_use"]
+    print(f"Claude wants to call {len(tool_blocks)} tool(s)")
+    for tool in tool_blocks:
+        print(f"  → {tool.name}({tool.input})")
+
+elif response.stop_reason == "max_tokens":
+    # Output was truncated — handle gracefully
+    print("Warning: response truncated at max_tokens limit")
+
+elif response.stop_reason == "stop_sequence":
+    # Hit a custom stop sequence
+    print("Stopped at custom sequence")
+</code></pre>
+
+                    <h3 id="stop-sequences">3.2 Custom Stop Sequences</h3>
+
+                    <p>Custom stop sequences let you control <em>exactly where</em> Claude stops generating. When Claude produces any string in your <code>stop_sequences</code> array, it immediately halts output and sets <code>stop_reason</code> to <code>"stop_sequence"</code>. The stop string itself is <strong>not included</strong> in the response text &mdash; it acts as a boundary marker you can rely on for parsing.</p>
+
+                    <p>Key behaviors:</p>
+                    <ul>
+                        <li>Up to 4 stop sequences per request (array of strings)</li>
+                        <li>Matching is exact and case-sensitive</li>
+                        <li>The matched stop sequence is excluded from the output</li>
+                        <li>Works alongside <code>max_tokens</code> &mdash; whichever triggers first wins</li>
+                        <li>Compatible with streaming (the stream ends when a stop sequence is hit)</li>
+                    </ul>
+
+                    <p><strong>Use Case 1: Section Extraction</strong> &mdash; extract only the first section of a structured response:</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Stop at the first section boundary — get only the summary
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=2048,
+    stop_sequences=["## ", "---"],
+    messages=[
+        {"role": "user", "content": "Write a technical summary of Python async/await, then a code example section. Use ## headings."}
+    ]
+)
+
+# Only the first section is returned — Claude stopped at "## " (next heading)
+print(response.content[0].text)
+print(f"Stop reason: {response.stop_reason}")  # "stop_sequence"
+</code></pre>
+
+                    <p><strong>Use Case 2: Template Filling</strong> &mdash; have Claude fill in a template and stop at a placeholder boundary:</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Fill in a template — Claude generates until it hits the delimiter
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=512,
+    stop_sequences=["{{END}}"],
+    messages=[
+        {"role": "user", "content": "Generate a product description for a wireless mouse. Write naturally and end with {{END}}."}
+    ]
+)
+
+# Clean output — no delimiter in the text, just the description
+product_description = response.content[0].text.strip()
+print(product_description)
+</code></pre>
+
+                    <p><strong>Use Case 3: Iterative Generation</strong> &mdash; generate content step-by-step by stopping and resuming at markers. This is a powerful pattern for building pipelines that process each section individually:</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Generate a multi-step plan, stopping after each step
+messages = [
+    {"role": "user", "content": "List 3 steps to deploy a FastAPI app to production. Number each step (1. 2. 3.) and put --- between steps."}
+]
+
+steps = []
+for i in range(3):
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=512,
+        stop_sequences=["---"],
+        messages=messages
+    )
+
+    step_text = response.content[0].text.strip()
+    steps.append(step_text)
+
+    if response.stop_reason == "stop_sequence":
+        # Append assistant's partial output (including the stop marker)
+        messages.append({"role": "assistant", "content": response.content[0].text + "---"})
+        # API requires conversation to end with a user message — prompt to continue
+        messages.append({"role": "user", "content": "Continue."})
+    else:
+        break  # end_turn or max_tokens — no more steps
+
+for i, step in enumerate(steps, 1):
+    print(f"Step {i}: {step}\n")
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Resuming After Stop:</strong> When Claude stops at a custom sequence, you can continue generation by appending the partial response (including the stop sequence) as an <code>assistant</code> message, followed by a <code>user</code> message (e.g., <code>"Continue."</code>) since the API requires conversations to end with a user turn. This &ldquo;stop and resume&rdquo; pattern is essential for iterative pipelines, chunked processing, and building structured outputs piece by piece. Note that <code>stop_sequences</code> are checked against the raw output text &mdash; if Claude wraps output in markdown code fences, include the delimiter outside the fences.
+                    </div>
+
+                    <h2 id="streaming"><i class="fas fa-stream me-2 text-teal"></i>4. Streaming</h2>
+
+                    <p>Streaming delivers response tokens as they&rsquo;re generated, reducing time-to-first-token (TTFT) and enabling real-time UIs. The Anthropic API uses Server-Sent Events (SSE) with typed event objects that map to the content block architecture.</p>
+
+                    <h3 id="sse-events">4.1 SSE Event Types</h3>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-dark">
+                                <tr><th>Event</th><th>Purpose</th><th>Key Data</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>message_start</code></td><td>Response begins</td><td>Message ID, model, usage (input_tokens)</td></tr>
+                                <tr><td><code>content_block_start</code></td><td>New content block begins</td><td>Block type, index</td></tr>
+                                <tr><td><code>content_block_delta</code></td><td>Incremental content</td><td>Text delta or tool input delta</td></tr>
+                                <tr><td><code>content_block_stop</code></td><td>Block complete</td><td>Block index</td></tr>
+                                <tr><td><code>message_delta</code></td><td>Message-level updates</td><td>stop_reason, usage (output_tokens)</td></tr>
+                                <tr><td><code>message_stop</code></td><td>Response complete</td><td>&mdash;</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h3 id="stream-helpers">4.2 SDK Stream Helpers</h3>
+
+                    <p>The Python SDK provides a high-level streaming interface that handles SSE parsing and delivers events as typed objects. Use the <code>with client.messages.stream()</code> context manager for the cleanest pattern:</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# High-level streaming with the SDK helper
+with client.messages.stream(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Explain microservices architecture."}]
+) as stream:
+    for text in stream.text_stream:
+        print(text, end="", flush=True)
+
+# Access the final message after streaming completes
+final_message = stream.get_final_message()
+print(f"\n\nTokens used: {final_message.usage.input_tokens} in, {final_message.usage.output_tokens} out")
+</code></pre>
+
+                    <p>For more granular control over individual SSE events (useful when handling tool calls in streaming mode), use the raw event stream:</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Define a tool for streaming example
+tools = [{
+    "name": "get_weather",
+    "description": "Get weather for a location.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"location": {"type": "string"}},
+        "required": ["location"]
+    }
+}]
+
+# Low-level event-based streaming for tool_use handling
+with client.messages.stream(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    tools=tools,
+    messages=[{"role": "user", "content": "What's the weather in Paris?"}]
+) as stream:
+    for event in stream:
+        if event.type == "content_block_start":
+            if event.content_block.type == "tool_use":
+                print(f"Tool call starting: {event.content_block.name}")
+        elif event.type == "content_block_delta":
+            if event.delta.type == "text_delta":
+                print(event.delta.text, end="", flush=True)
+            elif event.delta.type == "input_json_delta":
+                print(event.delta.partial_json, end="")
+        elif event.type == "message_delta":
+            print(f"\nStop reason: {event.delta.stop_reason}")
+</code></pre>
+
+                    <p>The TypeScript SDK provides equivalent streaming with async iterators:</p>
+
+<pre><code class="language-javascript">import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic();
+
+async function streamResponse() {
+    const stream = client.messages.stream({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [{ role: "user", content: "Explain microservices." }]
+    });
+
+    // Event-based streaming
+    stream.on("text", (text) => process.stdout.write(text));
+    stream.on("message", (message) => {
+        console.log(`\nDone. Tokens: ${message.usage.output_tokens}`);
+    });
+
+    // Or use async iteration
+    // for await (const event of stream) { ... }
+
+    const finalMessage = await stream.finalMessage();
+    return finalMessage;
+}
+
+streamResponse();
+</code></pre>
+
+                    <h2 id="token-management"><i class="fas fa-calculator me-2 text-teal"></i>5. Token Management</h2>
+
+                    <p>Understanding token usage is essential for cost control and context window management. Every response includes a <code>usage</code> object, and the SDK provides a dedicated token counting endpoint for pre-flight checks.</p>
+
+                    <h3 id="usage-object">5.1 Usage Object</h3>
+
+                    <p>Every response includes detailed token accounting. When prompt caching is active, additional fields track cache hits and creation costs:</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=512,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# Standard usage fields
+usage = response.usage
+print(f"Input tokens:  {usage.input_tokens}")
+print(f"Output tokens: {usage.output_tokens}")
+
+# With prompt caching enabled, additional fields appear:
+# usage.cache_creation_input_tokens — tokens written to cache (first call)
+# usage.cache_read_input_tokens    — tokens read from cache (subsequent calls)
+</code></pre>
+
+                    <h3 id="count-tokens">5.2 Count Tokens API</h3>
+
+                    <p>Use the <code>count_tokens</code> endpoint to measure token usage <em>before</em> making a request. This is invaluable for context window management &mdash; verifying your messages fit within the model&rsquo;s limit before sending:</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Count tokens before sending a request
+token_count = client.messages.count_tokens(
+    model="claude-sonnet-4-6",
+    system="You are a helpful assistant.",
+    messages=[
+        {"role": "user", "content": "Explain the theory of relativity in detail."}
+    ]
+)
+
+print(f"Input tokens: {token_count.input_tokens}")
+
+# Use this for context window management
+MAX_CONTEXT = 200000
+available_for_output = MAX_CONTEXT - token_count.input_tokens
+print(f"Available for output: {available_for_output} tokens")
+
+# Validate before sending
+if token_count.input_tokens > MAX_CONTEXT * 0.8:
+    print("Warning: approaching context limit, consider summarizing history")
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Cost Formula:</strong> Total cost = (input_tokens &times; input_price) + (output_tokens &times; output_price). Cache reads cost 90% less than regular input tokens. Always track usage per-request for cost attribution and anomaly detection.
+                    </div>
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-laptop-code me-2"></i>
+                        <strong>Try It Yourself:</strong> Build a multi-turn conversation where Claude acts as a Socratic tutor. It should ask clarifying questions instead of giving direct answers. Implement at least 5 turns, handling the message history correctly. Then add streaming to see responses token-by-token.
+                    </div>
+
+                    <h2 id="count-tokens-adv"><i class="fas fa-calculator me-2 text-teal"></i>6. Count Tokens &amp; Advanced Patterns</h2>
+
+                    <p>The <strong>Count Tokens</strong> endpoint lets you check how many tokens a message will consume <em>before</em> sending it &mdash; essential for staying within context limits, estimating costs, and deciding when to summarize or truncate. Unlike the <code>usage</code> field in responses (which tells you AFTER), count_tokens tells you BEFORE.</p>
+
+                    <h3 id="count-tokens-api">6.1 Count Tokens Endpoint</h3>
+
+<pre><code class="language-python">import anthropic
+import json
+
+client = anthropic.Anthropic()
+
+# COUNT TOKENS — Check token count BEFORE sending
+# POST /v1/messages/count_tokens
+# Use case: Decide whether to summarize before sending (context window management)
+
+result = client.messages.count_tokens(
+    model="claude-sonnet-4-6",
+    system="You are a helpful assistant.",
+    messages=[
+        {"role": "user", "content": "Explain quantum computing in simple terms."}
+    ],
+    # tools=[] — optional, tools consume tokens too!
+)
+
+print(f"Input tokens: {result.input_tokens}")
+# Use this to decide: is there room for the response?
+# context_window = 200000
+# room_for_output = context_window - result.input_tokens
+# if room_for_output < 4096:
+#     summarize_older_messages()
+
+# COUNT WITH TOOLS — tools add to token count
+tools = [{
+    "name": "search",
+    "description": "Search the knowledge base",
+    "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}}
+}]
+
+result_with_tools = client.messages.count_tokens(
+    model="claude-sonnet-4-6",
+    system="You are a support agent.",
+    messages=[{"role": "user", "content": "How do I reset my password?"}],
+    tools=tools
+)
+
+print(f"Without tools: ~20 tokens")
+print(f"With tools: {result_with_tools.input_tokens} tokens (tool schemas add overhead!)")
+print("\nKey insight: Each tool definition adds ~50-200 tokens to EVERY request")
+</code></pre>
+
+                    <h3 id="multi-turn-patterns">6.2 Multi-Turn Conversation Patterns</h3>
+
+<pre><code class="language-python">import anthropic
+import json
+
+client = anthropic.Anthropic()
+
+# Multi-turn conversations require careful message management.
+# Each turn adds to the context — eventually hitting the window limit.
+
+# Pattern 1: Simple accumulation (fine for short conversations)
+messages = []
+
+def chat_simple(user_input: str) -> str:
+    """Simple multi-turn — accumulates all messages."""
+    messages.append({"role": "user", "content": user_input})
+
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1000,
+        messages=messages
+    )
+
+    assistant_msg = response.content[0].text
+    messages.append({"role": "assistant", "content": assistant_msg})
+    return assistant_msg
+
+# Pattern 2: Token-aware (checks before sending, summarizes if needed)
+def chat_token_aware(user_input: str, max_context: int = 150000) -> str:
+    """Multi-turn with token management — summarizes when context gets large."""
+    messages.append({"role": "user", "content": user_input})
+
+    # Check current token count
+    count = client.messages.count_tokens(
+        model="claude-sonnet-4-6",
+        messages=messages
+    )
+
+    # If approaching limit, summarize older messages
+    if count.input_tokens > max_context:
+        summary = summarize_messages(messages[:-4])  # Keep last 4 messages
+        messages[:] = [
+            {"role": "user", "content": f"[Previous conversation summary: {summary}]"},
+            {"role": "assistant", "content": "I understand the context. How can I help?"}
+        ] + messages[-4:]
+
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1000,
+        messages=messages
+    )
+
+    assistant_msg = response.content[0].text
+    messages.append({"role": "assistant", "content": assistant_msg})
+    return assistant_msg
+
+def summarize_messages(msgs: list) -> str:
+    """Summarize older messages to free context space."""
+    response = client.messages.create(
+        model="claude-haiku-4-5",  # Cheap model for summarization
+        max_tokens=500,
+        system="Summarize this conversation, preserving key decisions and facts.",
+        messages=[{"role": "user", "content": json.dumps(msgs)}]
+    )
+    return response.content[0].text
+
+print("Pattern 1: Simple accumulation (short conversations)")
+print("Pattern 2: Token-aware with auto-summarization (long conversations)")
+print("\nAlways use count_tokens BEFORE sending to avoid context overflow")
+</code></pre>
+
+                    <h3 id="beta-headers">6.3 Beta Features &amp; Headers</h3>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Beta features require special headers to opt-in
+# This gives Anthropic a way to ship experimental features safely
+
+# Enable beta features via the beta parameter:
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1000,
+    # Beta features (check docs for currently available betas):
+    # betas=["prompt-caching-2024-07-31", "max-tokens-3-5-sonnet-2024-07-15"]
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# Or via raw headers (lower-level control):
+# client = anthropic.Anthropic(
+#     default_headers={"anthropic-beta": "prompt-caching-2024-07-31"}
+# )
+
+# Common beta features (examples — check current docs):
+# - Prompt caching (reduces cost for repeated system prompts)
+# - Extended output (higher max_tokens limits)
+# - Computer use (UI interaction tools)
+# - PDF support (native PDF processing)
+
+</code></pre>
+
+                    <div class="mermaid-container">
+                        <span class="mermaid-label"><i class="fas fa-flask me-1"></i>Beta Feature Lifecycle</span>
+                        <pre class="mermaid">
+stateDiagram-v2
+    [*] --> Beta: Feature announced
+    Beta --> Stable: Header optional
+    Stable --> GA: Generally available
+    GA --> Deprecated: Header ignored
+
+    Beta: Requires header to enable
+    Stable: Header works but optional
+    GA: No header needed
+    Deprecated: Header still accepted
+                        </pre>
+                    </div>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Beta Feature Summary:</strong> Opt in via the <code>betas</code> parameter or <code>anthropic-beta</code> header. Check <code>docs.anthropic.com</code> for currently available betas. <strong>Production tip:</strong> pin beta versions (date-stamped) for stability &mdash; beta APIs can change without notice.
+                    </div>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-graduation-cap"></i>
+                        <strong>CCA Exam Pattern (0.4):</strong> Questions test: (1) <code>count_tokens</code> checks token count BEFORE sending (not after). (2) Tool definitions add token overhead to every request (~50-200 tokens each). (3) Multi-turn requires message accumulation with role alternation. (4) Beta features require explicit opt-in via headers. (5) Pin model versions AND beta versions in production for stability.
+                    </div>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the SDK Track</h4>
+                        <p>In <a href="ai-app-dev-sdk-anthropic-part03-agentic-loops.html"><strong>Part 3: Agentic Loops &amp; Task Decomposition</strong></a>, we&rsquo;ll use <code>stop_reason</code> to build autonomous agentic loops &mdash; the foundation of the Claude Agent SDK. Covers CCA Domain 1 Task 1.1 (agentic loop lifecycle) and Task 1.6 (task decomposition strategies).</p>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Anthropic Part 1: Platform &amp; SDK Setup</h5>
+                            <p>Set up the Anthropic platform and Claude SDK &mdash; API keys, models, tiers, client configuration, and production patterns.</p>
+                            <a href="ai-app-dev-sdk-anthropic-part01-platform-setup.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Anthropic Part 3: Agentic Loops &amp; Task Decomposition</h5>
+                            <p>Build autonomous agents with stop_reason-driven loops, task decomposition strategies, and prompt chaining patterns.</p>
+                            <a href="ai-app-dev-sdk-anthropic-part03-agentic-loops.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left"><div class="fc-brand-group"><div class="fc-brand-stack"><span></span><span></span><span></span></div><span class="fc-brand-name">Wasil Zafar</span></div><span class="fc-tagline">Consultant &amp; Cloud Architect</span></div>
+                <div class="fc-center"><a href="/">Home</a><a href="/disclaimer.html">Disclaimer</a><a href="/privacy-policy.html">Privacy</a><a href="/pages/contact.html">Contact</a></div>
+                <div class="fc-right">
+                    <a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a>
+                    <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>
+                    <a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                    <a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a>
+                    <a href="/feed.xml" target="_blank" title="RSS Feed"><i class="fas fa-rss"></i></a>
+                </div>
+            </div>
+            <div class="footer-sub"><span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span><a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a></div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="../../../js/path-progress.js"></script>
+</body>
+</html>

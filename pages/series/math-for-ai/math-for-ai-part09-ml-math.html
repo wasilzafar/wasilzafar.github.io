@@ -387,6 +387,84 @@ print(f"ReLU'(1)     = {relu_grad(1):.4f}  (constant gradient for x>0)")
 
                         <p>Benefits: reduces internal covariate shift, smooths loss landscape (enabling larger $\alpha$), provides mild regularization effect, reduces sensitivity to initialization.</p>
 
+                        <h2 id="numerical-stability">Numerical Stability</h2>
+
+                        <p>Floating-point arithmetic has finite precision. Operations that are mathematically correct can produce catastrophically wrong results when implemented naively. Understanding and preventing numerical instability is essential for reliable deep learning.</p>
+
+                        <h3 id="overflow-underflow">Overflow &amp; Underflow</h3>
+
+                        <p><strong>Overflow:</strong> Computing $e^{1000}$ produces infinity in float32. This occurs in naive softmax when logits are large. <strong>Underflow:</strong> Computing $e^{-1000}$ produces 0, and $\log(0) = -\infty$. This occurs when computing $\log p$ for very small probabilities.</p>
+
+                        <p><strong>The log-sum-exp trick:</strong> The softmax denominator $\sum_j e^{z_j}$ can overflow. Subtract the maximum:</p>
+
+                        <div class="math-block">$$\log\sum_j e^{z_j} = c + \log\sum_j e^{z_j - c}, \quad c = \max_j z_j$$</div>
+
+                        <p>After subtraction, the largest exponent is $e^0 = 1$, preventing overflow. The sum is at least 1, preventing underflow in the log.</p>
+
+                        <p><strong>Stable softmax:</strong> Combining the above:</p>
+                        <div class="math-block">$$\text{softmax}(z_i) = \frac{e^{z_i - c}}{\sum_j e^{z_j - c}}$$</div>
+
+                        <h3 id="stable-cross-entropy">Stable Cross-Entropy</h3>
+
+                        <p>Computing cross-entropy as $-\log(\text{softmax}(z_i))$ is numerically dangerous — softmax produces values near 0 or 1, and $\log(0) = -\infty$. The <strong>log-softmax</strong> formulation avoids this:</p>
+
+                        <div class="math-block">$$\log\text{softmax}(z_i) = z_i - \log\sum_j e^{z_j} = z_i - c - \log\sum_j e^{z_j - c}$$</div>
+
+                        <p>This is why PyTorch provides <code>F.cross_entropy(logits, targets)</code> which operates on raw logits — it fuses softmax and log into a numerically stable operation.</p>
+
+                        <h3 id="gradient-issues">Gradient Pathologies</h3>
+
+                        <p><strong>Vanishing gradients:</strong> Sigmoid saturates at extreme values: $\sigma(x) \to 0$ or $1$, and $\sigma'(x) = \sigma(x)(1-\sigma(x)) \to 0$. Through $L$ layers: $\prod_{l=1}^L \sigma' \to 0$ exponentially fast.</p>
+
+                        <p><strong>Exploding gradients:</strong> If weight matrices have spectral norm $> 1$, gradients can grow exponentially through layers. <strong>Gradient clipping</strong> bounds the norm:</p>
+
+                        <div class="math-block">$$\mathbf{g} \leftarrow \begin{cases} \mathbf{g} & \text{if } \|\mathbf{g}\| \leq c \\ c \cdot \frac{\mathbf{g}}{\|\mathbf{g}\|} & \text{otherwise}\end{cases}$$</div>
+
+                        <p><strong>Mixed-precision training:</strong> float16 has range $\pm 65504$ and 10 bits of mantissa. Tiny gradients underflow to zero. The solution: keep a float32 master copy of weights, compute forward/backward in float16, and use loss scaling to shift gradients into representable range.</p>
+
+<pre><code class="language-python">import numpy as np
+
+# Demonstration: naive vs stable softmax
+logits_normal = np.array([2.0, 1.0, 0.1])
+logits_large = np.array([1000.0, 999.0, 998.0])
+
+def naive_softmax(z):
+    exp_z = np.exp(z)  # can overflow!
+    return exp_z / exp_z.sum()
+
+def stable_softmax(z):
+    c = np.max(z)
+    exp_z = np.exp(z - c)  # max exponent is 0
+    return exp_z / exp_z.sum()
+
+print("Normal logits — both work:")
+print(f"  Naive:  {naive_softmax(logits_normal)}")
+print(f"  Stable: {stable_softmax(logits_normal)}")
+
+print("\nLarge logits — naive fails:")
+try:
+    result = naive_softmax(logits_large)
+    print(f"  Naive:  {result}")  # will show nan/inf
+except Exception as e:
+    print(f"  Naive:  ERROR - {e}")
+print(f"  Stable: {stable_softmax(logits_large)}")
+
+# Log-sum-exp trick
+def stable_logsumexp(z):
+    c = np.max(z)
+    return c + np.log(np.sum(np.exp(z - c)))
+
+# Stable cross-entropy from logits
+def stable_cross_entropy(logits, target_idx):
+    """CE loss without computing softmax separately."""
+    log_sum_exp = stable_logsumexp(logits)
+    return -(logits[target_idx] - log_sum_exp)
+
+target = 0  # true class index
+ce = stable_cross_entropy(logits_large, target)
+print(f"\nStable cross-entropy (target=0): {ce:.4f}")
+print(f"Expected: -log(softmax[0]) = -log({stable_softmax(logits_large)[0]:.4f}) = {-np.log(stable_softmax(logits_large)[0]):.4f}")</code></pre>
+
                         <h2 id="exercises">Practice Exercises</h2>
 
                         <div class="experiment-card">

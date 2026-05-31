@@ -1,0 +1,1541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Design effective tool interfaces for Claude agents: JSON Schema input_schema patterns, the Agent SDK @tool decorator with create_sdk_mcp_server for custom in-process tools, tool annotations for parallel execution, error handling with is_error, and composable tool sets. CCA Domain 2 Tasks 2.1, 2.2." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="Claude tools, tool design, input_schema, @tool decorator, create_sdk_mcp_server, tool annotations, readOnlyHint, is_error, composable tools, CCA Domain 2, in-process MCP" />
+    <meta property="og:title" content="Anthropic SDK Track Part 6: Tool Interface Design" />
+    <meta property="og:description" content="Design tool schemas that drive correct model reasoning — descriptions, input validation, error patterns, composability, and anti-patterns." />
+    <meta property="og:type" content="article" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/favicon_io/android-chrome-512x512.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="article:published_time" content="2026-05-22" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>Anthropic SDK Track Part 6: Tool Interface Design - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/ai-app-dev-xtreme/ai-app-dev-sdk-anthropic-part06-tool-design.html" />
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'ad_storage': 'denied', 'ad_user_data': 'denied',
+            'ad_personalization': 'denied', 'analytics_storage': 'denied',
+            'region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']
+        });
+        gtag('consent', 'default', {
+            'ad_storage': 'granted', 'ad_user_data': 'granted',
+            'ad_personalization': 'granted', 'analytics_storage': 'granted'
+        });
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <script>
+        (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});
+        var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
+        j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;
+        f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');
+    </script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <div class="nav-v16-wrapper">
+        <nav class="nav-v16">
+            <a href="/" class="brand"><div class="brand-stack"><span></span><span></span><span></span></div><span class="brand-text">Wasil Zafar</span></a>
+            <button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()"><span></span><span></span><span></span></button>
+            <div class="links">
+                <a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a>
+                <a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a>
+                <a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a>
+                <a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a>
+                <a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a>
+                <button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to AI App Dev Series</a>
+                <h1 class="display-4 fw-bold mb-3">Anthropic SDK Track Part 6: Tool Interface Design</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>May 22, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>55 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Design tool schemas that enable correct model-driven reasoning &mdash; JSON Schema <code>input_schema</code> patterns, description engineering, the <code>is_error</code> flag for error propagation, composable tool sets with minimal overlap, and anti-patterns that cause agents to misuse tools.</p>
+                <div class="mt-3">
+                    <span class="badge bg-warning text-dark bg-opacity-75 me-1"><i class="fas fa-wrench me-1"></i>CCA Domain 2 &middot; 23%</span>
+                    <span class="badge bg-secondary bg-opacity-75">Tasks 2.1, 2.2</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- TOC Toggle -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header"><h3><i class="fas fa-list me-2"></i>Table of Contents</h3><button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button></div>
+        <ol>
+            <li><a href="#schema-design" onclick="closeNav()">Schema Design Principles</a>
+                <ul>
+                    <li><a href="#descriptions" onclick="closeNav()">Description Engineering</a></li>
+                    <li><a href="#input-schema" onclick="closeNav()">input_schema Patterns</a></li>
+                    <li><a href="#enums-defaults" onclick="closeNav()">Enums &amp; Defaults</a></li>
+                </ul>
+            </li>
+            <li><a href="#error-handling" onclick="closeNav()">Error Response Patterns</a>
+                <ul>
+                    <li><a href="#is-error" onclick="closeNav()">The is_error Flag</a></li>
+                    <li><a href="#structured-errors" onclick="closeNav()">Structured Error Objects</a></li>
+                    <li><a href="#recovery" onclick="closeNav()">Self-Recovery Patterns</a></li>
+                </ul>
+            </li>
+            <li><a href="#composability" onclick="closeNav()">Composable Tool Sets</a>
+                <ul>
+                    <li><a href="#minimal-overlap" onclick="closeNav()">Minimal Overlap</a></li>
+                    <li><a href="#granularity" onclick="closeNav()">Right Granularity</a></li>
+                    <li><a href="#tool-versioning" onclick="closeNav()">Tool Versioning</a></li>
+                </ul>
+            </li>
+            <li><a href="#anti-patterns" onclick="closeNav()">Anti-Patterns</a></li>
+            <li><a href="#strict-tool-use" onclick="closeNav()">Strict Tool Use &amp; Input Examples</a>
+                <ul>
+                    <li><a href="#strict-mode" onclick="closeNav()">Strict Mode (strict: true)</a></li>
+                    <li><a href="#input-examples" onclick="closeNav()">Input Examples</a></li>
+                    <li><a href="#tool-prompt-caching" onclick="closeNav()">Tool Use with Prompt Caching</a></li>
+                </ul>
+            </li>
+            <li><a href="#builtin-tools" onclick="closeNav()">Built-In Tools Deep Dive</a>
+                <ul>
+                    <li><a href="#read-write-edit" onclick="closeNav()">Read / Write / Edit</a></li>
+                    <li><a href="#bash-tool" onclick="closeNav()">Bash Tool</a></li>
+                    <li><a href="#grep-glob" onclick="closeNav()">Grep &amp; Glob</a></li>
+                    <li><a href="#error-metadata" onclick="closeNav()">MCP Error Metadata</a></li>
+                </ul>
+            </li>
+            <li><a href="#sdk-custom-tools" onclick="closeNav()">Agent SDK: Custom Tools</a>
+                <ul>
+                    <li><a href="#tool-decorator" onclick="closeNav()">@tool Decorator</a></li>
+                    <li><a href="#sdk-mcp-server" onclick="closeNav()">In-Process MCP Server</a></li>
+                    <li><a href="#tool-annotations" onclick="closeNav()">Tool Annotations</a></li>
+                    <li><a href="#tool-errors-sdk" onclick="closeNav()">Error Handling (is_error)</a></li>
+                    <li><a href="#tool-images" onclick="closeNav()">Returning Images &amp; Resources</a></li>
+                </ul>
+            </li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>What You&rsquo;ll Learn:</strong> Well-designed tools are the difference between an agent that works reliably and one that hallucinates or gets stuck. This article teaches you how to create tools that Claude understands intuitively &mdash; clear names, precise descriptions, validated inputs, and helpful error messages. Think of tools like a well-designed API: the better the interface, the less likely users (or agents) are to misuse it.
+                    </div>
+
+                    <h2 id="schema-design"><i class="fas fa-drafting-compass me-2 text-teal"></i>1. Schema Design Principles</h2>
+
+                    <p>Tool schemas are the API contract between your code and Claude&rsquo;s reasoning. The quality of your tool definitions directly impacts agent reliability. Good schemas make it easy for Claude to call the right tool with correct arguments; bad schemas cause hallucinated inputs, wrong tool selection, and wasted iterations.</p>
+
+                    <h3 id="descriptions">1.1 Description Engineering</h3>
+
+                    <p>The tool <code>description</code> field is the most important part of a tool definition. Claude uses it to decide <em>when</em> to call the tool and <em>what to expect</em>. A good description answers three questions: What does this tool do? When should it be used? What does it return?</p>
+
+<pre><code class="language-python"># ❌ BAD: Vague description — Claude can't decide when to use this
+bad_tool = {
+    "name": "search",
+    "description": "Search for things.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"q": {"type": "string"}},
+        "required": ["q"]
+    }
+}
+
+# ✅ GOOD: Specific description with usage guidance and return format
+good_tool = {
+    "name": "search_docs",
+    "description": "Search the internal documentation knowledge base by keyword query. Returns up to 10 matching documents with titles, relevance scores, and excerpt snippets. Use this when the user asks about company policies, product features, or internal procedures. Do NOT use for general web search or real-time data.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Search query — use specific keywords, not natural language questions. Example: 'refund policy enterprise' not 'what is the refund policy?'"
+            },
+            "category": {
+                "type": "string",
+                "enum": ["policies", "products", "procedures", "technical"],
+                "description": "Filter by document category. Omit to search all categories."
+            },
+            "max_results": {
+                "type": "integer",
+                "description": "Maximum results to return (1-10). Default: 5.",
+                "minimum": 1,
+                "maximum": 10
+            }
+        },
+        "required": ["query"]
+    }
+}
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-graduation-cap"></i>
+                        <strong>CCA Task 2.1 &mdash; Description Principles:</strong> Effective descriptions include: (1) what the tool does, (2) when to use it vs. alternatives, (3) what it returns, (4) examples of good inputs, (5) negative guidance (&ldquo;Do NOT use for...&rdquo;). The exam tests ability to improve tool descriptions that cause misuse.
+                    </div>
+
+                    <h3 id="input-schema">1.2 input_schema Patterns</h3>
+
+                    <p>The <code>input_schema</code> uses JSON Schema to define parameter types, constraints, and documentation. Strong schemas prevent invalid inputs at the type level while property descriptions guide Claude&rsquo;s argument generation:</p>
+
+<pre><code class="language-python"># Comprehensive input_schema demonstrating best practices
+create_ticket_tool = {
+    "name": "create_support_ticket",
+    "description": "Create a support ticket in the system. Requires verified customer_id (from get_customer). Always include reproduction steps and expected behavior in the description.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "customer_id": {
+                "type": "string",
+                "description": "Verified customer ID from a prior get_customer call. Format: cust_XXXX",
+                "pattern": "^cust_[a-zA-Z0-9]+$"
+            },
+            "subject": {
+                "type": "string",
+                "description": "Brief ticket subject (5-100 chars). Be specific: 'Login fails with SSO' not 'Login issue'",
+                "minLength": 5,
+                "maxLength": 100
+            },
+            "priority": {
+                "type": "string",
+                "enum": ["low", "medium", "high", "critical"],
+                "description": "Severity: low=cosmetic, medium=workaround exists, high=blocking, critical=data loss/security"
+            },
+            "description": {
+                "type": "string",
+                "description": "Detailed issue description. Include: 1) What happened 2) Steps to reproduce 3) Expected behavior 4) Actual behavior"
+            },
+            "tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Categorization tags. Use existing tags: 'billing', 'auth', 'api', 'ui', 'performance'",
+                "maxItems": 5
+            }
+        },
+        "required": ["customer_id", "subject", "priority", "description"]
+    }
+}
+</code></pre>
+
+                    <h3 id="enums-defaults">1.3 Enums and Constrained Values</h3>
+
+                    <p>Use <code>enum</code> to constrain inputs to valid values. This prevents hallucinated categories, misspelled statuses, and invalid identifiers. Combine with descriptive enum documentation:</p>
+
+<pre><code class="language-python"># Enums prevent hallucinated values and make tool usage predictable
+filter_orders_tool = {
+    "name": "filter_orders",
+    "description": "Filter a customer's orders by status. Returns matching orders with IDs, amounts, and dates.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "customer_id": {
+                "type": "string",
+                "description": "Customer ID from get_customer"
+            },
+            "status": {
+                "type": "string",
+                "enum": ["pending", "processing", "shipped", "delivered", "cancelled", "refunded"],
+                "description": "Order status filter. Use 'pending' for unprocessed, 'processing' for in-progress, 'shipped' for in-transit."
+            },
+            "date_range": {
+                "type": "object",
+                "description": "Optional date range filter",
+                "properties": {
+                    "start": {"type": "string", "description": "ISO 8601 date (YYYY-MM-DD)"},
+                    "end": {"type": "string", "description": "ISO 8601 date (YYYY-MM-DD)"}
+                }
+            },
+            "sort_by": {
+                "type": "string",
+                "enum": ["date_asc", "date_desc", "amount_asc", "amount_desc"],
+                "description": "Sort order. Default: date_desc (newest first)"
+            }
+        },
+        "required": ["customer_id", "status"]
+    }
+}
+</code></pre>
+
+                    <h2 id="error-handling"><i class="fas fa-exclamation-circle me-2 text-teal"></i>2. Error Response Patterns</h2>
+
+                    <h3 id="is-error">2.1 The <code>is_error</code> Flag</h3>
+
+                    <p>When a tool execution fails, set <code>is_error: true</code> on the tool_result block. This signals to Claude that the operation failed and it should adapt its approach &mdash; retry with different arguments, try an alternative tool, or inform the user about the failure:</p>
+
+<pre><code class="language-python">import json
+
+def execute_tool_with_error_handling(tool_name: str, tool_input: dict) -> dict:
+    """Execute a tool and return a properly structured result, including errors."""
+    try:
+        result = execute_tool(tool_name, tool_input)
+        return {
+            "type": "tool_result",
+            "tool_use_id": tool_input["_id"],  # from the block
+            "content": json.dumps(result)
+        }
+    except ToolNotFoundError as e:
+        return {
+            "type": "tool_result",
+            "tool_use_id": tool_input["_id"],
+            "content": json.dumps({"error": str(e), "type": "not_found"}),
+            "is_error": True  # Signals failure to Claude
+        }
+    except ValidationError as e:
+        return {
+            "type": "tool_result",
+            "tool_use_id": tool_input["_id"],
+            "content": json.dumps({
+                "error": str(e),
+                "type": "validation",
+                "suggestion": "Check required fields and data types"
+            }),
+            "is_error": True
+        }
+    except RateLimitError as e:
+        return {
+            "type": "tool_result",
+            "tool_use_id": tool_input["_id"],
+            "content": json.dumps({
+                "error": "Rate limit exceeded",
+                "type": "rate_limit",
+                "retry_after_seconds": e.retry_after
+            }),
+            "is_error": True
+        }
+</code></pre>
+
+                    <h3 id="structured-errors">2.2 Structured Error Objects</h3>
+
+                    <p>Return structured error information that helps Claude reason about what went wrong and how to recover. Include the error type, a human-readable message, and actionable suggestions:</p>
+
+<pre><code class="language-python">import json
+
+def build_error_response(error_type: str, message: str, **kwargs) -> str:
+    """Build a structured error response for tool_result content."""
+    error = {
+        "success": False,
+        "error": {
+            "type": error_type,
+            "message": message
+        }
+    }
+
+    # Add contextual fields based on error type
+    if error_type == "not_found":
+        error["error"]["suggestion"] = kwargs.get("suggestion", "Verify the identifier exists")
+    elif error_type == "permission_denied":
+        error["error"]["required_prerequisite"] = kwargs.get("prerequisite")
+    elif error_type == "validation":
+        error["error"]["invalid_fields"] = kwargs.get("fields", [])
+        error["error"]["expected_format"] = kwargs.get("format")
+
+    return json.dumps(error)
+
+# Examples of structured errors that help Claude self-correct:
+
+# Customer not found — Claude should ask for correct identifier
+not_found_error = build_error_response(
+    "not_found",
+    "No customer found with email 'jon@example.com'",
+    suggestion="Try alternative email addresses or ask the customer to verify"
+)
+
+# Permission denied — Claude needs to call get_customer first
+permission_error = build_error_response(
+    "permission_denied",
+    "Cannot look up orders without verified customer",
+    prerequisite="Call get_customer first to verify identity"
+)
+
+# Validation error — Claude sent wrong data types
+validation_error = build_error_response(
+    "validation",
+    "Invalid input for create_ticket",
+    fields=["priority"],
+    format="Must be one of: low, medium, high, critical"
+)
+</code></pre>
+
+                    <h3 id="recovery">2.3 Self-Recovery Patterns</h3>
+
+                    <p>Well-designed error responses enable Claude to autonomously recover without human intervention. The key is providing enough context for Claude to understand what went wrong and what to try next:</p>
+
+<pre><code class="language-python">import anthropic
+import json
+
+client = anthropic.Anthropic()
+
+# Claude receives this error and autonomously adapts:
+# {"success": false, "error": {"type": "not_found", "message": "Order ORD-999 not found",
+#   "suggestion": "Check order ID format or search by customer email"}}
+
+# Claude's next action will typically be:
+# 1. Try an alternative approach (search by customer email)
+# 2. Ask the user for clarification
+# 3. Report the issue with context
+
+# This self-recovery happens naturally when errors are descriptive.
+# Compare with a BAD error that provides no recovery path:
+
+# ❌ BAD: "Error: 404" — Claude has no idea what to do
+# ✅ GOOD: {"error": {"type": "not_found", "message": "...", "suggestion": "..."}}
+
+# The agent loop handles this transparently — errors flow back as tool_result
+# with is_error=True, and Claude reasons about recovery on its next turn.
+</code></pre>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="meta-category"><i class="fas fa-flask me-1"></i>Real-World Application</span>
+                        </div>
+                        <div class="experiment-content">
+                            <h4>E-Commerce Product Search Agent</h4>
+                            <p>An online retailer built tools for their Claude agent: <code>search_products</code>, <code>check_inventory</code>, <code>apply_coupon</code>, and <code>calculate_shipping</code>. Key lesson: adding enum constraints to tool inputs (e.g., category must be one of [&ldquo;electronics&rdquo;, &ldquo;clothing&rdquo;, &ldquo;home&rdquo;]) reduced hallucinated tool calls by 90%. The team also found that adding negative guidance (&ldquo;Do NOT use for price comparisons across stores&rdquo;) eliminated a class of incorrect tool selections entirely.</p>
+                        </div>
+                        <div class="experiment-tags"><span class="bias-tag">Enum Constraints</span><span class="bias-tag">E-Commerce</span><span class="bias-tag">Tool Selection</span></div>
+                    </div>
+
+                    <h2 id="composability"><i class="fas fa-puzzle-piece me-2 text-teal"></i>3. Composable Tool Sets</h2>
+
+                    <h3 id="minimal-overlap">3.1 Minimal Overlap Principle</h3>
+
+                    <p>Each tool should have a distinct, non-overlapping responsibility. When tools overlap, Claude struggles to choose the right one and may call both redundantly. Design tool sets where each tool has a clear &ldquo;lane&rdquo;:</p>
+
+<pre><code class="language-python"># ❌ BAD: Overlapping tools — Claude won't know which to call
+overlapping_tools = [
+    {"name": "search", "description": "Search for information"},
+    {"name": "find", "description": "Find data in the system"},
+    {"name": "lookup", "description": "Look up records"}
+]
+
+# ✅ GOOD: Distinct responsibilities, clear lanes
+well_designed_tools = [
+    {
+        "name": "search_knowledge_base",
+        "description": "Search internal documentation for policies, procedures, and product info. Use for 'how do we...' or 'what is our policy on...' questions."
+    },
+    {
+        "name": "get_customer_record",
+        "description": "Look up a specific customer by email or ID. Returns profile, plan, and account status. Use when you know the customer's identifier."
+    },
+    {
+        "name": "query_orders_db",
+        "description": "Query the orders database with filters. Use for order-specific lookups by order ID, customer ID, or date range."
+    }
+]
+</code></pre>
+
+                    <h3 id="granularity">3.2 Right Granularity</h3>
+
+                    <p>Tools should be neither too broad (doing too many things) nor too narrow (requiring many calls for simple tasks). Find the natural unit of work &mdash; one tool call should accomplish one meaningful action:</p>
+
+<pre><code class="language-python"># ❌ TOO BROAD: One tool does everything — Claude loses fine-grained control
+too_broad = {
+    "name": "manage_customer",
+    "description": "Create, read, update, or delete customer records. Also handles orders, refunds, and tickets.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "action": {"type": "string", "enum": ["create", "read", "update", "delete", "refund", "ticket"]},
+            "data": {"type": "object"}  # Catch-all — no schema validation
+        }
+    }
+}
+
+# ❌ TOO NARROW: Simple task requires 4 tool calls
+too_narrow = [
+    {"name": "open_db_connection", "description": "Open a database connection"},
+    {"name": "build_query", "description": "Build a SQL query string"},
+    {"name": "execute_query", "description": "Execute the query"},
+    {"name": "close_db_connection", "description": "Close the connection"}
+]
+
+# ✅ RIGHT GRANULARITY: One meaningful action per tool
+right_granularity = [
+    {
+        "name": "get_customer",
+        "description": "Look up customer by email or ID. Returns: id, name, plan, status, verified."
+    },
+    {
+        "name": "lookup_order",
+        "description": "Get order details by order ID. Requires verified customer_id."
+    },
+    {
+        "name": "process_refund",
+        "description": "Process a refund for an order. Requires verified customer + confirmed order."
+    }
+]
+</code></pre>
+
+                    <h3 id="tool-versioning">3.3 Tool Versioning</h3>
+
+                    <p>When tools evolve, use versioning to maintain backward compatibility. Never silently change a tool&rsquo;s behavior &mdash; this can break agents that rely on specific input/output contracts:</p>
+
+<pre><code class="language-python"># Tool versioning strategies
+
+# Strategy 1: Version in the tool name (explicit, simple)
+tools_v1 = [
+    {"name": "search_docs_v1", "description": "..."},  # Deprecated
+    {"name": "search_docs_v2", "description": "Enhanced search with category filters and pagination. Prefer over v1."}
+]
+
+# Strategy 2: Version as a parameter (flexible)
+search_tool = {
+    "name": "search_docs",
+    "description": "Search documentation. Supports v1 (basic) and v2 (with filters) modes.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string"},
+            "version": {
+                "type": "string",
+                "enum": ["v1", "v2"],
+                "description": "API version. v2 supports filters and pagination. Default: v2"
+            },
+            "filters": {
+                "type": "object",
+                "description": "(v2 only) Category and date filters"
+            }
+        },
+        "required": ["query"]
+    }
+}
+
+# Strategy 3: Additive-only changes (backward compatible)
+# Add new optional parameters — never remove or rename existing ones
+# Old behavior preserved when new params are omitted
+</code></pre>
+
+                    <h2 id="anti-patterns"><i class="fas fa-ban me-2 text-teal"></i>4. Tool Design Anti-Patterns</h2>
+
+                    <p>The CCA exam (Task 2.2) specifically tests your ability to identify tool design anti-patterns that degrade agent performance:</p>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-dark">
+                                <tr><th>Anti-Pattern</th><th>Problem</th><th>Fix</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><strong>God tool</strong></td><td>One tool handles all operations via an <code>action</code> parameter</td><td>Split into focused, single-purpose tools</td></tr>
+                                <tr><td><strong>Ambiguous names</strong></td><td><code>process</code>, <code>handle</code>, <code>do_thing</code> &mdash; Claude can&rsquo;t reason about purpose</td><td>Verb + noun: <code>create_ticket</code>, <code>search_docs</code></td></tr>
+                                <tr><td><strong>Missing descriptions</strong></td><td>No guidance on when to use</td><td>Always include when/why/what-returns</td></tr>
+                                <tr><td><strong>Overlapping scope</strong></td><td>Multiple tools could handle same request</td><td>Clear lane per tool, negative guidance</td></tr>
+                                <tr><td><strong>Opaque errors</strong></td><td>Returns &ldquo;Error&rdquo; with no details</td><td>Structured errors with type + suggestion</td></tr>
+                                <tr><td><strong>Missing required</strong></td><td>All params optional but some are actually needed</td><td>Mark true requirements in <code>required</code> array</td></tr>
+                                <tr><td><strong>Catch-all params</strong></td><td><code>"data": {"type": "object"}</code> &mdash; no schema</td><td>Define explicit properties with types</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p>Here is a concrete example showing how to refactor a poorly-designed tool set into a well-structured one:</p>
+
+<pre><code class="language-python"># ❌ BEFORE: Anti-patterns everywhere
+bad_tools = [
+    {
+        "name": "do_stuff",
+        "description": "Does stuff with the system",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string"},
+                "data": {"type": "object"}
+            }
+        }
+    }
+]
+
+# ✅ AFTER: Refactored with proper design
+good_tools = [
+    {
+        "name": "get_customer",
+        "description": "Look up a customer by email or customer ID. Returns the customer profile including name, subscription plan, account status, and whether identity is verified. Use this FIRST before any order or refund operations — other tools require a verified customer_id.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "identifier": {
+                    "type": "string",
+                    "description": "Customer email address or customer ID (format: cust_XXXX)"
+                }
+            },
+            "required": ["identifier"]
+        }
+    },
+    {
+        "name": "lookup_order",
+        "description": "Retrieve order details by order ID. Returns items, amounts, status, and shipping info. Requires a verified customer_id from get_customer. Do NOT call without verifying the customer first.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "order_id": {
+                    "type": "string",
+                    "description": "Order ID in format ORD-XXXXX"
+                },
+                "customer_id": {
+                    "type": "string",
+                    "description": "Verified customer ID from get_customer"
+                }
+            },
+            "required": ["order_id", "customer_id"]
+        }
+    },
+    {
+        "name": "process_refund",
+        "description": "Issue a refund for a specific order. Maximum $500 without escalation. Requires verified customer and confirmed order. Returns refund confirmation with transaction ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "order_id": {"type": "string", "description": "Order ID to refund"},
+                "customer_id": {"type": "string", "description": "Verified customer ID"},
+                "amount": {"type": "number", "description": "Refund amount in USD (max 500.00)"},
+                "reason": {
+                    "type": "string",
+                    "enum": ["damaged", "wrong_item", "not_received", "quality", "changed_mind"],
+                    "description": "Refund reason category"
+                }
+            },
+            "required": ["order_id", "customer_id", "amount", "reason"]
+        }
+    }
+]
+</code></pre>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="meta-category"><i class="fas fa-flask me-1"></i>CCA Exam Pattern</span>
+                        </div>
+                        <div class="experiment-content">
+                            <h4>Tool Design Questions</h4>
+                            <p>The exam presents a tool definition and asks &ldquo;which improvement would most reduce incorrect tool calls?&rdquo; or &ldquo;why is the agent calling tool X when it should call tool Y?&rdquo; The answer usually involves: improving the description with when-to-use guidance, adding negative guidance (&ldquo;Do NOT use for...&rdquo;), or adding enum constraints to prevent hallucinated values.</p>
+                        </div>
+                        <div class="experiment-tags"><span class="bias-tag">CCA Task 2.1</span><span class="bias-tag">CCA Task 2.2</span></div>
+                    </div>
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-laptop-code me-2"></i>
+                        <strong>Try It Yourself:</strong> Design a complete tool suite for a recipe assistant: <code>create_recipe</code> (with ingredients, steps, cuisine type), <code>search_recipes</code> (by ingredient or cuisine), and <code>scale_recipe</code> (multiply servings). Each tool should have Pydantic-validated inputs, clear descriptions, and return structured JSON. Test by asking Claude to find a pasta recipe and scale it for 8 people.
+                    </div>
+
+                    <h2 id="strict-tool-use"><i class="fas fa-shield-alt me-2 text-teal"></i>4B. Strict Tool Use &amp; Input Examples</h2>
+
+                    <p>Standard tool definitions are advisory &mdash; Claude <em>usually</em> follows your schema, but occasionally returns incompatible types (<code>"2"</code> instead of <code>2</code>) or missing required fields. In production agents, these type mismatches break your functions and cause runtime errors. <strong>Strict tool use</strong> eliminates this class of bugs entirely.</p>
+
+                    <h3 id="strict-mode">4B.1 Strict Mode (<code>strict: true</code>)</h3>
+
+                    <p>Adding <code>strict: true</code> to a tool definition enables <strong>grammar-constrained sampling</strong> &mdash; the model&rsquo;s token generation is restricted to outputs that are valid according to your JSON Schema. This is not validation-after-the-fact; it&rsquo;s a hard constraint during generation:</p>
+
+<pre><code class="language-python">import anthropic
+import json
+
+client = anthropic.Anthropic()
+
+# Strict tool: Claude's output is GUARANTEED to match this schema
+booking_tool = {
+    "name": "book_flight",
+    "description": "Book a flight for a customer. All fields are validated at generation time.",
+    "strict": True,  # Enable grammar-constrained sampling
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "origin": {
+                "type": "string",
+                "description": "Origin airport IATA code (3 letters, e.g. 'SFO')"
+            },
+            "destination": {
+                "type": "string",
+                "description": "Destination airport IATA code (3 letters)"
+            },
+            "passengers": {
+                "type": "integer",
+                "description": "Number of passengers (1-9)"
+            },
+            "cabin_class": {
+                "type": "string",
+                "enum": ["economy", "premium_economy", "business", "first"]
+            },
+            "departure_date": {
+                "type": "string",
+                "description": "Departure date in YYYY-MM-DD format"
+            }
+        },
+        "required": ["origin", "destination", "passengers", "cabin_class", "departure_date"],
+        "additionalProperties": False  # No extra fields allowed
+    }
+}
+
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    tools=[booking_tool],
+    tool_choice={"type": "tool", "name": "book_flight"},
+    messages=[{"role": "user", "content": "Book me a business class flight from SFO to NRT for 2 people on Jan 15, 2027"}]
+)
+
+# GUARANTEED: passengers is int (not "2"), cabin_class is from enum, no extra fields
+tool_block = next(b for b in response.content if b.type == "tool_use")
+print(json.dumps(tool_block.input, indent=2))
+# {"origin": "SFO", "destination": "NRT", "passengers": 2, "cabin_class": "business", "departure_date": "2027-01-15"}
+
+# Without strict: passengers might be "2" (string) or cabin_class might be "Business" (wrong case)
+# With strict: these bugs are impossible — the grammar rejects invalid tokens
+print(f"passengers type: {type(tool_block.input['passengers']).__name__}")  # Always: int
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>When to use strict mode:</strong> Use <code>strict: true</code> in production agentic systems where type mismatches would cause runtime failures. Combine with <code>tool_choice: {{"type": "any"}}</code> to guarantee both that a tool is called AND that its inputs are schema-valid. Skip strict mode during prototyping or when schemas are evolving rapidly (changes require recompilation of the grammar).
+                    </div>
+
+                    <h3 id="input-examples">4B.2 Input Examples (<code>input_examples</code>)</h3>
+
+                    <p>For complex tools with nested objects, optional parameters, or format-sensitive inputs, <code>input_examples</code> shows Claude concrete patterns for well-formed calls. Examples are validated against your schema at request time &mdash; invalid examples return a 400 error:</p>
+
+<pre><code class="language-python">import anthropic
+import json
+
+client = anthropic.Anthropic()
+
+# Tool with input_examples — teaches Claude HOW to call complex schemas
+search_tool = {
+    "name": "search_flights",
+    "description": "Search for available flights. Supports complex filters and flexible dates.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "origin": {"type": "string", "description": "IATA airport code"},
+            "destination": {"type": "string", "description": "IATA airport code"},
+            "departure_date": {"type": "string", "description": "YYYY-MM-DD format"},
+            "return_date": {"type": "string", "description": "YYYY-MM-DD (optional for one-way)"},
+            "passengers": {
+                "type": "object",
+                "properties": {
+                    "adults": {"type": "integer"},
+                    "children": {"type": "integer"},
+                    "infants": {"type": "integer"}
+                },
+                "required": ["adults"]
+            },
+            "filters": {
+                "type": "object",
+                "properties": {
+                    "max_stops": {"type": "integer", "enum": [0, 1, 2]},
+                    "airlines": {"type": "array", "items": {"type": "string"}},
+                    "max_price_usd": {"type": "number"}
+                }
+            }
+        },
+        "required": ["origin", "destination", "departure_date", "passengers"]
+    },
+    # input_examples: validated array of example inputs
+    "input_examples": [
+        # Simple one-way search
+        {
+            "origin": "SFO",
+            "destination": "NRT",
+            "departure_date": "2027-03-15",
+            "passengers": {"adults": 1}
+        },
+        # Round-trip with filters
+        {
+            "origin": "JFK",
+            "destination": "LHR",
+            "departure_date": "2027-06-01",
+            "return_date": "2027-06-15",
+            "passengers": {"adults": 2, "children": 1, "infants": 0},
+            "filters": {"max_stops": 1, "airlines": ["BA", "AA"], "max_price_usd": 2500}
+        },
+        # Family trip, no filters
+        {
+            "origin": "LAX",
+            "destination": "CDG",
+            "departure_date": "2027-12-20",
+            "return_date": "2027-01-03",
+            "passengers": {"adults": 2, "children": 2}
+        }
+    ]
+}
+
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    tools=[search_tool],
+    messages=[{"role": "user", "content": "Find nonstop flights from Chicago to Tokyo next March for me and my wife"}]
+)
+
+tool_block = next(b for b in response.content if b.type == "tool_use")
+print(json.dumps(tool_block.input, indent=2))
+# Claude learned from examples: proper nested objects, correct field usage
+</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Limitations:</strong> <code>input_examples</code> works on user-defined and Anthropic-schema client tools but NOT on server tools (web search, code execution). Each example adds ~20&ndash;50 tokens (simple) or ~100&ndash;200 tokens (complex nested). Use 2&ndash;3 examples for most tools; don&rsquo;t exceed 5 unless the schema is exceptionally complex.
+                    </div>
+
+                    <h3 id="tool-prompt-caching">4B.3 Tool Use with Prompt Caching</h3>
+
+                    <p>Tool definitions are sent with every API request, consuming input tokens repeatedly. For agentic loops that run 10&ndash;50 iterations, caching tool definitions saves significant cost. Use <code>cache_control</code> on the last tool in your array to cache the entire tool block:</p>
+
+<pre><code class="language-python">import anthropic
+import json
+
+client = anthropic.Anthropic()
+
+# Cache tool definitions — saves tokens on every loop iteration
+tools_with_caching = [
+    {
+        "name": "search_docs",
+        "description": "Search documentation for answers to technical questions.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "max_results": {"type": "integer"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "run_code",
+        "description": "Execute Python code in a sandboxed environment.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "code": {"type": "string"},
+                "timeout_seconds": {"type": "integer"}
+            },
+            "required": ["code"]
+        },
+        # cache_control on the LAST tool — caches ALL tool definitions above it
+        "cache_control": {"type": "ephemeral"}
+    }
+]
+
+# First call: creates cache (slight overhead)
+response1 = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    tools=tools_with_caching,
+    messages=[{"role": "user", "content": "Search for how to use asyncio"}]
+)
+print(f"First call - input tokens: {response1.usage.input_tokens}")
+print(f"Cache creation tokens: {response1.usage.cache_creation_input_tokens}")
+
+# Subsequent calls: reads from cache (major savings)
+response2 = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    tools=tools_with_caching,
+    messages=[{"role": "user", "content": "Run this code: print('hello')"}]
+)
+print(f"Second call - input tokens: {response2.usage.input_tokens}")
+print(f"Cache read tokens: {response2.usage.cache_read_input_tokens}")  # Much cheaper!
+
+# Key rules:
+# - cache_control goes on the LAST tool in the array
+# - It caches everything above (system prompt + all tools)
+# - Cache lives for 5 minutes after last use
+# - Changing tool_choice invalidates cached message blocks (not tool definitions)
+# - Tool definitions + system prompt remain cached across tool_choice changes
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-graduation-cap me-2"></i>
+                        <strong>CCA Exam Tip:</strong> Key distinctions: (1) <code>strict: true</code> guarantees schema conformance via grammar-constrained sampling &mdash; it&rsquo;s deterministic, not probabilistic. (2) <code>input_examples</code> are teaching aids &mdash; they help Claude use tools correctly but don&rsquo;t guarantee compliance. (3) Prompt caching reduces cost for multi-turn loops but requires consistent tool arrays. (4) Combine strict + tool_choice &ldquo;any&rdquo; for maximum reliability in production agents.
+                    </div>
+
+                    <h2 id="builtin-tools"><i class="fas fa-toolbox me-2 text-teal"></i>5. Built-In Tools Deep Dive (CCA 7.4)</h2>
+
+                    <p>Claude Code and the Agent SDK ship with <strong>built-in tools</strong> that agents can use without custom MCP servers. Understanding how each works &mdash; and when to prefer one over another &mdash; is critical for both building effective agents and the CCA exam.</p>
+
+                    <p><strong>Analogy:</strong> Built-in tools are like the standard tools in a developer&rsquo;s IDE (find, replace, terminal). You don&rsquo;t install them separately &mdash; they&rsquo;re always available, well-tested, and designed to work together.</p>
+
+                    <h3 id="read-write-edit">5.1 Read / Write / Edit &mdash; File Operations</h3>
+
+<pre><code class="language-python"># Built-in file tools — the agent's primary way to interact with code
+
+# READ — Read file contents (entire file or line range)
+# When: Agent needs to understand existing code before making changes
+# Always prefer Read BEFORE Edit (never edit blind)
+read_example = {
+    "name": "Read",
+    "input": {
+        "file_path": "/src/auth/jwt.py",
+        "start_line": 45,    # Optional: read specific range
+        "end_line": 80       # Optional: for focused inspection
+    }
+}
+# Returns: file contents as text (with line numbers)
+
+# WRITE — Create or completely overwrite a file
+# When: Creating NEW files or replacing entire file contents
+# Caution: overwrites without confirmation — use Edit for surgical changes
+write_example = {
+    "name": "Write",
+    "input": {
+        "file_path": "/src/auth/jwt.py",
+        "content": "# Complete new file contents here\nimport jwt\n..."
+    }
+}
+# Returns: confirmation of write
+
+# EDIT — Surgical line-level replacement
+# When: Changing specific lines without rewriting the whole file
+# This is the PREFERRED tool for modifications (preserves unchanged code)
+edit_example = {
+    "name": "Edit",
+    "input": {
+        "file_path": "/src/auth/jwt.py",
+        "old_string": "TOKEN_EXPIRY = 86400  # 24 hours",
+        "new_string": "TOKEN_EXPIRY = 3600  # 1 hour (security hardening)"
+    }
+}
+# Returns: confirmation with diff
+
+# Rules:
+# - Always Read BEFORE Edit — never edit blind
+# - Prefer Edit over Write for existing files (preserves context)
+# - Use Read with line ranges for large files (don't read 10k lines)
+</code></pre>
+
+                    <div class="mermaid-container">
+                        <div class="mermaid-label">File Tool Decision Tree</div>
+                        <pre class="mermaid">
+                            flowchart TD
+                                Q{"What do you need<br/>to do?"}
+                                Q -->|"Create new file"| W["Write"]
+                                Q -->|"Understand existing code"| R["Read"]
+                                Q -->|"Change specific lines"| E["Edit"]
+                                Q -->|"Full file rewrite"| RW["Read → Write"]
+                                Q -->|"Incremental fix"| RE["Read → Edit"]
+
+                                style W fill:#16476A,color:#fff
+                                style R fill:#3B9797,color:#fff
+                                style E fill:#BF092F,color:#fff
+                                style RW fill:#16476A,color:#fff
+                                style RE fill:#BF092F,color:#fff
+                        </pre>
+                    </div>
+
+                    <h3 id="bash-tool">5.2 Bash &mdash; Command Execution</h3>
+
+<pre><code class="language-python"># Bash tool — execute shell commands in the agent's environment
+
+# When to use Bash:
+# - Running tests: pytest, npm test, cargo test
+# - Installing dependencies: pip install, npm install
+# - Git operations: git status, git diff, git log
+# - Build commands: make, cargo build, npm run build
+# - System inspection: ls, find, which, env
+
+bash_examples = [
+    # Run tests after making changes
+    {"name": "Bash", "input": {"command": "cd /project &amp;&amp; pytest tests/ -v --tb=short"}},
+
+    # Check git status
+    {"name": "Bash", "input": {"command": "git diff --stat"}},
+
+    # Install a dependency
+    {"name": "Bash", "input": {"command": "pip install pydantic>=2.0"}},
+
+    # Check what's running on a port
+    {"name": "Bash", "input": {"command": "lsof -i :8080"}},
+]
+
+# Security considerations:
+# - Bash can execute ANYTHING — restrict with allowedTools when possible
+# - In sandboxed environments, filesystem and network are limited
+# - Agents should not have Bash in production customer-facing scenarios
+# - Use Bash for developer tools (CI/CD, code review), not user interactions
+
+# When NOT to use Bash (prefer file tools instead):
+# ❌ Reading a file: use Read tool (structured output, line numbers)
+# ❌ Finding a file: use Glob tool (pattern matching, faster)
+# ❌ Searching content: use Grep tool (structured results)
+# ✅ Running tests: Bash (no alternative)
+# ✅ Git operations: Bash (no alternative)
+# ✅ Build/compile: Bash (no alternative)
+
+print("Bash: powerful but unrestricted — use allowedTools to control access")
+print("Prefer specialized tools (Read, Grep, Glob) over Bash equivalents")
+</code></pre>
+
+                    <h3 id="grep-glob">5.3 Grep &amp; Glob &mdash; Search Tools</h3>
+
+<pre><code class="language-python"># Grep — Search file CONTENTS for patterns (like grep -r)
+# When: Find where something is used, referenced, or defined
+
+grep_example = {
+    "name": "Grep",
+    "input": {
+        "pattern": "def authenticate",     # Regex pattern
+        "path": "/src/",                   # Directory to search
+        "include": "*.py"                  # File filter (optional)
+    }
+}
+# Returns: list of matches with file paths, line numbers, and context
+
+# Glob — Search for FILES by path pattern (like find)
+# When: Find files by name, extension, or directory structure
+
+glob_example = {
+    "name": "Glob",
+    "input": {
+        "pattern": "/src/**/*test*.py"     # Glob pattern (** = recursive)
+    }
+}
+# Returns: list of matching file paths
+
+print("Strategy: Glob (find files) → Grep (find patterns) → Read (understand) → Edit (fix)")
+</code></pre>
+
+                    <div class="mermaid-container">
+                        <div class="mermaid-label">Incremental Codebase Exploration Strategy</div>
+                        <pre class="mermaid">
+                            flowchart LR
+                                G["fa:fa-search Glob<br/>Find files by<br/>name/pattern"] --> GR["fa:fa-crosshairs Grep<br/>Search contents<br/>for patterns"]
+                                GR --> R["fa:fa-file-code Read<br/>Inspect actual<br/>code at location"]
+                                R --> E["fa:fa-pen Edit<br/>Make targeted<br/>changes"]
+
+                                style G fill:#3B9797,color:#fff
+                                style GR fill:#16476A,color:#fff
+                                style R fill:#132440,color:#fff
+                                style E fill:#BF092F,color:#fff
+                        </pre>
+                    </div>
+
+                    <h3 id="error-metadata">5.4 MCP Error Metadata (isError, errorCategory, isRetryable)</h3>
+
+<pre><code class="language-python">import json
+
+# When tools fail, structured error metadata helps Claude recover intelligently.
+# MCP tools can return errors with metadata that guides the agent's next action.
+
+# The tool_result with error metadata:
+error_result = {
+    "type": "tool_result",
+    "tool_use_id": "toolu_abc123",
+    "content": json.dumps({
+        "success": False,
+        "error": {
+            "message": "Rate limited by external API",
+            "type": "rate_limit",
+
+            # isError: True — this is an error, not empty results
+            "isError": True,
+
+            # errorCategory: helps Claude decide what to do next
+            # Options: "transient", "permission", "not_found", "validation", "rate_limit"
+            "errorCategory": "rate_limit",
+
+            # isRetryable: True — agent should wait and retry
+            "isRetryable": True,
+
+            # retryAfter: seconds to wait before retry (optional)
+            "retryAfter": 30,
+
+            # suggestion: what the agent should do
+            "suggestion": "Wait 30 seconds, then retry with the same parameters"
+        }
+    }),
+    "is_error": True  # MCP protocol field — tells Claude this is an error
+}
+
+# How Claude uses these fields:
+</code></pre>
+
+                    <div class="mermaid-container">
+                        <div class="mermaid-label">Error Recovery Decision Tree</div>
+                        <pre class="mermaid">
+                            flowchart TD
+                                ERR["Tool Returns Error"] --> RT{"isRetryable?"}
+                                RT -->|"True"| WAIT["Wait retryAfter seconds<br/>then retry same call"]
+                                RT -->|"False"| CAT{"errorCategory?"}
+                                CAT -->|"not_found"| ALT["Try alternative<br/>approach"]
+                                CAT -->|"permission"| ESC["Escalate to user<br/>or request access"]
+                                CAT -->|"validation"| FIX["Fix input<br/>parameters &amp; retry"]
+                                CAT -->|"rate_limit"| WAIT
+
+                                style WAIT fill:#3B9797,color:#fff
+                                style ALT fill:#16476A,color:#fff
+                                style ESC fill:#BF092F,color:#fff
+                                style FIX fill:#132440,color:#fff
+                        </pre>
+                    </div>
+
+<pre><code class="language-python"># IMPORTANT distinction: is_error (MCP protocol) vs isError (your metadata)
+# - is_error: True → MCP protocol flag, Claude knows the tool failed
+# - errorCategory → YOUR metadata helping Claude decide recovery strategy
+
+# Anti-pattern: returning empty results for "not found"
+# ❌ BAD: {"results": []}  — Claude can't tell: no results vs search failed
+# ✅ GOOD: {"results": [], "isError": False, "totalAvailable": 0}
+
+print("Error metadata tells Claude: what went wrong, can it retry, what to do instead")
+print("Always distinguish: empty results (success) vs access failure (error)")
+</code></pre>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-graduation-cap"></i>
+                        <strong>CCA Exam Pattern (7.1, 7.4):</strong> The exam tests: (1) Prefer Edit over Read+Write for existing files (atomic, preserves context). (2) Incremental exploration: Glob &rarr; Grep &rarr; Read &rarr; Edit (never read entire codebase). (3) <code>is_error: true</code> tells Claude the tool failed. (4) <code>isRetryable</code> determines whether to retry or try an alternative. (5) Empty results &ne; error &mdash; always distinguish between &ldquo;no matches found&rdquo; and &ldquo;search failed.&rdquo;
+                    </div>
+
+                    <h2 id="sdk-custom-tools"><i class="fas fa-cogs me-2 text-teal"></i>6. Agent SDK: Custom Tools (<code>@tool</code> Decorator)</h2>
+
+                    <p>The built-in tools (Section 5) cover filesystem, search, and shell access. But your agents need <em>domain-specific</em> tools &mdash; database queries, API calls, business logic. In the raw Client SDK (Sections 1&ndash;4), you defined tool schemas as JSON and implemented execution yourself. The Agent SDK provides a cleaner approach: the <code>@tool</code> decorator + <code>create_sdk_mcp_server()</code> creates an <strong>in-process MCP server</strong> that runs inside your application.</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Analogy:</strong> The raw approach is like defining a REST API spec (OpenAPI) and writing the route handlers separately. The <code>@tool</code> decorator is like using FastAPI: you define the schema and handler in one place, and the framework wires everything together automatically.
+                    </div>
+
+                    <h3 id="tool-decorator">6.1 The <code>@tool</code> Decorator</h3>
+
+                    <p>A tool is defined by four parts: name, description, input schema, and async handler. The decorator combines all of these into a single decorated function:</p>
+
+<pre><code class="language-python"># Agent SDK Custom Tool — Complete Pattern
+# Requires: pip install claude-agent-sdk httpx
+# Set env var: ANTHROPIC_API_KEY=sk-ant-...
+
+import asyncio
+import httpx
+from claude_agent_sdk import tool, create_sdk_mcp_server, query, ClaudeAgentOptions, ResultMessage
+
+
+# --- Define a custom tool using the @tool decorator ---
+@tool(
+    "get_temperature",                           # Tool name (unique ID)
+    "Get the current temperature at a location. " # Description (Claude reads this)
+    "Returns temperature in Fahrenheit.",
+    {"latitude": float, "longitude": float},     # Input schema (dict → JSON Schema)
+)
+async def get_temperature(args: dict) -> dict:
+    """Handler function — called when Claude invokes this tool."""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": args["latitude"],
+                "longitude": args["longitude"],
+                "current": "temperature_2m",
+                "temperature_unit": "fahrenheit",
+            },
+        )
+        data = response.json()
+
+    # Return a content array — Claude sees this as the tool result
+    return {
+        "content": [
+            {
+                "type": "text",
+                "text": f"Temperature: {data['current']['temperature_2m']}°F",
+            }
+        ]
+    }
+
+
+# --- Wrap tools in an in-process MCP server ---
+weather_server = create_sdk_mcp_server(
+    name="weather",       # Server name
+    version="1.0.0",      # Version string
+    tools=[get_temperature],  # List of @tool-decorated functions
+)
+
+print("Custom tool defined: get_temperature")
+print("Server name: weather")
+print("Full tool name in SDK: mcp__weather__get_temperature")
+</code></pre>
+
+                    <h3 id="sdk-mcp-server">6.2 In-Process MCP Server &mdash; Connecting to <code>query()</code></h3>
+
+                    <p>Once you wrap tools in <code>create_sdk_mcp_server()</code>, pass the server to <code>query()</code> via <code>mcp_servers</code>. The SDK registers your tools alongside the built-in ones. The tool&rsquo;s fully qualified name follows the pattern <code>mcp__&lt;server_name&gt;__&lt;tool_name&gt;</code>:</p>
+
+<pre><code class="language-python"># Calling Custom Tools via query() — Full Working Example
+# Requires: pip install claude-agent-sdk httpx
+
+import asyncio
+import httpx
+from claude_agent_sdk import (
+    tool, create_sdk_mcp_server, query,
+    ClaudeAgentOptions, AssistantMessage, ResultMessage
+)
+
+
+@tool(
+    "get_temperature",
+    "Get the current temperature at a location. Returns Fahrenheit.",
+    {"latitude": float, "longitude": float},
+)
+async def get_temperature(args: dict) -> dict:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": args["latitude"],
+                "longitude": args["longitude"],
+                "current": "temperature_2m",
+                "temperature_unit": "fahrenheit",
+            },
+        )
+        data = response.json()
+    return {"content": [{"type": "text", "text": f"{data['current']['temperature_2m']}°F"}]}
+
+
+@tool(
+    "get_precipitation",
+    "Get hourly precipitation probability for a location. Returns next 12 hours.",
+    {"latitude": float, "longitude": float},
+)
+async def get_precipitation(args: dict) -> dict:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": args["latitude"],
+                "longitude": args["longitude"],
+                "hourly": "precipitation_probability",
+                "forecast_days": 1,
+            },
+        )
+        data = response.json()
+    chances = data["hourly"]["precipitation_probability"][:12]
+    return {"content": [{"type": "text", "text": f"Next 12h: {chances}"}]}
+
+
+# Bundle both tools into one server
+weather_server = create_sdk_mcp_server(
+    name="weather",
+    version="1.0.0",
+    tools=[get_temperature, get_precipitation],
+)
+
+
+async def main():
+    async for message in query(
+        prompt="What's the weather like in San Francisco right now? Include rain chance.",
+        options=ClaudeAgentOptions(
+            # Pass custom MCP server — tools become available to Claude
+            mcp_servers={"weather": weather_server},
+            # Pre-approve your custom tools (no permission prompt)
+            # Format: mcp__<server_name>__<tool_name>
+            allowed_tools=[
+                "mcp__weather__get_temperature",
+                "mcp__weather__get_precipitation",
+            ],
+        ),
+    ):
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if hasattr(block, "name"):
+                    print(f"  [Tool call: {block.name}]")
+        if isinstance(message, ResultMessage) and message.subtype == "success":
+            print(f"\nResult: {message.result}")
+            print(f"Cost: ${message.total_cost_usd:.4f}")
+
+
+asyncio.run(main())
+</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Key Difference from Raw SDK:</strong> In the raw approach, you define tool schemas as JSON dicts and implement <code>execute_tool()</code> yourself. With the Agent SDK, <code>@tool</code> + <code>create_sdk_mcp_server()</code> handles schema generation, validation, and execution. The tool runs <em>in-process</em> (no subprocess or network) &mdash; it&rsquo;s just an async function call.
+                    </div>
+
+                    <h3 id="tool-annotations">6.3 Tool Annotations (Parallel Execution Hints)</h3>
+
+                    <p>Annotations are metadata that tell the SDK <em>how</em> a tool behaves. The most important one: <code>readOnlyHint: True</code> enables the SDK to run that tool in <strong>parallel</strong> with other read-only tools (instead of sequentially). This maps directly to the parallel tool call pattern from Part 3.</p>
+
+<pre><code class="language-python"># Tool Annotations — Enable Parallel Execution
+# Requires: pip install claude-agent-sdk
+
+from claude_agent_sdk import tool, ToolAnnotations
+
+
+# Read-only tool — safe to run in parallel with other read-only tools
+@tool(
+    "search_products",
+    "Search the product catalog by query. Returns top 10 matches.",
+    {"query": str, "category": str},
+    annotations=ToolAnnotations(
+        readOnlyHint=True,       # No side effects → can run in parallel
+        openWorldHint=True,      # Reaches external system (database)
+    ),
+)
+async def search_products(args: dict) -> dict:
+    # In production: query your database
+    return {"content": [{"type": "text", "text": f"Found 3 products for '{args['query']}'"}]}
+
+
+# Destructive tool — must run sequentially (default)
+@tool(
+    "place_order",
+    "Place an order for a product. Charges the customer's card.",
+    {"product_id": str, "quantity": int, "customer_id": str},
+    annotations=ToolAnnotations(
+        readOnlyHint=False,      # Has side effects (charges card)
+        destructiveHint=True,    # Irreversible action
+        idempotentHint=False,    # Calling twice = double charge!
+    ),
+)
+async def place_order(args: dict) -> dict:
+    return {"content": [{"type": "text", "text": f"Order placed for product {args['product_id']}"}]}
+
+
+print("Annotation summary:")
+print("  readOnlyHint=True  → SDK may batch with other read-only calls")
+print("  destructiveHint    → informational, for logging/auditing")
+print("  idempotentHint     → informational, hints retry safety")
+print("  openWorldHint      → informational, reaches external systems")
+</code></pre>
+
+                    <h3 id="tool-errors-sdk">6.4 Error Handling: <code>is_error</code> vs Exceptions</h3>
+
+                    <p>How your handler reports errors determines whether the agent loop continues or stops. This is the most critical design decision for tool reliability:</p>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-dark">
+                                <tr><th>Pattern</th><th>Agent Loop</th><th>What Claude Sees</th><th>When to Use</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Return <code>is_error: True</code></td><td>Continues</td><td>Error message as data</td><td>Expected failures (404, validation, rate limit)</td></tr>
+                                <tr><td>Throw uncaught exception</td><td><strong>Stops</strong></td><td>Nothing (query fails)</td><td>Never in production</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+<pre><code class="language-python"># Error Handling in Agent SDK Tools — Keep the Loop Alive
+# Requires: pip install claude-agent-sdk httpx
+
+import httpx
+from claude_agent_sdk import tool
+
+
+@tool(
+    "fetch_user_profile",
+    "Fetch a user profile from the API by user ID.",
+    {"user_id": str},
+)
+async def fetch_user_profile(args: dict) -> dict:
+    """Handler that gracefully reports errors without stopping the loop."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://api.example.com/users/{args['user_id']}"
+            )
+
+            if response.status_code == 404:
+                # ✅ Return is_error — Claude sees "user not found" and can try alternatives
+                return {
+                    "content": [{"type": "text", "text": f"User {args['user_id']} not found"}],
+                    "is_error": True,
+                }
+
+            if response.status_code == 429:
+                # ✅ Rate limited — Claude may wait and retry or use cached data
+                return {
+                    "content": [{"type": "text", "text": "Rate limited. Try again in 30s."}],
+                    "is_error": True,
+                }
+
+            data = response.json()
+            return {
+                "content": [{"type": "text", "text": f"User: {data['name']}, Plan: {data['plan']}"}]
+            }
+
+    except Exception as e:
+        # ✅ Catch ALL exceptions — never let them propagate
+        # An uncaught exception STOPS the agent loop entirely
+        return {
+            "content": [{"type": "text", "text": f"API error: {str(e)}"}],
+            "is_error": True,
+        }
+
+
+print("Rule: ALWAYS catch exceptions in tool handlers")
+print("Return is_error=True → loop continues, Claude adapts")
+print("Uncaught exception → loop STOPS, query() fails")
+</code></pre>
+
+                    <h3 id="tool-images">6.5 Returning Images &amp; Resources</h3>
+
+                    <p>Tools can return non-text content. Image blocks carry base64-encoded bytes directly in the result &mdash; Claude processes them as visual input:</p>
+
+<pre><code class="language-python"># Returning Images from Tools — Visual Data for Claude
+# Requires: pip install claude-agent-sdk httpx
+
+import base64
+import httpx
+from claude_agent_sdk import tool
+
+
+@tool(
+    "capture_screenshot",
+    "Capture a screenshot of a webpage and return it for visual analysis.",
+    {"url": str},
+)
+async def capture_screenshot(args: dict) -> dict:
+    """Return an image block — Claude sees this as visual input."""
+    # In production: use Playwright, Puppeteer, or a screenshot service
+    async with httpx.AsyncClient() as client:
+        response = await client.get(args["url"])
+        image_bytes = response.content  # Raw bytes
+
+    return {
+        "content": [
+            {
+                "type": "image",
+                "data": base64.b64encode(image_bytes).decode("utf-8"),
+                "mimeType": "image/png",  # Required: image/png, image/jpeg, image/webp
+            }
+        ]
+    }
+
+
+@tool(
+    "generate_chart",
+    "Generate a chart from data and return as image for analysis.",
+    {"data": list, "chart_type": str},
+)
+async def generate_chart(args: dict) -> dict:
+    """Generate a chart image (matplotlib) and return to Claude."""
+    import matplotlib.pyplot as plt
+    import io
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(args["data"])
+    ax.set_title(f"{args['chart_type'].title()} Chart")
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=100)
+    plt.close(fig)
+    buf.seek(0)
+
+    return {
+        "content": [
+            {
+                "type": "image",
+                "data": base64.b64encode(buf.read()).decode("utf-8"),
+                "mimeType": "image/png",
+            }
+        ]
+    }
+
+
+print("Image blocks: type='image', data=base64 (no data: prefix), mimeType required")
+print("Claude sees images as visual input — can describe, analyze, compare")
+</code></pre>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-graduation-cap me-2"></i>
+                        <strong>Design Principle:</strong> Every tool on your <code>create_sdk_mcp_server()</code> consumes context window space on every turn (the SDK sends tool definitions to Claude). If you have 50+ tools, most will never be used on any given query. Use <strong>tool search</strong> (covered in Part 7) to load tools on demand instead of registering all of them upfront.
+                    </div>
+
+                    <div class="series-next">
+                        <h4><i class="fas fa-arrow-right me-2"></i>Next in the SDK Track</h4>
+                        <p>In <a href="ai-app-dev-sdk-anthropic-part07-mcp-tools.html"><strong>Part 7: MCP Servers &amp; Built-In Tools</strong></a>, we&rsquo;ll explore the Model Context Protocol &mdash; MCP servers, resource types, built-in tools (file I/O, web fetch, code execution), transport layers (stdio, HTTP), and how MCP enables tool discovery. Covers CCA Domain 2 Tasks 2.3 and 2.4.</p>
+                    </div>
+
+                    <!-- Related Posts -->
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Anthropic Part 5: Hooks, Sessions &amp; State</h5>
+                            <p>Deterministic hooks, session persistence, fork_session for exploration, and state management.</p>
+                            <a href="ai-app-dev-sdk-anthropic-part05-hooks-sessions.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Anthropic Part 7: MCP Servers &amp; Built-In Tools</h5>
+                            <p>Model Context Protocol servers, resource types, built-in file and web tools, and MCP transport layers.</p>
+                            <a href="ai-app-dev-sdk-anthropic-part07-mcp-tools.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left"><div class="fc-brand-group"><div class="fc-brand-stack"><span></span><span></span><span></span></div><span class="fc-brand-name">Wasil Zafar</span></div><span class="fc-tagline">Consultant &amp; Cloud Architect</span></div>
+                <div class="fc-center"><a href="/">Home</a><a href="/disclaimer.html">Disclaimer</a><a href="/privacy-policy.html">Privacy</a><a href="/pages/contact.html">Contact</a></div>
+                <div class="fc-right">
+                    <a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a>
+                    <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>
+                    <a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                    <a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a>
+                    <a href="/feed.xml" target="_blank" title="RSS Feed"><i class="fas fa-rss"></i></a>
+                </div>
+            </div>
+            <div class="footer-sub"><span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span><a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a></div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="../../../js/path-progress.js"></script>
+</body>
+</html>

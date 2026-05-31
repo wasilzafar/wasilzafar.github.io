@@ -35,11 +35,112 @@ v_hat = v / (1 - beta2)
 w = w - lr * (m_hat / (np.sqrt(v_hat) + eps) + wd * w)
 print(np.round(w, 6))</code></pre>
 <h2 id="schedules">Schedules &amp; Clipping</h2><p>Warmup prevents early unstable updates. Cosine decay gradually reduces learning rate. Gradient clipping rescales gradients when $\|g\|_2$ exceeds a threshold, preventing rare huge updates from destabilizing training.</p>
-<h2 id="perplexity">Perplexity &amp; Calibration</h2><p>For language models, perplexity is exponentiated average negative log likelihood:</p><p>$$\text{PPL}=\exp\left(-\frac{1}{N}\sum_{i=1}^{N}\log p(x_i|x_{&lt;i})\right)$$</p><p>Calibration asks whether probabilities mean what they say. If a model predicts 80% confidence on 100 examples, about 80 should be correct.</p>
-<h2 id="preferences">Preference Optimization</h2><p>RLHF trains a reward model from comparisons, then optimizes a policy with a KL penalty to avoid drifting too far from the reference model. DPO writes the preference objective directly in terms of policy log probabilities:</p><p>$$\mathcal{L}_{DPO}=-\log\sigma\left(\beta\left[\log\frac{\pi_\theta(y_w|x)}{\pi_{ref}(y_w|x)}-\log\frac{\pi_\theta(y_l|x)}{\pi_{ref}(y_l|x)}\right]\right)$$</p>
+<h2 id="perplexity">Perplexity &amp; Calibration</h2><p>For language models, perplexity is exponentiated average negative log likelihood:</p><p>$$\text{PPL}=\exp\left(-\frac{1}{N}\sum_{i=1}^{N}\log p(x_i|x_{&lt;i})\right)$$</p><p><strong>Derivation from cross-entropy:</strong> The cross-entropy of the model distribution $q$ against the true distribution $p$ over sequences is $H(p,q) = -\frac{1}{N}\sum_{i}\log q(x_i|x_{&lt;i})$. Perplexity is simply $2^{H(p,q)}$ (or equivalently $e^{H(p,q)}$ when using natural log). It represents the effective vocabulary size the model is "confused" among at each step.</p><p><strong>Connection to bits-per-character (BPC):</strong> $\text{BPC} = H(p,q) / \log 2$. Lower BPC means more efficient compression. A model with PPL = 20 is equivalent to ~4.3 BPC.</p><p><strong>Calibration:</strong> A model is <em>calibrated</em> if its predicted probabilities match empirical frequencies. Expected Calibration Error (ECE) measures this:</p><p>$$\text{ECE} = \sum_{b=1}^B \frac{|B_b|}{N}\left|\text{acc}(B_b) - \text{conf}(B_b)\right|$$</p><p>where predictions are binned by confidence. <strong>Temperature scaling</strong> post-hoc recalibrates by dividing logits by a learned $T > 0$ before softmax: $p_i = \text{softmax}(z_i / T)$. $T > 1$ softens overconfident predictions.</p>
+<pre><code class="language-python">import numpy as np
+
+# Perplexity computation for a language model
+log_probs = np.array([-2.3, -1.8, -3.1, -2.0, -1.5, -2.8, -1.9, -2.5])
+N = len(log_probs)
+
+# Cross-entropy (negative average log-prob)
+cross_entropy = -np.mean(log_probs)
+perplexity = np.exp(cross_entropy)
+bpc = cross_entropy / np.log(2)
+
+print(f"Average NLL: {cross_entropy:.4f}")
+print(f"Perplexity:  {perplexity:.2f}")
+print(f"Bits/char:   {bpc:.4f}")
+
+# ECE computation
+confidences = np.array([0.95, 0.85, 0.75, 0.65, 0.92, 0.55, 0.88, 0.72])
+correct = np.array([1, 1, 0, 1, 1, 0, 1, 1])
+n_bins = 4
+bin_edges = np.linspace(0.5, 1.0, n_bins + 1)
+ece = 0.0
+for i in range(n_bins):
+    mask = (confidences >= bin_edges[i]) & (confidences < bin_edges[i+1])
+    if mask.sum() > 0:
+        bin_acc = correct[mask].mean()
+        bin_conf = confidences[mask].mean()
+        ece += mask.sum() / N * abs(bin_acc - bin_conf)
+print(f"\nECE: {ece:.4f}")
+
+# Temperature scaling effect
+logits = np.array([2.5, 1.0, 0.3])
+for T in [0.5, 1.0, 2.0]:
+    scaled = logits / T
+    probs = np.exp(scaled) / np.exp(scaled).sum()
+    print(f"T={T}: probs = {np.round(probs, 3)}")</code></pre>
+<h2 id="preferences">Preference Optimization</h2>
+<p>After supervised training, language models need <em>alignment</em> — learning to produce outputs humans prefer. The math of alignment centers on reward modeling and constrained policy optimization.</p>
+<h3 id="rlhf">RLHF: Reward Modeling &amp; KL-Constrained Optimization</h3>
+<p><strong>Step 1 — Reward Model:</strong> Given preference pairs $(y_w \succ y_l | x)$ from human annotators, train a reward model $r_\psi(x, y)$ using the <strong>Bradley-Terry model</strong>:</p>
+<p>$$P(y_w \succ y_l | x) = \sigma(r_\psi(x, y_w) - r_\psi(x, y_l))$$</p>
+<p>The loss maximizes log-likelihood of observed preferences:</p>
+<p>$$\mathcal{L}_{RM} = -\mathbb{E}_{(x, y_w, y_l)}\left[\log \sigma(r_\psi(x, y_w) - r_\psi(x, y_l))\right]$$</p>
+<p><strong>Step 2 — KL-Constrained Policy Optimization:</strong> Maximize expected reward while staying close to a reference policy $\pi_{\text{ref}}$ (the SFT model):</p>
+<p>$$\max_{\pi_\theta} \mathbb{E}_{x \sim \mathcal{D},\, y \sim \pi_\theta(\cdot|x)}[r_\psi(x, y)] - \beta \cdot D_{KL}(\pi_\theta \| \pi_{\text{ref}})$$</p>
+<p>The KL penalty prevents reward hacking — exploiting quirks of the reward model by drifting too far from sensible language. This objective is optimized using PPO (see <a href="math-for-ai-extension05-rl-mathematics.html">Extension 5</a>) with the reward model providing the signal.</p>
+<p><strong>Optimal solution:</strong> The closed-form optimal policy for the KL-constrained objective is:</p>
+<p>$$\pi^*(y|x) = \frac{1}{Z(x)} \pi_{\text{ref}}(y|x) \exp\left(\frac{r(x,y)}{\beta}\right)$$</p>
+<p>where $Z(x) = \sum_y \pi_{\text{ref}}(y|x)\exp(r(x,y)/\beta)$ is the partition function. This is intractable to compute but provides the foundation for DPO.</p>
+<h3 id="dpo">DPO: Direct Preference Optimization</h3>
+<p><strong>Key insight:</strong> We can rearrange the optimal policy to express the reward in terms of policies:</p>
+<p>$$r(x, y) = \beta \log \frac{\pi^*(y|x)}{\pi_{\text{ref}}(y|x)} + \beta \log Z(x)$$</p>
+<p>Substituting into the Bradley-Terry preference model and noting that $Z(x)$ cancels between $y_w$ and $y_l$:</p>
+<p>$$P(y_w \succ y_l | x) = \sigma\left(\beta\left[\log\frac{\pi^*(y_w|x)}{\pi_{\text{ref}}(y_w|x)} - \log\frac{\pi^*(y_l|x)}{\pi_{\text{ref}}(y_l|x)}\right]\right)$$</p>
+<p>Now replace the unknown $\pi^*$ with our learnable policy $\pi_\theta$ and maximize the preference likelihood directly:</p>
+<p>$$\boxed{\mathcal{L}_{\text{DPO}}(\theta) = -\mathbb{E}_{(x, y_w, y_l)}\left[\log\sigma\left(\beta\left[\log\frac{\pi_\theta(y_w|x)}{\pi_{\text{ref}}(y_w|x)} - \log\frac{\pi_\theta(y_l|x)}{\pi_{\text{ref}}(y_l|x)}\right]\right)\right]}$$</p>
+<p><strong>Why DPO works:</strong> It implicitly defines a reward $r(x,y) = \beta\log\frac{\pi_\theta(y|x)}{\pi_{\text{ref}}(y|x)}$ and optimizes it to match human preferences — without ever training a separate reward model or running RL. The $\beta$ parameter controls how far the policy can deviate from the reference (same role as the KL penalty in RLHF).</p>
+<pre><code class="language-python">import numpy as np
+
+def dpo_loss(log_pi_w, log_pi_l, log_ref_w, log_ref_l, beta=0.1):
+    """
+    Compute DPO loss for a batch of preference pairs.
+    
+    Args:
+        log_pi_w: log pi_theta(y_w|x) for preferred completions
+        log_pi_l: log pi_theta(y_l|x) for dispreferred completions
+        log_ref_w: log pi_ref(y_w|x) for preferred completions
+        log_ref_l: log pi_ref(y_l|x) for dispreferred completions
+        beta: temperature parameter (controls deviation from reference)
+    
+    Returns:
+        Scalar DPO loss (minimize this)
+    """
+    # Log-ratio differences
+    log_ratio_w = log_pi_w - log_ref_w  # log(pi/ref) for winner
+    log_ratio_l = log_pi_l - log_ref_l  # log(pi/ref) for loser
+    
+    # DPO objective: -log sigmoid(beta * (log_ratio_w - log_ratio_l))
+    logits = beta * (log_ratio_w - log_ratio_l)
+    loss = -np.mean(np.log(1 / (1 + np.exp(-logits))))
+    return loss
+
+# Example: 4 preference pairs
+np.random.seed(42)
+batch_size = 4
+
+# Simulated log-probs (policy assigns higher prob to preferred outputs)
+log_pi_w = np.array([-1.2, -0.8, -1.5, -0.9])   # pi_theta on winners
+log_pi_l = np.array([-2.1, -1.9, -2.3, -2.0])   # pi_theta on losers
+log_ref_w = np.array([-1.5, -1.2, -1.8, -1.3])  # pi_ref on winners
+log_ref_l = np.array([-1.8, -1.5, -2.0, -1.6])  # pi_ref on losers
+
+for beta in [0.05, 0.1, 0.5]:
+    loss = dpo_loss(log_pi_w, log_pi_l, log_ref_w, log_ref_l, beta)
+    print(f"beta={beta}: DPO loss = {loss:.4f}")
+
+# Implicit reward under current policy
+implicit_reward_w = 0.1 * (log_pi_w - log_ref_w)
+implicit_reward_l = 0.1 * (log_pi_l - log_ref_l)
+print(f"\nImplicit rewards (beta=0.1):")
+print(f"  Winners: {np.round(implicit_reward_w, 4)}")
+print(f"  Losers:  {np.round(implicit_reward_l, 4)}")
+print(f"  Reward margin: {np.round(implicit_reward_w - implicit_reward_l, 4)}")</code></pre>
 <h2 id="evaluation">Evaluation Uncertainty</h2><p>Benchmarks are samples. A 1% improvement on 200 examples may be noise; a 1% improvement on 20,000 examples is more convincing. Always pair score changes with uncertainty estimates and error analysis.</p>
 <div class="experiment-card"><div class="experiment-meta"><span class="bias-tag">Exercise</span><span class="bias-tag">Evaluation</span></div><h5>Confidence Interval for Accuracy</h5><p>A model gets 870 out of 1000 examples correct. Estimate a 95% confidence interval using $\hat{p}\pm1.96\sqrt{\hat{p}(1-\hat{p})/n}$.</p></div>
-<div class="related-posts"><h3><i class="fas fa-book-reader me-2"></i>Related Pages</h3><div class="related-post-item"><h5>Generative Model Math</h5><p>Review distribution objectives that appear in modern generative training.</p><a href="math-for-ai-extension03-generative-model-math.html">Read Extension 3 <i class="fas fa-arrow-right ms-1"></i></a></div><div class="related-post-item"><h5>Math for AI Hub</h5><p>Return to the full roadmap and capstone upgrade list.</p><a href="index.html">Open Hub <i class="fas fa-arrow-right ms-1"></i></a></div></div>
+<div class="related-posts"><h3><i class="fas fa-book-reader me-2"></i>Related Pages</h3><div class="related-post-item"><h5>Extension 5: Reinforcement Learning Mathematics</h5><p>Full derivation of policy gradients, PPO clipping, and GAE — the RL algorithms used inside RLHF.</p><a href="math-for-ai-extension05-rl-mathematics.html">Read Extension 5 <i class="fas fa-arrow-right ms-1"></i></a></div><div class="related-post-item"><h5>Generative Model Math</h5><p>Review distribution objectives that appear in modern generative training.</p><a href="math-for-ai-extension03-generative-model-math.html">Read Extension 3 <i class="fas fa-arrow-right ms-1"></i></a></div><div class="related-post-item"><h5>Math for AI Hub</h5><p>Return to the full roadmap and capstone upgrade list.</p><a href="index.html">Open Hub <i class="fas fa-arrow-right ms-1"></i></a></div></div>
 </div></div></div></div></section><footer id="social-media"><div class="footer-v2-wrapper"><div class="footer-bar"><div class="fc-left"><div class="fc-brand-group"><div class="fc-brand-stack"><span></span><span></span><span></span></div><span class="fc-brand-name">Wasil Zafar</span></div><span class="fc-tagline">Consultant &amp; Cloud Architect</span></div><div class="fc-center"><a href="/">Home</a><a href="/disclaimer.html">Disclaimer</a><a href="/privacy-policy.html">Privacy</a><a href="/pages/contact.html">Contact</a></div><div class="fc-right"><a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a><a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a></div></div><div class="footer-sub"><span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span><a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a></div></div></footer><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script><button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button><div id="categoryIndicator" class="category-indicator"></div><script src="../../../js/cookie-consent.js"></script><script src="../../../js/main.js"></script>
     <!-- Fuse.js Search Library -->
     <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>

@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Context window management for long-running agents: token counting, summarization strategies, sliding windows, the 200K token limit, conversation compaction, and memory architectures. CCA Domain 4 Tasks 4.5, 4.6." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="context window, token counting, summarization, sliding window, 200K tokens, conversation compaction, memory architecture, CCA Domain 4" />
+    <meta property="og:title" content="Anthropic SDK Track Part 12: Context Preservation" />
+    <meta property="og:description" content="Context window management: token counting, summarization, sliding windows, and memory architectures." />
+    <meta property="og:type" content="article" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/favicon_io/android-chrome-512x512.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="article:published_time" content="2026-05-22" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+
+    <title>Anthropic SDK Track Part 12: Context Preservation - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/ai-app-dev-xtreme/ai-app-dev-sdk-anthropic-part12-context-preservation.html" />
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{'ad_storage':'denied','ad_user_data':'denied','ad_personalization':'denied','analytics_storage':'denied','region':['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']});gtag('consent','default',{'ad_storage':'granted','ad_user_data':'granted','ad_personalization':'granted','analytics_storage':'granted'});gtag('set','url_passthrough',true);</script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <div class="nav-v16-wrapper"><nav class="nav-v16"><a href="/" class="brand"><div class="brand-stack"><span></span><span></span><span></span></div><span class="brand-text">Wasil Zafar</span></a><button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()"><span></span><span></span><span></span></button><div class="links"><a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a><a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a><a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a><a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a><a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a><button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button></div></nav></div>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to AI App Dev Series</a>
+                <h1 class="display-4 fw-bold mb-3">Anthropic SDK Track Part 12: Context Preservation</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>May 22, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>35 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Manage the 200K context window for long-running agents &mdash; token counting, conversation summarization, sliding windows, memory architectures, and strategies for preserving critical information across extended interactions.</p>
+                <div class="mt-3">
+                    <span class="badge bg-success bg-opacity-75 me-1"><i class="fas fa-pen-fancy me-1"></i>CCA Domain 4 &middot; 15%</span>
+                    <span class="badge bg-secondary bg-opacity-75">Tasks 4.5, 4.6</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header"><h3><i class="fas fa-list me-2"></i>Table of Contents</h3><button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button></div>
+        <ol>
+            <li><a href="#token-management" onclick="closeNav()">Token Management</a></li>
+            <li><a href="#summarization" onclick="closeNav()">Summarization Strategies</a></li>
+            <li><a href="#sliding-window" onclick="closeNav()">Sliding Window Pattern</a></li>
+            <li><a href="#memory-arch" onclick="closeNav()">Memory Architectures</a></li>
+            <li><a href="#memory-api" onclick="closeNav()">Durable Memory Patterns</a></li>
+            <li><a href="#advanced-context" onclick="closeNav()">Advanced Context Patterns</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>What You&rsquo;ll Learn:</strong> Claude has a 200K token context window &mdash; massive, but not infinite. When your agent has long conversations or processes large documents, you need strategies to manage context: what to keep, what to summarize, and what to forget. Think of it like a desk: you can only have so many papers open at once, so you need a filing system for the rest.
+                    </div>
+
+                    <h2 id="token-management"><i class="fas fa-calculator me-2 text-teal"></i>1. Token Management</h2>
+
+                    <p>Claude models have a 200K token context window. In agentic loops, context grows rapidly &mdash; each tool call adds input/output tokens. Without management, you&rsquo;ll hit the limit and the agent will fail mid-task.</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Token counting via the API
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello, world!"}]
+)
+
+# Usage info returned with every response
+print(f"Input tokens: {response.usage.input_tokens}")
+print(f"Output tokens: {response.usage.output_tokens}")
+print(f"Total: {response.usage.input_tokens + response.usage.output_tokens}")
+
+# For planning: estimate tokens before sending
+# Rule of thumb: 1 token ≈ 4 characters (English text)
+# Code is denser: 1 token ≈ 3 characters
+def estimate_tokens(text: str) -> int:
+    """Rough token estimate for planning purposes."""
+    return len(text) // 4
+
+# Track cumulative usage in agentic loop
+class TokenTracker:
+    def __init__(self, budget: int = 150000):
+        self.budget = budget
+        self.total_input = 0
+        self.total_output = 0
+
+    def record(self, usage):
+        self.total_input += usage.input_tokens
+        self.total_output += usage.output_tokens
+
+    @property
+    def remaining(self) -> int:
+        return self.budget - (self.total_input + self.total_output)
+
+    @property
+    def should_compact(self) -> bool:
+        """Trigger compaction when 70% of budget is used."""
+        return self.remaining < self.budget * 0.3
+</code></pre>
+
+                    <h2 id="summarization"><i class="fas fa-compress-alt me-2 text-teal"></i>2. Summarization Strategies</h2>
+
+<pre><code class="language-python">import anthropic
+import json
+
+client = anthropic.Anthropic()
+
+def summarize_conversation(messages: list, keep_last_n: int = 4) -> list:
+    """Compact conversation history by summarizing older messages."""
+
+    if len(messages) <= keep_last_n + 2:
+        return messages  # Too short to summarize
+
+    # Split: old messages to summarize, recent to keep verbatim
+    to_summarize = messages[:-keep_last_n]
+    to_keep = messages[-keep_last_n:]
+
+    # Generate summary of older conversation
+    summary_response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1024,
+        system="Summarize this conversation history concisely. Preserve: (1) key decisions made, (2) files modified, (3) current task state, (4) any constraints or requirements discovered.",
+        messages=[{
+            "role": "user",
+            "content": f"Summarize this conversation:\n\n{json.dumps(to_summarize, indent=2)}"
+        }]
+    )
+
+    summary_text = summary_response.content[0].text
+
+    # Reconstruct: summary as first message + recent messages
+    compacted = [
+        {"role": "user", "content": f"[Conversation history summary]\n{summary_text}"},
+        {"role": "assistant", "content": "Understood. I have the context from our previous conversation. Let me continue."}
+    ] + to_keep
+
+    return compacted
+</code></pre>
+
+                    <div class="experiment-card">
+                        <div class="experiment-meta">
+                            <span class="meta-category"><i class="fas fa-flask me-1"></i>Real-World Application</span>
+                        </div>
+                        <div class="experiment-content">
+                            <h4>Legal Document Analysis at Scale</h4>
+                            <p>A law firm processes 500-page contracts using Claude. Their solution: chunk documents into sections, process each with a focused prompt, maintain a running summary of findings, and use the summary as context for cross-referencing. Result: 95% accuracy on clause identification across 500+ pages.</p>
+                        </div>
+                        <div class="experiment-tags"><span class="bias-tag">Context Management</span><span class="bias-tag">Document Processing</span></div>
+                    </div>
+
+                    <h2 id="sliding-window"><i class="fas fa-window-maximize me-2 text-teal"></i>3. Sliding Window Pattern</h2>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+class SlidingWindowAgent:
+    """Agent that maintains a fixed-size context window."""
+
+    def __init__(self, max_messages: int = 20, system: str = ""):
+        self.max_messages = max_messages
+        self.system = system
+        self.messages = []
+        self.pinned_context = ""  # Critical info always included
+
+    def add_message(self, role: str, content: str):
+        self.messages.append({"role": role, "content": content})
+
+        # Trim when exceeding window
+        if len(self.messages) > self.max_messages:
+            self._compact()
+
+    def _compact(self):
+        """Keep first 2 messages (task setup) + last N messages."""
+        keep_first = 2
+        keep_last = self.max_messages - keep_first - 2  # Leave room for summary
+
+        old_middle = self.messages[keep_first:-keep_last]
+
+        # Extract key facts from discarded messages
+        facts = self._extract_facts(old_middle)
+        self.pinned_context += f"\n{facts}"
+
+        # Rebuild: first messages + recent messages
+        self.messages = self.messages[:keep_first] + self.messages[-keep_last:]
+
+    def _extract_facts(self, messages: list) -> str:
+        """Extract critical facts from messages being discarded."""
+        # In production, use Claude to summarize
+        files_mentioned = set()
+        decisions = []
+        for msg in messages:
+            content = msg.get("content", "")
+            if "modified" in content.lower() or "created" in content.lower():
+                decisions.append(content[:100])
+        return f"Previous actions: {'; '.join(decisions[:5])}"
+
+    def get_effective_messages(self) -> list:
+        """Messages with pinned context prepended."""
+        if self.pinned_context:
+            context_msg = {"role": "user", "content": f"[Context from earlier]: {self.pinned_context}"}
+            return [context_msg] + self.messages
+        return self.messages
+</code></pre>
+
+                    <h2 id="memory-arch"><i class="fas fa-brain me-2 text-teal"></i>4. Memory Architectures</h2>
+
+                    <h3 id="auto-compaction">4.1 Automatic Compaction in the Agent SDK</h3>
+
+                    <p>The Claude Agent SDK handles context window management automatically. When the context approaches its limit, the SDK <strong>compacts</strong> the conversation: it summarizes older history to free space, keeping recent exchanges and key decisions intact. You can also trigger compaction manually.</p>
+
+<pre><code class="language-python"># Agent SDK Automatic Compaction
+# Docs: https://code.claude.com/docs/en/agent-sdk/agent-loop#automatic-compaction
+
+import asyncio
+from claude_agent_sdk import (
+    query,
+    ClaudeAgentOptions,
+    SystemMessage,
+    ResultMessage,
+)
+
+
+async def agent_with_compaction_awareness():
+    """The SDK compacts automatically — here's how to detect and customize it."""
+
+    async for message in query(
+        prompt="Refactor the entire auth module and update all tests",
+        options=ClaudeAgentOptions(
+            allowed_tools=["Read", "Edit", "Bash", "Grep", "Glob"],
+        ),
+    ):
+        # Detect compaction events
+        if isinstance(message, SystemMessage):
+            if message.subtype == "compact_boundary":
+                # SDK just summarized older context to free space
+                print("[COMPACTION] Context was summarized to fit window")
+                # Older messages are now condensed into a summary
+                # Recent messages + key decisions preserved
+
+        if isinstance(message, ResultMessage):
+            print(f"Done. Total cost: ${message.total_cost_usd:.4f}")
+
+
+# --- Manual compaction: trigger with /compact ---
+async def manual_compact():
+    """Send /compact as a prompt to force compaction on demand."""
+    async for message in query(
+        prompt="/compact",  # Slash command triggers compaction
+        options=ClaudeAgentOptions(
+            continue_conversation=True,  # Must be continuing a session
+        ),
+    ):
+        if isinstance(message, SystemMessage) and message.subtype == "compact_boundary":
+            print("Manual compaction complete")
+
+
+asyncio.run(agent_with_compaction_awareness())
+</code></pre>
+
+                    <p><strong>What compaction preserves vs. loses:</strong></p>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-dark">
+                                <tr><th>Preserved</th><th>May Be Lost</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Recent messages (last few turns)</td><td>Exact wording from early messages</td></tr>
+                                <tr><td>Key decisions and reasoning</td><td>Intermediate tool call details</td></tr>
+                                <tr><td>Files modified (paths + what changed)</td><td>Full file contents read early on</td></tr>
+                                <tr><td>Current task objective</td><td>Specific error messages from early turns</td></tr>
+                                <tr><td>CLAUDE.md content (re-injected every request)</td><td>Verbose tool output from early exploration</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Critical:</strong> Persistent rules belong in <strong>CLAUDE.md</strong> (loaded via <code>settingSources</code>), not in the initial prompt. CLAUDE.md content is re-injected on every request and survives compaction. Initial prompt instructions may be summarized away.
+                    </div>
+
+<pre><code class="language-bash"># Customize compaction in your CLAUDE.md:
+
+# Summary instructions
+
+When summarizing this conversation, always preserve:
+- The current task objective and acceptance criteria
+- File paths that have been read or modified
+- Test results and error messages (exact text)
+- Decisions made and the reasoning behind them
+- Any constraints or requirements discovered during exploration
+
+# The compactor reads this section and respects it during auto-summarization.
+# This is NOT a magic header — the compactor matches on intent, not exact text.
+</code></pre>
+
+                    <h3 id="memory-tiers">4.2 Multi-Tier Memory Architecture</h3>
+
+                    <div class="mermaid-container">
+                        <div class="mermaid-label">Multi-Tier Memory Architecture</div>
+                        <pre class="mermaid">
+flowchart TD
+    A["Working Memory<br/>(Current messages)"] --> B["Short-Term Memory<br/>(Summarized history)"]
+    B --> C["Long-Term Memory<br/>(Persistent store)"]
+    A -->|"Exceeds window"| D["Compaction"]
+    D -->|"Key facts"| B
+    D -->|"Decisions & patterns"| C
+    C -->|"Retrieve relevant"| A
+                        </pre>
+                    </div>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-graduation-cap"></i>
+                        <strong>CCA Tasks 4.5 &amp; 4.6:</strong> The exam tests: (1) the 200K context window is a hard limit, (2) tool_use results accumulate in context (especially large file reads), (3) summarization is lossy &mdash; critical details can be lost, (4) the sliding window pattern preserves recent context at the expense of older context, (5) pinned context ensures critical information survives compaction.
+                    </div>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-laptop-code me-2"></i>
+                        <strong>Try It Yourself:</strong> Build a conversation manager that handles a 50-message conversation. Implement three strategies: (1) sliding window (keep last 20 messages), (2) summarization (summarize older messages into a &ldquo;memory&rdquo; block), (3) hybrid (keep recent + summarized old). Compare Claude&rsquo;s answer quality on a test question that requires information from message #3.
+                    </div>
+
+                    <h2 id="memory-api"><i class="fas fa-brain me-2 text-teal"></i>5. Durable Memory Patterns</h2>
+
+                    <p>The current Agent SDK does <strong>not</strong> expose a managed <code>memory_stores</code> CRUD API. In practice, durable memory comes from three places: filesystem-backed memory Claude already loads (<code>CLAUDE.md</code> and auto memory), your application&rsquo;s own database or vector store, and session transcripts mirrored via <code>SessionStore</code> when you need resumability across hosts.</p>
+
+                    <h3 id="memory-stores">5.1 Filesystem Memory: <code>CLAUDE.md</code> and Auto Memory</h3>
+
+<pre><code class="language-python"># Filesystem-backed memory in the Agent SDK
+
+
+from claude_agent_sdk import ClaudeAgentOptions
+
+# Default SDK behavior loads project/user settings and memory files from disk.
+project_context = ClaudeAgentOptions(
+    cwd="/srv/support-agent",
+    setting_sources=["user", "project"],
+)
+
+# In multi-tenant environments, disable filesystem memory when sessions
+# must not inherit context from other tenants or prior local runs.
+isolated_context = ClaudeAgentOptions(
+    cwd="/srv/tenant-123",
+    setting_sources=[],
+    env={"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"},
+)
+
+print("CLAUDE.md: durable project/user instructions loaded from the filesystem")
+print("Auto memory: local Claude Code memory files loaded unless explicitly disabled")
+print("Use per-tenant cwd + setting_sources=[] for strict isolation")
+</code></pre>
+
+                    <h3 id="memories-crud">5.2 Application-Managed Durable Memory</h3>
+
+<pre><code class="language-python"># Application-managed memory store
+# Your app, not the Agent SDK, owns long-term memory records.
+
+from typing import List, Dict
+
+
+def retrieve_customer_facts(customer_id: str, query_text: str) -> List[Dict[str, str]]:
+    """Look up relevant facts in your own DB or vector store."""
+    # Replace with Postgres, Redis, Elasticsearch, pgvector, Pinecone, etc.
+    return [
+        {"content": "Customer prefers concise responses", "source": "crm"},
+        {"content": "Customer is on Enterprise plan, 100 seats", "source": "billing"},
+    ]
+
+
+def save_customer_fact(customer_id: str, content: str, source: str) -> None:
+    """Persist new durable memory in application storage."""
+    # Example: INSERT INTO customer_memory (...)
+    print(f"Saved memory for {customer_id}: {content} ({source})")
+
+
+print("Durable memory lives in your application store, not a Claude-managed API")
+print("SessionStore mirrors transcripts only; it does not replace long-term memory")
+</code></pre>
+
+                    <h3 id="memory-in-agents">5.3 Using Retrieved Memory in Agents</h3>
+
+<pre><code class="language-python">import asyncio
+from claude_agent_sdk import query, ClaudeAgentOptions, ResultMessage
+
+
+def build_memory_context(facts):
+    return "\n".join(f"- {fact['content']} (source: {fact['source']})" for fact in facts)
+
+
+async def support_agent(user_message: str, customer_id: str):
+    """Inject retrieved facts into the current run, then persist new learnings in app code."""
+    facts = retrieve_customer_facts(customer_id, user_message)
+    memory_context = build_memory_context(facts)
+
+    enhanced_prompt = f"""Customer context:
+{memory_context}
+
+User request:
+{user_message}
+
+Use the known context when answering. If you learn a durable new fact, mention it explicitly so the host application can store it."""
+
+    async for message in query(
+        prompt=enhanced_prompt,
+        options=ClaudeAgentOptions(
+            allowed_tools=["Read", "Glob", "Grep"],
+        ),
+    ):
+        if isinstance(message, ResultMessage) and message.subtype == "success":
+            print(message.result)
+            # Host application logic decides what to persist.
+            save_customer_fact(customer_id, "Upgraded to 100 seats", "conversation")
+
+
+asyncio.run(support_agent("I just upgraded to 100 seats", "user_123"))
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-graduation-cap"></i>
+                        <strong>CCA Exam Pattern (9.1):</strong> Questions test: (1) The Agent SDK does not provide a first-class <code>memory_stores</code> API. (2) Durable memory usually comes from <code>CLAUDE.md</code>, auto memory, or your own application store. (3) <code>SessionStore</code> mirrors transcripts for resumption but is not a long-term knowledge database. (4) Multi-tenant apps should isolate <code>cwd</code>, control <code>setting_sources</code>, and disable auto memory when needed.
+                    </div>
+                    <h2 id="advanced-context"><i class="fas fa-compress-arrows-alt me-2 text-teal"></i>6. Advanced Context Patterns</h2>
+
+                    <p>Beyond basic sliding windows, production agents need sophisticated techniques for managing their context window: the <code>/compact</code> command for on-demand compression, scratchpad files for intermediate state, and awareness of the &ldquo;lost-in-the-middle&rdquo; problem where information in the center of long contexts gets less attention.</p>
+
+                    <h3 id="compact-command">6.1 /compact Command</h3>
+
+<pre><code class="language-python">import anthropic
+import json
+
+client = anthropic.Anthropic()
+
+# /compact — On-demand context compression in Claude Code
+# When context gets too large, /compact summarizes the conversation
+# while preserving critical details (tool results, decisions made)
+
+# Simulating what /compact does internally:
+def compact_context(messages: list, max_tokens: int = 2000) -> list:
+    """Compress conversation history while preserving key information."""
+
+    # Identify what MUST be preserved:
+    # - System prompt (never compressed)
+    # - Last N messages (recent context)
+    # - Tool results that haven't been acted on yet
+    # - Explicit decisions and commitments made
+
+    preserve_last = 4  # Always keep last 4 messages
+    preserved = messages[-preserve_last:]
+    to_summarize = messages[:-preserve_last]
+
+    if not to_summarize:
+        return messages  # Nothing to compact
+
+    # Generate a structured summary of older messages
+    summary_prompt = f"""Summarize this conversation history into a concise briefing.
+
+MUST include:
+- Key decisions made
+- Important facts learned (from tool results)
+- Current task state and next steps
+- Any constraints or rules established
+
+Conversation to summarize:
+{json.dumps(to_summarize, indent=2)}"""
+
+    summary = client.messages.create(
+        model="claude-haiku-4-5",  # Use cheap model for summarization
+        max_tokens=max_tokens,
+        messages=[{"role": "user", "content": summary_prompt}]
+    )
+
+    # Replace old messages with summary + preserved recent messages
+    compacted = [
+        {"role": "user", "content": f"[Context Summary]\n{summary.content[0].text}"},
+        {"role": "assistant", "content": "Understood. I have the context from our previous conversation."}
+    ] + preserved
+
+    return compacted
+
+# Example: 50-message conversation compressed to ~6 messages
+long_conversation = [{"role": "user", "content": f"Message {i}"} for i in range(50)]
+compacted = compact_context(long_conversation)
+print(f"Before: {len(long_conversation)} messages → After: {len(compacted)} messages")
+</code></pre>
+
+                    <h3 id="lost-in-middle">6.2 Lost-in-the-Middle Problem</h3>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# The "lost-in-the-middle" problem:
+# Claude pays MORE attention to content at the START and END of the context window
+# Content buried in the MIDDLE gets less attention (lower recall)
+
+# ❌ BAD: Important instruction buried in middle of long context
+bad_messages = [
+    {"role": "user", "content": "[... 5000 words of context ...]"},
+    {"role": "user", "content": "IMPORTANT: Always cite sources."},  # BURIED
+    {"role": "user", "content": "[... 5000 more words ...]"},
+    {"role": "user", "content": "Now summarize everything above."}
+]
+
+# ✅ GOOD: Put critical instructions at START (system prompt) or END (latest message)
+good_system = "CRITICAL: Always cite sources with [Source: name, page] format."
+
+good_messages = [
+    {"role": "user", "content": "[... 10000 words of context ...]"},
+    {"role": "user", "content": "Summarize the above. Remember: cite all sources with [Source: name, page] format."}
+]
+
+# ✅ BEST: Use structured "case facts" blocks that Claude recognizes as important
+structured_context = """## CASE FACTS (refer back to these throughout your response)
+- Customer: TechCorp (Enterprise, 500 seats)
+- Issue: Data export failing since 2024-03-10
+- Previous attempts: restart, cache clear, API key rotation
+- SLA deadline: 24 hours remaining
+
+## EVIDENCE
+[... supporting documentation ...]
+
+## TASK
+Diagnose the root cause and provide a fix. Reference CASE FACTS in your answer."""
+
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1000,
+    messages=[{"role": "user", "content": structured_context}]
+)
+print(response.content[0].text[:200])
+</code></pre>
+
+                    <h3 id="scratchpad-files">6.3 Scratchpad Files Pattern</h3>
+
+<pre><code class="language-python">import anthropic
+import json
+
+client = anthropic.Anthropic()
+
+# Scratchpad pattern: Agent writes intermediate state to files
+# instead of holding everything in the context window.
+# This prevents context overflow during complex multi-step tasks.
+
+# Example: Research agent investigating a complex question
+# Instead of keeping all findings in context, it writes to a scratchpad:
+
+scratchpad_system = """You are a research agent with a scratchpad file.
+
+## Working Method
+1. For each research step, write findings to the scratchpad (write_scratchpad tool)
+2. Before synthesizing, read the full scratchpad (read_scratchpad tool)
+3. The scratchpad persists across context compactions
+4. Use sections: ## Findings, ## Open Questions, ## Conclusions
+
+This lets you handle complex research without context overflow."""
+
+scratchpad_tools = [
+    {
+        "name": "write_scratchpad",
+        "description": "Append findings to the persistent scratchpad file.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "section": {"type": "string", "enum": ["findings", "questions", "conclusions"]},
+                "content": {"type": "string"}
+            },
+            "required": ["section", "content"]
+        }
+    },
+    {
+        "name": "read_scratchpad",
+        "description": "Read the current scratchpad contents.",
+        "input_schema": {"type": "object", "properties": {}}
+    }
+]
+
+# The scratchpad lives outside the context window (as a file or external store)
+# Even after /compact, the agent can read_scratchpad to recover its findings
+print("Scratchpad pattern: externalizes state to survive context compaction")
+print("Key benefit: agent can handle 100+ step research without context overflow")
+</code></pre>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-graduation-cap"></i>
+                        <strong>CCA Exam Pattern (9.2):</strong> Questions test: (1) /compact compresses older messages while preserving recent ones and key decisions. (2) Lost-in-the-middle: put critical info at START (system prompt) or END (latest message), never buried in middle. (3) Scratchpad files externalize state to survive context compaction. (4) Structured &ldquo;case facts&rdquo; blocks at the top of context improve recall for key information.
+                    </div>
+
+                    <div class="related-posts">
+                        <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                        <div class="related-post-item">
+                            <h5>Anthropic Part 11: Structured Output &amp; Batch</h5>
+                            <p>JSON mode, Pydantic validation, Message Batches API, and output guarantees.</p>
+                            <a href="ai-app-dev-sdk-anthropic-part11-structured-output.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                        <div class="related-post-item">
+                            <h5>Anthropic Part 13: Escalation, Errors &amp; Human Review</h5>
+                            <p>Error recovery patterns, human-in-the-loop escalation, and graceful degradation.</p>
+                            <a href="ai-app-dev-sdk-anthropic-part13-escalation-errors.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
+                    </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <footer id="social-media"><div class="footer-v2-wrapper"><div class="footer-bar"><div class="fc-left"><div class="fc-brand-group"><div class="fc-brand-stack"><span></span><span></span><span></span></div><span class="fc-brand-name">Wasil Zafar</span></div><span class="fc-tagline">Consultant &amp; Cloud Architect</span></div><div class="fc-center"><a href="/">Home</a><a href="/disclaimer.html">Disclaimer</a><a href="/privacy-policy.html">Privacy</a><a href="/pages/contact.html">Contact</a></div><div class="fc-right"><a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a><a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a><a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a><a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a><a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a><a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a><a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a><a href="/feed.xml" target="_blank" title="RSS Feed"><i class="fas fa-rss"></i></a></div></div><div class="footer-sub"><span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span><a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a></div></div></footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="../../../js/path-progress.js"></script>
+</body>
+</html>
