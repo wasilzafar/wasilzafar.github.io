@@ -18,6 +18,10 @@ import sys
 import json
 import argparse
 from html.parser import HTMLParser
+
+# Ensure Unicode output works on Windows (CP1252 terminals)
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 from urllib.parse import urlparse
 from pathlib import Path
 from collections import defaultdict

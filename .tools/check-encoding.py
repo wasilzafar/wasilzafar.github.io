@@ -32,6 +32,10 @@ import os
 import sys
 from pathlib import Path
 
+# Ensure Unicode output works on Windows (CP1252 terminals)
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 
 # ============================================================
 # MOJIBAKE DETECTION: Build garbled→correct character mappings
