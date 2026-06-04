@@ -143,8 +143,22 @@ TARGET_CHARS = [
     '\u00e7',  # ç c-cedilla
 
     # Box-Drawing Characters (common in tree/directory displays)
-    '\u2500',  # ─ horizontal line
-    '\u2502',  # │ vertical line
+    '\u2500',  # ─ horizontal line (single)
+    '\u2502',  # │ vertical line (single)
+    '\u2550',  # ═ horizontal line (double)
+    '\u2551',  # ║ vertical line (double)
+    '\u2552',  # ╒ double-top-left
+    '\u2553',  # ╓ double-left-top
+    '\u2554',  # ╔ double top-left corner
+    '\u2555',  # ╕ double-top-right
+    '\u2556',  # ╖ double-right-top
+    '\u2557',  # ╗ double top-right corner
+    '\u2558',  # ╘ double-bottom-left
+    '\u2559',  # ╙ double-left-bottom
+    '\u255a',  # ╚ double bottom-left corner
+    '\u255b',  # ╛ double-bottom-right
+    '\u255c',  # ╜ double-right-bottom
+    '\u255d',  # ╝ double bottom-right corner
     '\u250c',  # ┌ top-left corner
     '\u2510',  # ┐ top-right corner
     '\u2514',  # └ bottom-left corner
