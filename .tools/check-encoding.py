@@ -43,13 +43,22 @@ sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 def make_garbled(char):
     """Given a correct Unicode char, produce the garbled string that appears
-    when its UTF-8 bytes are misread as Windows-1252 and re-encoded to UTF-8."""
+    when its UTF-8 bytes are misread as Windows-1252 and re-encoded to UTF-8.
+
+    Falls back to latin-1 (ISO-8859-1) when cp1252 fails, because some bytes
+    in the 0x80-0x9F range (0x8D, 0x8F, 0x90, 0x9D) are undefined in strict
+    CP1252 but editors/tools often treat them as raw byte values (latin-1)."""
     try:
         utf8_bytes = char.encode('utf-8')
         garbled = utf8_bytes.decode('cp1252')
         return garbled
     except (UnicodeDecodeError, UnicodeEncodeError):
-        return None
+        try:
+            utf8_bytes = char.encode('utf-8')
+            garbled = utf8_bytes.decode('latin-1')
+            return garbled
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            return None
 
 
 # Characters commonly affected by double-encoding
@@ -132,6 +141,58 @@ TARGET_CHARS = [
     '\u00e4',  # ä a-umlaut
     '\u00f6',  # ö o-umlaut
     '\u00e7',  # ç c-cedilla
+
+    # Box-Drawing Characters (common in tree/directory displays)
+    '\u2500',  # ─ horizontal line
+    '\u2502',  # │ vertical line
+    '\u250c',  # ┌ top-left corner
+    '\u2510',  # ┐ top-right corner
+    '\u2514',  # └ bottom-left corner
+    '\u2518',  # ┘ bottom-right corner
+    '\u251c',  # ├ tee right
+    '\u2524',  # ┤ tee left
+    '\u252c',  # ┬ tee down
+    '\u2534',  # ┴ tee up
+    '\u253c',  # ┼ cross
+
+    # Check/Cross Marks & Status Indicators
+    '\u2713',  # ✓ check mark
+    '\u2714',  # ✔ heavy check mark
+    '\u2717',  # ✗ ballot x
+    '\u2718',  # ✘ heavy ballot x
+    '\u274c',  # ❌ cross mark (emoji)
+    '\u2705',  # ✅ check mark (emoji)
+    '\u2611',  # ☑ ballot box with check
+    '\u2612',  # ☒ ballot box with x
+    '\u2610',  # ☐ ballot box
+
+    # Common Emoji (used in technical docs & Mermaid diagrams)
+    '\U0001F512',  # 🔒 lock
+    '\U0001F513',  # 🔓 unlock
+    '\U0001F511',  # 🔑 key
+    '\U0001F680',  # 🚀 rocket
+    '\u26a1',      # ⚡ lightning
+    '\U0001F3AF',  # 🎯 target
+    '\U0001F4DD',  # 📝 memo
+    '\U0001F4E6',  # 📦 package
+    '\U0001F527',  # 🔧 wrench
+    '\U0001F504',  # 🔄 refresh
+    '\u26a0',      # ⚠ warning
+    '\U0001F4A1',  # 💡 lightbulb
+    '\U0001F3D7',  # 🏗 construction
+    '\U0001F6E1',  # 🛡 shield
+
+    # Geometric & Block Shapes
+    '\u25a0',  # ■ black square
+    '\u25a1',  # □ white square
+    '\u25aa',  # ▪ small black square
+    '\u25ab',  # ▫ small white square
+    '\u25cf',  # ● black circle
+    '\u25cb',  # ○ white circle
+    '\u25c6',  # ◆ black diamond
+    '\u25c7',  # ◇ white diamond
+    '\u25b6',  # ▶ right-pointing triangle
+    '\u25c0',  # ◀ left-pointing triangle
 
     # Miscellaneous
     '\u2122',  # ™ trademark
