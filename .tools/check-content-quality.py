@@ -7,6 +7,8 @@ Usage:
     python check-content-quality.py --path pages/series/digital-transformation
     python check-content-quality.py --path pages/series/digital-transformation --filter capstone
     python check-content-quality.py --fix                        # Auto-fix what's possible
+    python check-content-quality.py --gsc urls.txt               # Investigate GSC indexing issues
+    python check-content-quality.py --gsc -                      # Read URLs from stdin
 
 Checks performed:
     1. Encoding issues (mojibake, BOM, broken arrows)
@@ -18,22 +20,38 @@ Checks performed:
     7. Missing OG/Twitter meta tags
     8. Broken internal links (file references that don't exist)
     9. Thin content detection (< 1500 content words)
+
+GSC Indexability checks (--gsc mode):
+    10. Text-to-HTML ratio (target: >15%)
+    11. Inbound internal link count (orphan detection)
+    12. Duplicate title/description detection
+    13. Content uniqueness / boilerplate ratio
+    14. Heading structure (H1 count, H2 hierarchy)
+    15. File size analysis
+    16. Canonical consistency
+    17. Structured data (schema.org) presence
 """
 import argparse
 import os
 import re
 import sys
 from pathlib import Path
+from collections import defaultdict, Counter
 
 
 # ============================================================
 # CONFIGURATION
 # ============================================================
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
+
 META_DESC_MIN = 120
 META_DESC_MAX = 160
 THIN_CONTENT_THRESHOLD = 1500  # words
 WPM_READING_SPEED = 200
+TEXT_HTML_RATIO_MIN = 15  # percent
+SITE_BASE_URL = 'https://www.wasilzafar.com/'
 
 REQUIRED_FEATURES_BLOG = {
     'canonical': ('rel="canonical"', 'Missing canonical URL'),
@@ -196,11 +214,13 @@ def audit_file(filepath, repo_root):
     if 'twitter:card' not in content:
         warnings.append('Missing twitter:card meta tag')
     
-    # --- 8. INTERNAL LINK CHECK ---
+    # --- 8. INTERNAL LINK CHECK (all same-directory links) ---
     file_dir = os.path.dirname(filepath)
-    local_links = re.findall(r'href="(digital-transformation-[^"#]+\.html)"', content)
+    local_links = re.findall(r'href="([^"#/][^"#]*?\.html)"', content)
     broken_links = []
     for link in local_links:
+        if link.startswith('http') or link.startswith('../'):
+            continue
         target = os.path.join(file_dir, link)
         if not os.path.exists(target):
             broken_links.append(link)
@@ -267,6 +287,293 @@ def fix_file(filepath, repo_root):
 
 
 # ============================================================
+# GSC INDEXABILITY ANALYSIS
+# ============================================================
+
+def url_to_filepath(url):
+    """Convert a site URL to a local file path relative to REPO_ROOT."""
+    path = url.replace(SITE_BASE_URL, '').strip('/')
+    if not path or path == '':
+        path = 'index.html'
+    return REPO_ROOT / path
+
+
+def get_text_content(html):
+    """Extract visible text, stripping scripts/styles/nav/footer."""
+    text = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL)
+    text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL)
+    text = re.sub(r'<nav[^>]*>.*?</nav>', '', text, flags=re.DOTALL)
+    text = re.sub(r'<footer[^>]*>.*?</footer>', '', text, flags=re.DOTALL)
+    text = re.sub(r'<[^>]+>', ' ', text)
+    text = re.sub(r'&\w+;', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def compute_text_html_ratio(html):
+    """Compute text-to-HTML ratio as percentage."""
+    text = get_text_content(html)
+    html_size = len(html.encode('utf-8'))
+    text_size = len(text.encode('utf-8'))
+    if html_size == 0:
+        return 0
+    return round(text_size / html_size * 100, 1)
+
+
+def get_title(html):
+    """Extract <title> content."""
+    m = re.search(r'<title[^>]*>(.*?)</title>', html, re.DOTALL)
+    return re.sub(r'\s+', ' ', m.group(1)).strip() if m else ''
+
+
+def get_meta_description(html):
+    """Extract meta description content."""
+    m = re.search(r'<meta name="description" content="([^"]*)"', html)
+    return m.group(1) if m else ''
+
+
+def get_canonical(html):
+    """Extract canonical URL."""
+    m = re.search(r'<link rel="canonical" href="([^"]*)"', html)
+    return m.group(1) if m else ''
+
+
+def get_h1(html):
+    """Extract H1 text content."""
+    matches = re.findall(r'<h1[^>]*>(.*?)</h1>', html, re.DOTALL)
+    return [re.sub(r'<[^>]+>', '', h).strip() for h in matches]
+
+
+def get_h2_count(html):
+    """Count H2 headings."""
+    return len(re.findall(r'<h2[^>]*>', html))
+
+
+def has_structured_data(html):
+    """Check for schema.org / JSON-LD structured data."""
+    return 'application/ld+json' in html or 'schema.org' in html
+
+
+def build_inbound_link_map():
+    """Scan all HTML files and build a map: target_path -> set of source files linking to it."""
+    inbound = defaultdict(set)
+    pages_dir = REPO_ROOT / 'pages'
+    
+    for html_file in pages_dir.rglob('*.html'):
+        try:
+            content = html_file.read_text(encoding='utf-8', errors='replace')
+        except OSError:
+            continue
+        
+        # Find all href links
+        links = re.findall(r'href="([^"#]*)"', content)
+        source_rel = str(html_file.relative_to(REPO_ROOT))
+        
+        for link in links:
+            if not link or link.startswith('http') or link.startswith('mailto:') or link.startswith('javascript:'):
+                continue
+            
+            # Resolve relative link to absolute path from repo root
+            if link.startswith('/'):
+                target_path = link.lstrip('/')
+            else:
+                target_path = str((html_file.parent / link).resolve().relative_to(REPO_ROOT))
+            
+            # Normalize path separators
+            target_path = target_path.replace('\\', '/')
+            inbound[target_path].add(source_rel.replace('\\', '/'))
+    
+    # Also scan category pages and index.html
+    for html_file in [REPO_ROOT / 'index.html']:
+        if not html_file.exists():
+            continue
+        content = html_file.read_text(encoding='utf-8', errors='replace')
+        links = re.findall(r'href="([^"#]*)"', content)
+        for link in links:
+            if not link or link.startswith('http') or link.startswith('mailto:'):
+                continue
+            target_path = link.lstrip('/').replace('\\', '/')
+            inbound[target_path].add('index.html')
+    
+    return inbound
+
+
+def gsc_audit(urls):
+    """Run GSC indexability analysis on a list of URLs."""
+    print(f"\n{'='*72}")
+    print(f"  GSC INDEXABILITY ANALYSIS — {len(urls)} pages")
+    print(f"{'='*72}\n")
+    
+    # Build inbound link map (expensive but needed for orphan detection)
+    print("  Building inbound link map...")
+    inbound_map = build_inbound_link_map()
+    print(f"  Tracked links to {len(inbound_map)} unique targets.\n")
+    
+    # Collect all titles and descriptions for duplicate detection
+    all_titles = Counter()
+    all_descs = Counter()
+    pages_dir = REPO_ROOT / 'pages'
+    for html_file in pages_dir.rglob('*.html'):
+        try:
+            content = html_file.read_text(encoding='utf-8', errors='replace')
+            t = get_title(content)
+            d = get_meta_description(content)
+            if t:
+                all_titles[t] += 1
+            if d:
+                all_descs[d] += 1
+        except OSError:
+            continue
+    
+    # Analyze each URL
+    results = []
+    for url in urls:
+        filepath = url_to_filepath(url)
+        rel_path = str(filepath.relative_to(REPO_ROOT)).replace('\\', '/')
+        
+        if not filepath.exists():
+            results.append({'url': url, 'path': rel_path, 'error': 'FILE NOT FOUND'})
+            continue
+        
+        html = filepath.read_text(encoding='utf-8', errors='replace')
+        file_size = filepath.stat().st_size
+        
+        # Metrics
+        text_html_ratio = compute_text_html_ratio(html)
+        title = get_title(html)
+        description = get_meta_description(html)
+        canonical = get_canonical(html)
+        h1_list = get_h1(html)
+        h2_count = get_h2_count(html)
+        word_count = get_content_word_count(html)
+        total_words = get_word_count(html)
+        inbound_count = len(inbound_map.get(rel_path, set()))
+        has_schema = has_structured_data(html)
+        
+        # Canonical consistency
+        expected_canonical = SITE_BASE_URL + rel_path
+        canonical_ok = canonical == expected_canonical
+        
+        # Duplicate checks
+        title_dupes = all_titles.get(title, 0)
+        desc_dupes = all_descs.get(description, 0) if description else 0
+        
+        # Boilerplate ratio (unique content vs total text)
+        # Approximate: content words / total text words
+        uniqueness = round(word_count / total_words * 100, 1) if total_words > 0 else 0
+        
+        # Issues and signals
+        signals = []
+        if text_html_ratio < TEXT_HTML_RATIO_MIN:
+            signals.append(f'⚠️  Low text/HTML ratio: {text_html_ratio}% (min {TEXT_HTML_RATIO_MIN}%)')
+        if inbound_count < 2:
+            signals.append(f'🔴 Low inbound links: {inbound_count} (orphan risk!)')
+        elif inbound_count < 5:
+            signals.append(f'⚠️  Few inbound links: {inbound_count}')
+        if title_dupes > 1:
+            signals.append(f'🔴 Duplicate title ({title_dupes} pages share this title)')
+        if desc_dupes > 1:
+            signals.append(f'⚠️  Duplicate meta description ({desc_dupes} pages)')
+        if not canonical_ok:
+            signals.append(f'⚠️  Canonical mismatch: {canonical[:60]}')
+        if len(h1_list) == 0:
+            signals.append('🔴 Missing H1 heading')
+        elif len(h1_list) > 1:
+            signals.append(f'⚠️  Multiple H1 headings: {len(h1_list)}')
+        if h2_count < 3:
+            signals.append(f'⚠️  Few H2 sections: {h2_count} (thin structure)')
+        if word_count < THIN_CONTENT_THRESHOLD:
+            signals.append(f'🔴 Thin content: {word_count} words (threshold {THIN_CONTENT_THRESHOLD})')
+        if uniqueness < 30:
+            signals.append(f'⚠️  Low content uniqueness: {uniqueness}%')
+        if file_size > 200_000:
+            signals.append(f'⚠️  Large file: {file_size // 1024}KB')
+        if not has_schema:
+            signals.append('ℹ️  No structured data (schema.org)')
+        if not description:
+            signals.append('🔴 Missing meta description')
+        elif len(description) < META_DESC_MIN:
+            signals.append(f'⚠️  Short meta description: {len(description)} chars')
+        
+        results.append({
+            'url': url,
+            'path': rel_path,
+            'title': title,
+            'word_count': word_count,
+            'total_words': total_words,
+            'text_html_ratio': text_html_ratio,
+            'inbound_links': inbound_count,
+            'h1_count': len(h1_list),
+            'h2_count': h2_count,
+            'file_size_kb': file_size // 1024,
+            'uniqueness': uniqueness,
+            'canonical_ok': canonical_ok,
+            'title_dupes': title_dupes,
+            'desc_dupes': desc_dupes,
+            'has_schema': has_schema,
+            'signals': signals,
+        })
+    
+    # Print results
+    print(f"{'─'*72}")
+    print(f"  {'Page':<50} {'Words':>6} {'T/H%':>5} {'Links':>5} {'H2s':>4} {'Size':>5}")
+    print(f"{'─'*72}")
+    
+    for r in results:
+        if 'error' in r:
+            print(f"  ❌ {r['path']:<50} {r['error']}")
+            continue
+        
+        short_path = r['path'].replace('pages/series/', '').replace('pages/', '')
+        if len(short_path) > 48:
+            short_path = '...' + short_path[-45:]
+        
+        print(f"  {short_path:<50} {r['word_count']:>6} {r['text_html_ratio']:>5} {r['inbound_links']:>5} {r['h2_count']:>4} {r['file_size_kb']:>4}K")
+        
+        for signal in r['signals']:
+            print(f"     {signal}")
+        if r['signals']:
+            print()
+    
+    # Summary statistics
+    valid = [r for r in results if 'error' not in r]
+    if valid:
+        avg_words = sum(r['word_count'] for r in valid) // len(valid)
+        avg_ratio = sum(r['text_html_ratio'] for r in valid) / len(valid)
+        avg_links = sum(r['inbound_links'] for r in valid) / len(valid)
+        low_links = sum(1 for r in valid if r['inbound_links'] < 2)
+        thin = sum(1 for r in valid if r['word_count'] < THIN_CONTENT_THRESHOLD)
+        low_ratio = sum(1 for r in valid if r['text_html_ratio'] < TEXT_HTML_RATIO_MIN)
+        dupe_titles = sum(1 for r in valid if r['title_dupes'] > 1)
+        
+        print(f"\n{'='*72}")
+        print(f"  GSC ANALYSIS SUMMARY")
+        print(f"{'='*72}")
+        print(f"  Pages analyzed:       {len(valid)}")
+        print(f"  Avg content words:    {avg_words}")
+        print(f"  Avg text/HTML ratio:  {avg_ratio:.1f}%")
+        print(f"  Avg inbound links:    {avg_links:.1f}")
+        print(f"{'─'*72}")
+        print(f"  🔴 Orphan pages (<2 inbound links):   {low_links}")
+        print(f"  🔴 Thin content (<{THIN_CONTENT_THRESHOLD} words):       {thin}")
+        print(f"  ⚠️  Low text/HTML ratio (<{TEXT_HTML_RATIO_MIN}%):     {low_ratio}")
+        print(f"  ⚠️  Duplicate titles:                  {dupe_titles}")
+        print(f"{'='*72}")
+        
+        if low_links > 0:
+            print(f"\n  RECOMMENDATION: Add internal links to orphan pages from category")
+            print(f"  pages, related-posts sections, or the homepage.")
+        if thin > 0:
+            print(f"\n  RECOMMENDATION: Expand thin content pages to 2000+ words with")
+            print(f"  additional sections, examples, diagrams, or code snippets.")
+        if low_ratio > 0:
+            print(f"\n  RECOMMENDATION: Pages with low text/HTML ratio have too much")
+            print(f"  boilerplate. Consider reducing nav/footer size or adding content.")
+    
+    print()
+
+
+# ============================================================
 # MAIN
 # ============================================================
 
@@ -279,10 +586,38 @@ def main():
     parser.add_argument('--path', type=str, default=None, help='Relative path to scan')
     parser.add_argument('--filter', type=str, default=None, help='Only audit files matching this substring')
     parser.add_argument('--verbose', '-v', action='store_true', help='Show warnings too')
+    parser.add_argument('--gsc', type=str, default=None, metavar='FILE',
+                        help='GSC indexability mode: file with URLs (one per line), or "-" for stdin')
     args = parser.parse_args()
 
-    script_dir = Path(__file__).parent
-    repo_root = script_dir.parent
+    # --- GSC MODE ---
+    if args.gsc is not None:
+        if args.gsc == '-':
+            raw = sys.stdin.read()
+        else:
+            raw = Path(args.gsc).read_text(encoding='utf-8')
+        
+        # Parse URLs (handle tab-separated date columns, blank lines)
+        urls = []
+        for line in raw.strip().splitlines():
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            # Split on tab/whitespace to handle "URL\tdate" format
+            parts = line.split()
+            url = parts[0]
+            if url.startswith('http'):
+                urls.append(url)
+        
+        if not urls:
+            print("ERROR: No valid URLs found in input.")
+            sys.exit(1)
+        
+        gsc_audit(urls)
+        sys.exit(0)
+
+    # --- STANDARD AUDIT MODE ---
+    repo_root = REPO_ROOT
 
     # Determine scan targets
     if args.path:
