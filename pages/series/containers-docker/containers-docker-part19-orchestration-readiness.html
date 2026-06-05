@@ -402,51 +402,178 @@ docker run \
                         <!-- Section 4: Container Design Principles for Orchestration -->
                         <h2 id="design-principles">Container Design Principles for Orchestration</h2>
 
-                        <p>Beyond statelessness, orchestration-ready containers follow specific design principles that enable the orchestrator to manage their lifecycle effectively.</p>
+                        <p>Beyond statelessness, orchestration-ready containers follow specific design principles that enable the orchestrator to manage their lifecycle effectively. Think of these as a contract between your container and the orchestrator — if you follow these rules, the orchestrator can do its job well.</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">The Orchestrator's Contract with Your Container</div>
+                            <pre class="mermaid">
+flowchart LR
+    subgraph Contract["What the Orchestrator Needs"]
+        direction TB
+        A["🎯 One process<br/>so I know what to monitor"]
+        B["⚡ Fast startup<br/>so I can scale quickly"]
+        C["🔒 Immutable image<br/>so any replica is identical"]
+        D["📡 Health endpoints<br/>so I know when you're broken"]
+        E["🛑 SIGTERM handling<br/>so I can stop you gracefully"]
+    end
+
+    subgraph Reward["What You Get in Return"]
+        direction TB
+        R1["Auto-healing"]
+        R2["Auto-scaling"]
+        R3["Zero-downtime deploys"]
+        R4["Efficient scheduling"]
+        R5["Self-documenting ops"]
+    end
+
+    Contract --> Reward
+                            </pre>
+                        </div>
 
                         <h3>Single Process per Container</h3>
 
-                        <p>Each container should run one primary process. This makes health monitoring, logging, scaling, and resource allocation straightforward.</p>
+                        <p>Each container should run <strong>one primary process</strong>. The mental model: a container is to a process what a VM is to a service. This makes health monitoring, logging, scaling, and resource allocation straightforward — the orchestrator can treat each container as an atomic unit.</p>
 
-                        <pre><code class="language-bash"># Anti-pattern: multiple processes in one container
-# Dockerfile that runs nginx + php-fpm + cron in one container
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Anti-pattern vs Pattern: Process per Container</div>
+                            <pre class="mermaid">
+flowchart TB
+    subgraph BAD["❌ Monolithic Container"]
+        direction TB
+        SUP["supervisord (PID 1)"]
+        SUP --> NG["nginx"]
+        SUP --> PHP["php-fpm"]
+        SUP --> CRON["cron"]
+        SUP -.->|"Which failed?"| Q1["Health check = ???"]
+        SUP -.->|"Scale what?"| Q2["Can't scale independently"]
+        SUP -.->|"Whose logs?"| Q3["Mixed stdout"]
+    end
+
+    subgraph GOOD["✅ One Process per Container"]
+        direction TB
+        C1["Container 1<br/>nginx<br/>Scale: 2 replicas"]
+        C2["Container 2<br/>php-fpm<br/>Scale: 5 replicas"]
+        C3["Container 3<br/>cron<br/>Scale: 1 replica"]
+        C1 -.->|"Health: GET /"| H1["Clear ownership"]
+        C2 -.->|"Health: GET /ping"| H2["Independent scaling"]
+        C3 -.->|"Health: exit code"| H3["Isolated failures"]
+    end
+                            </pre>
+                        </div>
+
+<pre><code class="language-bash"># Anti-pattern: multiple processes in one container
 CMD ["supervisord", "-c", "/etc/supervisor.conf"]
-# Problems: Can't scale web and cron independently,
-# can't monitor health of individual services,
-# logs are mixed, failure of one affects all
+# Problems:
+# - Can't scale web tier without scaling cron
+# - If php-fpm crashes, health check may still pass (nginx is fine)
+# - Logs from all services are interleaved in one stream
+# - Memory/CPU limits apply to ALL processes combined
 
 # Pattern: separate containers for separate concerns
-# Container 1: nginx (reverse proxy)
-# Container 2: php-fpm (application)  
-# Container 3: cron (scheduled tasks)
-# Each can scale, restart, and be monitored independently</code></pre>
+# docker-compose.yaml or K8s Deployment per service:
+# nginx:      image: nginx:alpine       (scale independently)
+# app:        image: myapp:latest       (scale independently)
+# scheduler:  image: myapp:latest       (single replica, different CMD)
+# Each has its own health check, logs, resource limits, and scaling rules</code></pre>
 
                         <h3>Immutable Infrastructure</h3>
 
-                        <pre><code class="language-bash"># Anti-pattern: mutable container (SSH in and fix things)
+                        <p>An orchestrated container is like a <strong>printed page, not a whiteboard</strong>. You don't edit running containers — you replace them with new images. This guarantees that every replica is identical, rollbacks are instant, and there's a full audit trail via image tags.</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Mutable (Fragile) vs Immutable (Reliable) Lifecycle</div>
+                            <pre class="mermaid">
+flowchart LR
+    subgraph Mutable["❌ Mutable: Snowflake Servers"]
+        direction TB
+        M1["Deploy v1.0"] --> M2["SSH in, patch libs"]
+        M2 --> M3["Edit config manually"]
+        M3 --> M4["Install hotfix"]
+        M4 --> M5["🤷 What version is this?<br/>No one knows anymore"]
+    end
+
+    subgraph Immutable["✅ Immutable: Cattle not Pets"]
+        direction TB
+        I1["Build image v1.0<br/>(tag: sha-abc123)"] --> I2["Deploy v1.0"]
+        I2 --> I3["Bug found"]
+        I3 --> I4["Build image v1.1<br/>(tag: sha-def456)"]
+        I4 --> I5["Deploy v1.1<br/>(old containers replaced)"]
+        I5 --> I6["Rollback? Deploy v1.0 again<br/>(same image, guaranteed)"]
+    end
+                            </pre>
+                        </div>
+
+<pre><code class="language-bash"># Anti-pattern: mutable container (SSH in and fix things)
 docker exec -it production-web bash
 apt-get update && apt-get install -y hotfix-package
-# Container is now different from its image
-# Next deployment reverts the fix
-# No audit trail of what changed
+# Container is now different from its image — a "snowflake"
+# Next deployment reverts the fix silently
+# Other replicas DON'T have the fix — inconsistent state
+# No audit trail of what changed or why
 
 # Pattern: immutable containers
-# Fix the Dockerfile, build a new image, deploy
-# Every container matches its image exactly
-# Rollback = deploy previous image tag</code></pre>
+# 1. Fix the Dockerfile or source code
+# 2. Build a new image (CI/CD does this)
+# 3. Push with a new tag (git SHA or semver)
+# 4. Deploy — orchestrator replaces old containers with new ones
+# 5. Rollback = deploy the previous image tag (instant, safe)
+docker build -t myapp:v1.1-hotfix .
+docker push myapp:v1.1-hotfix
+kubectl set image deployment/webapp webapp=myapp:v1.1-hotfix</code></pre>
 
                         <h3>Fast Startup</h3>
 
-                        <pre><code class="language-bash"># Measure container startup time
+                        <p>The orchestrator's superpower is creating new containers on demand — for scaling, healing, and rolling updates. But this only works if containers start <strong>fast</strong>. A 60-second startup means 60 seconds of degraded capacity during scaling events.</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Why Startup Time Matters for Orchestration</div>
+                            <pre class="mermaid">
+sequenceDiagram
+    participant LB as Load Balancer
+    participant Old as Old Container
+    participant New as New Container
+    participant K as Orchestrator
+
+    K->>New: Start new container (rolling update)
+    Note over New: Startup time begins...
+    K->>LB: Keep sending traffic to Old
+    New->>New: Pull image (if not cached)
+    New->>New: Run entrypoint
+    New->>New: Connect to DB, warm cache
+    New->>K: Readiness probe passes ✓
+    Note over New: Startup time ends
+    K->>LB: Add New to endpoints
+    K->>Old: Send SIGTERM
+    Note over LB: Zero downtime achieved<br/>(only if startup is fast!)
+                            </pre>
+                        </div>
+
+<pre><code class="language-bash"># Measure container startup time
 time docker run --rm myapp:latest echo "ready"
 # Target: under 5 seconds for web services
 # Target: under 30 seconds for complex services (JVM, ML models)
 
 # Strategies for fast startup:
-# 1. Small images (Alpine, distroless) — less to pull/extract
+# 1. Small images (Alpine, distroless) — less to pull and extract
+docker images myapp
+# REPOSITORY  TAG     SIZE
+# myapp       ubuntu  450MB  ← Slow to pull on cold nodes
+# myapp       alpine  45MB   ← 10x faster to pull
+
 # 2. Pre-compile/pre-build in image (don't compile at startup)
+# BAD:  CMD ["pip install -r requirements.txt && python app.py"]
+# GOOD: RUN pip install ... (in Dockerfile, done at build time)
+
 # 3. Lazy initialization (connect to DB on first request, not at boot)
-# 4. Health probe start_period to handle warm-up</code></pre>
+# App starts serving immediately; DB pool created on first query
+
+# 4. Health probe startupProbe for slow services
+# Gives the app time to boot before liveness checks start killing it</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Rule of Thumb:</strong> If your container takes longer than 10 seconds to start, the orchestrator's self-healing and scaling become noticeably sluggish. Every second of startup time is a second of reduced capacity during incidents. Invest in startup performance the same way you invest in request latency.
+                        </div>
 
                         <!-- Section 5: Health Probes -->
                         <h2 id="health-probes">Health Probes</h2>
