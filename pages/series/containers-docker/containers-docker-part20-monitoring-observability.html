@@ -392,6 +392,14 @@ cat ${CGROUP_PATH}/pids.max
                         <p><strong>cAdvisor</strong> (Container Advisor) is Google's open-source container metrics collector. It runs as a daemon, automatically discovers all containers on the host, and exposes their resource usage via a web UI and a Prometheus-compatible metrics endpoint. It's the standard "metrics agent" for container environments.</p>
 
 <pre><code class="language-bash"># Run cAdvisor as a container (the standard deployment method)
+# NOTE: cAdvisor always listens on port 8080 INSIDE the container.
+# Use --publish=HOST_PORT:8080 — not HOST_PORT:HOST_PORT.
+# If port 8080 is already in use on your host (e.g. by nginx),
+# map to any free host port: --publish=8090:8080
+
+# Check what's using port 8080 before running:
+# lsof -i :8080   OR   ss -tlnp | grep 8080
+
 docker run -d \
     --name=cadvisor \
     --restart=always \
@@ -400,27 +408,27 @@ docker run -d \
     --volume=/sys:/sys:ro \
     --volume=/var/lib/docker/:/var/lib/docker:ro \
     --volume=/dev/disk/:/dev/disk:ro \
-    --publish=8080:8080 \
+    --publish=8090:8080 \
     --privileged \
     --device=/dev/kmsg \
     gcr.io/cadvisor/cadvisor:v0.49.1
 
-# Verify cAdvisor is running
-curl -s http://localhost:8080/healthz
+# Verify cAdvisor is running (use the HOST port you chose above)
+curl -s http://localhost:8090/healthz
 # ok
 
-# Access the web UI at http://localhost:8080
+# Access the web UI at http://localhost:8090
 # Shows: container list, per-container CPU/memory/network/filesystem graphs
 
 # Access Prometheus metrics endpoint
-curl -s http://localhost:8080/metrics | head -20
+curl -s http://localhost:8090/metrics | head -20
 # # HELP container_cpu_usage_seconds_total Cumulative cpu time consumed
 # # TYPE container_cpu_usage_seconds_total counter
 # container_cpu_usage_seconds_total{container_label_com_docker_compose_service="nginx",id="/docker/a1b2c3..."} 12.345
 # container_cpu_usage_seconds_total{container_label_com_docker_compose_service="redis",id="/docker/f6e5d4..."} 5.678
 
 # Key metrics exposed by cAdvisor:
-curl -s http://localhost:8080/metrics | grep -E "^container_(cpu|memory|network|fs)" | sort -u | head -20
+curl -s http://localhost:8090/metrics | grep -E "^container_(cpu|memory|network|fs)" | sort -u | head -20
 # container_cpu_cfs_periods_total
 # container_cpu_cfs_throttled_periods_total
 # container_cpu_cfs_throttled_seconds_total
@@ -502,7 +510,7 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
     ports:
-      - "8080:8080"
+      - "8090:8080"   # cAdvisor always listens on 8080 inside; map host port freely
     networks:
       - monitoring
 
