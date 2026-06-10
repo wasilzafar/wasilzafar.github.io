@@ -912,11 +912,6 @@ function initPrismThemeSwitcher() {
         document.querySelectorAll('div.code-toolbar select.prism-theme-selector').forEach(function(dropdown) {
             dropdown.value = themeId;
         });
-        
-        // Re-apply syntax highlighting
-        setTimeout(function() {
-            Prism.highlightAll();
-        }, 10);
     };
     
     // Apply saved theme on load
