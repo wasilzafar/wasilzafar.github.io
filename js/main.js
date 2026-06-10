@@ -985,7 +985,44 @@ document.addEventListener('DOMContentLoaded', function() {
     initMermaidDiagrams();
     initInterestsMegaDropdown();
     initCategoryNewTab();
+    initMultiLangWidgets();
 });
+
+/* ============================================================
+   Multi-Language Code Widget
+   Tab switching for .code-widget components. Prism theme
+   and copy button are handled globally by initPrismThemeSwitcher.
+   ============================================================ */
+function initMultiLangWidgets() {
+    var widgets = document.querySelectorAll('.code-widget');
+    if (!widgets.length) return;
+
+    widgets.forEach(function (widget) {
+        var tabs   = widget.querySelectorAll('.lang-tab');
+        var panels = widget.querySelectorAll('.lang-panel');
+
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                var lang = tab.dataset.lang;
+
+                tabs.forEach(function (t) { t.classList.remove('active'); });
+                panels.forEach(function (p) { p.classList.remove('active'); });
+
+                tab.classList.add('active');
+
+                var panel = widget.querySelector('[data-panel="' + lang + '"]');
+                if (panel) {
+                    panel.classList.add('active');
+                    // Re-highlight the newly visible block
+                    var code = panel.querySelector('code');
+                    if (code && typeof Prism !== 'undefined') {
+                        Prism.highlightElement(code);
+                    }
+                }
+            });
+        });
+    });
+}
 
 // ============================================================
 // Category Pages — open article links in new tab

@@ -70,7 +70,7 @@
         f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');
     </script>
     <script type="application/ld+json">
-    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Kubernetes Architecture - Part 6", "description": "Master Kubernetes architecture — the declarative reconciliation model, control plane components (API Server, etcd, Scheduler, Controller Manager), worker nodes (kubelet, kube-proxy, container runtime), and the desired-state mental model.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/distributed-systems-k8s/distributed-systems-k8s-part06-k8s-architecture.html"}, "wordCount": 3241, "inLanguage": "en", "datePublished": "2026-05-14", "dateModified": "2026-05-14", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/distributed-systems-k8s/distributed-systems-k8s-part06-k8s-architecture-og.jpg", "width": 1200, "height": 630}}
+    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Kubernetes Architecture - Part 6", "description": "Master Kubernetes architecture — the declarative reconciliation model, control plane components (API Server, etcd, Scheduler, Controller Manager), worker nodes (kubelet, kube-proxy, container runtime), and the desired-state mental model.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/distributed-systems-k8s/distributed-systems-k8s-part06-k8s-architecture.html"}, "wordCount": 2850, "inLanguage": "en", "datePublished": "2026-05-14", "dateModified": "2026-05-14", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/distributed-systems-k8s/distributed-systems-k8s-part06-k8s-architecture-og.jpg", "width": 1200, "height": 630}}
     </script>
 </head>
 <body>
@@ -126,7 +126,7 @@
                 <div class="blog-meta">
                     <span><i class="fas fa-calendar me-2"></i>May 14, 2026</span>
                     <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
-                    <span class="reading-time"><i class="fas fa-clock me-1"></i>40 min read</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>35 min read</span>
                     <button onclick="window.print()" class="print-btn" title="Print this article">
                         <i class="fas fa-print"></i> Print</button>
                 </div>
@@ -147,6 +147,13 @@
             <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
         </div>
         <ol>
+            <li>
+                <a href="#cluster-setup" onclick="closeNav()">Cluster Setup &amp; Installation</a>
+                <ul>
+                    <li><a href="#kubeadm" onclick="closeNav()">kubeadm</a></li>
+                    <li><a href="#managed-vs-self" onclick="closeNav()">Managed vs Self-Managed</a></li>
+                </ul>
+            </li>
             <li>
                 <a href="#mental-model" onclick="closeNav()">The Kubernetes Mental Model</a>
                 <ul>
@@ -179,13 +186,6 @@
                     <li><a href="#watch-mechanism" onclick="closeNav()">Watch Mechanism</a></li>
                 </ul>
             </li>
-            <li>
-                <a href="#cluster-setup" onclick="closeNav()">Cluster Setup &amp; Installation</a>
-                <ul>
-                    <li><a href="#kubeadm" onclick="closeNav()">kubeadm</a></li>
-                    <li><a href="#managed-vs-self" onclick="closeNav()">Managed vs Self-Managed</a></li>
-                </ul>
-            </li>
             <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
             <li><a href="#conclusion" onclick="closeNav()">Conclusion</a></li>
         </ol>
@@ -201,7 +201,282 @@
                 <div class="col-lg-8 mx-auto">
                     <div class="blog-content">
 
+                        <p>This article takes a <strong>build-first</strong> approach: we'll set up a working Kubernetes cluster, then explore how each component works. By having a live environment, you can verify every concept hands-on as you read. The complete "Hello Kubernetes" exercise that demonstrates all features together is in <a href="distributed-systems-k8s-part07-object-model.html">Part 7</a>, which pairs theory with practice for each object type.</p>
+
+                        <h2 id="cluster-setup">Cluster Setup &amp; Installation</h2>
+
+                        <h3 id="kubeadm">kubeadm</h3>
+
+                        <p>kubeadm is the standard tool for bootstrapping Kubernetes clusters. It handles the complex process of generating certificates, configuring etcd, starting control plane components, and creating the token for worker nodes to join.</p>
+
+                        <pre><code class="language-bash"># Bootstrap a Kubernetes cluster with kubeadm:
+
+# STEP 1: Install prerequisites (run on ALL nodes — master + workers)
+
+# 1a. Disable swap (required by kubelet)
+sudo swapoff -a
+sudo sed -i '/ swap / s/^/#/' /etc/fstab
+
+# 1b. Load required kernel modules
+cat &lt;&lt;EOF | sudo tee /etc/modules-load.d/k8s.conf
+overlay
+br_netfilter
+EOF
+sudo modprobe overlay
+sudo modprobe br_netfilter
+
+# 1c. Set required sysctl parameters
+cat &lt;&lt;EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward                 = 1
+EOF
+sudo sysctl --system
+
+# 1d. Install containerd (container runtime)
+sudo apt-get update
+sudo apt-get install -y containerd
+sudo mkdir -p /etc/containerd
+containerd config default | sudo tee /etc/containerd/config.toml
+# Enable SystemdCgroup (required for kubelet)
+sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+sudo systemctl restart containerd
+sudo systemctl enable containerd
+
+# 1e. Install kubeadm, kubelet, kubectl
+sudo apt-get install -y apt-transport-https ca-certificates curl gpg
+sudo mkdir -p /etc/apt/keyrings
+
+# Add Kubernetes signing key + apt repository (v1.30)
+# Method A — Import from Release.key URL (works when key matches repo):
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | \
+  sudo gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+# Method B — If Method A fails with "NO_PUBKEY" error during apt-get update,
+# the repo signing key has rotated. Import directly from a keyserver instead:
+#   sudo rm -f /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+#   sudo gpg --no-default-keyring \
+#     --keyring gnupg-ring:/etc/apt/keyrings/kubernetes-apt-keyring.gpg \
+#     --keyserver hkps://keyserver.ubuntu.com \
+#     --recv-keys 234654DA9A296436
+#   sudo chmod 644 /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+#   sudo rm -f /etc/apt/keyrings/kubernetes-apt-keyring.gpg~
+
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /' | \
+  sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl</code></pre>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i><strong>Troubleshooting GPG Key Errors:</strong> If <code>apt-get update</code> fails with <code>NO_PUBKEY 234654DA9A296436</code>, it means the signing key in the <code>Release.key</code> URL is stale (Kubernetes periodically rotates keys). The fix is to use <strong>Method B</strong> above — import the key directly from Ubuntu's keyserver using the <code>gnupg-ring:</code> prefix. This creates the keyring in the legacy format that apt can read. The <code>chmod 644</code> is required because GPG creates files with 600 permissions but apt needs read access.
+                        </div>
+
+                        <pre><code class="language-bash"># STEP 2: Initialise the control plane (master node only)
+#
+# Option A — Single-node / learning cluster (simplest):
+sudo kubeadm init \
+  --pod-network-cidr=10.244.0.0/16
+
+# Option B — Multi-master HA cluster (production):
+# --control-plane-endpoint should point to a load balancer FQDN
+# or a DNS name that resolves to your API server(s).
+# For a single-node setup, use your machine's IP or hostname instead:
+#   --control-plane-endpoint="$(hostname -I | awk '{print $1}'):6443"
+sudo kubeadm init \
+  --pod-network-cidr=10.244.0.0/16 \
+  --control-plane-endpoint="k8s-api.example.com:6443" \
+  --upload-certs</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-info-circle me-2"></i><strong>Hostname Resolution:</strong> If <code>hostname -f</code> fails with "Name or service not known", add your hostname to <code>/etc/hosts</code> first: <code>echo "127.0.0.1 $(hostname)" >> /etc/hosts</code>. kubeadm needs the node's hostname to resolve. The <code>--control-plane-endpoint</code> flag is only needed for HA setups where multiple control planes share a load balancer. For single-node clusters, omit it entirely.
+                        </div>
+
+                        <pre><code class="language-bash"># Output from kubeadm init (annotated):
+# [init] Using Kubernetes version: v1.30.14
+# [preflight] Running pre-flight checks
+# [preflight] Pulling images required for setting up a Kubernetes cluster
+# [certs] Generating "ca" certificate and key
+# [certs] Generating "apiserver" certificate and key
+# [certs] apiserver serving cert is signed for DNS names
+#         [kubernetes kubernetes.default kubernetes.default.svc
+#          kubernetes.default.svc.cluster.local your-hostname]
+#         and IPs [10.96.0.1 &lt;your-node-ip&gt;]
+# [certs] Generating etcd/ca, etcd/server, etcd/peer, front-proxy certs...
+# [kubeconfig] Writing admin.conf, kubelet.conf, controller-manager.conf, scheduler.conf
+# [etcd] Creating static Pod manifest for local etcd
+# [control-plane] Creating static Pod manifests for apiserver, controller-manager, scheduler
+# [kubelet-start] Starting the kubelet
+# [kubelet-check] The kubelet is healthy after ~1s
+# [api-check] The API server is healthy after ~6s
+# [upload-config] Storing configuration in ConfigMap "kubeadm-config"
+# [upload-certs] Storing certificates in Secret "kubeadm-certs"
+# [mark-control-plane] Adding labels and taints to control-plane node
+# [bootstrap-token] Creating token for node joins
+# [addons] Applied essential addon: CoreDNS
+# [addons] Applied essential addon: kube-proxy
+#
+# ✅ Your Kubernetes control-plane has initialized successfully!
+
+# STEP 3: Configure kubectl (master node)
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+# (Or if root: export KUBECONFIG=/etc/kubernetes/admin.conf)
+
+# STEP 4: Install CNI plugin (networking)
+# Without a CNI, pods can't communicate and nodes stay NotReady
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml
+
+# STEP 5: Join worker nodes
+# kubeadm init outputs a join command — run it on each worker:
+sudo kubeadm join your-master:6443 \
+  --token &lt;token-from-init-output&gt; \
+  --discovery-token-ca-cert-hash sha256:&lt;hash-from-init-output&gt;
+
+# For additional control-plane nodes (HA), add --control-plane --certificate-key:
+# sudo kubeadm join your-master:6443 --token &lt;token&gt; \
+#   --discovery-token-ca-cert-hash sha256:&lt;hash&gt; \
+#   --control-plane --certificate-key &lt;cert-key-from-init-output&gt;
+
+# If you lost the join command, regenerate the token:
+kubeadm token create --print-join-command</code></pre>
+
+                        <pre><code class="language-bash"># Output from kubeadm join (run on each worker node):
+# [preflight] Running pre-flight checks
+# [preflight] Reading configuration from the cluster...
+# [kubelet-start] Writing kubelet configuration to file "/var/lib/kubelet/config.yaml"
+# [kubelet-start] Writing kubelet environment file with flags to file "/var/lib/kubelet/kubeadm-flags.env"
+# [kubelet-start] Starting the kubelet
+# [kubelet-check] The kubelet is healthy after ~500ms
+# [kubelet-start] Waiting for the kubelet to perform the TLS Bootstrap
+#
+# ✅ This node has joined the cluster:
+# * Certificate signing request was sent to apiserver and a response was received.
+# * The Kubelet was informed of the new secure connection details.
+
+# Verify cluster (run on master):
+kubectl get nodes
+# NAME         STATUS     ROLES           AGE    VERSION
+# master-1     Ready      control-plane   55m    v1.30.14
+# worker-1     Ready      &lt;none&gt;          2m     v1.30.14
+# worker-2     NotReady   &lt;none&gt;          30s    v1.30.14
+#
+# Note: Workers show "NotReady" for 30-90 seconds while the CNI
+# plugin initialises networking. This is normal — wait and re-check:
+kubectl get nodes
+# NAME         STATUS   ROLES           AGE    VERSION
+# master-1     Ready    control-plane   55m    v1.30.14
+# worker-1     Ready    &lt;none&gt;          2m     v1.30.14
+# worker-2     Ready    &lt;none&gt;          97s    v1.30.14</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i><strong>What kubeadm init Does Under the Hood:</strong> It generates a full PKI (12+ certificates), writes kubeconfig files for each component, creates static pod manifests in <code>/etc/kubernetes/manifests/</code> for etcd + apiserver + controller-manager + scheduler, starts kubelet which launches those static pods, waits for the API server to be healthy, uploads config to ConfigMaps, creates bootstrap tokens, and installs CoreDNS + kube-proxy addons. All in ~10 seconds.
+                        </div>
+
+                        <h4 id="single-node-setup">Single-Node Alternative</h4>
+
+                        <p>For a single-node learning cluster, remove the control-plane taint so pods can schedule on the master:</p>
+
+                        <pre><code class="language-bash"># SINGLE-NODE SETUP: Allow pods to run on the control-plane node
+kubectl taint nodes --all node-role.kubernetes.io/control-plane-
+
+# Verify the taint is gone:
+kubectl describe node | grep Taints
+# Taints: &lt;none&gt;</code></pre>
+
+                        <h3 id="managed-vs-self">Managed vs Self-Managed Kubernetes</h3>
+
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Aspect</th>
+                                    <th>Managed (EKS/GKE/AKS)</th>
+                                    <th>Self-Managed (kubeadm/k3s)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Control plane</td>
+                                    <td>Provider manages (HA, upgrades, etcd)</td>
+                                    <td>You manage everything</td>
+                                </tr>
+                                <tr>
+                                    <td>etcd</td>
+                                    <td>Hidden, auto-backed up</td>
+                                    <td>You must back up and maintain</td>
+                                </tr>
+                                <tr>
+                                    <td>Upgrades</td>
+                                    <td>One-click or automatic</td>
+                                    <td>Manual (kubeadm upgrade)</td>
+                                </tr>
+                                <tr>
+                                    <td>Networking</td>
+                                    <td>Pre-integrated CNI</td>
+                                    <td>Install and configure CNI yourself</td>
+                                </tr>
+                                <tr>
+                                    <td>Cost</td>
+                                    <td>$70–$200/month for control plane</td>
+                                    <td>$0 (just node costs)</td>
+                                </tr>
+                                <tr>
+                                    <td>Best for</td>
+                                    <td>Production workloads, teams without deep K8s ops expertise</td>
+                                    <td>Learning, edge/IoT, air-gapped, extreme customisation</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal text-white">Comparison</span>
+                                <span>Lightweight Distributions</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h5>K3s, MicroK8s, and Kind</h5>
+                                <p>For development and edge computing, lightweight distributions strip down Kubernetes:</p>
+                                <ul>
+                                    <li><strong>K3s (Rancher):</strong> Single binary (~60MB), replaces etcd with SQLite, ideal for edge/IoT and development. Production-ready for small clusters.</li>
+                                    <li><strong>MicroK8s (Canonical):</strong> Snap-based, single-node or multi-node, built-in addons (Istio, Prometheus). Great for developers on Ubuntu.</li>
+                                    <li><strong>Kind (Kubernetes in Docker):</strong> Runs cluster nodes as Docker containers. Perfect for CI/CD testing and local development. Not for production.</li>
+                                    <li><strong>Minikube:</strong> Single-node cluster in a VM or container. Focused on local development with easy addon management.</li>
+                                </ul>
+                                <div class="highlight-box highlight-navy">
+                                    <i class="fas fa-graduation-cap me-2"></i>
+                                    <strong>Going Deeper — Local Dev Tracks:</strong> This section introduces Minikube and Kind conceptually. For full hands-on walkthroughs — install, addons, multi-node clusters, and CI integration — see the dedicated tracks in this series: <a href="local-dev-minikube-part01-install-addons.html"><strong>Minikube Track →</strong></a> and <a href="local-dev-kind-part01-setup-config.html"><strong>Kind Track →</strong></a>.
+                                </div>
+                            </div>
+                            <div class="experiment-tags">
+                                <span class="bias-tag">K3s</span>
+                                <span class="bias-tag">MicroK8s</span>
+                                <span class="bias-tag">Kind</span>
+                                <span class="bias-tag">Minikube</span>
+                            </div>
+                        </div>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-check-circle me-2"></i><strong>Checkpoint:</strong> You now have a running Kubernetes cluster. In the sections below, we'll explore what each component does — and you can verify every concept by running commands against your live cluster.
+                        </div>
+
                         <h2 id="mental-model">The Kubernetes Mental Model</h2>
+
+                        <p>Now that you have a running cluster, let's explore the mental model that makes Kubernetes tick. Start by looking at what's already running:</p>
+
+                        <pre><code class="language-bash"># See every component Kubernetes installed automatically:
+kubectl get pods -n kube-system
+# NAME                                       READY   STATUS    AGE
+# calico-kube-controllers-...                1/1     Running   ...
+# calico-node-...                            1/1     Running   ...
+# coredns-...                                1/1     Running   ...
+# etcd-master-1                              1/1     Running   ...
+# kube-apiserver-master-1                    1/1     Running   ...
+# kube-controller-manager-master-1           1/1     Running   ...
+# kube-proxy-...                             1/1     Running   ...
+# kube-scheduler-master-1                    1/1     Running   ...
+
+# Every component you see here is explained in the sections below.</code></pre>
 
                         <h3 id="declarative-reconciliation">Declarative Reconciliation</h3>
 
@@ -270,6 +545,17 @@ flowchart TD
 
                         <p>This is the single most important concept in Kubernetes. Everything else flows from it:</p>
 
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Reading YAML — A Quick Primer:</strong> Kubernetes resources are defined in YAML files (a human-readable data format). You don't need to memorise the syntax now — Part 7 covers the object model in detail. For now, just understand the structure:
+                            <ul class="mb-0">
+                                <li><code>apiVersion</code> + <code>kind</code> — <em>what type</em> of resource (e.g., a Deployment)</li>
+                                <li><code>metadata</code> — the resource's <em>name</em> and labels</li>
+                                <li><code>spec</code> — your <em>desired state</em> (how many replicas, which container image, etc.)</li>
+                            </ul>
+                            You submit this file with <code>kubectl apply -f filename.yaml</code>. Kubernetes reads it, stores it in etcd, and works to make reality match your declaration.
+                        </div>
+
                         <pre><code class="language-yaml"># This YAML is a declaration of DESIRED STATE:
 apiVersion: apps/v1
 kind: Deployment
@@ -313,7 +599,10 @@ spec:
 # 2. Creates 1 new Pod
 # 3. Scheduler assigns it
 # 4. kubelet starts it
-# Total recovery time: ~5-15 seconds</code></pre>
+# Total recovery time: ~5-15 seconds
+
+# Don't worry about writing YAML yet — Part 7 teaches every field.
+# For now, focus on the PATTERN: declare what you want → Kubernetes makes it happen.</code></pre>
 
                         <div class="highlight-box highlight-navy">
                             <i class="fas fa-info-circle me-2"></i>
@@ -327,30 +616,37 @@ spec:
                         <div class="mermaid-container">
                             <div class="mermaid-label">Kubernetes Control Plane Architecture</div>
                             <pre class="mermaid">
-flowchart TD
-    subgraph Control Plane
-        API[API Server<br/>Central Hub]
+flowchart LR
+    subgraph CP[Control Plane]
+        direction TB
         ETCD[(etcd<br/>State Store)]
+        API[API Server<br/>Central Hub]
         SCHED[Scheduler<br/>Pod Placement]
         CM[Controller Manager<br/>Reconciliation Loops]
         CCM[Cloud Controller<br/>Provider Integration]
+
+        API <-->|read/write state| ETCD
+        SCHED -->|watch unscheduled pods| API
+        CM -->|watch & reconcile| API
+        CCM -->|cloud resources| API
     end
-    subgraph Worker Nodes
-        K1[kubelet]
-        K2[kubelet]
-        K3[kubelet]
-        KP1[kube-proxy]
-        KP2[kube-proxy]
-        KP3[kube-proxy]
+
+    subgraph W1[Worker Node 1]
+        direction TB
+        K1[kubelet<br/>Pod Lifecycle]
+        KP1[kube-proxy<br/>Network Rules]
     end
-    
-    API <--> ETCD
-    SCHED --> API
-    CM --> API
-    CCM --> API
-    K1 --> API
-    K2 --> API
-    K3 --> API
+
+    subgraph W2[Worker Node 2]
+        direction TB
+        K2[kubelet<br/>Pod Lifecycle]
+        KP2[kube-proxy<br/>Network Rules]
+    end
+
+    K1 -->|report status & watch pods| API
+    KP1 -->|watch Services & Endpoints| API
+    K2 -->|report status & watch pods| API
+    KP2 -->|watch Services & Endpoints| API
                             </pre>
                         </div>
 
@@ -377,7 +673,13 @@ kubectl get pods --watch
 kubectl api-resources          # List all resource types
 kubectl api-versions           # List all API versions
 kubectl explain deployment     # Show schema for a resource type
-kubectl explain deployment.spec.template.spec.containers</code></pre>
+kubectl explain deployment.spec.template.spec.containers
+
+# ╔══════════════════════════════════════════════════════════╗
+# ║  🔧 TRY IT: Run these on your cluster right now:       ║
+# ║  kubectl api-resources | head -20                      ║
+# ║  kubectl get pods -n kube-system -l component=kube-apiserver  ║
+# ╚══════════════════════════════════════════════════════════╝</code></pre>
 
                         <p>Key responsibilities of the API Server:</p>
 
@@ -392,14 +694,25 @@ kubectl explain deployment.spec.template.spec.containers</code></pre>
                         <div class="mermaid-container">
                             <div class="mermaid-label">API Server Request Processing Pipeline</div>
                             <pre class="mermaid">
-flowchart LR
-    A[Client Request] --> B[Authentication]
-    B --> C[Authorization]
-    C --> D[Admission Control<br/>Mutating Webhooks]
-    D --> E[Schema Validation]
-    E --> F[Admission Control<br/>Validating Webhooks]
+flowchart TD
+    A["`**Client Request**
+    kubectl apply -f deploy.yaml`"] --> B
+
+    subgraph AUTH[Identity & Access]
+        direction LR
+        B[Authentication<br/>Who are you?] --> C[Authorization<br/>Are you allowed?]
+    end
+
+    C --> D
+
+    subgraph ADM[Admission Control]
+        direction LR
+        D[Mutating Webhooks<br/>Modify the request] --> E[Schema Validation<br/>Is it well-formed?] --> F[Validating Webhooks<br/>Policy checks]
+    end
+
     F --> G[Persist to etcd]
-    G --> H[Response to Client]
+    G --> H["`**Response to Client**
+    201 Created`"]
                             </pre>
                         </div>
 
@@ -411,34 +724,74 @@ flowchart LR
 # Key: /registry/pods/default/my-pod
 # Value: JSON-encoded Pod object
 
-# Check etcd cluster health:
-ETCDCTL_API=3 etcdctl endpoint health \
-  --endpoints=https://10.0.1.10:2379,https://10.0.1.11:2379,https://10.0.1.12:2379 \
-  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
-  --cert=/etc/kubernetes/pki/etcd/peer.crt \
-  --key=/etc/kubernetes/pki/etcd/peer.key
+# ╔══════════════════════════════════════════════════════════╗
+# ║  🔧 TRY IT: Find YOUR etcd endpoints and certs first: ║
+# ╚══════════════════════════════════════════════════════════╝
 
-# Output:
-# https://10.0.1.10:2379 is healthy: committed index = 15423
-# https://10.0.1.11:2379 is healthy: committed index = 15423
-# https://10.0.1.12:2379 is healthy: committed index = 15423
+# Step 1: Get your etcd pod name (it varies per cluster!):
+kubectl get pods -n kube-system -l component=etcd
+# NAME                                    READY   STATUS    AGE
+# etcd-wz-k8s-master.corp.adobe.com       1/1     Running   10h
 
-# Check cluster member list:
-ETCDCTL_API=3 etcdctl member list --write-out=table
-# +------------------+---------+--------+----------------------------+
-# |        ID        | STATUS  |  NAME  |         PEER ADDRS         |
-# +------------------+---------+--------+----------------------------+
-# | 8e9e05c52164694d | started | etcd-0 | https://10.0.1.10:2380     |
-# | 91bc3c398fb3c146 | started | etcd-1 | https://10.0.1.11:2380     |
-# | fd422379fda50e48 | started | etcd-2 | https://10.0.1.12:2380     |
-# +------------------+---------+--------+----------------------------+
+# Step 2: Store the pod name in a variable for reuse:
+ETCD_POD=$(kubectl get pods -n kube-system -l component=etcd -o jsonpath='{.items[0].metadata.name}')
+echo $ETCD_POD
+# etcd-wz-k8s-master.corp.adobe.com
 
-# Backup etcd (CRITICAL for disaster recovery):
-ETCDCTL_API=3 etcdctl snapshot save /backup/etcd-snapshot.db \
-  --endpoints=https://10.0.1.10:2379 \
+# Step 3: Extract the advertise URL (your actual etcd endpoint):
+kubectl describe pod $ETCD_POD -n kube-system | grep -- --advertise-client-urls
+# --advertise-client-urls=https://10.42.38.10:2379
+
+# Step 4: Use kubectl exec to run etcdctl INSIDE the etcd pod
+# (certs are already mounted inside — no host path issues):
+kubectl exec -n kube-system $ETCD_POD -- etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
   --cacert=/etc/kubernetes/pki/etcd/ca.crt \
   --cert=/etc/kubernetes/pki/etcd/server.crt \
-  --key=/etc/kubernetes/pki/etcd/server.key</code></pre>
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  endpoint health
+
+# Output:
+# https://127.0.0.1:2379 is healthy: successfully committed proposal: took = 11.16ms
+
+# Member list (shows all etcd nodes in an HA cluster):
+kubectl exec -n kube-system $ETCD_POD -- etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  member list --write-out=table
+
+# Single-node cluster output:
+# +------------------+---------+------------------------------+--------------------------+--------------------------+------------+
+# |        ID        | STATUS  |             NAME             |       PEER ADDRS         |      CLIENT ADDRS        | IS LEARNER |
+# +------------------+---------+------------------------------+--------------------------+--------------------------+------------+
+# | e179b74d7e9a5155 | started | wz-k8s-master.corp.adobe.com | https://10.42.38.10:2380 | https://10.42.38.10:2379 |      false |
+# +------------------+---------+------------------------------+--------------------------+------------+
+#
+# Multi-node HA cluster output (3 voting members):
+# | 8e9e05c52164694d | started | master-1 | https://192.168.1.100:2380 | https://192.168.1.100:2379 | false |
+# | 91bc3c398fb3c146 | started | master-2 | https://192.168.1.101:2380 | https://192.168.1.101:2379 | false |
+# | fd422379fda50e48 | started | master-3 | https://192.168.1.102:2380 | https://192.168.1.102:2379 | false |
+#
+# IS LEARNER column:
+#   false = Full voting member (participates in Raft quorum)
+#   true  = Learner/non-voting member (receives log replication but
+#           does NOT vote in elections or count toward quorum).
+#           Used when adding a new node — it catches up on data first,
+#           then gets promoted to voter with: etcdctl member promote <ID>
+#           This prevents a slow new node from disrupting cluster consensus.
+
+# Backup etcd (CRITICAL for disaster recovery):
+kubectl exec -n kube-system $ETCD_POD -- etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /var/lib/etcd/snapshot.db
+
+# Copy the snapshot to your local machine:
+kubectl cp kube-system/$ETCD_POD:/var/lib/etcd/snapshot.db ./etcd-backup.db</code></pre>
 
                         <div class="highlight-box highlight-crimson">
                             <i class="fas fa-exclamation-triangle me-2"></i>
@@ -500,33 +853,38 @@ flowchart LR
                             </pre>
                         </div>
 
-                        <pre><code class="language-bash"># How scheduling works step by step:
+                        <p>The scheduler works in three phases every time it sees an unassigned pod:</p>
 
-# 1. FILTERING: Eliminate nodes that can't run the pod
-#    - Sufficient CPU/memory? (resource requests vs node capacity)
-#    - Ports available? (hostPort conflicts)
-#    - Node selectors match? (nodeSelector, nodeAffinity)
-#    - Taints tolerated? (NoSchedule taints)
-#    - Volume requirements met? (PV availability in zone)
+                        <h4>1. Filtering — Which nodes <em>can</em> run this pod?</h4>
+                        <p>Eliminates nodes that violate hard constraints:</p>
+                        <ul>
+                            <li><strong>Resources:</strong> Does the node have enough free CPU/memory for the pod's <code>requests</code>?</li>
+                            <li><strong>Ports:</strong> Is the required <code>hostPort</code> already taken?</li>
+                            <li><strong>Node selectors:</strong> Does the node match <code>nodeSelector</code> or <code>nodeAffinity</code> rules?</li>
+                            <li><strong>Taints:</strong> Does the pod tolerate the node's taints (e.g., <code>NoSchedule</code>)?</li>
+                            <li><strong>Volumes:</strong> Is the required PersistentVolume available in the node's zone?</li>
+                        </ul>
 
-# 2. SCORING: Rank remaining nodes (0-100 per plugin)
-#    - LeastRequestedPriority: prefer nodes with most free resources
-#    - BalancedResourceAllocation: balance CPU/memory usage
-#    - InterPodAffinity: prefer nodes with co-located pods
-#    - ImageLocality: prefer nodes that already have the container image
-#    - TopologySpreadConstraints: spread across zones evenly
+                        <h4>2. Scoring — Which surviving node is <em>best</em>?</h4>
+                        <p>Ranks each remaining node 0–100 using scoring plugins:</p>
+                        <ul>
+                            <li><strong>LeastRequestedPriority:</strong> Prefer nodes with the most free resources</li>
+                            <li><strong>BalancedResourceAllocation:</strong> Prefer nodes where CPU and memory usage are balanced</li>
+                            <li><strong>InterPodAffinity:</strong> Prefer nodes already running co-located pods</li>
+                            <li><strong>ImageLocality:</strong> Prefer nodes that already pulled the container image (faster start)</li>
+                            <li><strong>TopologySpreadConstraints:</strong> Spread pods evenly across zones/nodes</li>
+                        </ul>
 
-# 3. BINDING: Assign pod to highest-scoring node
-#    - Update Pod.spec.nodeName in API Server
-#    - kubelet on that node picks it up
+                        <h4>3. Binding — Assign the pod to the winner</h4>
+                        <p>The scheduler updates <code>Pod.spec.nodeName</code> in the API Server. The kubelet on that node detects the assignment and starts the container.</p>
 
-# See why a pod isn't scheduling:
+                        <pre><code class="language-bash"># See why a pod isn't scheduling:
 kubectl describe pod stuck-pod
 # Events:
 #   Warning  FailedScheduling  0/5 nodes available:
 #   2 Insufficient memory, 3 node(s) had taint {dedicated: gpu}
 
-# See scheduler decisions:
+# See successful scheduler decisions:
 kubectl get events --field-selector reason=Scheduled
 # Successfully assigned default/web-pod to worker-node-2</code></pre>
 
@@ -650,7 +1008,14 @@ ls /etc/kubernetes/manifests/
 # kube-apiserver.yaml
 # kube-controller-manager.yaml
 # kube-scheduler.yaml
-# These are how control plane components run on master nodes!</code></pre>
+# These are how control plane components run on master nodes!
+
+# ╔══════════════════════════════════════════════════════════╗
+# ║  🔧 TRY IT: SSH into a worker node and run:            ║
+# ║  systemctl status kubelet                              ║
+# ║  ls /etc/kubernetes/manifests/   (empty on workers!)   ║
+# ║  crictl ps                       (running containers) ║
+# ╚══════════════════════════════════════════════════════════╝</code></pre>
 
                         <h3 id="kube-proxy">kube-proxy</h3>
 
@@ -819,120 +1184,6 @@ kubectl get pods --watch -v=7
 # I0514 10:23:45.234567   Response Status: 200 OK
 # (stream of events follows...)</code></pre>
 
-                        <h2 id="cluster-setup">Cluster Setup &amp; Installation</h2>
-
-                        <h3 id="kubeadm">kubeadm</h3>
-
-                        <p>kubeadm is the standard tool for bootstrapping Kubernetes clusters. It handles the complex process of generating certificates, configuring etcd, starting control plane components, and creating the token for worker nodes to join.</p>
-
-                        <pre><code class="language-bash"># Bootstrap a Kubernetes cluster with kubeadm:
-
-# STEP 1: Install prerequisites (all nodes)
-# - Container runtime (containerd)
-# - kubeadm, kubelet, kubectl packages
-# - Disable swap
-# - Load required kernel modules (br_netfilter, overlay)
-# - Set sysctl (net.bridge.bridge-nf-call-iptables = 1)
-
-# STEP 2: Initialise the control plane (master node only)
-sudo kubeadm init \
-  --pod-network-cidr=10.244.0.0/16 \
-  --control-plane-endpoint="k8s-api.example.com:6443" \
-  --upload-certs
-
-# Output includes:
-# - kubeconfig setup instructions
-# - Worker join command with token
-# - Control plane join command (for HA)
-
-# STEP 3: Configure kubectl (master node)
-mkdir -p $HOME/.kube
-sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-sudo chown $(id -u):$(id -g) $HOME/.kube/config
-
-# STEP 4: Install CNI plugin (networking)
-kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml
-
-# STEP 5: Join worker nodes
-# (run on each worker with the token from step 2)
-sudo kubeadm join k8s-api.example.com:6443 \
-  --token abcdef.0123456789abcdef \
-  --discovery-token-ca-cert-hash sha256:abc123...
-
-# Verify cluster:
-kubectl get nodes
-# NAME       STATUS   ROLES           AGE   VERSION
-# master-1   Ready    control-plane   10m   v1.30.0
-# worker-1   Ready    &lt;none&gt;          3m    v1.30.0
-# worker-2   Ready    &lt;none&gt;          2m    v1.30.0</code></pre>
-
-                        <h3 id="managed-vs-self">Managed vs Self-Managed Kubernetes</h3>
-
-                        <table class="table table-bordered table-sm">
-                            <thead class="table-dark">
-                                <tr>
-                                    <th>Aspect</th>
-                                    <th>Managed (EKS/GKE/AKS)</th>
-                                    <th>Self-Managed (kubeadm/k3s)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>Control plane</td>
-                                    <td>Provider manages (HA, upgrades, etcd)</td>
-                                    <td>You manage everything</td>
-                                </tr>
-                                <tr>
-                                    <td>etcd</td>
-                                    <td>Hidden, auto-backed up</td>
-                                    <td>You must back up and maintain</td>
-                                </tr>
-                                <tr>
-                                    <td>Upgrades</td>
-                                    <td>One-click or automatic</td>
-                                    <td>Manual (kubeadm upgrade)</td>
-                                </tr>
-                                <tr>
-                                    <td>Networking</td>
-                                    <td>Pre-integrated CNI</td>
-                                    <td>Install and configure CNI yourself</td>
-                                </tr>
-                                <tr>
-                                    <td>Cost</td>
-                                    <td>$70–$200/month for control plane</td>
-                                    <td>$0 (just node costs)</td>
-                                </tr>
-                                <tr>
-                                    <td>Best for</td>
-                                    <td>Production workloads, teams without deep K8s ops expertise</td>
-                                    <td>Learning, edge/IoT, air-gapped, extreme customisation</td>
-                                </tr>
-                            </tbody>
-                        </table>
-
-                        <div class="experiment-card">
-                            <div class="experiment-meta">
-                                <span class="badge bg-teal text-white">Comparison</span>
-                                <span>Lightweight Distributions</span>
-                            </div>
-                            <div class="experiment-content">
-                                <h5>K3s, MicroK8s, and Kind</h5>
-                                <p>For development and edge computing, lightweight distributions strip down Kubernetes:</p>
-                                <ul>
-                                    <li><strong>K3s (Rancher):</strong> Single binary (~60MB), replaces etcd with SQLite, ideal for edge/IoT and development. Production-ready for small clusters.</li>
-                                    <li><strong>MicroK8s (Canonical):</strong> Snap-based, single-node or multi-node, built-in addons (Istio, Prometheus). Great for developers on Ubuntu.</li>
-                                    <li><strong>Kind (Kubernetes in Docker):</strong> Runs cluster nodes as Docker containers. Perfect for CI/CD testing and local development. Not for production.</li>
-                                    <li><strong>Minikube:</strong> Single-node cluster in a VM or container. Focused on local development with easy addon management.</li>
-                                </ul>
-                            </div>
-                            <div class="experiment-tags">
-                                <span class="bias-tag">K3s</span>
-                                <span class="bias-tag">MicroK8s</span>
-                                <span class="bias-tag">Kind</span>
-                                <span class="bias-tag">Minikube</span>
-                            </div>
-                        </div>
-
                         <h2 id="exercises">Exercises</h2>
 
                         <div class="highlight-box">
@@ -966,7 +1217,7 @@ kubectl get nodes
                             <li><strong>Self-Healing (Part 5):</strong> Controllers continuously reconcile desired vs actual state</li>
                         </ul>
 
-                        <p>In Part 7, we'll explore the Kubernetes Object Model — Pods, ReplicaSets, Deployments, Services, ConfigMaps, and Secrets — and learn to write YAML manifests that declare the desired state of your applications.</p>
+                        <p>In Part 7, we'll explore the Kubernetes Object Model — Pods, ReplicaSets, Deployments, Services, ConfigMaps, and Secrets — with hands-on exercises for each object type so you can practice every concept on the cluster you just built.</p>
 
                         <!-- Related Posts -->
                         <div class="related-posts">

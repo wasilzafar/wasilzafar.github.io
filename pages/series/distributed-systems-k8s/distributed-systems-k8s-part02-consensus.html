@@ -156,6 +156,7 @@
                     <li><a href="#why-consensus" onclick="closeNav()">Why Consensus Matters</a></li>
                     <li><a href="#properties" onclick="closeNav()">Required Properties</a></li>
                     <li><a href="#impossibility" onclick="closeNav()">FLP Impossibility</a></li>
+                    <li><a href="#consensus-approaches" onclick="closeNav()">Consensus Approaches</a></li>
                 </ul>
             </li>
             <li>
@@ -167,6 +168,9 @@
                     <li><a href="#quorum" onclick="closeNav()">Quorum Mechanics</a></li>
                     <li><a href="#raft-safety" onclick="closeNav()">Safety Guarantees</a></li>
                 </ul>
+            </li>
+            <li>
+                <a href="#raft-interactive" onclick="closeNav()">Interactive Simulation</a>
             </li>
             <li>
                 <a href="#paxos" onclick="closeNav()">Paxos (Conceptual)</a>
@@ -200,6 +204,8 @@
             <div class="row">
                 <div class="col-lg-8 mx-auto">
                     <div class="blog-content">
+
+                        <p class="lead">Part 1 established that distributed systems require <em>coordination</em> — multiple machines must agree on shared facts to act as one system. Consensus is the technical solution to coordination. In this part, we'll see <em>how</em> machines actually reach agreement using the Raft algorithm — the same protocol that powers Kubernetes' state store (etcd).</p>
 
                         <h2 id="consensus-problem">The Consensus Problem</h2>
 
@@ -263,6 +269,48 @@
                         </ul>
 
                         <p>Raft and Paxos both rely on partial synchrony — they guarantee safety (agreement) always, and guarantee liveness (termination) as long as the network eventually stabilizes.</p>
+
+                        <h3 id="consensus-approaches">Consensus Approaches</h3>
+
+                        <p>Before diving into Raft's mechanics, it helps to know the landscape. There are three major families of consensus algorithms, each suited to different trust and failure models:</p>
+
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Approach</th>
+                                    <th>How It Works</th>
+                                    <th>Tolerates</th>
+                                    <th>Examples</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Leader-based</strong></td>
+                                    <td>One node coordinates; others follow</td>
+                                    <td>Crash failures (minority)</td>
+                                    <td>Raft, ZAB (ZooKeeper)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Leaderless</strong></td>
+                                    <td>Any node can propose; quorum decides</td>
+                                    <td>Crash failures (minority)</td>
+                                    <td>Paxos, EPaxos</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Byzantine Fault Tolerant (BFT)</strong></td>
+                                    <td>Handles nodes that lie or act maliciously</td>
+                                    <td>Up to ⅓ malicious nodes</td>
+                                    <td>PBFT, Tendermint</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <p>We focus on <strong>leader-based consensus (Raft)</strong> because Kubernetes uses it. Leader-based algorithms are simpler to implement and faster in the common case (no conflicts) — the leader makes decisions unilaterally, followers just replicate. The downside: if the leader fails, the cluster pauses briefly during a new election.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Key Concept — The Replicated Log:</strong> At its core, consensus means agreeing on a <strong>sequence of commands</strong>. A "log" is that sequence — each entry is {index, term, command}. If all nodes have the same log in the same order, they compute the same state. Raft's job is to ensure every node's log stays identical, even when nodes crash or the network drops messages.
+                        </div>
 
                         <h2 id="raft">Raft Consensus Algorithm</h2>
 
@@ -328,6 +376,7 @@ stateDiagram-v2
 # Total election time: ~200-300ms (one round-trip + timeout)
 
 # In Kubernetes etcd, view the current leader:
+# (Install: apt install etcd-client  OR  snap install etcd)
 etcdctl endpoint status --write-out=table
 # +----------------+------------------+---------+---------+
 # |    ENDPOINT    |        ID        | IS_LEADER | TERM  |
@@ -431,6 +480,35 @@ sequenceDiagram
                         </ul>
 
                         <p>These properties ensure that committed writes survive leader elections, network partitions, and node restarts — exactly what you need for a system like etcd that stores your entire Kubernetes cluster state.</p>
+
+                        <!-- Interactive Raft Animation -->
+                        <h2 id="raft-interactive"><i class="fas fa-play-circle me-2 text-teal"></i>Interactive: Raft Protocol Simulation</h2>
+
+                        <p>Step through a complete Raft lifecycle — from initial followers to leader election, log replication, network partition, and recovery. Use the <strong>Next</strong> button (or arrow keys while hovering) to advance each stage.</p>
+
+                        <div class="tech-demo" id="raftDemo">
+                            <div class="tech-demo-header">
+                                <h4><i class="fas fa-project-diagram me-2"></i>Raft Consensus — Live Simulation</h4>
+                                <div class="tech-demo-legend">
+                                    <span class="tech-demo-legend-item"><span class="tech-demo-legend-dot" style="background:#5a6e82"></span> Follower</span>
+                                    <span class="tech-demo-legend-item"><span class="tech-demo-legend-dot" style="background:#c4873b"></span> Candidate</span>
+                                    <span class="tech-demo-legend-item"><span class="tech-demo-legend-dot" style="background:#3B9797"></span> Leader</span>
+                                    <span class="tech-demo-legend-item"><span class="tech-demo-legend-dot" style="background:#16476A"></span> Log Entry</span>
+                                </div>
+                            </div>
+                            <div class="tech-demo-svg-wrap"></div>
+                            <div class="tech-demo-step-info" data-td-info>
+                                <div class="tech-demo-step-title">All Nodes Start as Followers</div>
+                                <p class="tech-demo-step-desc">A fresh Raft cluster begins with every node in the Follower state. No leader exists yet. Click <em>Next</em> to begin the election process.</p>
+                            </div>
+                            <div class="tech-demo-controls">
+                                <button data-td-prev disabled><i class="fas fa-arrow-left me-1"></i> Previous</button>
+                                <span data-td-time>t = 0 ms</span>
+                                <span data-td-step>Step 1 / 14</span>
+                                <button data-td-next>Next <i class="fas fa-arrow-right ms-1"></i></button>
+                                <button data-td-reset><i class="fas fa-undo me-1"></i> Reset</button>
+                            </div>
+                        </div>
 
                         <h2 id="paxos">Paxos (Conceptual)</h2>
 
@@ -543,7 +621,17 @@ flowchart TD
 
                         <p>etcd is Kubernetes' single source of truth — every object (Pods, Services, Deployments) is stored as a key-value pair in etcd. The Raft consensus algorithm ensures this state is consistently replicated across all etcd nodes.</p>
 
-                        <pre><code class="language-bash"># Check etcd cluster health:
+                        <div class="highlight-box">
+                            <i class="fas fa-info-circle me-2"></i><strong>Prerequisites:</strong> The commands below require a running etcd cluster. If you have a Kubernetes cluster, etcd is already running on control-plane nodes. To spin up a local test cluster with Docker:
+                            <code>docker run -d --name etcd -p 2379:2379 quay.io/coreos/etcd:v3.5.12 /usr/local/bin/etcd --advertise-client-urls http://0.0.0.0:2379 --listen-client-urls http://0.0.0.0:2379</code>
+                        </div>
+
+                        <pre><code class="language-bash"># Install etcdctl (if not available):
+# Ubuntu/Debian: sudo apt install etcd-client
+# Snap:          sudo snap install etcd
+# From binary:   https://github.com/etcd-io/etcd/releases
+
+# Check etcd cluster health:
 etcdctl endpoint health --cluster
 # https://10.0.0.1:2379 is healthy: successfully committed proposal: took = 2.5ms
 # https://10.0.0.2:2379 is healthy: successfully committed proposal: took = 2.1ms
@@ -718,5 +806,8 @@ etcdctl endpoint status --write-out=json | python3 -m json.tool
     <script src="../../../js/path-progress.js"></script>
     <!-- Quiz Widget -->
     <script src="../../../js/quiz-widget.js"></script>
+    <!-- TechDiagrams Interactive Animation -->
+    <script src="../../../js/tech-diagrams.js"></script>
+    <script src="../../../js/animations/raft-demo.js"></script>
 </body>
 </html>

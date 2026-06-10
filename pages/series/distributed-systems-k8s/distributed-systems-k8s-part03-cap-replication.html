@@ -201,6 +201,8 @@
                 <div class="col-lg-8 mx-auto">
                     <div class="blog-content">
 
+                        <p class="lead">Part 2 showed how consensus algorithms let nodes agree on a sequence of operations. But consensus has a cost — it requires waiting for a quorum, which means latency. The CAP theorem formalises this trade-off: you can't have perfect consistency, availability, <em>and</em> partition tolerance simultaneously. Understanding CAP explains why systems like etcd, Cassandra, and DynamoDB behave so differently under pressure.</p>
+
                         <h2 id="cap-theorem">The CAP Theorem</h2>
 
                         <p>In 2000, Eric Brewer conjectured (later proven by Gilbert and Lynch in 2002) that a distributed data store can provide at most <strong>two out of three</strong> guarantees simultaneously:</p>
@@ -229,16 +231,35 @@
                         <h3 id="the-impossible-triangle">The Impossible Triangle</h3>
 
                         <div class="mermaid-container">
-                            <div class="mermaid-label">CAP Theorem Trade-offs</div>
+                            <div class="mermaid-label">CAP Theorem — Pick Two (During a Partition)</div>
                             <pre class="mermaid">
 flowchart TD
-    CAP[CAP Theorem] --> CP[CP: Consistency + Partition Tolerance]
-    CAP --> AP[AP: Availability + Partition Tolerance]
-    CAP --> CA[CA: Consistency + Availability]
-    CP --> CP_ex["etcd, ZooKeeper, HBase\n❌ Unavailable during partition"]
-    AP --> AP_ex["Cassandra, DynamoDB, CouchDB\n❌ May return stale data"]
-    CA --> CA_ex["Single-node RDBMS\n❌ Cannot survive partitions"]
+    CAP["<b>CAP Theorem</b>\nIn a distributed system during a network partition,\nyou can guarantee at most TWO of three properties"]
+
+    CAP --> CP["<b>CP</b>\nConsistency + Partition Tolerance"]
+    CAP --> AP["<b>AP</b>\nAvailability + Partition Tolerance"]
+    CAP --> CA["<b>CA</b>\nConsistency + Availability"]
+
+    CP --> CP_ex["<b>etcd</b> — K8s state store (Raft consensus)\n<b>ZooKeeper</b> — Distributed coordination (ZAB protocol)\n<b>HBase</b> — Hadoop database (single-master writes)"]
+    CP --> CP_cost["❌ <i>Trade-off:</i> Refuses reads/writes\nwhen quorum is unreachable"]
+
+    AP --> AP_ex["<b>Cassandra</b> — Wide-column DB (leaderless, any node writes)\n<b>DynamoDB</b> — AWS key-value (shopping cart philosophy)\n<b>CouchDB</b> — Document DB (multi-master replication)"]
+    AP --> AP_cost["❌ <i>Trade-off:</i> May return stale or\nconflicting data during partition"]
+
+    CA --> CA_ex["<b>PostgreSQL</b> (single-node) — Traditional RDBMS\n<b>MySQL</b> (single-node) — No replication needed\n<b>SQLite</b> — Embedded, single-process only"]
+    CA --> CA_cost["❌ <i>Trade-off:</i> Cannot survive network\npartitions (not truly distributed)"]
+
+    style CP fill:#e8f4f4,stroke:#3B9797,color:#132440
+    style AP fill:#fff5f5,stroke:#BF092F,color:#132440
+    style CA fill:#f0f4f8,stroke:#16476A,color:#132440
+    style CP_cost fill:#fff,stroke:#3B9797,color:#64748b
+    style AP_cost fill:#fff,stroke:#BF092F,color:#64748b
+    style CA_cost fill:#fff,stroke:#16476A,color:#64748b
                             </pre>
+                        </div>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i><strong>Key Insight:</strong> Network partitions <em>will</em> happen in any distributed system. Since you can't avoid P, the real choice is between <strong>C</strong> (refuse requests to stay correct) and <strong>A</strong> (always respond, accept stale data). CA systems avoid this choice by not distributing at all — which means they can't scale horizontally or survive node failures.
                         </div>
 
                         <p>During a network partition:</p>
@@ -322,7 +343,7 @@ flowchart TD
 
                         <h3 id="cap-criticism">Beyond CAP: PACELC</h3>
 
-                        <p>CAP only describes behavior during partitions, but most of the time the network is healthy. The <strong>PACELC</strong> extension (Daniel Abadi, 2012) adds: "Else (when no partition), choose between Latency and Consistency."</p>
+                        <p>CAP only describes behavior during partitions — but networks are healthy 99.9% of the time. If CAP were the whole story, every CP system would feel identical during normal operation. They don't: etcd prioritises correctness even at the cost of latency, while MongoDB offers fast local reads that may be slightly stale. The <strong>PACELC</strong> extension (Daniel Abadi, 2012) captures this: "Else (when no partition), choose between Latency and Consistency."</p>
 
                         <table class="table table-bordered table-sm">
                             <thead class="table-dark">
@@ -432,6 +453,11 @@ flowchart TD
 # This is exactly how etcd (Raft) works:
 # - 3-node etcd: write committed after 2 nodes confirm
 # - 5-node etcd: write committed after 3 nodes confirm</code></pre>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>The Key Insight:</strong> Your replication strategy <em>determines</em> your consistency model. Synchronous replication (wait for all) enables strong consistency — but at high latency cost. Asynchronous replication (ack immediately) forces eventual consistency — fast but clients may read stale data. Semi-synchronous/quorum (Raft) gives a middle ground: strong consistency within the quorum, without waiting for every replica. This is why Kubernetes chose quorum-based Raft for etcd — it provides strong consistency for control plane state without the latency penalty of fully synchronous replication across all nodes.
+                        </div>
 
                         <h2 id="consistency-models">Consistency Models</h2>
 

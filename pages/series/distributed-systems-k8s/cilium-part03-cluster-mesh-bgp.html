@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Cilium Cluster Mesh for multi-cluster pod-to-pod connectivity, shared services, and global load balancing. BGP control plane for advertising LoadBalancer IPs and PodCIDRs to external routers. Part 3 of 3." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="Cilium Cluster Mesh, BGP control plane, multi-cluster Kubernetes, CiliumBGPPeeringPolicy, LoadBalancer IP advertisement, L2 announcement, cross-cluster services" />
+    <meta property="og:title" content="Cilium Track Part 3: Cluster Mesh &amp; BGP" />
+    <meta property="og:description" content="Cilium Cluster Mesh for multi-cluster connectivity, BGP control plane for LoadBalancer IP advertisement, and L2 announcements for bare-metal environments." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-06-06" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/distributed-systems-k8s/cilium-part03-cluster-mesh-bgp.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/distributed-systems-k8s/cilium-part03-cluster-mesh-bgp-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/distributed-systems-k8s/cilium-part03-cluster-mesh-bgp-tw.jpg" />
+    <title>Cilium Cluster Mesh &amp; BGP — Part 3 - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/distributed-systems-k8s/cilium-part03-cluster-mesh-bgp.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {'ad_storage': 'denied','ad_user_data': 'denied','ad_personalization': 'denied','analytics_storage': 'denied','region': ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']});
+        gtag('consent', 'default', {'ad_storage': 'granted','ad_user_data': 'granted','ad_personalization': 'granted','analytics_storage': 'granted'});
+        gtag('set', 'url_passthrough', true);
+    </script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <div id="cookieBanner" class="light display-bottom" style="display: none;">
+        <div id="closeIcon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm121.6 313.1c4.7 4.7 4.7 12.3 0 17L338 377.6c-4.7 4.7-12.3 4.7-17 0L256 312l-65.1 65.6c-4.7 4.7-12.3 4.7-17 0L134.4 338c-4.7-4.7-4.7-12.3 0-17l65.6-65-65.6-65.1c-4.7-4.7-4.7-12.3 0-17l39.6-39.6c4.7-4.7 12.3-4.7 17 0l65 65.7 65.1-65.6c4.7-4.7 12.3-4.7 17 0l39.6 39.6c4.7 4.7 4.7 12.3 0 17L312 256l65.6 65.1z"></path></svg></div>
+        <div class="content-wrap"><div class="msg-wrap"><div class="title-wrap"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="20" height="20"><path fill="#3B9797" d="M510.52 255.82c-69.97-.85-126.47-57.69-126.47-127.86-70.17 0-127-56.49-127.86-126.45-27.26-4.14-55.13.3-79.72 12.82l-69.13 35.22a132.221 132.221 0 0 0-57.79 57.81l-35.1 68.88a132.645 132.645 0 0 0-12.82 80.95l12.08 76.27a132.521 132.521 0 0 0 37.16 70.37l54.64 54.64a132.036 132.036 0 0 0 70.37 37.16l76.27 12.15c27.51 4.36 55.7-.11 80.95-12.8l68.88-35.08a132.166 132.166 0 0 0 57.79-57.81l35.1-68.88c12.56-24.64 17.01-52.58 12.91-79.91zM176 368c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm32-160c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32zm160 128c-17.67 0-32-14.33-32-32s14.33-32 32-32 32 14.33 32 32-14.33 32-32 32z"></path></svg><h4 style="margin: 0; font-size: 18px; color: var(--color-navy); font-weight: 700;">Cookie Consent</h4></div><p style="font-size: 14px; line-height: 1.6; color: var(--color-navy); margin-bottom: 15px;">We use cookies to enhance your browsing experience. See our <a href="/privacy-policy.html" style="color: var(--color-teal);">Privacy Policy</a>.</p></div><div class="btn-wrap"><button id="cookieAccept">Accept All</button><button id="cookieReject">Reject All</button></div></div>
+    </div>
+
+    <div class="nav-v16-wrapper">
+        <nav class="nav-v16">
+            <a href="/" class="brand"><div class="brand-stack"><span></span><span></span><span></span></div><span class="brand-text">Wasil Zafar</span></a>
+            <button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()"><span></span><span></span><span></span></button>
+            <div class="links">
+                <a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a>
+                <a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a>
+                <a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a>
+                <a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a>
+                <a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a>
+                <button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Table of Contents Toggle Button -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents">
+        <i class="fas fa-list"></i>
+    </button>
+
+    <!-- Side Navigation Overlay -->
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header">
+            <h3><i class="fas fa-list me-2"></i>Table of Contents</h3>
+            <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
+        </div>
+        <ol>
+            <li>
+                <a href="#cluster-mesh-concepts" onclick="closeNav()">Cluster Mesh Concepts</a>
+            </li>
+            <li>
+                <a href="#enable-cluster-mesh" onclick="closeNav()">Enable Cluster Mesh</a>
+            </li>
+            <li>
+                <a href="#cross-cluster-services" onclick="closeNav()">Cross-Cluster Services</a>
+            </li>
+            <li>
+                <a href="#bgp-control-plane" onclick="closeNav()">BGP Control Plane</a>
+            </li>
+            <li>
+                <a href="#cilium-bgp-peering-policy" onclick="closeNav()">CiliumBGPPeeringPolicy</a>
+            </li>
+            <li>
+                <a href="#l2-announcements" onclick="closeNav()">L2 Announcements</a>
+            </li>
+            <li>
+                <a href="#exercises" onclick="closeNav()">Exercises</a>
+            </li>
+            <li>
+                <a href="#key-takeaways" onclick="closeNav()">Key Takeaways</a>
+            </li>
+        </ol>
+    </div>
+
+    <!-- Overlay Backdrop -->
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Blog Hero -->
+    <section class="blog-hero">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto text-center">
+                    <a href="index.html" class="text-white-important mb-3 d-inline-block"><i class="fas fa-arrow-left me-2"></i>Back to Distributed Systems &amp; Kubernetes</a>
+                    <h1 class="display-4 fw-bold text-white mb-3">Cilium Track Part 3: Cluster Mesh &amp; BGP</h1>
+                    <div class="blog-meta">
+                        <span><i class="fas fa-calendar me-2"></i>June 6, 2026</span>
+                        <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                        <span class="reading-time"><i class="fas fa-clock me-1"></i>36 min read</span>
+                        <button onclick="window.print()" class="print-btn" title="Print this article">
+                            <i class="fas fa-print"></i> Print
+                        </button>
+                    </div>
+                    <p class="subtitle">Connect multiple Kubernetes clusters with Cilium Cluster Mesh for transparent pod-to-pod communication, shared services, and global load balancing. Use BGP to advertise LoadBalancer IPs and PodCIDRs to your network infrastructure.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Series Navigation Path -->
+    <section class="py-3">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                        <h2 id="cluster-mesh-concepts">Cluster Mesh Concepts</h2>
+
+                        <p>Cilium Cluster Mesh extends Cilium's networking across multiple Kubernetes clusters, enabling transparent pod-to-pod connectivity as if all pods were running in a single flat network. It operates at the eBPF datapath level — no additional proxies or tunnels between clusters are needed beyond standard IP connectivity.</p>
+
+                        <h3>What Cluster Mesh Provides</h3>
+
+                        <ul>
+                            <li><strong>Pod-to-Pod Connectivity</strong> — Pods in cluster A can reach pods in cluster B by IP address without NAT or application-level gateways</li>
+                            <li><strong>Shared Identity</strong> — Security identities from Cilium's identity-based policy model are replicated across clusters, so network policies work seamlessly</li>
+                            <li><strong>Global Services</strong> — A Kubernetes Service can load-balance across backends in multiple clusters</li>
+                            <li><strong>Service Affinity</strong> — Control whether traffic prefers local backends or distributes globally</li>
+                        </ul>
+
+                        <h3>Requirements</h3>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            <strong>Critical requirement:</strong> PodCIDRs and ClusterIPs must not overlap between clusters. Plan your IP address space carefully before deploying multi-cluster environments.
+                        </div>
+
+                        <ul>
+                            <li><strong>Non-overlapping PodCIDRs</strong> — Each cluster must use a unique pod network range (e.g., cluster1: 10.1.0.0/16, cluster2: 10.2.0.0/16)</li>
+                            <li><strong>IP Connectivity</strong> — Nodes across clusters must be able to reach each other (direct routing, VPN, or peered VPCs)</li>
+                            <li><strong>Same Cilium CA</strong> — Clusters share a certificate authority so mutual TLS between agents is trusted</li>
+                            <li><strong>Unique Cluster IDs</strong> — Each cluster must have a distinct <code>cluster-id</code> (1–255)</li>
+                        </ul>
+
+                        <h3>Architecture</h3>
+
+                        <p>When Cluster Mesh is enabled, each cluster runs a <code>clustermesh-apiserver</code> component backed by an etcd instance. This etcd stores the cluster's Cilium identities, endpoints, and service information. Remote clusters connect to this etcd to synchronize state:</p>
+
+                        <pre><code class="language-bash"># Architecture overview:
+# Cluster 1                        Cluster 2
+# ┌─────────────────────┐          ┌─────────────────────┐
+# │ cilium-agent        │          │ cilium-agent        │
+# │ clustermesh-apiserver│◄────────►│ clustermesh-apiserver│
+# │ etcd (identities)   │          │ etcd (identities)   │
+# └─────────────────────┘          └─────────────────────┘
+#
+# Each agent watches both local and remote etcd instances
+# to build a unified view of identities and services.</code></pre>
+
+                        <h2 id="enable-cluster-mesh">Enable Cluster Mesh</h2>
+
+                        <p>The Cilium CLI provides straightforward commands to enable Cluster Mesh and connect clusters. Ensure both clusters already have Cilium installed with matching versions and non-overlapping CIDRs.</p>
+
+                        <pre><code class="language-bash"># Enable Cluster Mesh on cluster 1
+cilium clustermesh enable --context cluster1
+
+# Enable Cluster Mesh on cluster 2
+cilium clustermesh enable --context cluster2
+
+# Connect the two clusters
+cilium clustermesh connect --context cluster1 --destination-context cluster2
+
+# Verify connectivity
+cilium clustermesh status --context cluster1</code></pre>
+
+                        <p>The <code>cilium clustermesh enable</code> command deploys the clustermesh-apiserver and exposes it (via LoadBalancer or NodePort). The <code>connect</code> command exchanges CA certificates and configures each cluster's agents to watch the remote cluster's etcd.</p>
+
+                        <h3>Verifying the Connection</h3>
+
+                        <pre><code class="language-bash"># Check that all nodes have connected to the remote cluster
+cilium clustermesh status --context cluster1 --wait
+
+# Expected output shows:
+# ✅ Cluster Mesh:       OK
+# ✅ Remote clusters:    1 connected
+#    - cluster2: ready, 3 nodes</code></pre>
+
+                        <p>If connectivity fails, verify that the clustermesh-apiserver Service has an external IP and that firewall rules allow port 2379 (etcd) between clusters.</p>
+
+                        <h2 id="cross-cluster-services">Cross-Cluster Services</h2>
+
+                        <p>Once Cluster Mesh is established, you can create <strong>global services</strong> — Kubernetes Services whose endpoints span multiple clusters. A pod in cluster1 calling the Service DNS name will be load-balanced across backends in both clusters.</p>
+
+                        <h3>Global Service Annotation</h3>
+
+                        <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: api-server
+  annotations:
+    service.cilium.io/global: "true"
+    service.cilium.io/shared: "true"
+spec:
+  selector:
+    app: api-server
+  ports:
+    - port: 80
+      targetPort: 8080</code></pre>
+
+                        <p>Deploy this Service definition in <strong>both</strong> clusters. The <code>service.cilium.io/global: "true"</code> annotation tells Cilium to merge endpoints from all connected clusters. The <code>service.cilium.io/shared: "true"</code> annotation means this cluster's backends are shared with remote clusters.</p>
+
+                        <h3>Service Affinity</h3>
+
+                        <p>By default, global services distribute traffic across all backends equally. Use the affinity annotation to prefer local backends:</p>
+
+                        <pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: api-server
+  annotations:
+    service.cilium.io/global: "true"
+    service.cilium.io/shared: "true"
+    service.cilium.io/affinity: "local"
+spec:
+  selector:
+    app: api-server
+  ports:
+    - port: 80
+      targetPort: 8080</code></pre>
+
+                        <p>With <code>service.cilium.io/affinity: "local"</code>, traffic stays within the local cluster when backends are healthy. If all local backends are down, Cilium automatically fails over to remote cluster backends — providing high availability without manual intervention.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Use case:</strong> Deploy the same microservice in two regions. With <code>affinity: "local"</code>, each region handles its own traffic for low latency, while the other region acts as a failover target.
+                        </div>
+
+                        <h2 id="bgp-control-plane">BGP Control Plane</h2>
+
+                        <p>Cilium's BGP control plane enables nodes to peer with external BGP routers and advertise routes for Service LoadBalancer IPs, PodCIDRs, or both. This eliminates the need for MetalLB or cloud-specific load balancer integrations — Cilium handles IP advertisement natively via eBPF.</p>
+
+                        <h3>What BGP Advertises</h3>
+
+                        <ul>
+                            <li><strong>LoadBalancer Service IPs</strong> — External IPs assigned to Services of type LoadBalancer</li>
+                            <li><strong>PodCIDRs</strong> — The pod network range allocated to each node, enabling direct pod routing</li>
+                            <li><strong>ClusterIPs</strong> — Optionally advertise ClusterIP ranges for external access</li>
+                        </ul>
+
+                        <h3>Enable BGP</h3>
+
+                        <p>Enable the BGP control plane during Cilium installation or upgrade:</p>
+
+                        <pre><code class="language-yaml"># Helm values for BGP
+bgpControlPlane:
+  enabled: true</code></pre>
+
+                        <pre><code class="language-bash"># Or via Cilium CLI
+cilium install --set bgpControlPlane.enabled=true
+
+# Or upgrade an existing installation
+cilium upgrade --set bgpControlPlane.enabled=true</code></pre>
+
+                        <p>Enabling the BGP control plane starts a BGP speaker on each selected node. The speaker uses GoBGP under the hood and is configured entirely through Kubernetes CRDs — no configuration files on the nodes are needed.</p>
+
+                        <h2 id="cilium-bgp-peering-policy">CiliumBGPPeeringPolicy</h2>
+
+                        <p>The <code>CiliumBGPPeeringPolicy</code> CRD defines which nodes peer with which routers, what ASN to use, and what routes to advertise. Each policy targets a set of nodes via <code>nodeSelector</code> and configures one or more virtual routers.</p>
+
+                        <pre><code class="language-yaml">apiVersion: cilium.io/v2alpha1
+kind: CiliumBGPPeeringPolicy
+metadata:
+  name: rack-bgp
+spec:
+  nodeSelector:
+    matchLabels:
+      rack: rack-01
+  virtualRouters:
+    - localASN: 65001
+      exportPodCIDR: true
+      neighbors:
+        - peerAddress: "10.0.0.1/32"
+          peerASN: 65000
+          connectRetryTimeSeconds: 120
+          holdTimeSeconds: 90
+          keepAliveTimeSeconds: 30
+      serviceSelector:
+        matchExpressions:
+          - key: somekey
+            operator: NotIn
+            values: ["never-advertise"]</code></pre>
+
+                        <h3>Field Reference</h3>
+
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Field</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>nodeSelector</code></td>
+                                    <td>Selects which nodes this peering policy applies to (e.g., nodes in a specific rack or availability zone)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>localASN</code></td>
+                                    <td>The BGP Autonomous System Number for Cilium's speaker on the selected nodes</td>
+                                </tr>
+                                <tr>
+                                    <td><code>exportPodCIDR</code></td>
+                                    <td>When <code>true</code>, advertises the node's PodCIDR to BGP peers — enables direct pod routing from external networks</td>
+                                </tr>
+                                <tr>
+                                    <td><code>neighbors</code></td>
+                                    <td>List of BGP peers (routers) to establish sessions with — includes address, ASN, and timer configuration</td>
+                                </tr>
+                                <tr>
+                                    <td><code>peerAddress</code></td>
+                                    <td>IP address of the BGP peer router in CIDR notation (/32 for a single host)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>peerASN</code></td>
+                                    <td>The ASN of the remote BGP router</td>
+                                </tr>
+                                <tr>
+                                    <td><code>holdTimeSeconds</code></td>
+                                    <td>Maximum time (in seconds) without a keepalive before the session is declared down</td>
+                                </tr>
+                                <tr>
+                                    <td><code>serviceSelector</code></td>
+                                    <td>Label selector to control which LoadBalancer Services have their IPs advertised (empty = all Services)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Multiple Peers Example</h3>
+
+                        <p>In production, nodes typically peer with two top-of-rack (ToR) switches for redundancy:</p>
+
+                        <pre><code class="language-yaml">apiVersion: cilium.io/v2alpha1
+kind: CiliumBGPPeeringPolicy
+metadata:
+  name: dual-tor-bgp
+spec:
+  nodeSelector:
+    matchLabels:
+      kubernetes.io/os: linux
+  virtualRouters:
+    - localASN: 65010
+      exportPodCIDR: true
+      neighbors:
+        - peerAddress: "10.0.0.1/32"
+          peerASN: 65000
+          holdTimeSeconds: 90
+          keepAliveTimeSeconds: 30
+        - peerAddress: "10.0.0.2/32"
+          peerASN: 65000
+          holdTimeSeconds: 90
+          keepAliveTimeSeconds: 30
+      serviceSelector:
+        matchLabels:
+          advertise: "external"</code></pre>
+
+                        <p>With this configuration, only Services labeled <code>advertise: external</code> have their LoadBalancer IPs announced to the ToR switches.</p>
+
+                        <h2 id="l2-announcements">L2 Announcements</h2>
+
+                        <p>For environments without BGP routers — such as bare-metal home labs, development clusters, or flat L2 networks — Cilium provides <strong>L2 Announcements</strong>. This feature uses ARP (IPv4) or NDP (IPv6) to announce LoadBalancer IPs on the local network segment, similar to what MetalLB does in L2 mode.</p>
+
+                        <h3>CiliumL2AnnouncementPolicy</h3>
+
+                        <pre><code class="language-yaml">apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: l2-policy
+spec:
+  interfaces:
+    - ^eth[0-9]+
+  externalIPs: true
+  loadBalancerIPs: true
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/worker: ""</code></pre>
+
+                        <h3>Field Reference</h3>
+
+                        <ul>
+                            <li><strong>interfaces</strong> — Regex patterns matching which network interfaces should respond to ARP requests for virtual IPs</li>
+                            <li><strong>externalIPs</strong> — Whether to announce Service externalIPs via L2</li>
+                            <li><strong>loadBalancerIPs</strong> — Whether to announce LoadBalancer IPs via L2</li>
+                            <li><strong>nodeSelector</strong> — Limits which nodes participate in L2 announcements (leader election happens among these nodes)</li>
+                        </ul>
+
+                        <h3>CiliumLoadBalancerIPPool</h3>
+
+                        <p>L2 announcements require an IP pool from which Cilium allocates LoadBalancer IPs. This replaces MetalLB's address pool configuration:</p>
+
+                        <pre><code class="language-yaml">apiVersion: cilium.io/v2alpha1
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: main-pool
+spec:
+  blocks:
+    - cidr: "192.168.1.200/28"</code></pre>
+
+                        <p>This allocates IPs from 192.168.1.200 to 192.168.1.215 (16 addresses). When you create a Service of type LoadBalancer, Cilium assigns an IP from this pool and one node begins responding to ARP requests for that IP.</p>
+
+                        <h3>Complete L2 Setup Example</h3>
+
+                        <pre><code class="language-bash"># 1. Install Cilium with L2 announcements and LB IPAM enabled
+cilium install \
+  --set l2announcements.enabled=true \
+  --set externalIPs.enabled=true \
+  --set kubeProxyReplacement=true</code></pre>
+
+                        <pre><code class="language-yaml"># 2. Create the IP pool
+apiVersion: cilium.io/v2alpha1
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: home-lab-pool
+spec:
+  blocks:
+    - cidr: "192.168.1.240/28"
+---
+# 3. Create the L2 announcement policy
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: default-l2
+spec:
+  interfaces:
+    - ^eth[0-9]+
+    - ^eno[0-9]+
+    - ^enp[0-9]+s[0-9]+
+  externalIPs: true
+  loadBalancerIPs: true</code></pre>
+
+                        <pre><code class="language-yaml"># 4. Create a LoadBalancer Service — Cilium assigns an IP from the pool
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-lb
+spec:
+  type: LoadBalancer
+  selector:
+    app: nginx
+  ports:
+    - port: 80
+      targetPort: 80</code></pre>
+
+                        <pre><code class="language-bash"># 5. Verify the assigned IP
+kubectl get svc nginx-lb
+# NAME       TYPE           CLUSTER-IP      EXTERNAL-IP     PORT(S)        AGE
+# nginx-lb   LoadBalancer   10.96.123.45    192.168.1.240   80:31234/TCP   10s
+
+# 6. Test from another machine on the same L2 network
+curl http://192.168.1.240</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>L2 vs BGP:</strong> L2 announcements work only within a single broadcast domain (same subnet). For multi-subnet or multi-site deployments, use BGP instead. L2 also has a single-node failover model (one leader responds to ARP), while BGP can do ECMP across multiple nodes.
+                        </div>
+
+                        <h2 id="exercises">Exercises</h2>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-flask me-2"></i>
+                            <strong>Exercise 1:</strong> Set up Cluster Mesh between two Kind clusters with Cilium. Create a global Service deployed in both clusters and verify that a pod in cluster1 can reach backends running in cluster2. Use <code>cilium connectivity test --multi-cluster</code> to validate.
+                        </div>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-flask me-2"></i>
+                            <strong>Exercise 2:</strong> Create a CiliumBGPPeeringPolicy that advertises LoadBalancer IPs to a FRRouting (FRR) container running as a pod or external VM. Verify with <code>vtysh -c "show ip bgp"</code> on the FRR instance that routes appear when you create a LoadBalancer Service.
+                        </div>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-flask me-2"></i>
+                            <strong>Exercise 3:</strong> Configure L2 announcements with a CiliumLoadBalancerIPPool on a Kind or bare-metal cluster. Create a LoadBalancer Service and verify the external IP is reachable from another machine on the same network. Use <code>arping</code> to confirm ARP responses.
+                        </div>
+
+                        <h2 id="key-takeaways">Key Takeaways</h2>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <ul>
+                                <li><strong>Cluster Mesh</strong> enables pod-to-pod and service-to-service communication across multiple Kubernetes clusters with shared identities and policies</li>
+                                <li><strong>Global services</strong> use annotations (<code>service.cilium.io/global</code>) to merge endpoints across cluster boundaries with optional local affinity</li>
+                                <li><strong>BGP control plane</strong> advertises LoadBalancer IPs and PodCIDRs to external routers — eliminating the need for MetalLB in routed environments</li>
+                                <li><strong>CiliumBGPPeeringPolicy</strong> configures BGP sessions declaratively via CRDs — no node-level configuration files needed</li>
+                                <li><strong>L2 announcements</strong> provide LoadBalancer IP assignment for bare-metal and flat networks without requiring BGP infrastructure</li>
+                                <li><strong>CiliumLoadBalancerIPPool</strong> replaces MetalLB address pools, integrating IP allocation directly into Cilium's data plane</li>
+                            </ul>
+                        </div>
+
+                        <!-- Related Posts -->
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                            <div class="related-post-item">
+                                <h5>Cilium Part 2: Hubble &amp; L7 Observability</h5>
+                                <p>Deep packet inspection with Hubble flows, service maps, HTTP/gRPC-aware policies, and Prometheus metrics from Cilium's eBPF datapath.</p>
+                                <a href="cilium-part02-hubble-l7-observability.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Istio Part 1: Install, Sidecar &amp; Traffic Management</h5>
+                                <p>Alternative service mesh approach using Envoy sidecars for traffic management, observability, and security — compare with Cilium's eBPF-native model.</p>
+                                <a href="istio-part01-install-sidecar-traffic.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left"><div class="fc-brand-group"><div class="fc-brand-stack"><span></span><span></span><span></span></div><span class="fc-brand-name">Wasil Zafar</span></div><span class="fc-tagline">Consultant &amp; Cloud Architect</span></div>
+                <div class="fc-center"><a href="/">Home</a><a href="/disclaimer.html">Disclaimer</a><a href="/privacy-policy.html">Privacy</a><a href="/pages/contact.html">Contact</a></div>
+                <div class="fc-right">
+                    <a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a>
+                    <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>
+                    <a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                    <a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a>
+                    <a href="/feed.xml" target="_blank" title="RSS Feed"><i class="fas fa-rss"></i></a>
+                </div>
+            </div>
+            <div class="footer-sub"><span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span><a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a></div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"></div>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <script src="../../../js/path-progress.js"></script>
+    <script src="../../../js/quiz-widget.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+</body>
+</html>

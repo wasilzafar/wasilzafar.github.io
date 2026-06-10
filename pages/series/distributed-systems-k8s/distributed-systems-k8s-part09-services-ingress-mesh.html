@@ -162,6 +162,7 @@
                     <li><a href="#ingress-resource" onclick="closeNav()">Ingress Resource &amp; Controllers</a></li>
                     <li><a href="#tls-termination" onclick="closeNav()">TLS Termination &amp; Routing</a></li>
                     <li><a href="#ingress-controllers-compared" onclick="closeNav()">Controller Comparison</a></li>
+                    <li><a href="#ingress-class" onclick="closeNav()">IngressClass: Multi-Controller</a></li>
                 </ul>
             </li>
             <li>
@@ -216,6 +217,17 @@
             <div class="row">
                 <div class="col-lg-8 mx-auto">
                     <div class="blog-content">
+
+                        <p class="lead">Part 8 explained how pods get IPs and how packets cross node boundaries. This part answers: <em>how do clients find and reach those pods?</em> We start with core Kubernetes features (Services, Ingress) that every cluster uses, then progress to advanced service mesh patterns (Istio, Linkerd) used in large-scale production. If you're new to Kubernetes, focus on the first two sections — Services and Ingress will cover 90% of real-world needs.</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-route me-2"></i>
+                            <strong>Reading Guide:</strong>
+                            <ul class="mb-0">
+                                <li><strong>Core (everyone):</strong> Service Deep Dive, Ingress &amp; Ingress Controllers</li>
+                                <li><strong>Advanced (production scale):</strong> Service Mesh — Istio &amp; Linkerd, Traffic Management Patterns</li>
+                            </ul>
+                        </div>
 
                         <h2 id="service-deep-dive">Service Deep Dive</h2>
 
@@ -536,6 +548,81 @@ curl -H "Host: app.example.com" https://34.120.5.67/</code></pre>
                             </tbody>
                         </table>
 
+                        <h3 id="ingress-class">IngressClass: Multi-Controller Coexistence</h3>
+
+                        <p>When a cluster has <strong>multiple Ingress controllers</strong> installed (e.g., nginx for public traffic and Traefik for internal APIs), Kubernetes needs a way to route each Ingress resource to the correct controller. This is what <code>IngressClass</code> solves.</p>
+
+                        <p>An IngressClass is a cluster-scoped resource that binds a <strong>class name</strong> (like <code>nginx</code> or <code>traefik-internal</code>) to a specific <strong>controller implementation</strong>. Ingress resources then declare which class they belong to via <code>spec.ingressClassName</code>.</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">IngressClass → Controller Binding</div>
+                            <pre class="mermaid">
+flowchart LR
+    IC1[IngressClass: nginx<br/>controller: k8s.io/ingress-nginx] --> C1[nginx-ingress-controller Pod]
+    IC2[IngressClass: traefik-internal<br/>controller: traefik.io/ingress-controller] --> C2[traefik Pod]
+    I1[Ingress: main-ingress<br/>ingressClassName: nginx] -.->|handled by| C1
+    I2[Ingress: admin-ingress<br/>ingressClassName: traefik-internal] -.->|handled by| C2
+
+    style IC1 fill:#e8f4f4,stroke:#3B9797,color:#132440
+    style IC2 fill:#f0f4f8,stroke:#16476A,color:#132440
+    style I1 fill:#fff,stroke:#3B9797,color:#132440
+    style I2 fill:#fff,stroke:#16476A,color:#132440
+    style C1 fill:#3B9797,stroke:#3B9797,color:#fff
+    style C2 fill:#16476A,stroke:#16476A,color:#fff
+                            </pre>
+                        </div>
+
+                        <pre><code class="language-yaml"># IngressClass that binds "nginx" to the nginx controller:
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: nginx
+  annotations:
+    # Mark as the default IngressClass — Ingress resources without
+    # ingressClassName will be handled by this controller:
+    ingressclass.kubernetes.io/is-default-class: "true"
+spec:
+  controller: k8s.io/ingress-nginx
+  # Optional: pass parameters to the controller (e.g., custom config):
+  parameters:
+    apiGroup: k8s.io
+    kind: IngressParameters
+    name: nginx-production-config
+---
+# A second IngressClass for internal traffic via Traefik:
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: traefik-internal
+spec:
+  controller: traefik.io/ingress-controller</code></pre>
+
+                        <p><strong>How the binding works:</strong></p>
+
+                        <ol>
+                            <li>When an Ingress controller starts, it watches for IngressClass resources whose <code>spec.controller</code> matches its own identifier.</li>
+                            <li>The controller then watches for Ingress resources with a matching <code>spec.ingressClassName</code>.</li>
+                            <li>Only matched Ingress resources trigger configuration updates in that controller — all others are ignored.</li>
+                        </ol>
+
+                        <pre><code class="language-bash"># List all IngressClasses in the cluster:
+kubectl get ingressclass
+# NAME               CONTROLLER                      PARAMETERS   AGE
+# nginx              k8s.io/ingress-nginx            &lt;none&gt;       12d
+# traefik-internal   traefik.io/ingress-controller   &lt;none&gt;       5d
+
+# See which class is the default (handles Ingress without ingressClassName):
+kubectl get ingressclass -o jsonpath='{range .items[?(@.metadata.annotations.ingressclass\.kubernetes\.io/is-default-class=="true")]}{.metadata.name}{"\n"}{end}'
+# nginx
+
+# Describe a class to see its controller and parameters:
+kubectl describe ingressclass nginx</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Default class behaviour:</strong> If exactly one IngressClass is annotated with <code>ingressclass.kubernetes.io/is-default-class: "true"</code>, any Ingress resource created <em>without</em> <code>spec.ingressClassName</code> is automatically assigned to that class. If no default is set and no class is specified, the Ingress remains unhandled. Always set a default in production clusters to avoid silent misconfigurations.
+                        </div>
+
                         <h2 id="gateway-api">Gateway API</h2>
 
                         <h3 id="gateway-evolution">The Evolution Beyond Ingress</h3>
@@ -715,6 +802,11 @@ flowchart TB
                         </div>
 
                         <h2 id="istio">Istio</h2>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-graduation-cap me-2"></i>
+                            <strong>Going Deeper — Istio Track:</strong> This section introduces Istio's architecture and core resources. For a full hands-on walkthrough — install, traffic management, canary deployments, mTLS, AuthorizationPolicy, and Kiali observability — see the <a href="istio-part01-concepts-install.html"><strong>Istio Track →</strong></a> in this series.
+                        </div>
 
                         <h3 id="istio-architecture">Istio Architecture</h3>
 

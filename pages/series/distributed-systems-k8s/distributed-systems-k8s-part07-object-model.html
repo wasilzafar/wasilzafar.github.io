@@ -70,7 +70,7 @@
         f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');
     </script>
     <script type="application/ld+json">
-    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Kubernetes Object Model - Part 7", "description": "Master Kubernetes core objects — Pods, ReplicaSets, Deployments, Services, ConfigMaps, Secrets, Jobs, DaemonSets, and StatefulSets. Learn declarative YAML manifests, labels, selectors, and annotations.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/distributed-systems-k8s/distributed-systems-k8s-part07-object-model.html"}, "wordCount": 2760, "inLanguage": "en", "datePublished": "2026-05-14", "dateModified": "2026-05-14", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/distributed-systems-k8s/distributed-systems-k8s-part07-object-model-og.jpg", "width": 1200, "height": 630}}
+    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Kubernetes Object Model - Part 7", "description": "Master Kubernetes core objects — Pods, ReplicaSets, Deployments, Services, ConfigMaps, Secrets, Jobs, DaemonSets, and StatefulSets. Learn declarative YAML manifests, labels, selectors, and annotations.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/distributed-systems-k8s/distributed-systems-k8s-part07-object-model.html"}, "wordCount": 3800, "inLanguage": "en", "datePublished": "2026-05-14", "dateModified": "2026-05-14", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/distributed-systems-k8s/distributed-systems-k8s-part07-object-model-og.jpg", "width": 1200, "height": 630}}
     </script>
 </head>
 <body>
@@ -148,6 +148,14 @@
         </div>
         <ol>
             <li>
+                <a href="#quick-start" onclick="closeNav()">Quick Start: Hello Kubernetes</a>
+                <ul>
+                    <li><a href="#qs-deploy" onclick="closeNav()">Deploy &amp; Expose</a></li>
+                    <li><a href="#qs-scale-heal" onclick="closeNav()">Scale &amp; Self-Heal</a></li>
+                    <li><a href="#qs-update-dns" onclick="closeNav()">Update &amp; DNS</a></li>
+                </ul>
+            </li>
+            <li>
                 <a href="#object-anatomy" onclick="closeNav()">Anatomy of a Kubernetes Object</a>
                 <ul>
                     <li><a href="#yaml-structure" onclick="closeNav()">YAML Structure</a></li>
@@ -201,6 +209,78 @@
             <div class="row">
                 <div class="col-lg-8 mx-auto">
                     <div class="blog-content">
+
+                        <h2 id="quick-start">Quick Start: Hello Kubernetes</h2>
+
+                        <p>Before diving into object types, let's run through a complete exercise on the cluster you built in <a href="distributed-systems-k8s-part06-k8s-architecture.html">Part 6</a>. This demonstrates every core Kubernetes capability in 7 commands — we'll then spend the rest of this article understanding <em>what each object is</em> and <em>why it works</em>.</p>
+
+                        <h3 id="qs-deploy">1. Deploy &amp; Expose</h3>
+
+                        <pre><code class="language-bash"># Create a Deployment (3 replicas of nginx) and expose it:
+kubectl create deployment hello-k8s --image=nginx:1.25 --replicas=3
+kubectl expose deployment hello-k8s --type=NodePort --port=80
+
+# Watch pods schedule across worker nodes:
+kubectl get pods -o wide
+# NAME                         READY   STATUS    NODE
+# hello-k8s-59bb5f8cdc-abc12   1/1     Running   worker-1
+# hello-k8s-59bb5f8cdc-def34   1/1     Running   worker-2
+# hello-k8s-59bb5f8cdc-ghi56   1/1     Running   worker-1
+
+# Access via NodePort (extract the assigned port dynamically):
+NODE_PORT=$(kubectl get svc hello-k8s -o jsonpath='{.spec.ports[0].nodePort}')
+curl http://localhost:$NODE_PORT
+# &lt;!DOCTYPE html&gt;...&lt;h1&gt;Welcome to nginx!&lt;/h1&gt;...</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i><strong>What just happened:</strong> <code>kubectl create deployment</code> created a <strong>Deployment</strong> → which created a <strong>ReplicaSet</strong> → which created 3 <strong>Pods</strong>. <code>kubectl expose</code> created a <strong>Service</strong>. Four object types, two commands. The rest of this article explains each one.
+                        </div>
+
+                        <h3 id="qs-scale-heal">2. Scale &amp; Self-Heal</h3>
+
+                        <pre><code class="language-bash"># Scale to 6 replicas:
+kubectl scale deployment hello-k8s --replicas=6
+kubectl get pods -o wide    # 6 pods spread across workers
+
+# Scale down to 2:
+kubectl scale deployment hello-k8s --replicas=2
+
+# Self-healing — delete a pod and watch it recover:
+kubectl delete pod $(kubectl get pods -l app=hello-k8s -o name | head -1)
+kubectl get pods -w
+# hello-k8s-59bb5f8cdc-abc12   1/1   Terminating         0   5m
+# hello-k8s-59bb5f8cdc-new99   0/1   ContainerCreating   0   0s
+# hello-k8s-59bb5f8cdc-new99   1/1   Running             0   2s
+# The ReplicaSet detected desired(2) != actual(1) and created a replacement.</code></pre>
+
+                        <h3 id="qs-update-dns">3. Rolling Update &amp; DNS</h3>
+
+                        <pre><code class="language-bash"># Zero-downtime update (nginx 1.25 → 1.26):
+kubectl set image deployment/hello-k8s nginx=nginx:1.26
+kubectl rollout status deployment/hello-k8s
+# deployment "hello-k8s" successfully rolled out
+
+# Rollback:
+kubectl rollout undo deployment/hello-k8s
+
+# Service discovery via DNS (from inside the cluster):
+kubectl run test-dns --image=busybox:1.36 --rm -it --restart=Never -- sh
+/ # nslookup hello-k8s
+# Name:   hello-k8s.default.svc.cluster.local
+# Address: 10.107.50.16
+/ # wget -qO- http://hello-k8s | head -5
+# &lt;!DOCTYPE html&gt;...&lt;h1&gt;Welcome to nginx!&lt;/h1&gt;...
+/ # exit
+
+# Cleanup:
+kubectl delete deployment hello-k8s
+kubectl delete svc hello-k8s</code></pre>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-info-circle me-2"></i><strong>Single-Node Users:</strong> If you set up a single-node cluster in Part 6, remove the control-plane taint first: <code>kubectl taint nodes --all node-role.kubernetes.io/control-plane-</code>. All exercises work identically — pods just all schedule on the same node.
+                        </div>
+
+                        <p>In 7 commands we used <strong>Deployments</strong>, <strong>ReplicaSets</strong>, <strong>Pods</strong>, and <strong>Services</strong> — plus labels, selectors, and DNS discovery under the hood. Now let's understand each object type in depth.</p>
 
                         <h2 id="object-anatomy">Anatomy of a Kubernetes Object</h2>
 
@@ -316,6 +396,34 @@ metadata:
     # Build info
     git-commit: "a1b2c3d4e5f6"
     build-date: "2026-05-14T10:30:00Z"</code></pre>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal text-white">Hands-On</span>
+                                <span>Labels &amp; Selectors</span>
+                            </div>
+                            <div class="experiment-content">
+                                <pre><code class="language-bash"># Create a pod with labels:
+kubectl run label-demo --image=nginx:1.25 --labels="app=demo,tier=frontend,env=dev"
+
+# Query by label:
+kubectl get pods -l app=demo              # Exact match
+kubectl get pods -l 'env in (dev,staging)' # Set-based
+kubectl get pods --show-labels             # See all labels
+
+# Add/change/remove labels on existing pods:
+kubectl label pod label-demo version=v1.0
+kubectl label pod label-demo env=staging --overwrite
+kubectl label pod label-demo version-   # Remove label
+
+# Annotate:
+kubectl annotate pod label-demo owner="platform-team"
+kubectl describe pod label-demo | grep Annotations
+
+# Cleanup:
+kubectl delete pod label-demo</code></pre>
+                            </div>
+                        </div>
 
                         <h2 id="pods">Pods</h2>
 
@@ -506,6 +614,65 @@ spec:
     ports:
     - containerPort: 8080</code></pre>
 
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal text-white">Hands-On</span>
+                                <span>Pods</span>
+                            </div>
+                            <div class="experiment-content">
+                                <pre><code class="language-bash"># Run a standalone pod:
+kubectl run my-pod --image=nginx:1.25
+
+# Inspect it:
+kubectl get pod my-pod -o wide
+kubectl describe pod my-pod
+
+# Exec into the running container:
+kubectl exec -it my-pod -- bash
+  root@my-pod:/# curl localhost
+  root@my-pod:/# exit
+
+# View logs:
+kubectl logs my-pod
+
+# Watch lifecycle states (in another terminal: kubectl delete pod my-pod):
+kubectl get pod my-pod -w
+# my-pod   1/1   Running       0   2m
+# my-pod   1/1   Terminating   0   2m
+
+# Multi-container pod (sidecar pattern):
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sidecar-demo
+spec:
+  containers:
+  - name: app
+    image: nginx:1.25
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log/nginx
+  - name: log-reader
+    image: busybox:1.36
+    command: ["sh", "-c", "tail -f /var/log/nginx/access.log"]
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log/nginx
+      readOnly: true
+  volumes:
+  - name: logs
+    emptyDir: {}
+EOF
+
+# Both containers share the volume:
+kubectl logs sidecar-demo -c log-reader
+
+# Cleanup:
+kubectl delete pod my-pod sidecar-demo</code></pre>
+                            </div>
+                        </div>
+
                         <h2 id="workloads">Workload Controllers</h2>
 
                         <h3 id="replicasets">ReplicaSets</h3>
@@ -524,6 +691,30 @@ kubectl get pods -w
 # payment-6f7g8h9j-xyz99   0/1   Pending       0   0s
 # payment-6f7g8h9j-xyz99   0/1   ContainerCreating   0   1s
 # payment-6f7g8h9j-xyz99   1/1   Running       0   3s</code></pre>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal text-white">Hands-On</span>
+                                <span>ReplicaSets</span>
+                            </div>
+                            <div class="experiment-content">
+                                <pre><code class="language-bash"># Create a Deployment (which creates a ReplicaSet):
+kubectl create deployment rs-demo --image=nginx:1.25 --replicas=3
+
+# See the ReplicaSet it created:
+kubectl get rs
+# NAME                  DESIRED   CURRENT   READY   AGE
+# rs-demo-59bb5f8cdc    3         3         3       10s
+
+# Delete a pod — watch the RS recreate it:
+kubectl delete pod $(kubectl get pods -l app=rs-demo -o name | head -1)
+kubectl get pods -l app=rs-demo
+# Still 3 pods — the ReplicaSet replaced the deleted one instantly
+
+# Cleanup:
+kubectl delete deployment rs-demo</code></pre>
+                            </div>
+                        </div>
 
                         <h3 id="deployments">Deployments</h3>
 
@@ -605,6 +796,40 @@ kubectl rollout resume deployment/payment-service</code></pre>
                         <div class="highlight-box highlight-navy">
                             <i class="fas fa-info-circle me-2"></i>
                             <strong>How Rolling Updates Work:</strong> Kubernetes creates a new ReplicaSet with the updated pod template and gradually scales it up while scaling the old ReplicaSet down. At any point during the update, traffic is split between old and new versions. If the new version fails readiness probes, the rollout stalls — protecting users from broken deployments.
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal text-white">Hands-On</span>
+                                <span>Deployments</span>
+                            </div>
+                            <div class="experiment-content">
+                                <pre><code class="language-bash"># Create a deployment:
+kubectl create deployment deploy-demo --image=nginx:1.25 --replicas=3
+
+# Rolling update (1.25 → 1.26):
+kubectl set image deployment/deploy-demo nginx=nginx:1.26
+kubectl rollout status deployment/deploy-demo
+# deployment "deploy-demo" successfully rolled out
+
+# View history:
+kubectl rollout history deployment/deploy-demo
+# REVISION  CHANGE-CAUSE
+# 1         <none>
+# 2         <none>
+
+# Rollback:
+kubectl rollout undo deployment/deploy-demo
+kubectl describe deployment deploy-demo | grep Image
+#     Image:         nginx:1.25
+
+# See both ReplicaSets (old and new):
+kubectl get rs -l app=deploy-demo
+# One has 3 replicas (active), one has 0 (previous version)
+
+# Cleanup:
+kubectl delete deployment deploy-demo</code></pre>
+                            </div>
                         </div>
 
                         <h3 id="statefulsets">StatefulSets</h3>
@@ -695,6 +920,70 @@ spec:
                             </tbody>
                         </table>
 
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal text-white">Hands-On</span>
+                                <span>StatefulSets</span>
+                            </div>
+                            <div class="experiment-content">
+                                <pre><code class="language-bash"># Create a headless Service (required by StatefulSets):
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Service
+metadata:
+  name: sts-demo-headless
+spec:
+  clusterIP: None
+  selector:
+    app: sts-demo
+  ports:
+  - port: 80
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sts-demo
+spec:
+  serviceName: sts-demo-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: sts-demo
+  template:
+    metadata:
+      labels:
+        app: sts-demo
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25
+EOF
+
+# Observe ORDERED creation (0, then 1, then 2):
+kubectl get pods -w -l app=sts-demo
+# sts-demo-0   0/1   Pending       0   0s
+# sts-demo-0   1/1   Running       0   3s
+# sts-demo-1   0/1   Pending       0   0s
+# sts-demo-1   1/1   Running       0   3s
+# sts-demo-2   0/1   Pending       0   0s
+# sts-demo-2   1/1   Running       0   3s
+
+# Stable DNS names:
+kubectl run dns-check --image=busybox:1.36 --rm -it --restart=Never -- \
+  nslookup sts-demo-0.sts-demo-headless
+# Address: 10.244.x.x  (specific pod IP)
+
+# Delete pod-1 — it comes back as sts-demo-1 (same name!):
+kubectl delete pod sts-demo-1
+kubectl get pods -l app=sts-demo
+# sts-demo-0, sts-demo-1 (recreated), sts-demo-2
+
+# Cleanup:
+kubectl delete statefulset sts-demo
+kubectl delete svc sts-demo-headless</code></pre>
+                            </div>
+                        </div>
+
                         <h3 id="daemonsets">DaemonSets</h3>
 
                         <p>A DaemonSet ensures one pod runs on every node (or a subset of nodes). Used for node-level agents like log collectors, monitoring, and network plugins:</p>
@@ -733,6 +1022,47 @@ spec:
             memory: "128Mi"
             cpu: "100m"</code></pre>
 
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal text-white">Hands-On</span>
+                                <span>DaemonSets</span>
+                            </div>
+                            <div class="experiment-content">
+                                <pre><code class="language-bash"># Create a DaemonSet:
+kubectl apply -f - <<'EOF'
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ds-demo
+spec:
+  selector:
+    matchLabels:
+      app: ds-demo
+  template:
+    metadata:
+      labels:
+        app: ds-demo
+    spec:
+      tolerations:
+      - effect: NoSchedule
+        operator: Exists
+      containers:
+      - name: agent
+        image: busybox:1.36
+        command: ["sh", "-c", "while true; do echo $(hostname); sleep 60; done"]
+EOF
+
+# Verify: one pod per node (including master with toleration):
+kubectl get pods -l app=ds-demo -o wide
+# ds-demo-abc12   1/1   Running   master-1
+# ds-demo-def34   1/1   Running   worker-1
+# ds-demo-ghi56   1/1   Running   worker-2
+
+# Cleanup:
+kubectl delete daemonset ds-demo</code></pre>
+                            </div>
+                        </div>
+
                         <h3 id="jobs-cronjobs">Jobs &amp; CronJobs</h3>
 
                         <pre><code class="language-yaml"># Job: run a task to completion
@@ -770,6 +1100,35 @@ spec:
           - name: backup
             image: postgres:16
             command: ["pg_dump", "-h", "postgres-0.postgres-headless", "-U", "admin", "-d", "appdb"]</code></pre>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal text-white">Hands-On</span>
+                                <span>Jobs</span>
+                            </div>
+                            <div class="experiment-content">
+                                <pre><code class="language-bash"># Run a one-shot Job:
+kubectl create job pi-calc --image=perl:5.34 \
+  -- perl -Mbignum=bpi -wle 'print bpi(500)'
+
+# Watch it complete:
+kubectl get jobs -w
+# NAME      COMPLETIONS   DURATION   AGE
+# pi-calc   0/1           5s         5s
+# pi-calc   1/1           12s        12s
+
+# View the result:
+kubectl logs job/pi-calc
+# 3.14159265358979323846...
+
+# The pod stays in Completed state (not deleted):
+kubectl get pods -l job-name=pi-calc
+# pi-calc-abc12   0/1   Completed   0   30s
+
+# Cleanup:
+kubectl delete job pi-calc</code></pre>
+                            </div>
+                        </div>
 
                         <h2 id="configuration">Configuration Objects</h2>
 
@@ -830,6 +1189,43 @@ spec:
     configMap:
       name: app-config</code></pre>
 
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal text-white">Hands-On</span>
+                                <span>ConfigMaps</span>
+                            </div>
+                            <div class="experiment-content">
+                                <pre><code class="language-bash"># Create a ConfigMap from literals:
+kubectl create configmap demo-config \
+  --from-literal=database.host=postgres-svc \
+  --from-literal=log.level=info
+
+# Inspect it:
+kubectl get configmap demo-config -o yaml
+
+# Mount in a pod and verify:
+kubectl run cm-demo --image=busybox:1.36 --restart=Never \
+  --overrides='{
+    "spec": {
+      "containers": [{
+        "name": "cm-demo",
+        "image": "busybox:1.36",
+        "command": ["sh", "-c", "cat /etc/config/database.host; sleep 3600"],
+        "volumeMounts": [{"name": "config", "mountPath": "/etc/config"}]
+      }],
+      "volumes": [{"name": "config", "configMap": {"name": "demo-config"}}]
+    }
+  }'
+
+kubectl logs cm-demo
+# postgres-svc
+
+# Cleanup:
+kubectl delete pod cm-demo
+kubectl delete configmap demo-config</code></pre>
+                            </div>
+                        </div>
+
                         <h3 id="secrets">Secrets</h3>
 
                         <p>Secrets store sensitive data (passwords, tokens, certificates). They're similar to ConfigMaps but with additional protections: base64-encoded at rest, can be encrypted in etcd, and access can be restricted via RBAC.</p>
@@ -856,6 +1252,32 @@ kubectl get secret db-credentials -o jsonpath='{.data.password}' | base64 -d</co
                         <div class="highlight-box highlight-crimson">
                             <i class="fas fa-exclamation-triangle me-2"></i>
                             <strong>Security Warning:</strong> Kubernetes Secrets are only base64-encoded by default — not encrypted. Anyone with API access can read them. For production: (a) enable etcd encryption at rest, (b) use RBAC to restrict Secret access, (c) consider external secret stores (HashiCorp Vault, AWS Secrets Manager) with the External Secrets Operator.
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal text-white">Hands-On</span>
+                                <span>Secrets</span>
+                            </div>
+                            <div class="experiment-content">
+                                <pre><code class="language-bash"># Create a Secret:
+kubectl create secret generic demo-secret \
+  --from-literal=username=admin \
+  --from-literal=password='K8s-S3cret!'
+
+# Values are base64-encoded (not encrypted!):
+kubectl get secret demo-secret -o yaml
+# data:
+#   password: SzhzLVMzY3JldCE=
+#   username: YWRtaW4=
+
+# Decode:
+kubectl get secret demo-secret -o jsonpath='{.data.password}' | base64 -d
+# K8s-S3cret!
+
+# Cleanup:
+kubectl delete secret demo-secret</code></pre>
+                            </div>
                         </div>
 
                         <h2 id="services">Services &amp; Discovery</h2>
@@ -966,7 +1388,47 @@ spec:
 # nslookup postgres-headless → 10.244.1.5, 10.244.2.8, 10.244.3.12
 # nslookup postgres-0.postgres-headless → 10.244.1.5 (specific pod)</code></pre>
 
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal text-white">Hands-On</span>
+                                <span>Services &amp; DNS</span>
+                            </div>
+                            <div class="experiment-content">
+                                <pre><code class="language-bash"># Create a deployment + ClusterIP service:
+kubectl create deployment svc-demo --image=nginx:1.25 --replicas=2
+kubectl expose deployment svc-demo --port=80
+
+# Check the ClusterIP:
+kubectl get svc svc-demo
+# NAME       TYPE        CLUSTER-IP     PORT(S)   AGE
+# svc-demo   ClusterIP   10.96.x.x      80/TCP    5s
+
+# Test DNS from inside the cluster:
+kubectl run dns-test --image=busybox:1.36 --rm -it --restart=Never -- sh
+/ # nslookup svc-demo
+# Name:   svc-demo.default.svc.cluster.local
+# Address: 10.96.x.x
+/ # wget -qO- http://svc-demo | head -3
+# &lt;!DOCTYPE html&gt;...
+/ # exit
+
+# Compare: create a NodePort service:
+kubectl expose deployment svc-demo --name=svc-demo-np --type=NodePort --port=80
+NODE_PORT=$(kubectl get svc svc-demo-np -o jsonpath='{.spec.ports[0].nodePort}')
+curl http://localhost:$NODE_PORT
+
+# Cleanup:
+kubectl delete deployment svc-demo
+kubectl delete svc svc-demo svc-demo-np</code></pre>
+                            </div>
+                        </div>
+
                         <h2 id="exercises">Exercises</h2>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-graduation-cap me-2"></i>
+                            <strong>Going Deeper — Skaffold Track:</strong> Once you're comfortable deploying manifests manually, Skaffold automates the inner development loop — rebuilding your image, pushing it, and re-deploying on every file save. See the <a href="inner-loop-skaffold-part01-workflow-hot-reload.html"><strong>Skaffold Track →</strong></a> in this series for a full hands-on walkthrough.
+                        </div>
 
                         <div class="highlight-box">
                             <i class="fas fa-pencil-alt me-2"></i>

@@ -194,6 +194,8 @@
                 <div class="col-lg-8 mx-auto">
                     <div class="blog-content">
 
+                        <p class="lead">Parts 1–3 covered how distributed nodes store and agree on data. But agreeing on state is useless if services can't <em>find</em> each other and <em>communicate</em> reliably. This part focuses on the networking layer: how ephemeral services discover each other, the protocols they use to talk, and the resilience patterns that keep communication working when individual services fail.</p>
+
                         <h2 id="why-discovery">Why Service Discovery Exists</h2>
 
                         <h3 id="static-vs-dynamic">Static vs Dynamic Environments</h3>
@@ -305,7 +307,15 @@ sequenceDiagram
 
                         <h3 id="k8s-discovery">Kubernetes Service Discovery</h3>
 
-                        <p>Kubernetes combines both approaches elegantly. A <code>Service</code> object provides a stable virtual IP (ClusterIP) and DNS name that automatically routes to healthy pod backends:</p>
+                        <p>Neither plain DNS nor an external registry is ideal on its own. DNS suffers from TTL staleness (clients cache dead IPs) and lacks health checking. External registries require every application to include registration code. Kubernetes solves both by building service discovery <em>into the platform</em>:</p>
+
+                        <ul>
+                            <li><strong>No TTL staleness:</strong> The ClusterIP is a <em>virtual IP</em> that never changes. Under the hood, kube-proxy intercepts traffic to this IP and routes it to live pods — no DNS cache invalidation needed.</li>
+                            <li><strong>Automatic registration:</strong> Pods don't register themselves. The Endpoints controller watches for pods matching a label selector and updates the routing table automatically.</li>
+                            <li><strong>Built-in health checking:</strong> Only pods passing <code>readinessProbe</code> receive traffic. A failing pod is removed from endpoints within seconds.</li>
+                        </ul>
+
+                        <p>A <code>Service</code> object provides a stable virtual IP (ClusterIP) and DNS name that automatically routes to healthy pod backends:</p>
 
                         <pre><code class="language-yaml"># Kubernetes Service creates a stable discovery endpoint:
 apiVersion: v1
@@ -558,6 +568,17 @@ stateDiagram-v2
                             <li><strong>Connection pool limits:</strong> Cap connections per downstream service.</li>
                             <li><strong>In Kubernetes:</strong> Resource limits (CPU/memory) on pods prevent one workload from starving others. Namespaces with ResourceQuotas provide cluster-level bulkheads.</li>
                         </ul>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Resilience in Kubernetes — Where These Patterns Live:</strong>
+                            <ul class="mb-0">
+                                <li><strong>Retries + Backoff:</strong> CrashLoopBackOff (10s → 20s → 40s → 5min cap); kubelet registration retries</li>
+                                <li><strong>Timeouts:</strong> <code>readinessProbe.timeoutSeconds</code>, <code>terminationGracePeriodSeconds</code>, client-go request timeouts</li>
+                                <li><strong>Circuit Breaker:</strong> <code>readinessProbe</code> removes unhealthy pods from Service endpoints — traffic stops flowing to them without crashing them (gives time to recover)</li>
+                                <li><strong>Bulkheads:</strong> Pod resource limits, namespace ResourceQuotas, PriorityClasses for eviction ordering</li>
+                            </ul>
+                        </div>
 
                         <h2 id="exercises">Exercises</h2>
 
