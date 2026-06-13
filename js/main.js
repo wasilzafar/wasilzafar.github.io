@@ -721,11 +721,218 @@ function initPrintTracking() {
     });
 }
 
+/* ============================================
+   Feedback Widget — Floating Bottom Bar
+   Collects star rating (1-5) + optional reason chip
+   and pushes a structured user_feedback event to GTM.
+   Auto-injected on article pages with .blog-content.
+============================================ */
+
+function initFeedbackWidget() {
+    // Guard: only on article pages
+    if (!document.querySelector('.blog-content')) return;
+    var path = window.location.pathname;
+    if (path.indexOf('/pages/series/') === -1 && !/\/pages\/\d{4}\/\d{2}\//.test(path)) return;
+
+    // Guard: already submitted for this article
+    var storageKey = 'feedback-' + path;
+    try { if (localStorage.getItem(storageKey)) return; } catch (e) { /* private browsing */ }
+
+    // Guard: dismissed this session
+    var dismissKey = 'feedback-dismiss-' + path;
+    try { if (sessionStorage.getItem(dismissKey)) return; } catch (e) {}
+
+    // Reason chip labels and values
+    var reasons = [
+        { label: 'Useful examples', value: 'useful_examples' },
+        { label: 'Well structured', value: 'well_structured' },
+        { label: 'Too basic', value: 'too_basic' },
+        { label: 'Too advanced', value: 'too_advanced' },
+        { label: 'Unclear', value: 'unclear' }
+    ];
+
+    // Build DOM
+    var bar = document.createElement('div');
+    bar.className = 'feedback-bar';
+    bar.setAttribute('role', 'complementary');
+    bar.setAttribute('aria-label', 'Article feedback');
+
+    var prompt = document.createElement('span');
+    prompt.className = 'feedback-bar-prompt';
+    prompt.textContent = 'Was this article helpful?';
+
+    var starsContainer = document.createElement('div');
+    starsContainer.className = 'feedback-stars';
+    starsContainer.setAttribute('role', 'radiogroup');
+    starsContainer.setAttribute('aria-label', 'Rating from 1 to 5 stars');
+
+    var selectedRating = 0;
+    var selectedReason = '';
+
+    for (var i = 1; i <= 5; i++) {
+        (function(val) {
+            var btn = document.createElement('button');
+            btn.className = 'feedback-star';
+            btn.type = 'button';
+            btn.setAttribute('role', 'radio');
+            btn.setAttribute('aria-checked', 'false');
+            btn.setAttribute('aria-label', val + ' star' + (val > 1 ? 's' : ''));
+            btn.innerHTML = '<i class="fas fa-star"></i>';
+
+            btn.addEventListener('mouseenter', function() {
+                var stars = starsContainer.querySelectorAll('.feedback-star');
+                for (var j = 0; j < stars.length; j++) {
+                    stars[j].classList.toggle('hovered', j < val);
+                }
+            });
+
+            btn.addEventListener('click', function() {
+                selectedRating = val;
+                var stars = starsContainer.querySelectorAll('.feedback-star');
+                for (var j = 0; j < stars.length; j++) {
+                    stars[j].classList.toggle('selected', j < val);
+                    stars[j].setAttribute('aria-checked', j < val ? 'true' : 'false');
+                }
+                reasonsContainer.classList.add('show');
+                submitBtn.classList.add('show');
+            });
+
+            starsContainer.appendChild(btn);
+        })(i);
+    }
+
+    starsContainer.addEventListener('mouseleave', function() {
+        var stars = starsContainer.querySelectorAll('.feedback-star');
+        for (var j = 0; j < stars.length; j++) {
+            stars[j].classList.remove('hovered');
+        }
+    });
+
+    // Reason chips
+    var reasonsContainer = document.createElement('div');
+    reasonsContainer.className = 'feedback-reasons';
+    reasonsContainer.setAttribute('aria-label', 'Optional: select a reason');
+
+    reasons.forEach(function(r) {
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'feedback-chip';
+        chip.textContent = r.label;
+        chip.setAttribute('aria-pressed', 'false');
+        chip.addEventListener('click', function() {
+            var chips = reasonsContainer.querySelectorAll('.feedback-chip');
+            for (var k = 0; k < chips.length; k++) {
+                chips[k].classList.remove('selected');
+                chips[k].setAttribute('aria-pressed', 'false');
+            }
+            if (selectedReason === r.value) {
+                selectedReason = '';
+            } else {
+                selectedReason = r.value;
+                chip.classList.add('selected');
+                chip.setAttribute('aria-pressed', 'true');
+            }
+        });
+        reasonsContainer.appendChild(chip);
+    });
+
+    // Submit button
+    var submitBtn = document.createElement('button');
+    submitBtn.type = 'button';
+    submitBtn.className = 'feedback-submit';
+    submitBtn.textContent = 'Submit';
+    submitBtn.addEventListener('click', function() {
+        if (!selectedRating) return;
+
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push({
+            event: 'user_feedback',
+            feedback_rating: selectedRating,
+            feedback_reason: selectedReason || '',
+            feedback_category: 'article_helpful',
+            page_path: path,
+            page_title: document.title
+        });
+
+        console.log('[Analytics] User Feedback:', {
+            rating: selectedRating,
+            reason: selectedReason,
+            page: path
+        });
+
+        try {
+            localStorage.setItem(storageKey, JSON.stringify({
+                rating: selectedRating,
+                reason: selectedReason,
+                ts: new Date().toISOString()
+            }));
+        } catch (e) {}
+
+        bar.classList.add('thank-you');
+        setTimeout(function() {
+            bar.classList.remove('show');
+            setTimeout(function() { bar.remove(); }, 500);
+        }, 2000);
+    });
+
+    // Thank-you text
+    var thanks = document.createElement('span');
+    thanks.className = 'feedback-thanks';
+    thanks.innerHTML = '<i class="fas fa-check-circle me-1"></i>Thank you for your feedback!';
+
+    // Dismiss button
+    var dismissBtn = document.createElement('button');
+    dismissBtn.type = 'button';
+    dismissBtn.className = 'feedback-dismiss';
+    dismissBtn.setAttribute('aria-label', 'Dismiss feedback');
+    dismissBtn.innerHTML = '&times;';
+    dismissBtn.addEventListener('click', function() {
+        bar.classList.remove('show');
+        try { sessionStorage.setItem(dismissKey, '1'); } catch (e) {}
+        setTimeout(function() { bar.remove(); }, 500);
+    });
+
+    bar.appendChild(prompt);
+    bar.appendChild(starsContainer);
+    bar.appendChild(reasonsContainer);
+    bar.appendChild(submitBtn);
+    bar.appendChild(thanks);
+    bar.appendChild(dismissBtn);
+
+    // Insert before scrollToTop so CSS sibling selectors can shift controls
+    var scrollBtn = document.getElementById('scrollToTop');
+    if (scrollBtn) {
+        scrollBtn.parentNode.insertBefore(bar, scrollBtn);
+    } else {
+        document.body.appendChild(bar);
+    }
+
+    // Trigger: show after 50% scroll OR 45 seconds
+    var shown = false;
+    function showBar() {
+        if (shown) return;
+        shown = true;
+        bar.classList.add('show');
+    }
+
+    var timer = setTimeout(showBar, 45000);
+
+    window.addEventListener('scroll', function onScroll() {
+        var docH = document.documentElement.scrollHeight - window.innerHeight;
+        if (docH > 0 && window.scrollY / docH >= 0.5) {
+            showBar();
+            clearTimeout(timer);
+            window.removeEventListener('scroll', onScroll);
+        }
+    });
+}
+
 // Initialize tracking when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
     initAnalyticsTracking();
     initContentGrouping();
     initPrintTracking();
+    initFeedbackWidget();
 });
 
 /* ============================================
