@@ -34,6 +34,9 @@ import os
 import argparse
 from pathlib import Path
 
+# Allow Google to return fewer scopes than requested without raising an error
+os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
+
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -55,11 +58,12 @@ TOKEN_FILE = SCRIPT_DIR / 'token-write.json'  # separate from readonly token
 
 ACCOUNT_ID = '6246435556'
 CONTAINER_ID = '193619648'
-WORKSPACE_ID = '12'
 
 ACCOUNT_PATH = f'accounts/{ACCOUNT_ID}'
 CONTAINER_PATH = f'{ACCOUNT_PATH}/containers/{CONTAINER_ID}'
-WORKSPACE_PATH = f'{CONTAINER_PATH}/workspaces/{WORKSPACE_ID}'
+
+# WORKSPACE_PATH is resolved at runtime by get_or_create_workspace()
+WORKSPACE_PATH = None  # set in main()
 
 # Existing GTM IDs (from fetch report)
 TRIGGER_CONTACT_ID = '6'        # pageview → should be customEvent
@@ -123,6 +127,38 @@ def get_service(dry_run=False):
 
     service = build('tagmanager', 'v2', credentials=creds)
     return service
+
+
+def get_or_create_workspace(service, dry_run=False):
+    """
+    Find an editable workspace in the container. If none exists, create one.
+    Returns the full workspace path string (e.g. accounts/.../workspaces/15).
+    """
+    resp = service.accounts().containers().workspaces().list(
+        parent=CONTAINER_PATH
+    ).execute()
+    workspaces = resp.get('workspace', [])
+
+    # Prefer "Default Workspace" or the first non-submitted workspace
+    for ws in workspaces:
+        ws_path = ws.get('path', '')
+        ws_name = ws.get('name', '')
+        # If it's listed, it's editable (submitted workspaces are auto-removed from list)
+        print(f'  Found workspace: {ws_name} (ID={ws.get("workspaceId")})')
+        return ws_path
+
+    # No workspace found — create a new one
+    if dry_run:
+        print('  [DRY-RUN] Would create new workspace: "User Feedback Tracking"')
+        return f'{CONTAINER_PATH}/workspaces/NEW'
+
+    new_ws = service.accounts().containers().workspaces().create(
+        parent=CONTAINER_PATH,
+        body={'name': 'User Feedback Tracking', 'description': 'Add user_feedback event tracking'}
+    ).execute()
+    ws_path = new_ws.get('path', '')
+    print(f'  ✓ Created workspace: {new_ws.get("name")} (ID={new_ws.get("workspaceId")})')
+    return ws_path
 
 
 # ------------------------------------------------------------------ #
@@ -999,6 +1035,185 @@ def publish_workspace(service, dry_run):
 
 
 # ------------------------------------------------------------------ #
+# User Feedback Tracking
+# ------------------------------------------------------------------ #
+
+def _get_existing_variable_names(service):
+    """Return a set of existing GTM variable names in the workspace."""
+    resp = service.accounts().containers().workspaces().variables().list(
+        parent=WORKSPACE_PATH
+    ).execute()
+    return {v.get('name') for v in resp.get('variable', [])}
+
+
+def _get_existing_trigger_names(service):
+    """Return a set of existing GTM trigger names in the workspace."""
+    resp = service.accounts().containers().workspaces().triggers().list(
+        parent=WORKSPACE_PATH
+    ).execute()
+    return {t.get('name') for t in resp.get('trigger', [])}
+
+
+def _get_existing_tag_names(service):
+    """Return a set of existing GTM tag names in the workspace."""
+    resp = service.accounts().containers().workspaces().tags().list(
+        parent=WORKSPACE_PATH
+    ).execute()
+    return {t.get('name') for t in resp.get('tag', [])}
+
+
+def create_feedback_variables(service, dry_run):
+    """
+    Create dataLayer variables for user feedback event parameters.
+    Idempotent — skips variables that already exist.
+    """
+    vars_to_create = [
+        ('feedback_rating',   'Feedback Rating Variable'),
+        ('feedback_reason',   'Feedback Reason Variable'),
+        ('feedback_category', 'Feedback Category Variable'),
+    ]
+
+    existing_names = set()
+    if not dry_run:
+        existing_names = _get_existing_variable_names(service)
+
+    for key, name in vars_to_create:
+        var_name = f'DL - {name}'
+        if not dry_run and var_name in existing_names:
+            print(f'    [SKIP] Variable already exists: {var_name}')
+            continue
+        action('CREATE', 'Variable', var_name, dry_run)
+        if dry_run:
+            continue
+        variable = {
+            'name': var_name,
+            'type': 'v',
+            'parameter': [
+                {'type': 'integer', 'key': 'dataLayerVersion', 'value': '2'},
+                {'type': 'boolean', 'key': 'setDefaultValue', 'value': 'false'},
+                {'type': 'template', 'key': 'name', 'value': key},
+            ]
+        }
+        result = service.accounts().containers().workspaces().variables().create(
+            parent=WORKSPACE_PATH, body=variable
+        ).execute()
+        print(f'    ✓ Created variable {result.get("variableId")}: {result.get("name")}')
+
+
+def create_user_feedback_trigger(service, dry_run):
+    """
+    Create customEvent trigger for 'user_feedback' events.
+    Idempotent — skips if trigger already exists, returns existing ID.
+    """
+    trigger_name = 'User Feedback Trigger'
+
+    if not dry_run:
+        existing = service.accounts().containers().workspaces().triggers().list(
+            parent=WORKSPACE_PATH
+        ).execute()
+        for t in existing.get('trigger', []):
+            if t.get('name') == trigger_name:
+                tid = t.get('triggerId')
+                print(f'    [SKIP] Trigger already exists: {trigger_name} (ID={tid})')
+                return tid
+
+    action('CREATE', 'Trigger', f'{trigger_name} (customEvent:user_feedback)', dry_run)
+    if dry_run:
+        return None
+
+    trigger = {
+        'name': trigger_name,
+        'type': 'customEvent',
+        'customEventFilter': [
+            {
+                'type': 'equals',
+                'parameter': [
+                    {'type': 'template', 'key': 'arg0', 'value': '{{_event}}'},
+                    {'type': 'template', 'key': 'arg1', 'value': 'user_feedback'},
+                ]
+            }
+        ]
+    }
+    result = service.accounts().containers().workspaces().triggers().create(
+        parent=WORKSPACE_PATH, body=trigger
+    ).execute()
+    trigger_id = result.get('triggerId')
+    print(f'    ✓ Created trigger {trigger_id}: {result.get("name")}')
+    return trigger_id
+
+
+def create_user_feedback_tag(service, feedback_trigger_id, dry_run):
+    """
+    Create GA4 Event tag for user_feedback, fires on User Feedback Trigger.
+    Captures feedback_rating, feedback_reason, feedback_category, page_path.
+    Idempotent — skips if tag already exists.
+    """
+    tag_name = 'GA4 - User Feedback'
+
+    if not dry_run:
+        existing = service.accounts().containers().workspaces().tags().list(
+            parent=WORKSPACE_PATH
+        ).execute()
+        for t in existing.get('tag', []):
+            if t.get('name') == tag_name:
+                print(f'    [SKIP] Tag already exists: {tag_name} (ID={t.get("tagId")})')
+                return
+
+    action('CREATE', 'Tag', f'{tag_name} (gaawe)', dry_run)
+    if dry_run:
+        return
+
+    tag = {
+        'name': tag_name,
+        'type': 'gaawe',
+        'parameter': [
+            {'type': 'template', 'key': 'measurementIdOverride', 'value': '{{Measurement Variable}}'},
+            {'type': 'template', 'key': 'eventName', 'value': 'user_feedback'},
+            {
+                'type': 'list',
+                'key': 'eventParameters',
+                'list': [
+                    {
+                        'type': 'map',
+                        'map': [
+                            {'type': 'template', 'key': 'name', 'value': 'feedback_rating'},
+                            {'type': 'template', 'key': 'value', 'value': '{{DL - Feedback Rating Variable}}'},
+                        ]
+                    },
+                    {
+                        'type': 'map',
+                        'map': [
+                            {'type': 'template', 'key': 'name', 'value': 'feedback_reason'},
+                            {'type': 'template', 'key': 'value', 'value': '{{DL - Feedback Reason Variable}}'},
+                        ]
+                    },
+                    {
+                        'type': 'map',
+                        'map': [
+                            {'type': 'template', 'key': 'name', 'value': 'feedback_category'},
+                            {'type': 'template', 'key': 'value', 'value': '{{DL - Feedback Category Variable}}'},
+                        ]
+                    },
+                    {
+                        'type': 'map',
+                        'map': [
+                            {'type': 'template', 'key': 'name', 'value': 'page_path'},
+                            {'type': 'template', 'key': 'value', 'value': '{{Page Path}}'},
+                        ]
+                    },
+                ]
+            }
+        ],
+        'firingTriggerId': [feedback_trigger_id],
+        'tagFiringOption': 'oncePerEvent',
+    }
+    result = service.accounts().containers().workspaces().tags().create(
+        parent=WORKSPACE_PATH, body=tag
+    ).execute()
+    print(f'    ✓ Created tag {result.get("tagId")}: {result.get("name")}')
+
+
+# ------------------------------------------------------------------ #
 # Main
 # ------------------------------------------------------------------ #
 
@@ -1012,6 +1227,8 @@ def main():
                         help='Enable missing built-in variables (videoTitle, videoUrl, videoPercent, pageTitle)')
     parser.add_argument('--content-group-only', action='store_true',
                         help='Run only content grouping steps (8 + 9): dataLayer vars + Regex Table + GA4 config wiring')
+    parser.add_argument('--feedback-only', action='store_true',
+                        help='Create user feedback tracking: 3 dataLayer variables + trigger + GA4 event tag')
     parser.add_argument('--resume', action='store_true',
                         help='Skip already-applied steps (critical fixes, HP triggers, scroll trigger) '
                              'and resume from scroll depth tag onwards. '
@@ -1032,12 +1249,22 @@ def main():
         print('=== PUBLISH-ONLY MODE — publishing existing workspace changes ===\n')
     elif getattr(args, 'content_group_only', False):
         print('=== CONTENT GROUP ONLY MODE — applying content grouping steps ===\n')
+    elif getattr(args, 'feedback_only', False):
+        print('=== FEEDBACK ONLY MODE — creating user feedback tracking ===\n')
     elif args.resume:
         print('=== RESUME MODE — skipping already-applied steps ===\n')
     else:
         print('=== LIVE MODE — changes will be applied to GTM ===\n')
 
     service = get_service(dry_run)
+
+    # Resolve editable workspace (replaces hardcoded WORKSPACE_ID)
+    global WORKSPACE_PATH
+    print('─' * 60)
+    print('RESOLVING WORKSPACE')
+    print('─' * 60)
+    WORKSPACE_PATH = get_or_create_workspace(service, dry_run)
+    print(f'  Using: {WORKSPACE_PATH}\n')
 
     # Fix-vars shortcut — enable missing built-in variables only
     if getattr(args, 'fix_vars', False):
@@ -1074,6 +1301,28 @@ def main():
         print('PUBLISHING WORKSPACE')
         print('─' * 60)
         publish_workspace(service, dry_run)
+        print('\nDone.')
+        return
+
+    # Feedback-only shortcut — create variables, trigger, and tag for user_feedback
+    if getattr(args, 'feedback_only', False):
+        print('─' * 60)
+        print('USER FEEDBACK TRACKING')
+        print('─' * 60)
+        create_feedback_variables(service, dry_run)
+        feedback_trigger_id = create_user_feedback_trigger(service, dry_run)
+        if not dry_run and feedback_trigger_id:
+            create_user_feedback_tag(service, feedback_trigger_id, dry_run)
+        elif dry_run:
+            action('CREATE', 'Tag', 'GA4 - User Feedback (gaawe)', dry_run)
+        print()
+        if args.publish:
+            print('─' * 60)
+            print('PUBLISHING WORKSPACE')
+            print('─' * 60)
+            publish_workspace(service, dry_run)
+        else:
+            print('Skipping publish. Run with --publish to create and publish a new GTM version.')
         print('\nDone.')
         return
 

@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Optimize Prometheus performance through TSDB tuning, memory management, WAL configuration, and query optimization. Debug production issues using Go pprof profiling, TSDB analysis tools, and systematic troubleshooting methodologies." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="Prometheus optimization, Prometheus debugging, pprof, TSDB tuning, WAL configuration, query optimization, cardinality management, Prometheus memory usage, Go profiling, promtool, tsdb analyze" />
+    <meta property="og:title" content="Prometheus Deep Dive Part 8: Optimizing & Debugging Prometheus" />
+    <meta property="og:description" content="Optimize Prometheus performance with TSDB tuning, memory management, and debug production issues using Go pprof and systematic troubleshooting." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-06-15" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part08-optimizing-debugging.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part08-optimizing-debugging-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part08-optimizing-debugging-tw.jpg" />
+    <title>Prometheus Deep Dive Part 8: Optimizing &amp; Debugging Prometheus - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part08-optimizing-debugging.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{'ad_storage':'denied','ad_user_data':'denied','ad_personalization':'denied','analytics_storage':'denied','region':['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']});gtag('consent','default',{'ad_storage':'granted','ad_user_data':'granted','ad_personalization':'granted','analytics_storage':'granted'});gtag('set','url_passthrough',true);</script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+    <script type="application/ld+json">
+    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Prometheus Deep Dive Part 8: Optimizing & Debugging Prometheus", "description": "Optimize Prometheus performance with TSDB tuning and debug production issues using Go pprof and systematic troubleshooting.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part08-optimizing-debugging.html"}, "wordCount": 6000, "inLanguage": "en", "datePublished": "2026-06-15", "dateModified": "2026-06-15", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part08-optimizing-debugging-og.jpg", "width": 1200, "height": 630}}
+    </script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <!-- Navigation Bar -->
+    <div class="nav-v16-wrapper"><nav class="nav-v16"><a href="/" class="brand"><div class="brand-stack"><span></span><span></span><span></span></div><span class="brand-text">Wasil Zafar</span></a><button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()"><span></span><span></span><span></span></button><div class="links"><a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a><a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a><a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a><a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a><a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a><button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button></div></nav></div>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Monitoring &amp; Observability Series</a>
+                <h1 class="display-4 fw-bold mb-3">Prometheus Deep Dive Part 8: Optimizing &amp; Debugging Prometheus</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>June 15, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>30 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Squeeze maximum performance from Prometheus through TSDB tuning, cardinality management, and query optimization &mdash; then learn to debug production issues with Go pprof, <code>promtool tsdb analyze</code>, and systematic troubleshooting workflows.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header"><h3><i class="fas fa-list me-2"></i>Table of Contents</h3><button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button></div>
+        <ol>
+            <li>
+                <a href="#performance-fundamentals" onclick="closeNav()">Performance Fundamentals</a>
+                <ul>
+                    <li><a href="#resource-model" onclick="closeNav()">Resource Consumption Model</a></li>
+                    <li><a href="#key-metrics" onclick="closeNav()">Key Self-Monitoring Metrics</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#tsdb-tuning" onclick="closeNav()">TSDB Tuning</a>
+                <ul>
+                    <li><a href="#wal-configuration" onclick="closeNav()">WAL Configuration</a></li>
+                    <li><a href="#head-block" onclick="closeNav()">Head Block Optimization</a></li>
+                    <li><a href="#compaction" onclick="closeNav()">Compaction Tuning</a></li>
+                    <li><a href="#retention" onclick="closeNav()">Retention Strategies</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#cardinality-management" onclick="closeNav()">Cardinality Management</a>
+                <ul>
+                    <li><a href="#identifying-cardinality" onclick="closeNav()">Identifying High Cardinality</a></li>
+                    <li><a href="#reducing-cardinality" onclick="closeNav()">Reduction Strategies</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#query-optimization" onclick="closeNav()">Query Optimization</a>
+                <ul>
+                    <li><a href="#expensive-patterns" onclick="closeNav()">Expensive Query Patterns</a></li>
+                    <li><a href="#recording-rules" onclick="closeNav()">Recording Rules for Performance</a></li>
+                    <li><a href="#query-limits" onclick="closeNav()">Query Limits &amp; Timeouts</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#go-profiling" onclick="closeNav()">Go Profiling with pprof</a>
+                <ul>
+                    <li><a href="#cpu-profiling" onclick="closeNav()">CPU Profiling</a></li>
+                    <li><a href="#memory-profiling" onclick="closeNav()">Memory (Heap) Profiling</a></li>
+                    <li><a href="#goroutine-analysis" onclick="closeNav()">Goroutine Analysis</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#tsdb-analysis" onclick="closeNav()">TSDB Analysis Tools</a>
+                <ul>
+                    <li><a href="#promtool-tsdb" onclick="closeNav()">promtool tsdb Commands</a></li>
+                    <li><a href="#block-inspection" onclick="closeNav()">Block Inspection</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#troubleshooting" onclick="closeNav()">Systematic Troubleshooting</a>
+                <ul>
+                    <li><a href="#high-memory" onclick="closeNav()">High Memory Usage</a></li>
+                    <li><a href="#slow-queries" onclick="closeNav()">Slow Queries</a></li>
+                    <li><a href="#ingestion-lag" onclick="closeNav()">Ingestion Lag</a></li>
+                </ul>
+            </li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                        <h2 id="performance-fundamentals">Performance Fundamentals</h2>
+
+                        <p>Before optimizing, you need to understand how Prometheus consumes resources. Its performance characteristics are directly tied to four primary factors: active time series count, ingestion rate, query complexity, and TSDB operations (compaction, WAL replay).</p>
+
+                        <h3 id="resource-model">Resource Consumption Model</h3>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-memory me-2"></i>
+                            <strong>Memory Rule of Thumb:</strong> Prometheus uses approximately <strong>3&ndash;4 KiB per active time series</strong> in the head block. With 5 million active series, expect 15&ndash;20 GiB of heap usage just for the head. Add 30&ndash;50% for query buffers, scrape buffers, and Go runtime overhead &mdash; so plan for 25&ndash;30 GiB total RSS.
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Resource Model</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h4>Prometheus Resource Consumption Breakdown</h4>
+                                <table class="table table-bordered">
+                                    <thead><tr><th>Resource</th><th>Primary Driver</th><th>Scaling Factor</th></tr></thead>
+                                    <tbody>
+                                        <tr><td><strong>Memory (heap)</strong></td><td>Active series in head block</td><td>~3&ndash;4 KiB per series</td></tr>
+                                        <tr><td><strong>Memory (mmap)</strong></td><td>Queried block data pages</td><td>Proportional to query time range</td></tr>
+                                        <tr><td><strong>CPU</strong></td><td>Ingestion + compaction + queries</td><td>Linear with samples/sec + rules</td></tr>
+                                        <tr><td><strong>Disk I/O (write)</strong></td><td>WAL appends + compaction</td><td>~1&ndash;2 bytes per sample (compressed)</td></tr>
+                                        <tr><td><strong>Disk I/O (read)</strong></td><td>Queries touching persistent blocks</td><td>Proportional to query range</td></tr>
+                                        <tr><td><strong>Network</strong></td><td>Scrape traffic + remote write</td><td>~1 KiB per target per scrape</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="experiment-tags"><span class="bias-tag">Capacity Planning</span><span class="bias-tag">Performance</span></div>
+                        </div>
+
+                        <h3 id="key-metrics">Key Self-Monitoring Metrics</h3>
+
+<pre><code class="language-bash"># Essential metrics for monitoring Prometheus itself
+
+# Head series count (primary memory driver)
+prometheus_tsdb_head_series
+
+# Ingestion rate (samples per second)
+rate(prometheus_tsdb_head_samples_appended_total[5m])
+
+# Memory usage breakdown
+process_resident_memory_bytes
+go_memstats_heap_inuse_bytes
+go_memstats_heap_alloc_bytes
+
+# Compaction health
+prometheus_tsdb_compactions_total
+prometheus_tsdb_compaction_duration_seconds
+prometheus_tsdb_compactions_failed_total
+
+# WAL health
+prometheus_tsdb_wal_corruptions_total
+prometheus_tsdb_wal_truncate_duration_seconds
+
+# Query performance
+prometheus_engine_query_duration_seconds{quantile="0.99"}
+prometheus_engine_queries_concurrent_max
+prometheus_engine_query_samples_total
+
+# Scrape performance
+prometheus_target_scrape_pool_targets
+prometheus_target_scrape_pool_sync_total
+scrape_duration_seconds
+scrape_samples_scraped
+</code></pre>
+
+                        <h2 id="tsdb-tuning">TSDB Tuning</h2>
+
+                        <h3 id="wal-configuration">WAL Configuration</h3>
+
+                        <p>The Write-Ahead Log (WAL) is Prometheus&rsquo;s durability mechanism. Every sample is first written to the WAL before being committed to the head block. WAL configuration affects both startup time (replay) and steady-state performance:</p>
+
+<pre><code class="language-yaml"># prometheus.yml — TSDB storage flags
+# These are CLI flags, not config file options
+# --storage.tsdb.wal-segment-size=128MB     # Default: 128MB per WAL segment
+# --storage.tsdb.wal-compression             # Enable WAL compression (recommended)
+# --storage.tsdb.min-block-duration=2h       # Head block minimum duration
+# --storage.tsdb.max-block-duration=36h      # Maximum block duration after compaction
+
+# Example Kubernetes args
+args:
+  - '--config.file=/etc/prometheus/prometheus.yml'
+  - '--storage.tsdb.path=/prometheus'
+  - '--storage.tsdb.retention.time=30d'
+  - '--storage.tsdb.retention.size=100GB'
+  - '--storage.tsdb.wal-compression'
+  - '--storage.tsdb.min-block-duration=2h'
+  - '--storage.tsdb.max-block-duration=36h'
+  - '--web.enable-lifecycle'
+  - '--web.enable-admin-api'
+</code></pre>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>WAL Replay Time:</strong> After a crash or restart, Prometheus replays the entire WAL. With a default 2h min-block-duration, this means up to 2 hours of data must be replayed. For Prometheus instances with high ingestion rates (&gt;500K samples/sec), WAL replay can take 5&ndash;15 minutes. Monitor with <code>prometheus_tsdb_wal_replay_duration_seconds</code>.
+                        </div>
+
+                        <h3 id="head-block">Head Block Optimization</h3>
+
+<pre><code class="language-bash"># Head block chunks — check memory pressure
+# If head chunks are too many, the GC pauses increase
+prometheus_tsdb_head_chunks
+
+# Out-of-order samples (indicates clock skew or client issues)
+prometheus_tsdb_out_of_order_samples_total
+
+# Series created/removed rate (high churn = high GC pressure)
+rate(prometheus_tsdb_head_series_created_total[5m])
+rate(prometheus_tsdb_head_series_removed_total[5m])
+
+# Head GC duration
+prometheus_tsdb_head_gc_duration_seconds
+</code></pre>
+
+                        <p><strong>Reducing series churn:</strong> High series creation/removal rates (churn) cause excessive garbage collection. Common causes include Kubernetes pod restarts creating new <code>pod</code> labels, or applications using request IDs as label values.</p>
+
+                        <h3 id="compaction">Compaction Tuning</h3>
+
+                        <p>Compaction merges smaller blocks into larger ones, reducing the number of files Prometheus needs to query and reclaiming space from deleted or out-of-retention series:</p>
+
+<pre><code class="language-bash"># Monitor compaction health
+# Duration should remain consistent — spikes indicate growing data
+prometheus_tsdb_compaction_duration_seconds
+
+# Block count — should stabilize, not grow indefinitely
+prometheus_tsdb_blocks_loaded
+
+# Compaction failures (often disk space or I/O issues)
+prometheus_tsdb_compactions_failed_total
+
+# Time since last successful compaction
+time() - prometheus_tsdb_head_max_time_seconds
+</code></pre>
+
+                        <h3 id="retention">Retention Strategies</h3>
+
+<pre><code class="language-bash"># Time-based retention (default)
+--storage.tsdb.retention.time=30d
+
+# Size-based retention (useful for fixed disk budgets)
+--storage.tsdb.retention.size=200GB
+
+# Combined: whichever limit is hit first
+--storage.tsdb.retention.time=90d
+--storage.tsdb.retention.size=500GB
+
+# Check current disk usage
+prometheus_tsdb_storage_blocks_bytes
+</code></pre>
+
+                        <h2 id="cardinality-management">Cardinality Management</h2>
+
+                        <p>Cardinality &mdash; the total number of unique time series &mdash; is the single most important factor affecting Prometheus performance. A metric with 10 label values on each of 5 labels produces 10^5 = 100,000 time series from a single metric name.</p>
+
+                        <h3 id="identifying-cardinality">Identifying High Cardinality</h3>
+
+<pre><code class="language-bash"># PromQL queries to find cardinality offenders
+
+# Top 10 metrics by series count
+topk(10, count by (__name__) ({__name__=~".+"}))
+
+# Series count per job
+count by (job) ({__name__=~".+"})
+
+# Find metrics with high label cardinality
+# (look for metrics with many unique label value combinations)
+count by (__name__) ({__name__=~"http_request_duration.*"})
+
+# Using the TSDB status API (available at /api/v1/status/tsdb)
+# Returns top series by label count, top label names by value count
+curl -s http://localhost:9090/api/v1/status/tsdb | jq .
+</code></pre>
+
+<pre><code class="language-bash"># promtool tsdb analyze — detailed block analysis
+promtool tsdb analyze /prometheus/data
+
+# Output includes:
+# - Block count and time range
+# - Series count per block
+# - Top 10 label names by number of values
+# - Top 10 metric names by series count
+# - Estimated cardinality per label pair
+</code></pre>
+
+                        <h3 id="reducing-cardinality">Reduction Strategies</h3>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-compress-arrows-alt me-2"></i>
+                            <strong>Cardinality Reduction Techniques:</strong>
+                            <ul class="mt-2 mb-0">
+                                <li><strong>Drop unused metrics:</strong> Use <code>metric_relabel_configs</code> to drop metrics you never query</li>
+                                <li><strong>Aggregate at source:</strong> Configure applications to emit pre-aggregated histograms instead of per-path metrics</li>
+                                <li><strong>Remove high-cardinality labels:</strong> Drop labels like <code>request_id</code>, <code>trace_id</code>, <code>user_id</code> at scrape time</li>
+                                <li><strong>Limit label values:</strong> Replace unbounded labels (URLs) with bounded alternatives (route patterns)</li>
+                                <li><strong>Use recording rules:</strong> Pre-aggregate and drop the raw high-cardinality metrics via remote write relabeling</li>
+                            </ul>
+                        </div>
+
+<pre><code class="language-yaml"># metric_relabel_configs — applied AFTER scraping
+scrape_configs:
+  - job_name: 'my-app'
+    static_configs:
+      - targets: ['my-app:8080']
+    metric_relabel_configs:
+      # Drop Go runtime metrics we don't use
+      - source_labels: [__name__]
+        regex: 'go_(gc|memstats)_.*'
+        action: drop
+
+      # Drop high-cardinality labels
+      - regex: 'request_id|trace_id'
+        action: labeldrop
+
+      # Aggregate HTTP metrics by dropping instance-specific path params
+      # /api/users/123 → /api/users/:id
+      - source_labels: [path]
+        regex: '/api/users/[0-9]+'
+        target_label: path
+        replacement: '/api/users/:id'
+
+      # Drop entire histogram buckets we don't need
+      - source_labels: [__name__, le]
+        regex: 'http_request_duration_seconds_bucket;(0\.001|0\.0025|0\.0075)'
+        action: drop
+</code></pre>
+
+                        <h2 id="query-optimization">Query Optimization</h2>
+
+                        <h3 id="expensive-patterns">Expensive Query Patterns</h3>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Anti-Patterns</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h4>Expensive vs Optimized Query Patterns</h4>
+                                <table class="table table-bordered">
+                                    <thead><tr><th>Anti-Pattern</th><th>Why Expensive</th><th>Optimized Alternative</th></tr></thead>
+                                    <tbody>
+                                        <tr><td><code>{__name__=~".+"}</code></td><td>Loads ALL series into memory</td><td>Always scope with job/metric name</td></tr>
+                                        <tr><td><code>rate(x[30d])</code></td><td>Loads 30 days of raw samples</td><td>Use recording rule with shorter range</td></tr>
+                                        <tr><td><code>count(up) without (instance)</code></td><td>Aggregates then filters</td><td><code>count by (job) (up)</code></td></tr>
+                                        <tr><td>Nested <code>label_replace</code></td><td>String ops on every sample</td><td>Relabeling at scrape time</td></tr>
+                                        <tr><td><code>histogram_quantile</code> on raw</td><td>Processes all buckets per series</td><td>Recording rule for common quantiles</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="experiment-tags"><span class="bias-tag">PromQL</span><span class="bias-tag">Performance</span></div>
+                        </div>
+
+                        <h3 id="recording-rules">Recording Rules for Performance</h3>
+
+<pre><code class="language-yaml"># Recording rules — pre-compute expensive queries
+groups:
+  - name: performance_recording_rules
+    interval: 30s
+    rules:
+      # Pre-compute P50/P90/P99 to avoid repeated histogram_quantile
+      - record: job:http_request_duration_seconds:p50
+        expr: |
+          histogram_quantile(0.50,
+            sum by (job, le) (rate(http_request_duration_seconds_bucket[5m]))
+          )
+
+      - record: job:http_request_duration_seconds:p99
+        expr: |
+          histogram_quantile(0.99,
+            sum by (job, le) (rate(http_request_duration_seconds_bucket[5m]))
+          )
+
+      # Pre-aggregate request rate across all instances
+      - record: job:http_requests:rate5m
+        expr: sum by (job, method, status) (rate(http_requests_total[5m]))
+
+      # Error rate as ratio (used in many dashboards)
+      - record: job:http_errors:ratio_rate5m
+        expr: |
+          sum by (job) (rate(http_requests_total{status=~"5.."}[5m]))
+          / sum by (job) (rate(http_requests_total[5m]))
+</code></pre>
+
+                        <h3 id="query-limits">Query Limits &amp; Timeouts</h3>
+
+<pre><code class="language-bash"># CLI flags to protect Prometheus from expensive queries
+--query.max-concurrency=20           # Max simultaneous queries (default: 20)
+--query.timeout=2m                   # Max query execution time (default: 2m)
+--query.max-samples=50000000         # Max samples a query can load (default: 50M)
+--query.lookback-delta=5m            # Staleness lookback window (default: 5m)
+</code></pre>
+
+                        <h2 id="go-profiling">Go Profiling with pprof</h2>
+
+                        <p>Prometheus is written in Go and exposes pprof profiling endpoints by default. These are invaluable for diagnosing CPU hotspots, memory leaks, and goroutine issues in production.</p>
+
+                        <h3 id="cpu-profiling">CPU Profiling</h3>
+
+<pre><code class="language-bash"># Collect a 30-second CPU profile
+curl -s http://localhost:9090/debug/pprof/profile?seconds=30 > cpu.prof
+
+# Analyze with go tool pprof
+go tool pprof -http=:8080 cpu.prof
+# Opens web UI with flame graphs, call graphs, top functions
+
+# Or use CLI for quick analysis
+go tool pprof cpu.prof
+(pprof) top 20
+(pprof) web                     # Generate SVG call graph
+(pprof) list compactBlocks      # Source-level view of specific function
+
+# Common CPU hotspots in Prometheus:
+# 1. tsdb.(*Head).Appender — ingestion path
+# 2. querier.Select — query evaluation
+# 3. compactor.Compact — block compaction
+# 4. scrape.(*scrapeLoop).append — scrape processing
+</code></pre>
+
+                        <h3 id="memory-profiling">Memory (Heap) Profiling</h3>
+
+<pre><code class="language-bash"># Current heap allocation profile
+curl -s http://localhost:9090/debug/pprof/heap > heap.prof
+
+# Analyze — show allocations by size
+go tool pprof -http=:8080 -alloc_space heap.prof
+
+# Compare two heap profiles (before/after suspected leak)
+go tool pprof -base heap_before.prof heap_after.prof
+(pprof) top 20 -cum    # Cumulative allocations
+
+# In-use (resident) vs allocated (total historical)
+go tool pprof -inuse_space heap.prof     # What's currently held
+go tool pprof -alloc_space heap.prof     # What was ever allocated
+
+# Common memory consumers:
+# 1. tsdb.(*headChunk) — compressed samples in head
+# 2. labels.Labels — label sets for active series
+# 3. index.(*PostingsReader) — query-time index lookups
+# 4. wal.(*Segment) — WAL buffers awaiting compaction
+</code></pre>
+
+                        <h3 id="goroutine-analysis">Goroutine Analysis</h3>
+
+<pre><code class="language-bash"># Current goroutine dump
+curl -s http://localhost:9090/debug/pprof/goroutine?debug=2 > goroutines.txt
+
+# Count goroutines by state
+curl -s http://localhost:9090/debug/pprof/goroutine?debug=1 | head -50
+
+# Watch goroutine count over time
+# High goroutine count often means:
+# - Stuck scrape connections (target not responding)
+# - Remote write queue backup
+# - Query handlers waiting on slow TSDB reads
+prometheus_go_goroutines   # Monitor this metric
+
+# Block profile — find contention points
+curl -s http://localhost:9090/debug/pprof/block > block.prof
+go tool pprof -http=:8080 block.prof
+</code></pre>
+
+                        <h2 id="tsdb-analysis">TSDB Analysis Tools</h2>
+
+                        <h3 id="promtool-tsdb">promtool tsdb Commands</h3>
+
+<pre><code class="language-bash"># Analyze TSDB blocks — comprehensive overview
+promtool tsdb analyze /prometheus/data
+
+# Output example:
+# Duration: 720h0m0s (30 days)
+# Series: 4,523,891
+# Samples: 12,847,291,340
+# Chunks: 45,238,910
+#
+# Highest cardinality labels:
+#   "instance" with 2,341 unique values
+#   "pod" with 8,912 unique values
+#
+# Highest cardinality metric names:
+#   "container_memory_usage_bytes" with 15,234 series
+#   "kube_pod_status_phase" with 12,891 series
+
+# List all blocks
+promtool tsdb list /prometheus/data
+
+# Dump specific block metadata
+promtool tsdb dump /prometheus/data/01HXYZ... --min-time=0 --max-time=9999999999999
+
+# Create snapshot for backup (via admin API)
+curl -XPOST http://localhost:9090/api/v1/admin/tsdb/snapshot
+# Creates /prometheus/data/snapshots/YYYYMMDDTHHMMSS-<hash>
+
+# Clean tombstones (reclaim space from deleted series)
+curl -XPOST http://localhost:9090/api/v1/admin/tsdb/clean_tombstones
+</code></pre>
+
+                        <h3 id="block-inspection">Block Inspection</h3>
+
+<pre><code class="language-bash"># Each block directory contains:
+# /prometheus/data/
+# ├── 01HXYZ.../               # Block directory (ULID name)
+# │   ├── meta.json            # Block metadata (time range, stats)
+# │   ├── index                # Inverted index (label→series mapping)
+# │   ├── chunks/              # Compressed sample data
+# │   │   └── 000001           # Chunk files (max 512MB each)
+# │   └── tombstones           # Deleted series markers
+# ├── wal/                     # Write-Ahead Log
+# │   ├── 00000001             # WAL segments (128MB each)
+# │   └── checkpoint.00000042  # Last checkpoint
+# └── lock                     # Process lock file
+
+# Inspect block metadata
+cat /prometheus/data/01HXYZ.../meta.json | jq .
+# {
+#   "ulid": "01HXYZ...",
+#   "minTime": 1718000000000,
+#   "maxTime": 1718007200000,
+#   "stats": {
+#     "numSamples": 142891234,
+#     "numSeries": 4523891,
+#     "numChunks": 9047782
+#   },
+#   "compaction": {
+#     "level": 2,
+#     "sources": ["01HABC...", "01HDEF..."]
+#   }
+# }
+</code></pre>
+
+                        <h2 id="troubleshooting">Systematic Troubleshooting</h2>
+
+                        <h3 id="high-memory">High Memory Usage</h3>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">High Memory Troubleshooting Flowchart</div>
+                            <pre class="mermaid">
+flowchart TD
+    A["High Memory Alert<br/>process_resident_memory_bytes &gt; threshold"] --> B{"Check head series count"}
+    B -->|"Growing"| C["Series churn?<br/>Check created/removed rate"]
+    B -->|"Stable"| D["Check query memory<br/>go_memstats_heap_inuse"]
+
+    C -->|"High churn"| E["Fix: relabeling to stabilize labels<br/>Remove pod/container_id from long-lived metrics"]
+    C -->|"Normal churn"| F["Growing workload<br/>Scale out (shard)"]
+
+    D -->|"Spikes with queries"| G["Find expensive queries<br/>prometheus_engine_query_duration_seconds"]
+    D -->|"Steady high"| H["Check mmap'd blocks<br/>Large query ranges loading block data"]
+
+    G --> I["Fix: Add recording rules<br/>Reduce query.max-samples<br/>Set query.timeout shorter"]
+    H --> J["Fix: Reduce retention<br/>Use remote storage for long-range queries"]
+                            </pre>
+                        </div>
+
+                        <h3 id="slow-queries">Slow Queries</h3>
+
+<pre><code class="language-bash"># Enable query logging to identify slow queries
+# CLI flag: --query.log-file=/prometheus/query.log
+
+# Or check the built-in query log API
+curl -s http://localhost:9090/api/v1/status/runtimeinfo | jq .
+
+# Find queries taking >10s in the last hour
+# (Requires query log enabled)
+grep -E '"duration_seconds":[0-9]{2,}' /prometheus/query.log | \
+  jq '{query: .params.query, duration: .stats.timings.evalTotalTime}'
+
+# Common slow query causes:
+# 1. Large time range (7d+) on high-cardinality metric
+# 2. Regex matchers on label values: {path=~".*api.*"}
+# 3. Nested subqueries: rate(metric[5m])[1h:1m]
+# 4. histogram_quantile over many series without pre-aggregation
+</code></pre>
+
+                        <h3 id="ingestion-lag">Ingestion Lag</h3>
+
+<pre><code class="language-bash"># Symptoms: prometheus_target_scrapes_exceeded_sample_limit_total increasing
+# Or: scrape_samples_scraped showing fewer samples than expected
+
+# Check if scrapes are timing out
+rate(prometheus_target_scrape_pools_failed_total[5m])
+scrape_duration_seconds{quantile="0.99"}
+
+# Check if targets are returning too many samples
+prometheus_target_scrapes_exceeded_sample_limit_total
+
+# Adjust limits if legitimate
+scrape_configs:
+  - job_name: 'heavy-exporter'
+    sample_limit: 100000    # Increase from default 0 (unlimited)
+    scrape_timeout: 30s     # Increase from default 10s
+
+# Remote write falling behind
+prometheus_remote_storage_samples_pending
+# If this grows continuously, increase max_shards or check backend
+</code></pre>
+
+                        <h2 id="conclusion">Conclusion</h2>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Optimization Priorities (in order):</strong>
+                            <ol class="mt-2 mb-0">
+                                <li><strong>Manage cardinality</strong> &mdash; the #1 lever for both memory and query performance</li>
+                                <li><strong>Add recording rules</strong> &mdash; pre-compute expensive queries used in dashboards</li>
+                                <li><strong>Tune TSDB flags</strong> &mdash; WAL compression, appropriate retention, block durations</li>
+                                <li><strong>Set query limits</strong> &mdash; protect the server from runaway queries</li>
+                                <li><strong>Profile under load</strong> &mdash; use pprof to find unexpected hotspots</li>
+                                <li><strong>Scale out</strong> &mdash; shard when a single server is maxed (Part 7)</li>
+                            </ol>
+                        </div>
+
+                        <!-- Related Posts -->
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                            <div class="related-post-item">
+                                <h5>Part 7: Sharding, Federation &amp; High Availability</h5>
+                                <p>When optimization isn&rsquo;t enough &mdash; scale Prometheus horizontally with sharding and HA patterns.</p>
+                                <a href="monitoring-observability-prometheus-part07-sharding-federation-ha.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 3: The Prometheus Data Model &amp; TSDB</h5>
+                                <p>Understand the TSDB internals that underpin all optimization techniques.</p>
+                                <a href="monitoring-observability-prometheus-part03-data-model-tsdb.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 9: Systems Monitoring with the Node Exporter</h5>
+                                <p>Next up &mdash; understand the most widely deployed exporter and everything it reveals about your infrastructure.</p>
+                                <a href="monitoring-observability-prometheus-part09-node-exporter.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                        <!-- Series Navigation -->
+                        <div class="series-nav">
+                            <a href="monitoring-observability-prometheus-part07-sharding-federation-ha.html" class="series-nav-item prev">
+                                <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span>
+                                <span class="nav-title">Part 7: Sharding, Federation &amp; HA</span>
+                            </a>
+                            <a href="monitoring-observability-prometheus-part09-node-exporter.html" class="series-nav-item next">
+                                <span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span>
+                                <span class="nav-title">Part 9: Node Exporter</span>
+                            </a>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <!-- Footer -->
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left"><div class="fc-brand-group"><div class="fc-brand-stack"><span></span><span></span><span></span></div><span class="fc-brand-name">Wasil Zafar</span></div><span class="fc-tagline">Consultant &amp; Cloud Architect</span></div>
+                <div class="fc-center"><a href="/">Home</a><a href="/disclaimer.html">Disclaimer</a><a href="/privacy-policy.html">Privacy</a><a href="/pages/contact.html">Contact</a></div>
+                <div class="fc-right"><a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a><a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a><a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a><a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a><a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a><a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a><a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a><a href="/feed.xml" target="_blank" title="RSS Feed"><i class="fas fa-rss"></i></a></div>
+            </div>
+            <div class="footer-sub"><span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span><a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a></div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-go.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="../../../js/path-progress.js"></script>
+    <script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

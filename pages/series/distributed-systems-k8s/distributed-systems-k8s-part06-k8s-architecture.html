@@ -991,8 +991,23 @@ kubectl get componentstatuses
 
 # Check kubelet status on a node:
 systemctl status kubelet
+# ● kubelet.service - kubelet: The Kubernetes Node Agent
+#      Loaded: loaded (/usr/lib/systemd/system/kubelet.service; enabled; preset: enabled)
+#     Drop-In: /usr/lib/systemd/system/kubelet.service.d
+#              └─10-kubeadm.conf
+#      Active: active (running) since Sun 2026-06-07 14:27:41 UTC; 1 week 0 days ago
+#        Docs: https://kubernetes.io/docs/
+#    Main PID: 6416 (kubelet)
+#       Tasks: 14 (limit: 19093)
+#      Memory: 35.4M (peak: 37.1M)
+#         CPU: 3h 12min 14.748s
+#      CGroup: /system.slice/kubelet.service
+#              └─6416 /usr/bin/kubelet --bootstrap-kubeconfig=/etc/kubernetes/boot...
+#
+# Jun 14 22:24:46 k8s-worker-1.lab.example.com kubelet[6416]: I0614 22:24:46.9...
+# Jun 14 22:24:47 k8s-worker-1.lab.example.com kubelet[6416]: I0614 22:24:47.1...
 
-# kubelet logs:
+# kubelet logs (live tail):
 journalctl -u kubelet -f --no-pager | tail -20
 
 # Key kubelet configuration:
@@ -1000,15 +1015,20 @@ journalctl -u kubelet -f --no-pager | tail -20
 # --cluster-dns=10.96.0.10                       # CoreDNS service IP
 # --max-pods=110                                 # Max pods per node
 # --node-status-update-frequency=10s             # Heartbeat interval
-# --eviction-hard=memory.available<100Mi         # Eviction thresholds
+# --eviction-hard=memory.available&lt;100Mi         # Eviction thresholds
 
 # Static pods (managed directly by kubelet, not API Server):
+# ON A MASTER NODE:
 ls /etc/kubernetes/manifests/
 # etcd.yaml
 # kube-apiserver.yaml
 # kube-controller-manager.yaml
 # kube-scheduler.yaml
 # These are how control plane components run on master nodes!
+
+# ON A WORKER NODE:
+ls /etc/kubernetes/manifests/
+# (empty — workers have no static pods, only kubelet + kube-proxy)
 
 # ╔══════════════════════════════════════════════════════════╗
 # ║  🔧 TRY IT: SSH into a worker node and run:            ║
@@ -1027,23 +1047,62 @@ ls /etc/kubernetes/manifests/
 # Creates iptables rules for each Service → endpoint mapping
 # Packets are redirected at kernel level (very fast, no userspace)
 iptables -t nat -L KUBE-SERVICES | head -20
-# Chain KUBE-SERVICES
-# target           prot  source     destination
-# KUBE-SVC-ABC123  tcp   anywhere   10.96.45.12/32  /* default/my-svc */
+# Chain KUBE-SERVICES (2 references)
+# target                     prot opt source       destination
+# KUBE-SVC-NPX46M4PTMTKRN6Y  tcp  --  anywhere     10.96.0.1    /* default/kubernetes:https cluster IP */ tcp dpt:https
+# KUBE-SVC-ERIFXISQEP7F7OF4  tcp  --  anywhere     10.96.0.10   /* kube-system/kube-dns:dns-tcp cluster IP */ tcp dpt:domain
+# KUBE-SVC-JD5MR3NA4I4DYORP  tcp  --  anywhere     10.96.0.10   /* kube-system/kube-dns:metrics cluster IP */ tcp dpt:9153
+# KUBE-SVC-TCOU7JCQXEZGVUNU  udp  --  anywhere     10.96.0.10   /* kube-system/kube-dns:dns cluster IP */ udp dpt:domain
+# KUBE-NODEPORTS             all  --  anywhere     anywhere     /* kubernetes service nodeports; NOTE: this must be the last rule in this chain */ ADDRTYPE match dst-type LOCAL
+#
+# Each KUBE-SVC-* chain contains the actual load-balancing rules
+# that distribute traffic to pod endpoints.
 
 # 2. IPVS mode (better for large clusters):
 # Uses Linux IPVS (IP Virtual Server) for load balancing
 # Supports more algorithms: round-robin, least-connection, weighted
 # Better performance at 10,000+ services
+#
+# Note: If your cluster uses iptables mode (the default), ipvsadm
+# will show empty output — this is normal:
 ipvsadm -Ln
-# TCP  10.96.45.12:80 rr
-#   -> 10.244.1.15:8080   Masq  1  0  0
-#   -> 10.244.2.22:8080   Masq  1  0  0
-#   -> 10.244.3.8:8080    Masq  1  0  0
+# IP Virtual Server version 1.2.1 (size=4096)
+# Prot LocalAddress:Port Scheduler Flags
+#   -&gt; RemoteAddress:Port           Forward Weight ActiveConn InActConn
+# (empty — cluster is using iptables mode, not IPVS)
+#
+# With IPVS mode enabled, you'd see:
+# TCP  10.96.0.1:443 rr
+#   -&gt; 10.244.1.15:6443   Masq  1  0  0
+# TCP  10.96.0.10:53 rr
+#   -&gt; 10.244.0.2:53      Masq  1  0  0
+#   -&gt; 10.244.0.3:53      Masq  1  0  0
 
-# Check kube-proxy mode:
+# Check kube-proxy mode (run from master):
 kubectl get configmap kube-proxy -n kube-system -o yaml | grep mode
-# mode: "iptables"  (or "ipvs")</code></pre>
+#     mode: ""
+#
+# mode: "" (empty string) means kube-proxy uses the DEFAULT mode,
+# which is iptables. Possible values:
+#   ""          → iptables (default since Kubernetes 1.2)
+#   "iptables"  → explicit iptables mode
+#   "ipvs"      → IPVS mode (better for 1000+ services)
+#   "nftables"  → nftables mode (alpha in 1.29+, replaces iptables)
+#
+# Key fields in the kube-proxy ConfigMap (config.conf):
+#   clusterCIDR: 10.244.0.0/16      # Pod network range
+#   iptables.syncPeriod: 0s          # How often rules are refreshed (0 = default 30s)
+#   ipvs.scheduler: ""               # Load balancing algorithm (rr, lc, wrr, etc.)
+#   ipvs.strictARP: false            # Must be true for MetalLB with IPVS
+#   conntrack.maxPerCore: null        # Connection tracking table size
+#
+# The ConfigMap also contains kubeconfig.conf pointing to the API server:
+#   server: https://k8s-master.lab.example.com:6443
+#
+# Note: kubectl only works on nodes with a valid kubeconfig.
+# On worker nodes without ~/.kube/config, you'll get:
+#   "The connection to the server localhost:8080 was refused"
+# Solution: copy admin.conf from master or run kubectl on master.</code></pre>
 
                         <h3 id="container-runtime">Container Runtime</h3>
 

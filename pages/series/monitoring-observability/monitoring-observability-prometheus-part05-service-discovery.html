@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Master Prometheus service discovery from static targets to dynamic SD. Cover Kubernetes SD roles (node, pod, service, endpoints, ingress), relabeling (relabel_configs vs metric_relabel_configs), Consul SD, DNS SD, file-based SD, HTTP SD, and building custom service discovery providers." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="Prometheus service discovery, Kubernetes SD, relabel_configs, metric_relabel_configs, Consul service discovery, DNS SD, file SD, HTTP SD, __meta labels, keep drop actions, target lifecycle, scrape configuration, custom SD provider, Prometheus relabeling" />
+    <meta property="og:title" content="Prometheus Deep Dive Part 5: Service Discovery" />
+    <meta property="og:description" content="Master Prometheus service discovery — Kubernetes SD roles, relabeling, Consul/DNS/HTTP SD, and building custom service discovery providers." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-06-15" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part05-service-discovery.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part05-service-discovery-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part05-service-discovery-tw.jpg" />
+    <title>Prometheus Deep Dive Part 5: Service Discovery - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part05-service-discovery.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{'ad_storage':'denied','ad_user_data':'denied','ad_personalization':'denied','analytics_storage':'denied','region':['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']});gtag('consent','default',{'ad_storage':'granted','ad_user_data':'granted','ad_personalization':'granted','analytics_storage':'granted'});gtag('set','url_passthrough',true);</script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+    <script type="application/ld+json">
+    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Prometheus Deep Dive Part 5: Service Discovery", "description": "Master Prometheus service discovery — Kubernetes SD, relabeling, Consul/DNS/HTTP SD, and custom providers.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part05-service-discovery.html"}, "wordCount": 6000, "inLanguage": "en", "datePublished": "2026-06-15", "dateModified": "2026-06-15", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part05-service-discovery-og.jpg", "width": 1200, "height": 630}}
+    </script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <!-- Navigation Bar -->
+    <div class="nav-v16-wrapper"><nav class="nav-v16"><a href="/" class="brand"><div class="brand-stack"><span></span><span></span><span></span></div><span class="brand-text">Wasil Zafar</span></a><button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()"><span></span><span></span><span></span></button><div class="links"><a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a><a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a><a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a><a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a><a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a><button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button></div></nav></div>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Monitoring &amp; Observability Series</a>
+                <h1 class="display-4 fw-bold mb-3">Prometheus Deep Dive Part 5: Service Discovery</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>June 15, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>30 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">In dynamic environments, targets come and go constantly. Master Prometheus service discovery &mdash; from Kubernetes SD roles and the power of relabeling to Consul, DNS, file-based, and HTTP service discovery. Learn to build custom SD providers for any infrastructure.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header"><h3><i class="fas fa-list me-2"></i>Table of Contents</h3><button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button></div>
+        <ol>
+            <li>
+                <a href="#overview" onclick="closeNav()">Service Discovery Overview</a>
+                <ul>
+                    <li><a href="#static-vs-dynamic" onclick="closeNav()">Static vs Dynamic</a></li>
+                    <li><a href="#target-lifecycle" onclick="closeNav()">Target Lifecycle</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#kubernetes-sd" onclick="closeNav()">Kubernetes Service Discovery</a>
+                <ul>
+                    <li><a href="#k8s-roles" onclick="closeNav()">SD Roles (node, pod, service, endpoints, ingress)</a></li>
+                    <li><a href="#k8s-meta-labels" onclick="closeNav()">__meta_kubernetes Labels</a></li>
+                    <li><a href="#k8s-examples" onclick="closeNav()">Practical Examples</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#relabeling" onclick="closeNav()">Relabeling Deep Dive</a>
+                <ul>
+                    <li><a href="#relabel-vs-metric" onclick="closeNav()">relabel_configs vs metric_relabel_configs</a></li>
+                    <li><a href="#relabel-actions" onclick="closeNav()">Actions: keep, drop, replace, labelmap, hashmod</a></li>
+                    <li><a href="#relabel-patterns" onclick="closeNav()">Common Relabeling Patterns</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#other-sd" onclick="closeNav()">Other SD Mechanisms</a>
+                <ul>
+                    <li><a href="#consul-sd" onclick="closeNav()">Consul SD</a></li>
+                    <li><a href="#dns-sd" onclick="closeNav()">DNS SD</a></li>
+                    <li><a href="#file-sd" onclick="closeNav()">File-Based SD</a></li>
+                    <li><a href="#http-sd" onclick="closeNav()">HTTP SD (Custom Providers)</a></li>
+                </ul>
+            </li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; What&rsquo;s Next</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                        <h2 id="overview">Service Discovery Overview</h2>
+
+                        <h3 id="static-vs-dynamic">Static vs Dynamic</h3>
+
+                        <p>Prometheus needs to know <em>where</em> to scrape metrics. In static environments, you list targets manually. In dynamic environments (Kubernetes, cloud, service mesh), targets appear and disappear constantly &mdash; requiring automated discovery:</p>
+
+<pre><code class="language-yaml"># Static targets - suitable for fixed infrastructure
+scrape_configs:
+  - job_name: 'database-servers'
+    static_configs:
+      - targets:
+          - 'db-primary.internal:9104'
+          - 'db-replica-1.internal:9104'
+          - 'db-replica-2.internal:9104'
+        labels:
+          env: production
+          team: data
+
+# Dynamic targets - Kubernetes discovers pods automatically
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+    # Relabeling filters and transforms discovered targets
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+</code></pre>
+
+                        <h3 id="target-lifecycle">Target Lifecycle</h3>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Target Discovery &amp; Scrape Lifecycle</div>
+                            <pre class="mermaid">
+flowchart TD
+    SD["Service Discovery<br/>(watches K8s API, Consul, etc.)"]
+    TG["Target Groups<br/>(raw targets + __meta labels)"]
+    RL["relabel_configs<br/>(filter, transform, drop)"]
+    AT["Active Targets<br/>(final scrape list)"]
+    SC["Scrape Loop<br/>(GET /metrics every interval)"]
+    MR["metric_relabel_configs<br/>(filter/modify scraped metrics)"]
+    TSDB["TSDB Storage"]
+
+    SD -->|"discover"| TG
+    TG -->|"apply"| RL
+    RL -->|"keep/drop"| AT
+    AT -->|"scrape"| SC
+    SC -->|"post-process"| MR
+    MR -->|"ingest"| TSDB
+
+    RL -->|"action: drop"| X1["Discarded<br/>(never scraped)"]
+    MR -->|"action: drop"| X2["Discarded<br/>(scraped but not stored)"]
+                            </pre>
+                        </div>
+
+                        <h2 id="kubernetes-sd">Kubernetes Service Discovery</h2>
+
+                        <h3 id="k8s-roles">SD Roles</h3>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Reference</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h4>Kubernetes SD Roles</h4>
+                                <table class="table table-bordered">
+                                    <thead><tr><th>Role</th><th>Discovers</th><th>Target Address</th><th>Use Case</th></tr></thead>
+                                    <tbody>
+                                        <tr><td><strong>node</strong></td><td>Cluster nodes</td><td><code>NodeIP:KubeletPort</code></td><td>Node exporter, kubelet metrics</td></tr>
+                                        <tr><td><strong>pod</strong></td><td>All pods (all containers)</td><td><code>PodIP:ContainerPort</code></td><td>Application metrics (annotation-based)</td></tr>
+                                        <tr><td><strong>service</strong></td><td>Services</td><td><code>ServiceIP:ServicePort</code></td><td>Blackbox probing service endpoints</td></tr>
+                                        <tr><td><strong>endpoints</strong></td><td>Endpoints (pods behind services)</td><td><code>PodIP:TargetPort</code></td><td>ServiceMonitor pattern (most common)</td></tr>
+                                        <tr><td><strong>endpointslice</strong></td><td>EndpointSlices (modern)</td><td><code>PodIP:TargetPort</code></td><td>Same as endpoints, better scaling</td></tr>
+                                        <tr><td><strong>ingress</strong></td><td>Ingress resources</td><td><code>IngressHost:80/443</code></td><td>Blackbox probing external URLs</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="experiment-tags"><span class="bias-tag">Kubernetes</span><span class="bias-tag">Discovery</span><span class="bias-tag">Roles</span></div>
+                        </div>
+
+                        <h3 id="k8s-meta-labels">__meta_kubernetes Labels</h3>
+
+                        <p>Kubernetes SD injects rich metadata as <code>__meta_kubernetes_*</code> labels. These are available during relabeling but are NOT stored in TSDB (double-underscore labels are dropped after relabeling):</p>
+
+<pre><code class="language-bash"># Key __meta labels for pod role:
+__meta_kubernetes_pod_name                    # Pod name
+__meta_kubernetes_pod_ip                      # Pod IP address
+__meta_kubernetes_pod_node_name               # Node the pod runs on
+__meta_kubernetes_namespace                   # Pod namespace
+__meta_kubernetes_pod_label_&lt;name&gt;            # Pod labels (dots → underscores)
+__meta_kubernetes_pod_annotation_&lt;name&gt;       # Pod annotations
+__meta_kubernetes_pod_container_name          # Container name
+__meta_kubernetes_pod_container_port_name     # Named port
+__meta_kubernetes_pod_container_port_number   # Port number
+__meta_kubernetes_pod_ready                   # "true" if pod is ready
+__meta_kubernetes_pod_phase                   # Running, Pending, etc.
+
+# Key __meta labels for node role:
+__meta_kubernetes_node_name                   # Node name
+__meta_kubernetes_node_label_&lt;name&gt;           # Node labels
+__meta_kubernetes_node_address_InternalIP     # Internal IP
+__meta_kubernetes_node_address_Hostname       # Hostname
+</code></pre>
+
+                        <h3 id="k8s-examples">Practical Examples</h3>
+
+<pre><code class="language-yaml"># Pattern 1: Annotation-based pod discovery (classic Prometheus pattern)
+# Pods opt-in by adding annotations:
+#   prometheus.io/scrape: "true"
+#   prometheus.io/port: "8080"
+#   prometheus.io/path: "/metrics"
+scrape_configs:
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      # Only scrape pods with prometheus.io/scrape annotation
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      # Use custom port if specified
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        target_label: __address__
+        regex: (.+)
+        replacement: ${1}
+      # Use custom path if specified
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      # Add namespace and pod labels
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        target_label: app
+</code></pre>
+
+                        <h2 id="relabeling">Relabeling Deep Dive</h2>
+
+                        <h3 id="relabel-vs-metric">relabel_configs vs metric_relabel_configs</h3>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Critical Distinction</strong>:
+                            <ul class="mt-2 mb-0">
+                                <li><strong>relabel_configs</strong> &mdash; runs BEFORE scraping. Decides which targets to scrape and sets target labels. Operates on <code>__meta_*</code> and <code>__address__</code> labels. <strong>Dropping here = target never scraped = saves CPU</strong></li>
+                                <li><strong>metric_relabel_configs</strong> &mdash; runs AFTER scraping. Filters or modifies individual metrics from the scrape response. <strong>Dropping here = metric scraped but not stored = saves disk/memory but still costs scrape CPU</strong></li>
+                            </ul>
+                        </div>
+
+                        <h3 id="relabel-actions">Actions: keep, drop, replace, labelmap, hashmod</h3>
+
+<pre><code class="language-yaml"># Action: keep - only keep targets where regex matches
+relabel_configs:
+  - source_labels: [__meta_kubernetes_namespace]
+    action: keep
+    regex: (production|staging)   # Only monitor prod and staging
+
+# Action: drop - discard targets where regex matches
+  - source_labels: [__meta_kubernetes_pod_label_app]
+    action: drop
+    regex: (test-.*|debug-.*)     # Skip test/debug pods
+
+# Action: replace - regex extract and set target label
+  - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+    action: replace
+    target_label: app
+    regex: (.+)
+    replacement: ${1}
+
+# Action: labelmap - copy __meta labels to target labels by regex
+  - action: labelmap
+    regex: __meta_kubernetes_pod_label_(.+)
+    replacement: ${1}              # All pod labels become target labels
+
+# Action: hashmod - consistent hashing for sharding
+  - source_labels: [__address__]
+    modulus: 3                      # 3 Prometheus shards
+    target_label: __tmp_hash
+    action: hashmod
+  - source_labels: [__tmp_hash]
+    regex: 0                        # This shard handles bucket 0
+    action: keep
+
+# Action: labeldrop / labelkeep - remove/keep labels by regex
+metric_relabel_configs:
+  - action: labeldrop
+    regex: (pod_template_hash|controller_revision_hash)  # Remove noisy labels
+</code></pre>
+
+                        <h3 id="relabel-patterns">Common Relabeling Patterns</h3>
+
+<pre><code class="language-yaml"># Pattern: Replace __address__ port (scrape different port than discovered)
+relabel_configs:
+  - source_labels: [__address__]
+    action: replace
+    regex: '([^:]+)(?::\d+)?'
+    replacement: '${1}:9090'
+    target_label: __address__
+
+# Pattern: Set metrics_path from annotation
+  - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+    action: replace
+    target_label: __metrics_path__
+    regex: (.+)
+
+# Pattern: Add static label to all metrics from a job
+  - target_label: environment
+    replacement: production
+
+# Pattern: Extract version from pod name (api-v2-abc123 → v2)
+  - source_labels: [__meta_kubernetes_pod_name]
+    action: replace
+    regex: '.*-(v\d+)-.*'
+    replacement: '${1}'
+    target_label: version
+</code></pre>
+
+                        <h2 id="other-sd">Other SD Mechanisms</h2>
+
+                        <h3 id="consul-sd">Consul SD</h3>
+
+<pre><code class="language-yaml"># Consul service discovery - for non-Kubernetes environments
+scrape_configs:
+  - job_name: 'consul-services'
+    consul_sd_configs:
+      - server: 'consul.internal:8500'
+        services: []              # Empty = discover ALL services
+        tags: ['prometheus']      # Only services with this tag
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [__meta_consul_service]
+        target_label: service
+      - source_labels: [__meta_consul_dc]
+        target_label: datacenter
+      - source_labels: [__meta_consul_tags]
+        regex: '.*,production,.*'
+        action: keep
+</code></pre>
+
+                        <h3 id="dns-sd">DNS SD</h3>
+
+<pre><code class="language-yaml"># DNS service discovery - SRV or A records
+scrape_configs:
+  - job_name: 'dns-discovery'
+    dns_sd_configs:
+      - names:
+          - '_prometheus._tcp.api.internal'    # SRV record
+          - 'metrics.api.internal'             # A record
+        type: SRV       # or A, AAAA
+        port: 9090      # Required for A/AAAA records
+        refresh_interval: 30s
+</code></pre>
+
+                        <h3 id="file-sd">File-Based SD</h3>
+
+<pre><code class="language-yaml"># File-based SD - read targets from JSON/YAML files
+# Prometheus watches files for changes (inotify)
+scrape_configs:
+  - job_name: 'file-discovery'
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/targets/*.json'
+          - '/etc/prometheus/targets/*.yml'
+        refresh_interval: 5m
+</code></pre>
+
+<pre><code class="language-json">[
+  {
+    "targets": ["10.0.1.5:9090", "10.0.1.6:9090"],
+    "labels": {
+      "env": "production",
+      "team": "platform",
+      "service": "api-gateway"
+    }
+  },
+  {
+    "targets": ["10.0.2.10:9090"],
+    "labels": {
+      "env": "staging",
+      "team": "platform",
+      "service": "api-gateway"
+    }
+  }
+]
+</code></pre>
+
+                        <h3 id="http-sd">HTTP SD (Custom Providers)</h3>
+
+                        <p>HTTP SD (Prometheus 2.28+) lets you build a custom service discovery provider as any HTTP server that returns target JSON. This is the most flexible approach for non-standard infrastructure:</p>
+
+<pre><code class="language-yaml"># HTTP service discovery configuration
+scrape_configs:
+  - job_name: 'custom-http-sd'
+    http_sd_configs:
+      - url: 'http://sd-provider.internal:8080/targets'
+        refresh_interval: 30s
+        # Optional authentication
+        authorization:
+          type: Bearer
+          credentials: 'my-secret-token'
+</code></pre>
+
+<pre><code class="language-javascript">// Simple HTTP SD provider (Node.js example)
+// Returns JSON array of target groups (same format as file_sd)
+const express = require('express');
+const app = express();
+
+app.get('/targets', async (req, res) =&gt; {
+  // Query your CMDB, cloud API, or custom registry
+  const instances = await getInstancesFromCMDB();
+
+  const targetGroups = instances.map(inst =&gt; ({
+    targets: [`${inst.ip}:${inst.metricsPort}`],
+    labels: {
+      __metrics_path__: inst.metricsPath || '/metrics',
+      service: inst.serviceName,
+      env: inst.environment,
+      region: inst.region,
+      owner: inst.team
+    }
+  }));
+
+  res.json(targetGroups);
+});
+
+app.listen(8080);
+</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>When to Use HTTP SD</strong>: Use HTTP SD when your targets live in a system Prometheus doesn&rsquo;t natively support &mdash; a custom CMDB, a proprietary cloud platform, a legacy inventory database, or when you need complex business logic to determine which targets to scrape (e.g., only instances that passed health checks in the last 5 minutes).
+                        </div>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Choosing a Service Discovery Mechanism</div>
+                            <pre class="mermaid">
+flowchart TD
+    Q1{"Where do targets live?"}
+    Q1 -->|Kubernetes| K8S["kubernetes_sd_configs<br/>(native, recommended)"]
+    Q1 -->|Consul/Nomad| CON["consul_sd_configs"]
+    Q1 -->|AWS/GCP/Azure| CLOUD["ec2/gce/azure SD"]
+    Q1 -->|DNS SRV records| DNS["dns_sd_configs"]
+    Q1 -->|Fixed list| STATIC["static_configs"]
+    Q1 -->|Custom system| CUSTOM{"Can you write<br/>an HTTP endpoint?"}
+    CUSTOM -->|Yes| HTTP["http_sd_configs"]
+    CUSTOM -->|No| FILE["file_sd_configs<br/>(cron job writes JSON)"]
+                            </pre>
+                        </div>
+
+                        <h2 id="conclusion">Conclusion &amp; What&rsquo;s Next</h2>
+
+                        <p>Service discovery is the bridge between Prometheus and your dynamic infrastructure. Key takeaways:</p>
+                        <ul>
+                            <li>Kubernetes SD with <code>endpoints</code> role is the most common production pattern</li>
+                            <li><code>relabel_configs</code> runs before scraping (saves CPU); <code>metric_relabel_configs</code> runs after (saves storage)</li>
+                            <li>The <code>keep</code>/<code>drop</code> actions are your primary filtering tools</li>
+                            <li><code>hashmod</code> enables sharding targets across multiple Prometheus instances</li>
+                            <li>HTTP SD is the universal escape hatch for any custom infrastructure</li>
+                        </ul>
+
+                        <!-- Next in Series -->
+                        <div class="series-next">
+                            <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                            <p>In <a href="monitoring-observability-prometheus-part06-alerting-alertmanager.html"><strong>Part 6: Effective Alerting &amp; Alertmanager</strong></a>, we&rsquo;ll turn PromQL queries into actionable alerts with proper routing, grouping, inhibition rules, and multi-channel notification.</p>
+                        </div>
+
+                        <!-- Related Posts -->
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                            <div class="related-post-item">
+                                <h5>Part 2: Deploying Prometheus to Kubernetes</h5>
+                                <p>Deploy the kube-prometheus-stack and understand how the Operator uses ServiceMonitors for SD.</p>
+                                <a href="monitoring-observability-prometheus-part02-deploying-kubernetes.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 7: Sharding, Federation &amp; High Availability</h5>
+                                <p>Use hashmod-based sharding and federation when a single Prometheus can&rsquo;t handle all targets.</p>
+                                <a href="monitoring-observability-prometheus-part07-sharding-federation-ha.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 4: Mastering PromQL</h5>
+                                <p>The query language that powers everything SD discovers &mdash; vectors, functions, and patterns.</p>
+                                <a href="monitoring-observability-prometheus-part04-mastering-promql.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                        <!-- Series Navigation -->
+                        <div class="series-nav">
+                            <a href="monitoring-observability-prometheus-part04-mastering-promql.html" class="series-nav-item prev">
+                                <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span>
+                                <span class="nav-title">Part 4: Mastering PromQL</span>
+                            </a>
+                            <a href="monitoring-observability-prometheus-part06-alerting-alertmanager.html" class="series-nav-item next">
+                                <span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span>
+                                <span class="nav-title">Part 6: Alerting &amp; Alertmanager</span>
+                            </a>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <!-- Footer -->
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left"><div class="fc-brand-group"><div class="fc-brand-stack"><span></span><span></span><span></span></div><span class="fc-brand-name">Wasil Zafar</span></div><span class="fc-tagline">Consultant &amp; Cloud Architect</span></div>
+                <div class="fc-center"><a href="/">Home</a><a href="/disclaimer.html">Disclaimer</a><a href="/privacy-policy.html">Privacy</a><a href="/pages/contact.html">Contact</a></div>
+                <div class="fc-right"><a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a><a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a><a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a><a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a><a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a><a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a><a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a><a href="/feed.xml" target="_blank" title="RSS Feed"><i class="fas fa-rss"></i></a></div>
+            </div>
+            <div class="footer-sub"><span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span><a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a></div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="../../../js/path-progress.js"></script>
+    <script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

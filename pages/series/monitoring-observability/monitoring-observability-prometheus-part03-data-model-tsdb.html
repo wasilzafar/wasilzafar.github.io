@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Master the Prometheus time series data model and TSDB internals. Understand metric names, labels, timestamps, the WAL, head blocks, persistent blocks, chunk encoding (XOR/Gorilla), compaction, tombstones, posting lists, and memory-mapped chunks for production debugging." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="Prometheus data model, TSDB architecture, time series database, WAL write-ahead log, head block, chunk encoding, Gorilla compression, XOR encoding, compaction Prometheus, posting lists, label indexes, memory mapped chunks, TSDB configuration, Prometheus storage internals" />
+    <meta property="og:title" content="Prometheus Deep Dive Part 3: The Prometheus Data Model & TSDB" />
+    <meta property="og:description" content="Deep dive into Prometheus TSDB internals — WAL, head blocks, chunk encoding, compaction, and the index structures that make PromQL queries fast." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-06-15" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part03-data-model-tsdb.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part03-data-model-tsdb-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part03-data-model-tsdb-tw.jpg" />
+    <title>Prometheus Deep Dive Part 3: The Prometheus Data Model &amp; TSDB - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part03-data-model-tsdb.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{'ad_storage':'denied','ad_user_data':'denied','ad_personalization':'denied','analytics_storage':'denied','region':['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']});gtag('consent','default',{'ad_storage':'granted','ad_user_data':'granted','ad_personalization':'granted','analytics_storage':'granted'});gtag('set','url_passthrough',true);</script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+    <script type="application/ld+json">
+    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Prometheus Deep Dive Part 3: The Prometheus Data Model & TSDB", "description": "Deep dive into Prometheus TSDB internals — WAL, head blocks, chunk encoding, compaction, and index structures.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part03-data-model-tsdb.html"}, "wordCount": 6400, "inLanguage": "en", "datePublished": "2026-06-15", "dateModified": "2026-06-15", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part03-data-model-tsdb-og.jpg", "width": 1200, "height": 630}}
+    </script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <!-- Navigation Bar -->
+    <div class="nav-v16-wrapper"><nav class="nav-v16"><a href="/" class="brand"><div class="brand-stack"><span></span><span></span><span></span></div><span class="brand-text">Wasil Zafar</span></a><button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()"><span></span><span></span><span></span></button><div class="links"><a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a><a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a><a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a><a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a><a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a><button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button></div></nav></div>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Monitoring &amp; Observability Series</a>
+                <h1 class="display-4 fw-bold mb-3">Prometheus Deep Dive Part 3: The Prometheus Data Model &amp; TSDB</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>June 15, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>32 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Open the hood on Prometheus&rsquo; storage engine &mdash; from the elegant simplicity of its data model (metric name + labels + timestamp + value) to the engineering marvel of the TSDB with its write-ahead log, Gorilla-compressed chunks, and inverted index that enables millisecond queries across millions of time series.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header"><h3><i class="fas fa-list me-2"></i>Table of Contents</h3><button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button></div>
+        <ol>
+            <li>
+                <a href="#data-model" onclick="closeNav()">The Time Series Data Model</a>
+                <ul>
+                    <li><a href="#anatomy" onclick="closeNav()">Anatomy of a Time Series</a></li>
+                    <li><a href="#naming-conventions" onclick="closeNav()">Naming Conventions</a></li>
+                    <li><a href="#sample-structure" onclick="closeNav()">Sample Structure in Memory</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#tsdb-architecture" onclick="closeNav()">TSDB Architecture Overview</a>
+                <ul>
+                    <li><a href="#wal" onclick="closeNav()">Write-Ahead Log (WAL)</a></li>
+                    <li><a href="#head-block" onclick="closeNav()">The Head Block</a></li>
+                    <li><a href="#persistent-blocks" onclick="closeNav()">Persistent Blocks</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#on-disk" onclick="closeNav()">Block Structure on Disk</a>
+                <ul>
+                    <li><a href="#directory-layout" onclick="closeNav()">Directory Layout</a></li>
+                    <li><a href="#chunks-format" onclick="closeNav()">Chunks File Format</a></li>
+                    <li><a href="#index-format" onclick="closeNav()">Index File Structure</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#encoding" onclick="closeNav()">Chunk Encoding &amp; Compression</a>
+                <ul>
+                    <li><a href="#xor-timestamps" onclick="closeNav()">XOR Encoding for Timestamps</a></li>
+                    <li><a href="#gorilla-values" onclick="closeNav()">Gorilla Encoding for Values</a></li>
+                    <li><a href="#compression-ratios" onclick="closeNav()">Compression Ratios</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#compaction" onclick="closeNav()">Compaction Process</a>
+                <ul>
+                    <li><a href="#compaction-triggers" onclick="closeNav()">When Compaction Runs</a></li>
+                    <li><a href="#tombstones" onclick="closeNav()">Tombstones &amp; Deletion</a></li>
+                    <li><a href="#retention" onclick="closeNav()">Retention Enforcement</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#index-deep-dive" onclick="closeNav()">Index Structure Deep Dive</a>
+                <ul>
+                    <li><a href="#posting-lists" onclick="closeNav()">Posting Lists</a></li>
+                    <li><a href="#label-index" onclick="closeNav()">Label Value Index</a></li>
+                    <li><a href="#query-resolution" onclick="closeNav()">Query Resolution Path</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#mmap" onclick="closeNav()">Memory-Mapped Chunks</a>
+            </li>
+            <li>
+                <a href="#configuration" onclick="closeNav()">TSDB Configuration</a>
+            </li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion &amp; What&rsquo;s Next</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                        <h2 id="data-model">The Time Series Data Model</h2>
+
+                        <h3 id="anatomy">Anatomy of a Time Series</h3>
+
+                        <p>Every piece of data in Prometheus is a <strong>time series</strong> &mdash; a stream of timestamped values belonging to the same metric and label set. The data model is deceptively simple but immensely powerful:</p>
+
+<pre><code class="language-bash"># A single sample (data point):
+# metric_name{label1="value1", label2="value2"} float64_value timestamp_ms
+
+# Concrete example - one sample at one moment in time:
+http_requests_total{method="POST", handler="/api/orders", status="201", instance="10.0.1.5:8080", job="order-service"} 48923 1718467200000
+
+# This decomposes to:
+# Metric Name:  http_requests_total
+# Labels:       {method="POST", handler="/api/orders", status="201", instance="10.0.1.5:8080", job="order-service"}
+# Value:        48923 (float64)
+# Timestamp:    1718467200000 (Unix milliseconds = 2026-06-15T12:00:00Z)
+</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-key me-2"></i>
+                            <strong>Identity Rule</strong>: A time series is uniquely identified by its metric name <em>plus</em> the complete set of label key-value pairs. The metric name is technically just another label: <code>__name__</code>. Internally, <code>http_requests_total{method=&quot;GET&quot;}</code> is stored as <code>{__name__=&quot;http_requests_total&quot;, method=&quot;GET&quot;}</code>.
+                        </div>
+
+                        <h3 id="naming-conventions">Naming Conventions</h3>
+
+<pre><code class="language-bash"># Prometheus metric naming conventions:
+# Format: library_name_unit_suffix
+
+# GOOD - clear, follows conventions:
+http_request_duration_seconds_bucket    # histogram bucket (seconds)
+http_request_duration_seconds_sum       # histogram sum
+http_request_duration_seconds_count     # histogram count
+node_cpu_seconds_total                  # counter (seconds, total suffix)
+node_memory_MemAvailable_bytes          # gauge (bytes unit)
+process_open_fds                        # gauge (no unit = count)
+
+# BAD - avoid these patterns:
+request_latency                  # no unit! seconds? ms? unclear
+requestLatency_ms                # camelCase, non-standard unit suffix
+http.requests.count              # dots not allowed (use underscores)
+http_request_total_count         # redundant (total IS the suffix for counters)
+</code></pre>
+
+                        <h3 id="sample-structure">Sample Structure in Memory</h3>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Time Series Data Structure</div>
+                            <pre class="mermaid">
+flowchart TD
+    subgraph Series["Time Series Identity"]
+        ID["Series ID: 42<br/>Fingerprint: 0xABCDEF12"]
+        Labels["Labels Map:<br/>__name__ = http_requests_total<br/>method = GET<br/>status = 200<br/>job = api-server"]
+    end
+
+    subgraph Samples["Samples (append-only)"]
+        S1["t=1718467200000, v=1000.0"]
+        S2["t=1718467215000, v=1003.0"]
+        S3["t=1718467230000, v=1007.0"]
+        S4["t=1718467245000, v=1012.0"]
+        S5["... (every 15s scrape)"]
+    end
+
+    subgraph Chunk["Chunk (120 samples max)"]
+        ENC["XOR-encoded timestamps<br/>Gorilla-encoded values<br/>~1.5 bytes/sample average"]
+    end
+
+    ID --> Samples
+    Labels --> ID
+    Samples --> Chunk
+                            </pre>
+                        </div>
+
+                        <h2 id="tsdb-architecture">TSDB Architecture Overview</h2>
+
+                        <p>The Prometheus TSDB (introduced in Prometheus 2.0, 2017) was designed by Fabian Reinartz to solve three problems simultaneously: fast ingestion of millions of samples per second, efficient compression for storage, and millisecond query responses over large time ranges.</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">TSDB Write &amp; Storage Pipeline</div>
+                            <pre class="mermaid">
+flowchart LR
+    subgraph Ingest["Ingestion"]
+        SC["Scrape<br/>Samples"]
+    end
+
+    subgraph WAL["Write-Ahead Log"]
+        W1["WAL Segment 1<br/>(128 MB)"]
+        W2["WAL Segment 2<br/>(128 MB)"]
+        W3["WAL Segment N..."]
+    end
+
+    subgraph Head["Head Block (in-memory)"]
+        HC["Active Chunks<br/>(last 2h of data)"]
+        MM["Memory-Mapped<br/>Chunks (older)"]
+    end
+
+    subgraph Persist["Persistent Blocks (on-disk)"]
+        B1["Block 01DB...<br/>2h range<br/>mint → maxt"]
+        B2["Block 01DC...<br/>2h range"]
+        B3["Block 01DD...<br/>(compacted)<br/>4h+ range"]
+    end
+
+    SC -->|"1. Write"| WAL
+    WAL -->|"2. Replay on<br/>restart"| Head
+    SC -->|"3. Append"| HC
+    HC -->|"4. Cut every 2h"| Persist
+    MM -->|"5. Already<br/>persisted"| Persist
+    B1 & B2 -->|"6. Compaction"| B3
+                            </pre>
+                        </div>
+
+                        <h3 id="wal">Write-Ahead Log (WAL)</h3>
+
+                        <p>Every incoming sample is first written to the <strong>WAL</strong> before being added to the in-memory head block. This ensures durability &mdash; if Prometheus crashes, it can replay the WAL to recover recent data:</p>
+
+<pre><code class="language-bash"># WAL directory structure
+data/
+├── wal/
+│   ├── 00000001    # WAL segment (up to 128 MB each)
+│   ├── 00000002
+│   ├── 00000003    # Currently active segment
+│   └── checkpoint.00000001/  # Compressed checkpoint
+│       └── 00000000
+
+# WAL contains three record types:
+# 1. Series records - new time series (labels → seriesID mapping)
+# 2. Sample records - timestamp + value for existing series
+# 3. Tombstone records - deletion markers
+
+# Inspect WAL health
+promtool tsdb analyze /path/to/data/
+
+# WAL replay time on restart (depends on WAL size):
+# 128 MB WAL segment ≈ 2-5 seconds replay
+# Multiple segments = linear replay time
+</code></pre>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>WAL Corruption</strong>: If WAL segments become corrupted (disk errors, OOM kills mid-write), Prometheus will fail to start. Recovery options: (1) Delete the corrupted segment (loses ~2h of data), (2) Use <code>promtool tsdb clean-tombstones</code>, or (3) In extreme cases, delete the entire WAL directory and accept data loss since the last persisted block.
+                        </div>
+
+                        <h3 id="head-block">The Head Block</h3>
+
+                        <p>The <strong>head block</strong> holds all recently ingested data in memory. It contains the most recent 2 hours (by default) of samples for every active time series. When the head block&rsquo;s oldest data exceeds the <code>--storage.tsdb.min-block-duration</code> (default: 2h), it gets &ldquo;cut&rdquo; into a persistent block on disk.</p>
+
+<pre><code class="language-bash"># Head block metrics (query in Prometheus)
+prometheus_tsdb_head_series              # Active time series in head
+prometheus_tsdb_head_samples_appended_total  # Samples ingested
+prometheus_tsdb_head_chunks              # Number of chunks in memory
+prometheus_tsdb_head_chunks_created_total # Chunks created
+prometheus_tsdb_head_gc_duration_seconds  # GC duration
+
+# Memory usage estimate for head block:
+# Each active series ≈ 3-4 KB in memory
+# 100,000 series × 4 KB = ~400 MB base memory for head
+# Plus WAL buffers, query buffers, etc.
+</code></pre>
+
+                        <h3 id="persistent-blocks">Persistent Blocks</h3>
+
+                        <p>Once the head block is cut, the data becomes a <strong>persistent block</strong> &mdash; an immutable, self-contained directory on disk. Each block covers a specific time range and contains its own index, chunks, and metadata:</p>
+
+<pre><code class="language-bash"># Block directory structure
+data/
+├── 01HQKR5M7S8TQR4JNWVPZKM3QN/   # Block ULID (time-sortable)
+│   ├── meta.json          # Block metadata (time range, stats)
+│   ├── index              # Series index (label → series mapping)
+│   ├── chunks/
+│   │   └── 000001         # Chunk data (compressed samples)
+│   └── tombstones         # Deletion markers
+├── 01HQMGT8N2RDP5XYZAB7CDEF01/
+│   ├── meta.json
+│   ├── index
+│   ├── chunks/
+│   │   └── 000001
+│   └── tombstones
+└── wal/
+</code></pre>
+
+<pre><code class="language-json">// meta.json - Block metadata example
+{
+  "ulid": "01HQKR5M7S8TQR4JNWVPZKM3QN",
+  "minTime": 1718380800000,
+  "maxTime": 1718388000000,
+  "stats": {
+    "numSamples": 28543921,
+    "numSeries": 142350,
+    "numChunks": 284700
+  },
+  "compaction": {
+    "level": 1,
+    "sources": ["01HQKR5M7S8TQR4JNWVPZKM3QN"]
+  },
+  "version": 1
+}
+</code></pre>
+
+                        <h2 id="on-disk">Block Structure on Disk</h2>
+
+                        <h3 id="directory-layout">Directory Layout</h3>
+
+<pre><code class="language-bash"># Examine your Prometheus data directory
+ls -la /prometheus/data/
+
+# See block time ranges
+for d in /prometheus/data/01*/; do
+  echo "$d: $(jq -r '.minTime, .maxTime' $d/meta.json | \
+    xargs -I{} date -d @$(echo {} / 1000 | bc) '+%Y-%m-%d %H:%M')"
+done
+
+# Check total storage usage
+du -sh /prometheus/data/
+du -sh /prometheus/data/wal/
+du -sh /prometheus/data/01*/chunks/
+</code></pre>
+
+                        <h3 id="chunks-format">Chunks File Format</h3>
+
+                        <p>Each chunk stores up to 120 samples for a single time series. Chunks are the fundamental unit of I/O &mdash; when Prometheus reads data for a query, it reads entire chunks, not individual samples:</p>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Internal Format</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h4>Chunk Binary Layout</h4>
+                                <table class="table table-bordered">
+                                    <thead><tr><th>Field</th><th>Size</th><th>Description</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>Encoding byte</td><td>1 byte</td><td><code>0x01</code> = XOR encoding (standard)</td></tr>
+                                        <tr><td>Num samples</td><td>2 bytes (varint)</td><td>Number of samples in chunk (max 120)</td></tr>
+                                        <tr><td>First timestamp</td><td>8 bytes</td><td>Absolute timestamp (int64 ms)</td></tr>
+                                        <tr><td>First value</td><td>8 bytes</td><td>Absolute float64 value</td></tr>
+                                        <tr><td>Delta-of-delta timestamps</td><td>Variable</td><td>XOR + varint encoded</td></tr>
+                                        <tr><td>XOR values</td><td>Variable</td><td>Gorilla-style XOR encoding</td></tr>
+                                    </tbody>
+                                </table>
+                                <p class="mt-2 mb-0"><strong>Average chunk size</strong>: ~200&ndash;300 bytes for 120 samples (vs 1,920 bytes uncompressed) = <strong>~6:1 compression ratio</strong></p>
+                            </div>
+                            <div class="experiment-tags"><span class="bias-tag">Storage</span><span class="bias-tag">Encoding</span><span class="bias-tag">Compression</span></div>
+                        </div>
+
+                        <h3 id="index-format">Index File Structure</h3>
+
+                        <p>The index file is the key to fast PromQL queries. It maps label pairs to series IDs and series IDs to chunk locations &mdash; enabling Prometheus to resolve complex label matchers without scanning all data:</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Index File Logical Structure</div>
+                            <pre class="mermaid">
+flowchart TD
+    subgraph Index["Index File Sections"]
+        SYM["Symbol Table<br/>All unique strings<br/>(label names + values)"]
+        SER["Series Section<br/>Series ID → labels + chunk refs"]
+        LI["Label Index<br/>label_name → [all values]"]
+        PL["Posting Lists<br/>label_pair → [series IDs]"]
+        PLO["Posting List Offsets<br/>Quick lookup table"]
+        TOC["Table of Contents<br/>Section offsets"]
+    end
+
+    subgraph Query["Query: {job='api', status='500'}"]
+        Q1["1. Find posting list<br/>for job='api'<br/>→ [1, 3, 7, 12, 45...]"]
+        Q2["2. Find posting list<br/>for status='500'<br/>→ [3, 12, 28, 45...]"]
+        Q3["3. Intersect lists<br/>→ [3, 12, 45...]"]
+        Q4["4. Look up chunk refs<br/>for each series ID"]
+    end
+
+    PL --> Q1
+    PL --> Q2
+    Q1 & Q2 --> Q3
+    Q3 --> SER
+    SER --> Q4
+                            </pre>
+                        </div>
+
+                        <h2 id="encoding">Chunk Encoding &amp; Compression</h2>
+
+                        <h3 id="xor-timestamps">XOR Encoding for Timestamps</h3>
+
+                        <p>Prometheus uses <strong>delta-of-delta</strong> encoding for timestamps, exploiting the fact that scrape intervals are highly regular. If scrapes happen every 15 seconds, the delta between timestamps is always ~15000ms, and the delta-of-delta is near zero:</p>
+
+<pre><code class="language-bash"># Timestamp encoding example:
+# Raw timestamps (ms): 1000, 1015, 1030, 1045, 1060, 1075
+# Deltas:                    15,   15,   15,   15,   15
+# Delta-of-deltas:                 0,    0,    0,    0
+
+# When delta-of-delta = 0: encode as single bit (0)
+# Regular scrapes → nearly free timestamp storage!
+
+# Irregular timestamps (jitter/missed scrapes):
+# Raw: 1000, 1015, 1032, 1045, 1061, 1075
+# Deltas:    15,   17,   13,   16,   14
+# DoD:             2,   -4,    3,   -2
+# These require more bits but are still compact (varint encoding)
+</code></pre>
+
+                        <h3 id="gorilla-values">Gorilla Encoding for Values</h3>
+
+                        <p>For float64 values, Prometheus uses <strong>Gorilla compression</strong> (from Facebook&rsquo;s 2015 paper). It XORs consecutive values and encodes only the meaningful bits that changed:</p>
+
+<pre><code class="language-bash"># Gorilla XOR encoding for float64 values:
+#
+# Value 1: 72.0  → IEEE 754: 0 10000000101 001000000000000000000000000000000000000000000000000
+# Value 2: 72.5  → IEEE 754: 0 10000000101 001001000000000000000000000000000000000000000000000
+#
+# XOR result:     0 00000000000 000001000000000000000000000000000000000000000000000
+#                              ^^^^^^ only these bits differ!
+#
+# Encoding: store leading zeros count + meaningful bits count + meaningful bits
+# Result: just a few bits instead of 64 bits per value!
+#
+# Best case (value unchanged): 1 bit (just a zero flag)
+# Typical case: 10-20 bits per value
+# Worst case (totally different value): 65 bits
+
+# Compression efficiency depends on value patterns:
+# - Counters (incrementing): excellent (small XOR differences)
+# - Gauges (stable): excellent (many unchanged values)
+# - Gauges (noisy): good (similar magnitude, different bits)
+# - Random values: poor (full 64-bit differences)
+</code></pre>
+
+                        <h3 id="compression-ratios">Compression Ratios</h3>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Benchmarks</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h4>TSDB Compression Efficiency</h4>
+                                <table class="table table-bordered">
+                                    <thead><tr><th>Metric Type</th><th>Raw Size/Sample</th><th>Compressed Size/Sample</th><th>Ratio</th><th>Notes</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>Counter (monotonic)</td><td>16 bytes</td><td>1.2&ndash;1.5 bytes</td><td>~12:1</td><td>Regular increments compress extremely well</td></tr>
+                                        <tr><td>Gauge (stable)</td><td>16 bytes</td><td>1.0&ndash;1.3 bytes</td><td>~14:1</td><td>Unchanged values = 1 bit each</td></tr>
+                                        <tr><td>Gauge (noisy)</td><td>16 bytes</td><td>2.0&ndash;3.0 bytes</td><td>~6:1</td><td>CPU/memory with fluctuation</td></tr>
+                                        <tr><td>Histogram (buckets)</td><td>16 bytes</td><td>1.5&ndash;2.0 bytes</td><td>~9:1</td><td>Multiple series per histogram</td></tr>
+                                        <tr><td><strong>Average across all types</strong></td><td><strong>16 bytes</strong></td><td><strong>1.5&ndash;2.0 bytes</strong></td><td><strong>~8&ndash;10:1</strong></td><td></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="experiment-tags"><span class="bias-tag">Compression</span><span class="bias-tag">Performance</span><span class="bias-tag">Storage</span></div>
+                        </div>
+
+                        <h2 id="compaction">Compaction Process</h2>
+
+                        <h3 id="compaction-triggers">When Compaction Runs</h3>
+
+                        <p>Compaction merges smaller blocks into larger ones, reducing the number of blocks Prometheus must search during queries and enabling more efficient compression across longer time ranges:</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Block Compaction Levels</div>
+                            <pre class="mermaid">
+flowchart LR
+    subgraph L1["Level 1 (2h blocks)"]
+        B1["Block A<br/>00:00-02:00"]
+        B2["Block B<br/>02:00-04:00"]
+        B3["Block C<br/>04:00-06:00"]
+        B4["Block D<br/>06:00-08:00"]
+    end
+
+    subgraph L2["Level 2 (merged)"]
+        M1["Block AB<br/>00:00-04:00"]
+        M2["Block CD<br/>04:00-08:00"]
+    end
+
+    subgraph L3["Level 3 (merged)"]
+        F1["Block ABCD<br/>00:00-08:00"]
+    end
+
+    B1 & B2 -->|"compact"| M1
+    B3 & B4 -->|"compact"| M2
+    M1 & M2 -->|"compact"| F1
+                            </pre>
+                        </div>
+
+<pre><code class="language-bash"># Compaction metrics to monitor
+prometheus_tsdb_compactions_total         # Total compactions run
+prometheus_tsdb_compaction_duration_seconds # Duration per compaction
+prometheus_tsdb_blocks_loaded             # Currently loaded blocks
+prometheus_tsdb_size_retentions_total     # Blocks deleted by retention
+
+# TSDB flags controlling compaction:
+# --storage.tsdb.min-block-duration=2h   # Minimum block time range
+# --storage.tsdb.max-block-duration=36h  # Maximum block time range (capped at 10% of retention)
+# Max block duration is automatically: min(31d, retention/10)
+</code></pre>
+
+                        <h3 id="tombstones">Tombstones &amp; Deletion</h3>
+
+                        <p>Prometheus supports deleting data via the Admin API. Rather than rewriting blocks, it creates <strong>tombstone</strong> files that mark time ranges as deleted. The actual data is removed during the next compaction:</p>
+
+<pre><code class="language-bash"># Delete series data via Admin API (must enable --web.enable-admin-api)
+# Delete all data for a specific metric in a time range
+curl -X POST 'http://localhost:9090/api/v1/admin/tsdb/delete_series' \
+  -d 'match[]={__name__="expensive_metric_to_remove"}' \
+  -d 'start=2026-06-01T00:00:00Z' \
+  -d 'end=2026-06-10T00:00:00Z'
+
+# Force compaction to reclaim disk space immediately
+curl -X POST 'http://localhost:9090/api/v1/admin/tsdb/clean_tombstones'
+
+# WARNING: Deletion is permanent after clean_tombstones!
+# The tombstones file can be manually deleted to "undo" before compaction
+</code></pre>
+
+                        <h3 id="retention">Retention Enforcement</h3>
+
+<pre><code class="language-bash"># Retention is enforced in two ways (whichever triggers first):
+
+# Time-based retention (default: 15 days)
+--storage.tsdb.retention.time=15d
+
+# Size-based retention (delete oldest blocks when exceeded)
+--storage.tsdb.retention.size=50GB
+
+# Both can be combined:
+# "Keep 30 days OR 100GB, whichever limit is hit first"
+--storage.tsdb.retention.time=30d
+--storage.tsdb.retention.size=100GB
+</code></pre>
+
+                        <h2 id="index-deep-dive">Index Structure Deep Dive</h2>
+
+                        <h3 id="posting-lists">Posting Lists</h3>
+
+                        <p>The <strong>posting list</strong> is an inverted index mapping each label pair to the set of series IDs containing that pair. This is identical to how search engines map terms to document IDs:</p>
+
+<pre><code class="language-bash"># Conceptual posting list structure:
+#
+# Label Pair              → Series IDs (sorted)
+# ─────────────────────────────────────────────
+# job="api-server"        → [1, 2, 3, 4, 5, 6, 7, 8]
+# job="worker"            → [9, 10, 11, 12, 13, 14]
+# method="GET"            → [1, 3, 5, 7, 9, 11, 13]
+# method="POST"           → [2, 4, 6, 8, 10, 12, 14]
+# status="200"            → [1, 2, 3, 4, 9, 10, 11, 12]
+# status="500"            → [5, 6, 7, 8, 13, 14]
+#
+# Query: {job="api-server", status="500"}
+# 1. Posting list for job="api-server"  → [1, 2, 3, 4, 5, 6, 7, 8]
+# 2. Posting list for status="500"      → [5, 6, 7, 8, 13, 14]
+# 3. Intersect (sorted merge)           → [5, 6, 7, 8]
+# 4. Result: 4 matching series (very fast!)
+</code></pre>
+
+                        <h3 id="label-index">Label Value Index</h3>
+
+                        <p>The label index provides fast lookup of all values for a given label name &mdash; used by the <code>/api/v1/label/&lt;name&gt;/values</code> endpoint and autocomplete in Grafana:</p>
+
+<pre><code class="language-bash"># Label index structure:
+# label_name → [value1, value2, value3, ...]
+#
+# __name__  → ["http_requests_total", "node_cpu_seconds_total", "up", ...]
+# job       → ["api-server", "worker", "node-exporter", "prometheus", ...]
+# instance  → ["10.0.1.5:8080", "10.0.1.6:8080", "10.0.2.3:9100", ...]
+# method    → ["GET", "POST", "PUT", "DELETE", "PATCH"]
+# status    → ["200", "201", "204", "400", "401", "403", "404", "500", "503"]
+
+# Query all label values for 'job':
+curl -s 'http://localhost:9090/api/v1/label/job/values' | jq '.data'
+</code></pre>
+
+                        <h3 id="query-resolution">Query Resolution Path</h3>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-route me-2"></i>
+                            <strong>PromQL Query Execution Path</strong>:
+                            <ol class="mt-2 mb-0">
+                                <li>Parse PromQL expression into AST</li>
+                                <li>Identify label matchers from selectors</li>
+                                <li>For each block overlapping the query time range:</li>
+                                <li>&nbsp;&nbsp;&nbsp;&nbsp;a. Look up posting lists for each matcher</li>
+                                <li>&nbsp;&nbsp;&nbsp;&nbsp;b. Intersect posting lists (AND logic) or union (OR logic)</li>
+                                <li>&nbsp;&nbsp;&nbsp;&nbsp;c. For each matching series, find chunk references</li>
+                                <li>&nbsp;&nbsp;&nbsp;&nbsp;d. Read and decompress relevant chunks</li>
+                                <li>Merge results across blocks (head + persistent)</li>
+                                <li>Apply PromQL functions (rate, sum, etc.)</li>
+                                <li>Return result</li>
+                            </ol>
+                        </div>
+
+                        <h2 id="mmap">Memory-Mapped Chunks</h2>
+
+                        <p>Since Prometheus 2.19, chunks from persisted blocks are <strong>memory-mapped</strong> (mmap) rather than loaded entirely into RAM. The operating system&rsquo;s page cache handles which chunks are in memory and which are on disk:</p>
+
+<pre><code class="language-bash"># Memory-mapped chunks reduce Prometheus memory usage dramatically
+# Before mmap: all queried data must fit in process heap
+# After mmap: OS page cache manages hot/cold data automatically
+
+# Monitor mmap behavior:
+prometheus_tsdb_head_chunks_storage_size_bytes   # Head chunk memory
+process_resident_memory_bytes                     # Total RSS
+process_virtual_memory_bytes                      # Includes mmap regions
+
+# The difference between virtual and resident memory
+# shows how much block data is mapped but not in RAM:
+# virtual - resident ≈ cold mmap data on disk
+
+# Practical impact: A Prometheus with 500GB on disk might show
+# 500GB virtual memory but only 8GB resident (actual RAM used)
+</code></pre>
+
+                        <h2 id="configuration">TSDB Configuration</h2>
+
+<pre><code class="language-yaml"># Key TSDB-related Prometheus flags:
+# (set via command-line args or Helm values)
+
+# Storage path
+--storage.tsdb.path=/prometheus/data
+
+# Retention
+--storage.tsdb.retention.time=15d
+--storage.tsdb.retention.size=0        # 0 = disabled (time-based only)
+
+# Block durations
+--storage.tsdb.min-block-duration=2h   # Don't change unless you know why
+--storage.tsdb.max-block-duration=36h  # Auto-capped at retention/10
+
+# WAL configuration
+--storage.tsdb.wal-segment-size=128MB  # Default, rarely needs changing
+--storage.tsdb.wal-compression         # Enable WAL compression (saves ~50% WAL disk)
+
+# Head chunks
+--storage.tsdb.head-chunks-write-queue-size=0  # Async chunk writes (0=sync)
+
+# Out-of-order ingestion (Prometheus 2.39+)
+--storage.tsdb.out-of-order-time-window=30m  # Accept samples up to 30m late
+
+# No-lockfile (for shared/readonly mounts)
+--storage.tsdb.no-lockfile=false
+</code></pre>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Out-of-Order Ingestion</strong>: Enabled in Prometheus 2.39+, this allows accepting samples with timestamps older than the most recent sample for a series. Critical for remote-write receivers, Prometheus agent mode, and environments with clock skew. Set <code>--storage.tsdb.out-of-order-time-window</code> to the maximum expected delay.
+                        </div>
+
+                        <h2 id="conclusion">Conclusion &amp; What&rsquo;s Next</h2>
+
+                        <p>The Prometheus TSDB is a masterpiece of systems engineering &mdash; achieving 8&ndash;10x compression ratios while maintaining sub-second query performance across millions of time series. Key takeaways:</p>
+
+                        <ul>
+                            <li>A time series = metric name + labels + ordered (timestamp, value) pairs</li>
+                            <li>The WAL provides crash recovery; the head block holds recent data in memory</li>
+                            <li>Chunks use Gorilla/XOR encoding for ~1.5 bytes per sample (vs 16 bytes raw)</li>
+                            <li>Posting lists enable millisecond label-based lookups across millions of series</li>
+                            <li>Compaction merges blocks over time for more efficient storage and queries</li>
+                            <li>Memory-mapped chunks let the OS page cache manage hot/cold data transparently</li>
+                        </ul>
+
+                        <!-- Next in Series -->
+                        <div class="series-next">
+                            <h4><i class="fas fa-arrow-right me-2"></i>Next in the Series</h4>
+                            <p>In <a href="monitoring-observability-prometheus-part04-mastering-promql.html"><strong>Part 4: Mastering PromQL</strong></a>, we&rsquo;ll harness the full power of Prometheus&rsquo; query language &mdash; from instant vectors and range vectors through aggregation operators, binary operations, and the recording rules that tame complex queries for dashboard performance.</p>
+                        </div>
+
+                        <!-- Related Posts -->
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                            <div class="related-post-item">
+                                <h5>Part 2: Deploying Prometheus to Kubernetes</h5>
+                                <p>Deploy the kube-prometheus-stack, configure storage and ServiceMonitors, and build the lab environment.</p>
+                                <a href="monitoring-observability-prometheus-part02-deploying-kubernetes.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 4: Mastering PromQL</h5>
+                                <p>Deep dive into PromQL &mdash; vectors, aggregations, binary operators, functions, subqueries, and recording rules.</p>
+                                <a href="monitoring-observability-prometheus-part04-mastering-promql.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 8: Optimizing &amp; Debugging Prometheus</h5>
+                                <p>Use TSDB knowledge to diagnose performance issues, reduce cardinality, and recover from storage problems.</p>
+                                <a href="monitoring-observability-prometheus-part08-optimizing-debugging.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                        <!-- Series Navigation -->
+                        <div class="series-nav">
+                            <a href="monitoring-observability-prometheus-part02-deploying-kubernetes.html" class="series-nav-item prev">
+                                <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span>
+                                <span class="nav-title">Part 2: Deploying to Kubernetes</span>
+                            </a>
+                            <a href="monitoring-observability-prometheus-part04-mastering-promql.html" class="series-nav-item next">
+                                <span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span>
+                                <span class="nav-title">Part 4: Mastering PromQL</span>
+                            </a>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <!-- Footer -->
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left">
+                    <div class="fc-brand-group">
+                        <div class="fc-brand-stack"><span></span><span></span><span></span></div>
+                        <span class="fc-brand-name">Wasil Zafar</span>
+                    </div>
+                    <span class="fc-tagline">Consultant &amp; Cloud Architect</span>
+                </div>
+                <div class="fc-center">
+                    <a href="/">Home</a>
+                    <a href="/disclaimer.html">Disclaimer</a>
+                    <a href="/privacy-policy.html">Privacy</a>
+                    <a href="/pages/contact.html">Contact</a>
+                </div>
+                <div class="fc-right">
+                    <a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a>
+                    <a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>
+                    <a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+                    <a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a>
+                    <a href="/feed.xml" target="_blank" title="RSS Feed"><i class="fas fa-rss"></i></a>
+                </div>
+            </div>
+            <div class="footer-sub">
+                <span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span>
+                <a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="../../../js/path-progress.js"></script>
+    <script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

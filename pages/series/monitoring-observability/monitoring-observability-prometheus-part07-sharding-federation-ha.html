@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Scale Prometheus beyond a single server with functional sharding, hierarchical federation, hashmod sharding, and high availability pairs. Learn when to use each pattern and how to combine them for reliable, distributed metric collection at enterprise scale." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="Prometheus sharding, Prometheus federation, Prometheus high availability, hashmod sharding, functional sharding, hierarchical federation, cross-service federation, Prometheus HA pairs, Prometheus scaling, distributed Prometheus, remote write fan-out" />
+    <meta property="og:title" content="Prometheus Deep Dive Part 7: Sharding, Federation & High Availability" />
+    <meta property="og:description" content="Scale Prometheus beyond a single server with functional sharding, hierarchical federation, and high availability patterns for enterprise reliability." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-06-15" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part07-sharding-federation-ha.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part07-sharding-federation-ha-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part07-sharding-federation-ha-tw.jpg" />
+    <title>Prometheus Deep Dive Part 7: Sharding, Federation &amp; High Availability - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part07-sharding-federation-ha.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{'ad_storage':'denied','ad_user_data':'denied','ad_personalization':'denied','analytics_storage':'denied','region':['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']});gtag('consent','default',{'ad_storage':'granted','ad_user_data':'granted','ad_personalization':'granted','analytics_storage':'granted'});gtag('set','url_passthrough',true);</script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+    <script type="application/ld+json">
+    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Prometheus Deep Dive Part 7: Sharding, Federation & High Availability", "description": "Scale Prometheus beyond a single server with functional sharding, hierarchical federation, and high availability patterns.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part07-sharding-federation-ha.html"}, "wordCount": 6200, "inLanguage": "en", "datePublished": "2026-06-15", "dateModified": "2026-06-15", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part07-sharding-federation-ha-og.jpg", "width": 1200, "height": 630}}
+    </script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <!-- Navigation Bar -->
+    <div class="nav-v16-wrapper"><nav class="nav-v16"><a href="/" class="brand"><div class="brand-stack"><span></span><span></span><span></span></div><span class="brand-text">Wasil Zafar</span></a><button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()"><span></span><span></span><span></span></button><div class="links"><a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a><a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a><a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a><a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a><a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a><button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button></div></nav></div>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Monitoring &amp; Observability Series</a>
+                <h1 class="display-4 fw-bold mb-3">Prometheus Deep Dive Part 7: Sharding, Federation &amp; High Availability</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>June 15, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>30 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">A single Prometheus server has practical limits. Learn when and how to scale horizontally with functional sharding, hashmod-based sharding, hierarchical federation, and high-availability pairs &mdash; building distributed metric collection that remains reliable at enterprise scale.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header"><h3><i class="fas fa-list me-2"></i>Table of Contents</h3><button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button></div>
+        <ol>
+            <li>
+                <a href="#scaling-limits" onclick="closeNav()">Prometheus Scaling Limits</a>
+                <ul>
+                    <li><a href="#single-server-ceiling" onclick="closeNav()">Single-Server Ceiling</a></li>
+                    <li><a href="#when-to-scale" onclick="closeNav()">When to Scale Out</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#functional-sharding" onclick="closeNav()">Functional Sharding</a>
+                <ul>
+                    <li><a href="#shard-by-team" onclick="closeNav()">Sharding by Team / Namespace</a></li>
+                    <li><a href="#shard-by-concern" onclick="closeNav()">Sharding by Concern</a></li>
+                    <li><a href="#shard-config" onclick="closeNav()">Configuration Patterns</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#hashmod-sharding" onclick="closeNav()">Hashmod Sharding</a>
+                <ul>
+                    <li><a href="#hashmod-mechanics" onclick="closeNav()">How Hashmod Works</a></li>
+                    <li><a href="#hashmod-config" onclick="closeNav()">Configuration</a></li>
+                    <li><a href="#hashmod-tradeoffs" onclick="closeNav()">Tradeoffs &amp; Pitfalls</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#federation" onclick="closeNav()">Federation</a>
+                <ul>
+                    <li><a href="#hierarchical-federation" onclick="closeNav()">Hierarchical Federation</a></li>
+                    <li><a href="#cross-service-federation" onclick="closeNav()">Cross-Service Federation</a></li>
+                    <li><a href="#federation-pitfalls" onclick="closeNav()">Federation Pitfalls</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#high-availability" onclick="closeNav()">High Availability</a>
+                <ul>
+                    <li><a href="#ha-pairs" onclick="closeNav()">HA Pairs Pattern</a></li>
+                    <li><a href="#deduplication" onclick="closeNav()">Query-Time Deduplication</a></li>
+                    <li><a href="#ha-alertmanager" onclick="closeNav()">HA Alertmanager Cluster</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#remote-write-fan-out" onclick="closeNav()">Remote Write Fan-Out</a>
+                <ul>
+                    <li><a href="#write-relabeling" onclick="closeNav()">Write-Path Relabeling</a></li>
+                    <li><a href="#queue-tuning" onclick="closeNav()">Queue Configuration Tuning</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#combined-patterns" onclick="closeNav()">Combined Patterns</a>
+                <ul>
+                    <li><a href="#reference-architecture" onclick="closeNav()">Reference Architecture</a></li>
+                    <li><a href="#decision-matrix" onclick="closeNav()">Decision Matrix</a></li>
+                </ul>
+            </li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                        <h2 id="scaling-limits">Prometheus Scaling Limits</h2>
+
+                        <p>Prometheus was designed as a single-server monitoring system with a local TSDB. This design makes it simple to operate but introduces hard limits as your infrastructure grows. Understanding where those limits lie is essential before choosing a scaling strategy.</p>
+
+                        <h3 id="single-server-ceiling">Single-Server Ceiling</h3>
+
+                        <p>A well-tuned Prometheus server on modern hardware (16 cores, 64 GiB RAM, fast NVMe SSD) can typically handle:</p>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Capacity Reference</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h4>Single Prometheus Server Practical Limits</h4>
+                                <table class="table table-bordered">
+                                    <thead><tr><th>Metric</th><th>Comfortable</th><th>Maximum</th><th>Bottleneck</th></tr></thead>
+                                    <tbody>
+                                        <tr><td><strong>Active time series</strong></td><td>5&ndash;8 million</td><td>~15 million</td><td>Memory (head block)</td></tr>
+                                        <tr><td><strong>Ingestion rate</strong></td><td>500K samples/sec</td><td>~1M samples/sec</td><td>CPU (appends + compaction)</td></tr>
+                                        <tr><td><strong>Scrape targets</strong></td><td>5,000</td><td>~20,000</td><td>Scrape goroutines + network</td></tr>
+                                        <tr><td><strong>Rule evaluations</strong></td><td>5,000 rules</td><td>~20,000 rules</td><td>CPU (PromQL evaluation)</td></tr>
+                                        <tr><td><strong>Retention (local)</strong></td><td>15&ndash;30 days</td><td>~90 days</td><td>Disk I/O + compaction time</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="experiment-tags"><span class="bias-tag">Capacity Planning</span><span class="bias-tag">Infrastructure</span></div>
+                        </div>
+
+                        <h3 id="when-to-scale">When to Scale Out</h3>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Scale-Out Signals:</strong> If you observe any of these consistently, it&rsquo;s time to distribute: ingestion rate &gt;80% of capacity; head series count approaching 10M; query latency P99 &gt;10s for dashboard queries; WAL replay time &gt;10 minutes after restart; compaction falling behind (increasing block count).
+                        </div>
+
+                        <p>The key insight is that scaling Prometheus is not about making one server bigger &mdash; it&rsquo;s about distributing the workload across multiple Prometheus instances, each responsible for a subset of the monitoring surface.</p>
+
+                        <h2 id="functional-sharding">Functional Sharding</h2>
+
+                        <p>Functional sharding is the simplest and most commonly recommended approach. Each Prometheus instance is responsible for a logical domain &mdash; a team, a namespace, a service tier, or a functional area.</p>
+
+                        <h3 id="shard-by-team">Sharding by Team / Namespace</h3>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Functional Sharding by Team</div>
+                            <pre class="mermaid">
+flowchart TD
+    subgraph Platform["Platform Team"]
+        PP[Prometheus<br/>platform-prom]
+        PT1[K8s Control Plane]
+        PT2[Ingress Controllers]
+        PT3[Cert Manager]
+    end
+
+    subgraph Payments["Payments Team"]
+        PAY[Prometheus<br/>payments-prom]
+        PAYT1[Payment Service]
+        PAYT2[Fraud Detection]
+        PAYT3[Payment Gateway]
+    end
+
+    subgraph Data["Data Platform"]
+        DP[Prometheus<br/>data-prom]
+        DPT1[Kafka Clusters]
+        DPT2[Spark Jobs]
+        DPT3[Data Pipelines]
+    end
+
+    subgraph Global["Global View"]
+        FED[Federation<br/>Prometheus]
+    end
+
+    PP --> PT1 & PT2 & PT3
+    PAY --> PAYT1 & PAYT2 & PAYT3
+    DP --> DPT1 & DPT2 & DPT3
+    PP & PAY & DP --> FED
+                            </pre>
+                        </div>
+
+                        <h3 id="shard-by-concern">Sharding by Concern</h3>
+
+                        <p>An alternative functional split separates by monitoring concern rather than team ownership:</p>
+
+                        <ul>
+                            <li><strong>Infrastructure Prometheus</strong> &mdash; Node exporters, kube-state-metrics, cAdvisor</li>
+                            <li><strong>Application Prometheus</strong> &mdash; Service-level metrics (HTTP, gRPC, custom business metrics)</li>
+                            <li><strong>Synthetic Prometheus</strong> &mdash; Blackbox exporter probes, external availability checks</li>
+                        </ul>
+
+                        <h3 id="shard-config">Configuration Patterns</h3>
+
+<pre><code class="language-yaml"># Prometheus instance: payments-prom
+# Only scrapes targets in the payments namespace
+global:
+  scrape_interval: 15s
+  external_labels:
+    cluster: production-us-east-1
+    shard: payments    # Identifies this shard in federation
+
+scrape_configs:
+  # Auto-discover pods in payments namespace
+  - job_name: 'payments-pods'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: ['payments', 'payments-staging']
+
+    relabel_configs:
+      # Only scrape pods with prometheus.io/scrape annotation
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: 'true'
+
+      # Use annotation for custom port
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        target_label: __address__
+        regex: (.+)
+        replacement: ${1}
+
+      # Preserve namespace and pod labels
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+
+  # ServiceMonitors for payments team
+  - job_name: 'payments-services'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names: ['payments']
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_label_monitoring]
+        action: keep
+        regex: 'true'
+</code></pre>
+
+                        <h2 id="hashmod-sharding">Hashmod Sharding</h2>
+
+                        <p>When you need to split a single large scrape job across multiple Prometheus instances (e.g., 10,000 node exporters that exceed one server&rsquo;s capacity), hashmod sharding distributes targets deterministically using consistent hashing.</p>
+
+                        <h3 id="hashmod-mechanics">How Hashmod Works</h3>
+
+                        <p>The <code>hashmod</code> relabeling action computes a hash of a source label value, takes modulo N (number of shards), and stores the result. Each Prometheus instance then <code>keep</code>s only targets where the hash result matches its shard index.</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Hashmod Sharding (3 Shards)</div>
+                            <pre class="mermaid">
+flowchart LR
+    subgraph Targets["All Targets (10,000 nodes)"]
+        T["hash(__address__) mod 3"]
+    end
+
+    subgraph S0["Shard 0 (~3,333 targets)"]
+        P0[prometheus-shard-0]
+    end
+    subgraph S1["Shard 1 (~3,333 targets)"]
+        P1[prometheus-shard-1]
+    end
+    subgraph S2["Shard 2 (~3,334 targets)"]
+        P2[prometheus-shard-2]
+    end
+
+    T -->|"mod=0"| P0
+    T -->|"mod=1"| P1
+    T -->|"mod=2"| P2
+                            </pre>
+                        </div>
+
+                        <h3 id="hashmod-config">Configuration</h3>
+
+<pre><code class="language-yaml"># Shard 0 of 3 — each shard uses identical config except SHARD_INDEX
+# Deploy via Helm with shard index as environment variable
+global:
+  scrape_interval: 30s
+  external_labels:
+    cluster: production
+    __replica__: shard-0    # For deduplication in long-term storage
+
+scrape_configs:
+  - job_name: 'node-exporter'
+    kubernetes_sd_configs:
+      - role: node
+
+    relabel_configs:
+      # Standard node exporter relabeling
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: instance
+
+      # === HASHMOD SHARDING ===
+      # Step 1: Compute hash of __address__, mod 3
+      - source_labels: [__address__]
+        modulus: 3
+        target_label: __tmp_hash
+        action: hashmod
+
+      # Step 2: Keep only targets where hash == this shard's index
+      - source_labels: [__tmp_hash]
+        regex: "0"          # Change to "1" for shard-1, "2" for shard-2
+        action: keep
+</code></pre>
+
+<pre><code class="language-yaml"># Kubernetes StatefulSet for hashmod shards
+# Each replica gets its shard index from the pod ordinal
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: prometheus-sharded
+spec:
+  replicas: 3
+  serviceName: prometheus-sharded
+  template:
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.53.0
+          args:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+            - '--storage.tsdb.path=/prometheus'
+            - '--storage.tsdb.retention.time=15d'
+            - '--web.enable-lifecycle'
+          env:
+            - name: SHARD_INDEX
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['apps.kubernetes.io/pod-index']
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: storage
+              mountPath: /prometheus
+  volumeClaimTemplates:
+    - metadata:
+        name: storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 200Gi
+        storageClassName: gp3
+</code></pre>
+
+                        <h3 id="hashmod-tradeoffs">Tradeoffs &amp; Pitfalls</h3>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-balance-scale me-2"></i>
+                            <strong>Hashmod Considerations:</strong>
+                            <ul class="mt-2 mb-0">
+                                <li><strong>Pro:</strong> Even distribution, stateless shard assignment, easy to add/remove shards</li>
+                                <li><strong>Pro:</strong> Each shard is independent &mdash; failure affects only 1/N of targets</li>
+                                <li><strong>Con:</strong> Changing shard count redistributes ALL targets (brief gap in data)</li>
+                                <li><strong>Con:</strong> Cross-shard queries impossible without federation or remote storage</li>
+                                <li><strong>Con:</strong> Recording rules that span targets across shards produce incomplete results</li>
+                            </ul>
+                        </div>
+
+                        <h2 id="federation">Federation</h2>
+
+                        <p>Federation allows one Prometheus server to scrape selected time series from another Prometheus server&rsquo;s <code>/federate</code> endpoint. It&rsquo;s primarily used to create aggregated global views from distributed shards.</p>
+
+                        <h3 id="hierarchical-federation">Hierarchical Federation</h3>
+
+                        <p>In hierarchical federation, leaf Prometheus instances scrape targets directly, while a higher-level &ldquo;global&rdquo; Prometheus federates aggregated metrics from the leaves:</p>
+
+<pre><code class="language-yaml"># Global Prometheus — federates from shard Prometheus instances
+# Only pulls pre-aggregated recording rules, NOT raw metrics
+global:
+  scrape_interval: 60s    # Longer interval — we're pulling aggregates
+  external_labels:
+    cluster: global
+
+scrape_configs:
+  # Federate from each shard
+  - job_name: 'federate-shards'
+    honor_labels: true     # Preserve original labels from shards
+    metrics_path: '/federate'
+    params:
+      'match[]':
+        # Only federate recording rules (namespace-level aggregates)
+        - '{__name__=~"namespace:.+"}'
+        # And critical alerts-relevant metrics
+        - '{__name__=~"job:.+"}'
+        # Plus cluster-level SLO indicators
+        - '{__name__=~"slo:.+"}'
+    static_configs:
+      - targets:
+          - 'prometheus-payments:9090'
+          - 'prometheus-platform:9090'
+          - 'prometheus-data:9090'
+        labels:
+          federated: 'true'
+
+  # Also federate from infrastructure shards
+  - job_name: 'federate-infra'
+    honor_labels: true
+    metrics_path: '/federate'
+    params:
+      'match[]':
+        - '{__name__=~"node:.+"}'       # Node-level aggregates
+        - '{__name__=~"cluster:.+"}'    # Cluster-wide metrics
+        - 'up'                          # Target health
+    kubernetes_sd_configs:
+      - role: service
+        namespaces:
+          names: ['monitoring']
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_label_app]
+        regex: prometheus-infra-shard
+        action: keep
+</code></pre>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>The Golden Rule of Federation:</strong> Only federate <em>aggregated</em> metrics (recording rules). Never federate raw high-cardinality series &mdash; you&rsquo;ll simply move the cardinality problem to the global Prometheus. Use recording rules on leaves to pre-aggregate, then federate the aggregates.
+                        </div>
+
+<pre><code class="language-yaml"># Recording rules on leaf Prometheus (payments-prom)
+# These are what get federated to global
+groups:
+  - name: namespace_aggregates
+    interval: 30s
+    rules:
+      # Request rate per service
+      - record: namespace:http_requests_total:rate5m
+        expr: |
+          sum by (namespace, service, method, status_code) (
+            rate(http_requests_total[5m])
+          )
+
+      # P99 latency per service
+      - record: namespace:http_duration_seconds:p99
+        expr: |
+          histogram_quantile(0.99,
+            sum by (namespace, service, le) (
+              rate(http_request_duration_seconds_bucket[5m])
+            )
+          )
+
+      # Error ratio per service
+      - record: namespace:http_errors:ratio_rate5m
+        expr: |
+          sum by (namespace, service) (rate(http_requests_total{status_code=~"5.."}[5m]))
+          / sum by (namespace, service) (rate(http_requests_total[5m]))
+</code></pre>
+
+                        <h3 id="cross-service-federation">Cross-Service Federation</h3>
+
+                        <p>Cross-service federation is used when one team needs specific metrics from another team&rsquo;s Prometheus without a full global view:</p>
+
+<pre><code class="language-yaml"># SRE team federates SLO-relevant metrics from service teams
+scrape_configs:
+  - job_name: 'federate-slo-metrics'
+    honor_labels: true
+    metrics_path: '/federate'
+    params:
+      'match[]':
+        # Only the specific SLI metrics needed for SLO calculation
+        - 'http_requests_total{job="payment-api"}'
+        - 'http_request_duration_seconds_bucket{job="payment-api"}'
+        - 'grpc_server_handled_total{job="order-service"}'
+    static_configs:
+      - targets: ['prometheus-payments:9090']
+</code></pre>
+
+                        <h3 id="federation-pitfalls">Federation Pitfalls</h3>
+
+                        <ul>
+                            <li><strong>Staleness:</strong> Federated data is always at least one scrape interval behind. A 60s federation interval means up to 60s staleness.</li>
+                            <li><strong>Label conflicts:</strong> Always use <code>honor_labels: true</code> to preserve original labels. Without it, the federating Prometheus overwrites <code>instance</code> and <code>job</code> labels.</li>
+                            <li><strong>Cardinality explosion:</strong> Federating <code>{__name__=~".+"}</code> (all metrics) defeats the purpose &mdash; the global Prometheus must handle the combined cardinality of all leaves.</li>
+                            <li><strong>Single point of failure:</strong> If the global Prometheus goes down, cross-shard dashboards break. Use HA for the global instance too.</li>
+                        </ul>
+
+                        <h2 id="high-availability">High Availability</h2>
+
+                        <p>Prometheus HA is conceptually simple: run two (or more) identical Prometheus instances scraping the same targets. Both collect the same data independently &mdash; there is no leader election, no replication protocol, no consensus algorithm.</p>
+
+                        <h3 id="ha-pairs">HA Pairs Pattern</h3>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Prometheus HA Pair Architecture</div>
+                            <pre class="mermaid">
+flowchart TD
+    subgraph Targets["Scrape Targets"]
+        T1[Service A]
+        T2[Service B]
+        T3[Service C]
+    end
+
+    subgraph HA["HA Pair"]
+        P1["Prometheus<br/>replica=prom-0"]
+        P2["Prometheus<br/>replica=prom-1"]
+    end
+
+    subgraph Query["Query Layer"]
+        TH[Thanos Query<br/>or Mimir]
+        DEDUP["Deduplication<br/>by __replica__ label"]
+    end
+
+    T1 & T2 & T3 --> P1
+    T1 & T2 & T3 --> P2
+    P1 --> TH
+    P2 --> TH
+    TH --> DEDUP
+                            </pre>
+                        </div>
+
+<pre><code class="language-yaml"># HA Pair — Prometheus replica 0
+# Identical config on replica 1, only external_labels differ
+global:
+  scrape_interval: 15s
+  external_labels:
+    cluster: production
+    __replica__: prom-0    # prom-1 on the other instance
+
+# Both replicas have IDENTICAL scrape_configs
+scrape_configs:
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: 'true'
+
+# Both remote-write to the same long-term store
+remote_write:
+  - url: https://mimir.internal/api/v1/push
+    headers:
+      X-Scope-OrgID: production
+    queue_config:
+      max_samples_per_send: 2000
+      batch_send_deadline: 5s
+</code></pre>
+
+                        <h3 id="deduplication">Query-Time Deduplication</h3>
+
+                        <p>When both replicas remote-write to Mimir or Thanos, the query layer deduplicates by the <code>__replica__</code> label. The deduplication strategy picks one replica&rsquo;s data per time window, preferring the one with fewer gaps:</p>
+
+<pre><code class="language-yaml"># Thanos Query — deduplication configuration
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thanos-query
+spec:
+  template:
+    spec:
+      containers:
+        - name: thanos-query
+          image: quay.io/thanos/thanos:v0.35.0
+          args:
+            - query
+            - --log.level=info
+            - --query.replica-label=__replica__     # Dedup on this label
+            - --query.auto-downsampling
+            - --store=dnssrv+_grpc._tcp.thanos-store.monitoring.svc
+            - --store=dnssrv+_grpc._tcp.prometheus-ha.monitoring.svc
+          ports:
+            - containerPort: 10902
+              name: http
+            - containerPort: 10901
+              name: grpc
+</code></pre>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Why Not Active-Passive?</strong> Unlike databases, Prometheus HA uses active-active. Both replicas scrape independently because: (1) scraping is cheap compared to query load, (2) no failover delay &mdash; both are always warm, (3) no split-brain risk since there&rsquo;s no shared state, (4) slight timestamp differences between replicas are handled by deduplication.
+                        </div>
+
+                        <h3 id="ha-alertmanager">HA Alertmanager Cluster</h3>
+
+                        <p>With HA Prometheus pairs, both replicas fire the same alerts. Alertmanager handles this via its gossip-based clustering protocol (using Hashicorp&rsquo;s Memberlist):</p>
+
+<pre><code class="language-yaml"># Alertmanager cluster — 3 instances for HA
+# They gossip to deduplicate notifications
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: alertmanager
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.27.0
+          args:
+            - '--config.file=/etc/alertmanager/alertmanager.yml'
+            - '--storage.path=/alertmanager'
+            - '--cluster.listen-address=0.0.0.0:9094'
+            # Peer discovery via DNS
+            - '--cluster.peer=alertmanager-0.alertmanager:9094'
+            - '--cluster.peer=alertmanager-1.alertmanager:9094'
+            - '--cluster.peer=alertmanager-2.alertmanager:9094'
+            # Settle time before sending notifications
+            - '--cluster.settle-timeout=60s'
+          ports:
+            - containerPort: 9093    # HTTP API
+            - containerPort: 9094    # Cluster gossip
+</code></pre>
+
+<pre><code class="language-yaml"># Both Prometheus replicas send alerts to ALL Alertmanager instances
+# Alertmanager cluster deduplicates internally
+alerting:
+  alert_relabel_configs:
+    # Drop the replica label from alerts — both replicas fire identical alerts
+    - action: labeldrop
+      regex: __replica__
+
+  alertmanagers:
+    - kubernetes_sd_configs:
+        - role: endpoints
+          namespaces:
+            names: ['monitoring']
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_service_name]
+          regex: alertmanager
+          action: keep
+        - source_labels: [__meta_kubernetes_endpoint_port_name]
+          regex: http
+          action: keep
+</code></pre>
+
+                        <h2 id="remote-write-fan-out">Remote Write Fan-Out</h2>
+
+                        <p>Remote write allows Prometheus to push samples to one or more remote endpoints in parallel. This is the foundation for centralizing data from distributed shards into long-term storage.</p>
+
+                        <h3 id="write-relabeling">Write-Path Relabeling</h3>
+
+<pre><code class="language-yaml"># Remote write with selective forwarding
+# Only send aggregated metrics to the global store (cost optimization)
+remote_write:
+  # Primary: Send everything to team's Mimir tenant
+  - url: https://mimir.internal/api/v1/push
+    headers:
+      X-Scope-OrgID: payments-team
+    queue_config:
+      max_samples_per_send: 2000
+      batch_send_deadline: 5s
+      max_shards: 30
+
+  # Secondary: Send only aggregates to global view
+  - url: https://mimir-global.internal/api/v1/push
+    headers:
+      X-Scope-OrgID: global
+    write_relabel_configs:
+      # Only forward recording rules (pre-aggregated)
+      - source_labels: [__name__]
+        regex: '(namespace|job|cluster|slo):.*'
+        action: keep
+    queue_config:
+      max_samples_per_send: 1000
+      batch_send_deadline: 10s
+      max_shards: 10
+</code></pre>
+
+                        <h3 id="queue-tuning">Queue Configuration Tuning</h3>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Configuration</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h4>Remote Write Queue Parameters</h4>
+                                <table class="table table-bordered">
+                                    <thead><tr><th>Parameter</th><th>Default</th><th>Recommended (High Volume)</th><th>Effect</th></tr></thead>
+                                    <tbody>
+                                        <tr><td><code>max_shards</code></td><td>200</td><td>30&ndash;50</td><td>Max concurrent write goroutines</td></tr>
+                                        <tr><td><code>min_shards</code></td><td>1</td><td>5&ndash;10</td><td>Min concurrent writes (faster ramp-up)</td></tr>
+                                        <tr><td><code>max_samples_per_send</code></td><td>2000</td><td>2000&ndash;5000</td><td>Batch size per request</td></tr>
+                                        <tr><td><code>batch_send_deadline</code></td><td>5s</td><td>5s</td><td>Max wait before sending partial batch</td></tr>
+                                        <tr><td><code>capacity</code></td><td>2500</td><td>10000</td><td>Per-shard buffer capacity</td></tr>
+                                        <tr><td><code>retry_on_http_429</code></td><td>true</td><td>true</td><td>Retry on rate-limit responses</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="experiment-tags"><span class="bias-tag">Performance</span><span class="bias-tag">Tuning</span></div>
+                        </div>
+
+<pre><code class="language-bash"># Key metrics to monitor remote write health
+# Pending samples in the WAL waiting to be sent
+prometheus_remote_storage_samples_pending
+
+# Failed sends (should be near zero)
+rate(prometheus_remote_storage_samples_failed_total[5m])
+
+# Highest timestamp successfully sent vs current time (lag)
+prometheus_remote_storage_highest_timestamp_in_seconds
+  - prometheus_remote_storage_queue_highest_sent_timestamp_seconds
+
+# Shard scaling — are we at max shards?
+prometheus_remote_storage_shards
+prometheus_remote_storage_shards_max
+</code></pre>
+
+                        <h2 id="combined-patterns">Combined Patterns</h2>
+
+                        <h3 id="reference-architecture">Reference Architecture</h3>
+
+                        <p>A production deployment typically combines multiple patterns. Here&rsquo;s a reference architecture for a mid-size organization (500+ microservices, 50M+ active series):</p>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Combined Scaling Architecture</div>
+                            <pre class="mermaid">
+flowchart TD
+    subgraph Leaf["Leaf Layer (Per-Team Shards)"]
+        direction LR
+        LP1["Platform<br/>HA Pair"]
+        LP2["Payments<br/>HA Pair"]
+        LP3["Data<br/>HA Pair"]
+        LP4["Frontend<br/>HA Pair"]
+    end
+
+    subgraph LTS["Long-Term Storage"]
+        MIMIR[Grafana Mimir<br/>Multi-Tenant]
+    end
+
+    subgraph Query["Query Layer"]
+        GF[Grafana<br/>Dashboards]
+    end
+
+    subgraph Alert["Alert Layer"]
+        AM["Alertmanager<br/>HA Cluster (3)"]
+    end
+
+    LP1 & LP2 & LP3 & LP4 -->|"remote_write"| MIMIR
+    LP1 & LP2 & LP3 & LP4 -->|"alerts"| AM
+    GF -->|"PromQL"| MIMIR
+                            </pre>
+                        </div>
+
+                        <h3 id="decision-matrix">Decision Matrix</h3>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Decision Guide</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h4>When to Use Each Pattern</h4>
+                                <table class="table table-bordered">
+                                    <thead><tr><th>Pattern</th><th>Use When</th><th>Avoid When</th></tr></thead>
+                                    <tbody>
+                                        <tr><td><strong>Functional Sharding</strong></td><td>Clear team/domain boundaries; independent ownership wanted</td><td>Single team owns everything; &lt;5M series total</td></tr>
+                                        <tr><td><strong>Hashmod Sharding</strong></td><td>One massive job exceeds single-server capacity (e.g., 20K nodes)</td><td>Cross-target recording rules needed; few targets</td></tr>
+                                        <tr><td><strong>Hierarchical Federation</strong></td><td>Global dashboards needed without central long-term store</td><td>High-cardinality raw metrics needed globally</td></tr>
+                                        <tr><td><strong>HA Pairs</strong></td><td>Always &mdash; any production deployment</td><td>Cost-constrained dev/staging environments</td></tr>
+                                        <tr><td><strong>Remote Write + Mimir/Thanos</strong></td><td>Global query view; retention &gt;30d; multi-cluster</td><td>Single small cluster; cost sensitivity</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="experiment-tags"><span class="bias-tag">Architecture</span><span class="bias-tag">Decision Making</span></div>
+                        </div>
+
+                        <h2 id="conclusion">Conclusion</h2>
+
+                        <p>Scaling Prometheus is not a single decision but a combination of complementary patterns applied based on your specific constraints:</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Key Takeaways:</strong>
+                            <ul class="mt-2 mb-0">
+                                <li><strong>Start with functional sharding</strong> &mdash; it aligns with team ownership and is simplest to operate</li>
+                                <li><strong>Always deploy HA pairs</strong> &mdash; the cost of a second replica is trivial compared to monitoring blind spots</li>
+                                <li><strong>Federate aggregates, not raw metrics</strong> &mdash; recording rules on leaves, federation of pre-aggregated series</li>
+                                <li><strong>Use remote write for global view</strong> &mdash; Mimir/Thanos provide better global querying than federation</li>
+                                <li><strong>Hashmod is a last resort</strong> &mdash; use it only when a single job truly exceeds one server</li>
+                                <li><strong>Monitor your monitoring</strong> &mdash; track WAL size, ingestion rate, remote write lag, and query latency</li>
+                            </ul>
+                        </div>
+
+                        <!-- Related Posts -->
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                            <div class="related-post-item">
+                                <h5>Part 6: Effective Alerting &amp; Alertmanager</h5>
+                                <p>Production alerting pipelines, routing trees, and notification delivery that pair with HA Alertmanager clusters.</p>
+                                <a href="monitoring-observability-prometheus-part06-alerting-alertmanager.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 8: Optimizing &amp; Debugging Prometheus</h5>
+                                <p>Tune each shard for maximum performance with Go profiling tools and TSDB optimization techniques.</p>
+                                <a href="monitoring-observability-prometheus-part08-optimizing-debugging.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 10: Remote Storage Systems</h5>
+                                <p>Deep dive into Grafana Mimir and VictoriaMetrics as the long-term storage backends that complete the scaling story.</p>
+                                <a href="monitoring-observability-prometheus-part10-remote-storage.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                        <!-- Series Navigation -->
+                        <div class="series-nav">
+                            <a href="monitoring-observability-prometheus-part06-alerting-alertmanager.html" class="series-nav-item prev">
+                                <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span>
+                                <span class="nav-title">Part 6: Alerting &amp; Alertmanager</span>
+                            </a>
+                            <a href="monitoring-observability-prometheus-part08-optimizing-debugging.html" class="series-nav-item next">
+                                <span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span>
+                                <span class="nav-title">Part 8: Optimizing &amp; Debugging</span>
+                            </a>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <!-- Footer -->
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left"><div class="fc-brand-group"><div class="fc-brand-stack"><span></span><span></span><span></span></div><span class="fc-brand-name">Wasil Zafar</span></div><span class="fc-tagline">Consultant &amp; Cloud Architect</span></div>
+                <div class="fc-center"><a href="/">Home</a><a href="/disclaimer.html">Disclaimer</a><a href="/privacy-policy.html">Privacy</a><a href="/pages/contact.html">Contact</a></div>
+                <div class="fc-right"><a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a><a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a><a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a><a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a><a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a><a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a><a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a><a href="/feed.xml" target="_blank" title="RSS Feed"><i class="fas fa-rss"></i></a></div>
+            </div>
+            <div class="footer-sub"><span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span><a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a></div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="../../../js/path-progress.js"></script>
+    <script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

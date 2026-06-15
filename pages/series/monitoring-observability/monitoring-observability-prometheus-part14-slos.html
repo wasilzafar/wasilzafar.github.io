@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Implement Service Level Objectives with Prometheus using multi-window multi-burn-rate alerting, error budgets, and the Sloth SLO generator. Learn the SLI/SLO/SLA hierarchy, calculate error budgets, build burn-rate alerts, and create SLO dashboards for reliability engineering." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="SLO, SLI, SLA, error budget, burn rate, multi-window alerting, Prometheus SLO, Sloth, service level objectives, reliability engineering, site reliability, error budget policy" />
+    <meta property="og:title" content="Prometheus Deep Dive Part 14: SLOs & Error Budgets with Prometheus" />
+    <meta property="og:description" content="Implement Service Level Objectives with Prometheus — multi-window multi-burn-rate alerting, error budgets, and SLO dashboards." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-06-15" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part14-slos.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part14-slos-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part14-slos-tw.jpg" />
+    <title>Prometheus Deep Dive Part 14: SLOs &amp; Error Budgets with Prometheus - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part14-slos.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{'ad_storage':'denied','ad_user_data':'denied','ad_personalization':'denied','analytics_storage':'denied','region':['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']});gtag('consent','default',{'ad_storage':'granted','ad_user_data':'granted','ad_personalization':'granted','analytics_storage':'granted'});gtag('set','url_passthrough',true);</script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <div class="nav-v16-wrapper"><nav class="nav-v16"><a href="/" class="brand"><div class="brand-stack"><span></span><span></span><span></span></div><span class="brand-text">Wasil Zafar</span></a><button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()"><span></span><span></span><span></span></button><div class="links"><a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a><a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a><a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a><a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a><a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a><button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button></div></nav></div>
+
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Monitoring &amp; Observability Series</a>
+                <h1 class="display-4 fw-bold mb-3">Prometheus Deep Dive Part 14: SLOs &amp; Error Budgets</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>June 15, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>32 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Implement Service Level Objectives as code with Prometheus. Define SLIs from request metrics, calculate error budgets, build multi-window multi-burn-rate alerts that page only when reliability is genuinely at risk, and automate SLO generation with Sloth.</p>
+            </div>
+        </div>
+    </section>
+
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header"><h3><i class="fas fa-list me-2"></i>Table of Contents</h3><button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button></div>
+        <ol>
+            <li><a href="#sli-slo-sla" onclick="closeNav()">SLI / SLO / SLA Hierarchy</a></li>
+            <li><a href="#defining-slis" onclick="closeNav()">Defining SLIs with Prometheus</a></li>
+            <li><a href="#error-budgets" onclick="closeNav()">Error Budgets</a></li>
+            <li><a href="#burn-rate" onclick="closeNav()">Multi-Window Multi-Burn-Rate Alerting</a></li>
+            <li><a href="#sloth" onclick="closeNav()">Automating with Sloth</a></li>
+            <li><a href="#dashboards" onclick="closeNav()">SLO Dashboards</a></li>
+            <li><a href="#error-budget-policy" onclick="closeNav()">Error Budget Policy</a></li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                        <h2 id="sli-slo-sla">SLI / SLO / SLA Hierarchy</h2>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Concepts</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h4>The Reliability Hierarchy</h4>
+                                <table class="table table-bordered">
+                                    <thead><tr><th>Term</th><th>Definition</th><th>Example</th><th>Owner</th></tr></thead>
+                                    <tbody>
+                                        <tr><td><strong>SLI</strong></td><td>Service Level <em>Indicator</em> &mdash; a quantitative measure of service quality</td><td>Ratio of successful HTTP requests</td><td>Engineering</td></tr>
+                                        <tr><td><strong>SLO</strong></td><td>Service Level <em>Objective</em> &mdash; target value for an SLI</td><td>99.9% of requests succeed in &lt;300ms</td><td>Engineering + Product</td></tr>
+                                        <tr><td><strong>SLA</strong></td><td>Service Level <em>Agreement</em> &mdash; contractual commitment with consequences</td><td>99.5% uptime or credits issued</td><td>Business + Legal</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="experiment-tags"><span class="bias-tag">SRE</span><span class="bias-tag">Reliability</span></div>
+                        </div>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Golden Rule:</strong> Your SLO should always be stricter than your SLA. If your SLA promises 99.5% availability, set your internal SLO to 99.9%. The gap between SLO and SLA is your safety margin &mdash; when the SLO is breached, you have time to recover before violating the SLA.
+                        </div>
+
+                        <h2 id="defining-slis">Defining SLIs with Prometheus</h2>
+
+<pre><code class="language-yaml"># Recording rules for SLI: Request Availability
+# SLI = proportion of successful requests
+groups:
+  - name: slo:api-gateway:availability
+    rules:
+      # Total requests (30-day rolling window, multiple rates for burn-rate)
+      - record: slo:api_requests:rate5m
+        expr: sum(rate(http_requests_total{job="api-gateway"}[5m]))
+
+      - record: slo:api_errors:rate5m
+        expr: sum(rate(http_requests_total{job="api-gateway",status=~"5.."}[5m]))
+
+      # Error ratio (instantaneous)
+      - record: slo:api_error_ratio:rate5m
+        expr: |
+          slo:api_errors:rate5m / slo:api_requests:rate5m
+
+      # SLI: 1 - error_ratio = availability
+      - record: slo:api_availability:rate5m
+        expr: 1 - (slo:api_errors:rate5m / slo:api_requests:rate5m)
+</code></pre>
+
+<pre><code class="language-yaml"># Recording rules for SLI: Request Latency
+# SLI = proportion of requests faster than threshold
+groups:
+  - name: slo:api-gateway:latency
+    rules:
+      # Requests within latency budget (300ms threshold)
+      - record: slo:api_latency_good:rate5m
+        expr: |
+          sum(rate(http_request_duration_seconds_bucket{
+            job="api-gateway",
+            le="0.3"
+          }[5m]))
+
+      - record: slo:api_latency_total:rate5m
+        expr: |
+          sum(rate(http_request_duration_seconds_count{
+            job="api-gateway"
+          }[5m]))
+
+      # SLI: proportion within latency budget
+      - record: slo:api_latency_ratio:rate5m
+        expr: |
+          slo:api_latency_good:rate5m / slo:api_latency_total:rate5m
+</code></pre>
+
+                        <h2 id="error-budgets">Error Budgets</h2>
+
+                        <p>The error budget is the acceptable amount of unreliability over a time window. For a 99.9% SLO over 30 days:</p>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-calculator me-2"></i>
+                            <strong>Error Budget Calculation:</strong><br>
+                            Error budget = 1 - SLO target = 1 - 0.999 = 0.001 (0.1%)<br>
+                            In 30 days: 30 &times; 24 &times; 60 = 43,200 minutes<br>
+                            Budget in minutes: 43,200 &times; 0.001 = <strong>43.2 minutes of downtime allowed</strong><br>
+                            Budget in requests: if 1M requests/month, 1,000 can fail
+                        </div>
+
+<pre><code class="language-yaml"># Recording rule: Error budget remaining (request-based)
+groups:
+  - name: slo:api-gateway:error-budget
+    rules:
+      # Total errors in 30-day window
+      - record: slo:api_errors:increase30d
+        expr: |
+          sum(increase(http_requests_total{job="api-gateway",status=~"5.."}[30d]))
+
+      # Total requests in 30-day window
+      - record: slo:api_requests:increase30d
+        expr: |
+          sum(increase(http_requests_total{job="api-gateway"}[30d]))
+
+      # Error budget consumed (0 = none consumed, 1 = fully exhausted)
+      - record: slo:api_error_budget_consumed:ratio
+        expr: |
+          (slo:api_errors:increase30d / slo:api_requests:increase30d)
+          / (1 - 0.999)
+
+      # Error budget remaining (1 = full budget, 0 = exhausted, negative = over)
+      - record: slo:api_error_budget_remaining:ratio
+        expr: 1 - slo:api_error_budget_consumed:ratio
+</code></pre>
+
+                        <h2 id="burn-rate">Multi-Window Multi-Burn-Rate Alerting</h2>
+
+                        <p>Burn rate measures how fast you&rsquo;re consuming your error budget. A burn rate of 1x means you&rsquo;ll exactly exhaust your budget in 30 days. A burn rate of 14.4x means you&rsquo;ll exhaust it in ~2 hours:</p>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">SRE Best Practice</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h4>Multi-Window Burn-Rate Alert Windows</h4>
+                                <table class="table table-bordered">
+                                    <thead><tr><th>Severity</th><th>Burn Rate</th><th>Long Window</th><th>Short Window</th><th>Budget Consumed</th><th>Time to Exhaust</th></tr></thead>
+                                    <tbody>
+                                        <tr><td><strong>Page</strong></td><td>14.4x</td><td>1h</td><td>5m</td><td>2% in 1h</td><td>~2 hours</td></tr>
+                                        <tr><td><strong>Page</strong></td><td>6x</td><td>6h</td><td>30m</td><td>5% in 6h</td><td>~5 hours</td></tr>
+                                        <tr><td><strong>Ticket</strong></td><td>3x</td><td>1d</td><td>2h</td><td>10% in 1d</td><td>~10 days</td></tr>
+                                        <tr><td><strong>Ticket</strong></td><td>1x</td><td>3d</td><td>6h</td><td>10% in 3d</td><td>~30 days</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="experiment-tags"><span class="bias-tag">Google SRE</span><span class="bias-tag">Burn Rate</span></div>
+                        </div>
+
+<pre><code class="language-yaml"># Multi-window multi-burn-rate alerts for 99.9% availability SLO
+groups:
+  - name: slo:api-gateway:burn-rate-alerts
+    rules:
+      # ---- Recording rules for burn rates ----
+      # 5m error ratio
+      - record: slo:api_error_ratio:rate5m
+        expr: |
+          sum(rate(http_requests_total{job="api-gateway",status=~"5.."}[5m]))
+          / sum(rate(http_requests_total{job="api-gateway"}[5m]))
+
+      # 30m error ratio
+      - record: slo:api_error_ratio:rate30m
+        expr: |
+          sum(rate(http_requests_total{job="api-gateway",status=~"5.."}[30m]))
+          / sum(rate(http_requests_total{job="api-gateway"}[30m]))
+
+      # 1h error ratio
+      - record: slo:api_error_ratio:rate1h
+        expr: |
+          sum(rate(http_requests_total{job="api-gateway",status=~"5.."}[1h]))
+          / sum(rate(http_requests_total{job="api-gateway"}[1h]))
+
+      # 2h error ratio
+      - record: slo:api_error_ratio:rate2h
+        expr: |
+          sum(rate(http_requests_total{job="api-gateway",status=~"5.."}[2h]))
+          / sum(rate(http_requests_total{job="api-gateway"}[2h]))
+
+      # 6h error ratio
+      - record: slo:api_error_ratio:rate6h
+        expr: |
+          sum(rate(http_requests_total{job="api-gateway",status=~"5.."}[6h]))
+          / sum(rate(http_requests_total{job="api-gateway"}[6h]))
+
+      # 1d error ratio
+      - record: slo:api_error_ratio:rate1d
+        expr: |
+          sum(rate(http_requests_total{job="api-gateway",status=~"5.."}[1d]))
+          / sum(rate(http_requests_total{job="api-gateway"}[1d]))
+
+      # 3d error ratio
+      - record: slo:api_error_ratio:rate3d
+        expr: |
+          sum(rate(http_requests_total{job="api-gateway",status=~"5.."}[3d]))
+          / sum(rate(http_requests_total{job="api-gateway"}[3d]))
+
+      # ---- Alerting rules ----
+      # Page: 14.4x burn rate over 1h (confirmed by 5m short window)
+      - alert: SLOBurnRateCritical
+        expr: |
+          slo:api_error_ratio:rate1h > (14.4 * 0.001)
+          and
+          slo:api_error_ratio:rate5m > (14.4 * 0.001)
+        labels:
+          severity: critical
+          slo: api-availability
+          window: 1h
+        annotations:
+          summary: "API availability burning error budget 14.4x faster than allowed"
+          description: "At current rate, 30-day error budget will be exhausted in ~2 hours"
+          runbook_url: "https://runbooks.example.com/slo-api-availability"
+
+      # Page: 6x burn rate over 6h (confirmed by 30m short window)
+      - alert: SLOBurnRateHigh
+        expr: |
+          slo:api_error_ratio:rate6h > (6 * 0.001)
+          and
+          slo:api_error_ratio:rate30m > (6 * 0.001)
+        labels:
+          severity: critical
+          slo: api-availability
+          window: 6h
+        annotations:
+          summary: "API availability burning error budget 6x faster than allowed"
+          description: "At current rate, 30-day error budget will be exhausted in ~5 hours"
+
+      # Ticket: 3x burn rate over 1d (confirmed by 2h short window)
+      - alert: SLOBurnRateWarning
+        expr: |
+          slo:api_error_ratio:rate1d > (3 * 0.001)
+          and
+          slo:api_error_ratio:rate2h > (3 * 0.001)
+        labels:
+          severity: warning
+          slo: api-availability
+          window: 1d
+        annotations:
+          summary: "API availability burning error budget 3x faster than allowed"
+
+      # Ticket: 1x burn rate over 3d (confirmed by 6h short window)
+      - alert: SLOBurnRateSlow
+        expr: |
+          slo:api_error_ratio:rate3d > (1 * 0.001)
+          and
+          slo:api_error_ratio:rate6h > (1 * 0.001)
+        labels:
+          severity: warning
+          slo: api-availability
+          window: 3d
+        annotations:
+          summary: "API availability on track to miss SLO this period"
+</code></pre>
+
+                        <h2 id="sloth">Automating with Sloth</h2>
+
+                        <p>Sloth generates all the recording rules and burn-rate alerts from a simple SLO specification:</p>
+
+<pre><code class="language-yaml"># slo.yaml — Sloth SLO specification
+version: "prometheus/v1"
+service: "api-gateway"
+labels:
+  team: platform
+  tier: tier-1
+
+slos:
+  - name: "requests-availability"
+    objective: 99.9
+    description: "99.9% of API requests succeed"
+    sli:
+      events:
+        error_query: sum(rate(http_requests_total{job="api-gateway",status=~"5.."}[{{.window}}]))
+        total_query: sum(rate(http_requests_total{job="api-gateway"}[{{.window}}]))
+    alerting:
+      name: APIGatewayAvailability
+      labels:
+        team: platform
+      annotations:
+        runbook_url: "https://runbooks.example.com/api-gateway-availability"
+      page_alert:
+        labels:
+          severity: critical
+      ticket_alert:
+        labels:
+          severity: warning
+
+  - name: "requests-latency"
+    objective: 99.0
+    description: "99% of API requests complete within 300ms"
+    sli:
+      events:
+        error_query: |
+          sum(rate(http_request_duration_seconds_count{job="api-gateway"}[{{.window}}]))
+          -
+          sum(rate(http_request_duration_seconds_bucket{job="api-gateway",le="0.3"}[{{.window}}]))
+        total_query: sum(rate(http_request_duration_seconds_count{job="api-gateway"}[{{.window}}]))
+    alerting:
+      name: APIGatewayLatency
+      labels:
+        team: platform
+</code></pre>
+
+<pre><code class="language-bash"># Generate Prometheus rules from Sloth spec
+sloth generate -i slo.yaml -o rules/
+
+# Output: rules/api-gateway.yaml
+# Contains:
+# - 14 recording rules (error ratios at multiple windows)
+# - 4 alerting rules (multi-burn-rate, multi-window)
+# - SLO metadata labels on all rules
+
+# Validate generated rules
+promtool check rules rules/api-gateway.yaml
+
+# Sloth also supports Kubernetes CRD mode
+sloth generate -i slo.yaml --mode kubernetes -o manifests/
+</code></pre>
+
+                        <h2 id="dashboards">SLO Dashboards</h2>
+
+<pre><code class="language-bash"># Key queries for SLO dashboards
+
+# 1. Current error budget remaining (percentage)
+1 - (
+  sum(increase(http_requests_total{job="api-gateway",status=~"5.."}[30d]))
+  / sum(increase(http_requests_total{job="api-gateway"}[30d]))
+) / (1 - 0.999)
+
+# 2. Burn rate (current, over 1h)
+(
+  sum(rate(http_requests_total{job="api-gateway",status=~"5.."}[1h]))
+  / sum(rate(http_requests_total{job="api-gateway"}[1h]))
+) / (1 - 0.999)
+
+# 3. Time until budget exhaustion (hours)
+# If burn_rate > 1:
+(720 * (1 - slo:api_error_budget_consumed:ratio)) / burn_rate_1h
+
+# 4. SLI over sliding windows
+slo:api_availability:rate5m   # Real-time
+slo:api_error_ratio:rate1h    # Hourly trend
+slo:api_error_ratio:rate1d    # Daily trend
+</code></pre>
+
+                        <h2 id="error-budget-policy">Error Budget Policy</h2>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-shield-alt me-2"></i>
+                            <strong>Error Budget Policy Framework:</strong>
+                            <ul class="mt-2 mb-0">
+                                <li><strong>&gt;50% remaining:</strong> Normal velocity. Ship features freely, accept reasonable risk.</li>
+                                <li><strong>25&ndash;50% remaining:</strong> Caution. Require extra review for risky deployments. Prioritize reliability work.</li>
+                                <li><strong>&lt;25% remaining:</strong> Freeze non-critical deploys. Focus engineering time on reliability improvements.</li>
+                                <li><strong>0% (exhausted):</strong> Full feature freeze. All engineering effort on reliability until budget replenishes.</li>
+                            </ul>
+                        </div>
+
+                        <h2 id="conclusion">Conclusion</h2>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Key Takeaways:</strong>
+                            <ul class="mt-2 mb-0">
+                                <li><strong>SLIs are ratios</strong> &mdash; good events / total events, measured from user-facing metrics</li>
+                                <li><strong>Error budgets quantify risk tolerance</strong> &mdash; 99.9% SLO = 43 minutes of allowed downtime per month</li>
+                                <li><strong>Multi-burn-rate alerts are precise</strong> &mdash; page for fast burns (14.4x), ticket for slow burns (1x)</li>
+                                <li><strong>Short windows prevent stale alerts</strong> &mdash; confirm the long-window signal is still active</li>
+                                <li><strong>Sloth automates the math</strong> &mdash; declare SLO target, get recording rules and alerts for free</li>
+                                <li><strong>Error budget policies drive decisions</strong> &mdash; connect SLO status to deployment velocity</li>
+                            </ul>
+                        </div>
+
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                            <div class="related-post-item">
+                                <h5>Part 6: Effective Alerting &amp; Alertmanager</h5>
+                                <p>The alerting fundamentals that burn-rate alerts build upon.</p>
+                                <a href="monitoring-observability-prometheus-part06-alerting-alertmanager.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 15: OpenTelemetry &amp; the Future</h5>
+                                <p>How OpenTelemetry and Prometheus 3.x enhance SLO implementations with native histograms.</p>
+                                <a href="monitoring-observability-prometheus-part15-opentelemetry-future.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 13: CI/CD Pipelines</h5>
+                                <p>Test your SLO recording rules and burn-rate alerts in CI before deployment.</p>
+                                <a href="monitoring-observability-prometheus-part13-ci-pipelines.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                        <div class="series-nav">
+                            <a href="monitoring-observability-prometheus-part13-ci-pipelines.html" class="series-nav-item prev">
+                                <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span>
+                                <span class="nav-title">Part 13: CI Pipelines</span>
+                            </a>
+                            <a href="monitoring-observability-prometheus-part15-opentelemetry-future.html" class="series-nav-item next">
+                                <span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span>
+                                <span class="nav-title">Part 15: OpenTelemetry &amp; Beyond</span>
+                            </a>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <footer id="social-media"><div class="footer-v2-wrapper"><div class="footer-bar"><div class="fc-left"><div class="fc-brand-group"><div class="fc-brand-stack"><span></span><span></span><span></span></div><span class="fc-brand-name">Wasil Zafar</span></div><span class="fc-tagline">Consultant &amp; Cloud Architect</span></div><div class="fc-center"><a href="/">Home</a><a href="/disclaimer.html">Disclaimer</a><a href="/privacy-policy.html">Privacy</a><a href="/pages/contact.html">Contact</a></div><div class="fc-right"><a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a><a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a><a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a><a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a><a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a><a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a><a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a><a href="/feed.xml" target="_blank" title="RSS Feed"><i class="fas fa-rss"></i></a></div></div><div class="footer-sub"><span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span><a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a></div></div></footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="../../../js/path-progress.js"></script>
+    <script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

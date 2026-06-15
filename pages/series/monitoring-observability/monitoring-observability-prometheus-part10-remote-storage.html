@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Deep dive into Prometheus remote storage with Grafana Mimir and VictoriaMetrics. Learn remote write configuration, multi-tenancy, long-term retention, global query views, and when to choose each backend for production deployments." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="Prometheus remote storage, Grafana Mimir, VictoriaMetrics, remote write, remote read, long-term storage, multi-tenancy, global query, Cortex, time series database, metric retention" />
+    <meta property="og:title" content="Prometheus Deep Dive Part 10: Remote Storage Systems" />
+    <meta property="og:description" content="Deep dive into Grafana Mimir and VictoriaMetrics as remote storage backends for Prometheus — long-term retention, global queries, and multi-tenancy." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-06-15" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part10-remote-storage.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part10-remote-storage-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part10-remote-storage-tw.jpg" />
+    <title>Prometheus Deep Dive Part 10: Remote Storage Systems - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part10-remote-storage.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{'ad_storage':'denied','ad_user_data':'denied','ad_personalization':'denied','analytics_storage':'denied','region':['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']});gtag('consent','default',{'ad_storage':'granted','ad_user_data':'granted','ad_personalization':'granted','analytics_storage':'granted'});gtag('set','url_passthrough',true);</script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+    <script type="application/ld+json">
+    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Prometheus Deep Dive Part 10: Remote Storage Systems", "description": "Deep dive into Grafana Mimir and VictoriaMetrics as remote storage backends for Prometheus.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part10-remote-storage.html"}, "wordCount": 6500, "inLanguage": "en", "datePublished": "2026-06-15", "dateModified": "2026-06-15", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part10-remote-storage-og.jpg", "width": 1200, "height": 630}}
+    </script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <!-- Navigation Bar -->
+    <div class="nav-v16-wrapper"><nav class="nav-v16"><a href="/" class="brand"><div class="brand-stack"><span></span><span></span><span></span></div><span class="brand-text">Wasil Zafar</span></a><button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()"><span></span><span></span><span></span></button><div class="links"><a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a><a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a><a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a><a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a><a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a><button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button></div></nav></div>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Monitoring &amp; Observability Series</a>
+                <h1 class="display-4 fw-bold mb-3">Prometheus Deep Dive Part 10: Remote Storage Systems</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>June 15, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>32 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Prometheus&rsquo;s local TSDB is limited to a single server&rsquo;s disk. Remote storage systems &mdash; particularly Grafana Mimir and VictoriaMetrics &mdash; extend Prometheus with virtually unlimited retention, global query views, multi-tenancy, and horizontal scalability. Learn when to adopt each and how to configure production-grade remote write pipelines.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header"><h3><i class="fas fa-list me-2"></i>Table of Contents</h3><button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button></div>
+        <ol>
+            <li>
+                <a href="#remote-storage-overview" onclick="closeNav()">Remote Storage Overview</a>
+                <ul>
+                    <li><a href="#why-remote" onclick="closeNav()">Why Remote Storage?</a></li>
+                    <li><a href="#write-vs-read" onclick="closeNav()">Remote Write vs Remote Read</a></li>
+                    <li><a href="#landscape" onclick="closeNav()">Solution Landscape</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#grafana-mimir" onclick="closeNav()">Grafana Mimir</a>
+                <ul>
+                    <li><a href="#mimir-architecture" onclick="closeNav()">Architecture &amp; Components</a></li>
+                    <li><a href="#mimir-deployment" onclick="closeNav()">Deployment (Monolithic &amp; Microservices)</a></li>
+                    <li><a href="#mimir-multi-tenancy" onclick="closeNav()">Multi-Tenancy</a></li>
+                    <li><a href="#mimir-configuration" onclick="closeNav()">Configuration Deep Dive</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#victoriametrics" onclick="closeNav()">VictoriaMetrics</a>
+                <ul>
+                    <li><a href="#vm-architecture" onclick="closeNav()">Architecture (Single &amp; Cluster)</a></li>
+                    <li><a href="#vm-deployment" onclick="closeNav()">Deployment</a></li>
+                    <li><a href="#vm-features" onclick="closeNav()">Unique Features (MetricsQL, Downsampling)</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#remote-write-config" onclick="closeNav()">Remote Write Configuration</a>
+                <ul>
+                    <li><a href="#write-tuning" onclick="closeNav()">Queue Tuning &amp; Reliability</a></li>
+                    <li><a href="#write-relabeling" onclick="closeNav()">Write-Path Relabeling</a></li>
+                    <li><a href="#exemplars" onclick="closeNav()">Exemplars Support</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#comparison" onclick="closeNav()">Mimir vs VictoriaMetrics</a>
+                <ul>
+                    <li><a href="#feature-comparison" onclick="closeNav()">Feature Comparison</a></li>
+                    <li><a href="#operational-comparison" onclick="closeNav()">Operational Comparison</a></li>
+                    <li><a href="#when-to-choose" onclick="closeNav()">Decision Guide</a></li>
+                </ul>
+            </li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                        <h2 id="remote-storage-overview">Remote Storage Overview</h2>
+
+                        <h3 id="why-remote">Why Remote Storage?</h3>
+
+                        <p>Prometheus&rsquo;s local TSDB is optimized for recent data queries. It excels at last-few-hours dashboards but has inherent limitations for enterprise use cases:</p>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-database me-2"></i>
+                            <strong>Limitations of Local Storage:</strong>
+                            <ul class="mt-2 mb-0">
+                                <li><strong>Single-node capacity</strong> &mdash; limited by one server&rsquo;s disk and memory</li>
+                                <li><strong>No global view</strong> &mdash; each Prometheus instance sees only its own data</li>
+                                <li><strong>No multi-tenancy</strong> &mdash; cannot isolate teams&rsquo; data or apply per-tenant limits</li>
+                                <li><strong>Retention limited</strong> &mdash; practically 30&ndash;90 days before disk/compaction issues</li>
+                                <li><strong>No deduplication</strong> &mdash; HA pairs write duplicate data locally</li>
+                                <li><strong>Backup complexity</strong> &mdash; snapshots are large and node-specific</li>
+                            </ul>
+                        </div>
+
+                        <h3 id="write-vs-read">Remote Write vs Remote Read</h3>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Remote Write vs Remote Read Data Flow</div>
+                            <pre class="mermaid">
+flowchart LR
+    subgraph Prometheus
+        TSDB[Local TSDB]
+        WAL[WAL]
+    end
+
+    subgraph RemoteWrite["Remote Write (push)"]
+        RW["Samples pushed<br/>as they're ingested"]
+    end
+
+    subgraph RemoteRead["Remote Read (pull)"]
+        RR["Queries proxied<br/>at query time"]
+    end
+
+    subgraph LTS["Long-Term Store"]
+        MIMIR[Grafana Mimir]
+    end
+
+    WAL -->|"continuous push"| RW --> MIMIR
+    TSDB -.->|"query-time proxy"| RR -.-> MIMIR
+                            </pre>
+                        </div>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Comparison</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h4>Remote Write vs Remote Read</h4>
+                                <table class="table table-bordered">
+                                    <thead><tr><th>Aspect</th><th>Remote Write</th><th>Remote Read</th></tr></thead>
+                                    <tbody>
+                                        <tr><td><strong>Direction</strong></td><td>Prometheus pushes to backend</td><td>Prometheus queries backend at query time</td></tr>
+                                        <tr><td><strong>Latency</strong></td><td>Near real-time (seconds)</td><td>Adds query latency (network round-trip)</td></tr>
+                                        <tr><td><strong>Data scope</strong></td><td>All ingested samples (or filtered)</td><td>Only what&rsquo;s queried</td></tr>
+                                        <tr><td><strong>Local retention</strong></td><td>Can reduce to hours (data is in backend)</td><td>Still need local data for recent queries</td></tr>
+                                        <tr><td><strong>Query path</strong></td><td>Query backend directly (Grafana&rarr;Mimir)</td><td>Query Prometheus (merges local + remote)</td></tr>
+                                        <tr><td><strong>Recommended</strong></td><td><strong>Yes</strong> &mdash; standard pattern</td><td>Rarely &mdash; adds complexity with little benefit</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="experiment-tags"><span class="bias-tag">Architecture</span><span class="bias-tag">Data Flow</span></div>
+                        </div>
+
+                        <h3 id="landscape">Solution Landscape</h3>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Landscape</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h4>Prometheus-Compatible Remote Storage Solutions</h4>
+                                <table class="table table-bordered">
+                                    <thead><tr><th>Solution</th><th>License</th><th>Backed By</th><th>Key Differentiator</th></tr></thead>
+                                    <tbody>
+                                        <tr><td><strong>Grafana Mimir</strong></td><td>AGPLv3</td><td>Grafana Labs</td><td>Multi-tenant, object-store native, Cortex successor</td></tr>
+                                        <tr><td><strong>VictoriaMetrics</strong></td><td>Apache 2.0</td><td>VictoriaMetrics Inc</td><td>High compression, MetricsQL, simple operations</td></tr>
+                                        <tr><td><strong>Thanos</strong></td><td>Apache 2.0</td><td>CNCF</td><td>Sidecar model, uses existing Prometheus TSDB blocks</td></tr>
+                                        <tr><td><strong>Cortex</strong></td><td>Apache 2.0</td><td>CNCF (archived)</td><td>Mimir&rsquo;s predecessor — use Mimir instead</td></tr>
+                                        <tr><td><strong>M3DB</strong></td><td>Apache 2.0</td><td>Uber</td><td>Originally for Uber scale; declining community</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="experiment-tags"><span class="bias-tag">Ecosystem</span><span class="bias-tag">Comparison</span></div>
+                        </div>
+
+                        <h2 id="grafana-mimir">Grafana Mimir</h2>
+
+                        <h3 id="mimir-architecture">Architecture &amp; Components</h3>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Grafana Mimir Architecture</div>
+                            <pre class="mermaid">
+flowchart TD
+    subgraph Write["Write Path"]
+        DIST[Distributor]
+        ING[Ingester<br/>x3 replicas]
+    end
+
+    subgraph Read["Read Path"]
+        QF[Query Frontend]
+        QS[Query Scheduler]
+        Q[Querier]
+    end
+
+    subgraph Storage["Storage"]
+        OBJ[(Object Store<br/>S3/GCS/Azure)]
+        SC[Store Gateway]
+    end
+
+    subgraph Ops["Operations"]
+        COMP[Compactor]
+        RUL[Ruler]
+    end
+
+    P[Prometheus<br/>remote_write] -->|"push"| DIST
+    DIST -->|"hash ring"| ING
+    ING -->|"flush blocks"| OBJ
+    GF[Grafana] --> QF --> QS --> Q
+    Q --> ING
+    Q --> SC --> OBJ
+    COMP --> OBJ
+    RUL --> Q
+                            </pre>
+                        </div>
+
+                        <h3 id="mimir-deployment">Deployment (Monolithic &amp; Microservices)</h3>
+
+<pre><code class="language-yaml"># Mimir monolithic mode — simplest deployment for &lt;1M active series
+# All components in a single binary
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mimir
+  namespace: monitoring
+spec:
+  replicas: 3
+  serviceName: mimir
+  template:
+    spec:
+      containers:
+        - name: mimir
+          image: grafana/mimir:2.13.0
+          args:
+            - -target=all
+            - -config.file=/etc/mimir/mimir.yaml
+          ports:
+            - containerPort: 8080    # HTTP API
+            - containerPort: 9095    # gRPC (internal)
+            - containerPort: 7946    # Memberlist gossip
+          volumeMounts:
+            - name: config
+              mountPath: /etc/mimir
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: "2"
+              memory: 8Gi
+            limits:
+              memory: 12Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 50Gi
+</code></pre>
+
+<pre><code class="language-yaml"># mimir.yaml — monolithic configuration
+multitenancy_enabled: true
+
+server:
+  http_listen_port: 8080
+  grpc_listen_port: 9095
+
+distributor:
+  ring:
+    kvstore:
+      store: memberlist
+
+ingester:
+  ring:
+    kvstore:
+      store: memberlist
+    replication_factor: 3
+
+blocks_storage:
+  backend: s3
+  s3:
+    endpoint: s3.us-east-1.amazonaws.com
+    bucket_name: mimir-blocks-prod
+    region: us-east-1
+  tsdb:
+    dir: /data/tsdb
+  bucket_store:
+    sync_dir: /data/tsdb-sync
+
+compactor:
+  data_dir: /data/compactor
+  sharding_ring:
+    kvstore:
+      store: memberlist
+
+store_gateway:
+  sharding_ring:
+    kvstore:
+      store: memberlist
+
+ruler:
+  alertmanager_url: http://alertmanager:9093
+  rule_path: /data/rules
+
+limits:
+  # Per-tenant limits
+  ingestion_rate: 100000                    # samples/sec per tenant
+  ingestion_burst_size: 200000
+  max_global_series_per_user: 5000000       # 5M series per tenant
+  max_global_series_per_metric: 100000
+  compactor_blocks_retention_period: 365d   # 1 year retention
+
+memberlist:
+  join_members:
+    - mimir-0.mimir:7946
+    - mimir-1.mimir:7946
+    - mimir-2.mimir:7946
+</code></pre>
+
+                        <h3 id="mimir-multi-tenancy">Multi-Tenancy</h3>
+
+<pre><code class="language-yaml"># Prometheus remote_write with tenant header
+remote_write:
+  - url: https://mimir.internal/api/v1/push
+    headers:
+      X-Scope-OrgID: payments-team    # Tenant identifier
+    queue_config:
+      max_samples_per_send: 2000
+      batch_send_deadline: 5s
+
+# Grafana datasource configuration per tenant
+# Each team queries only their own data
+apiVersion: 1
+datasources:
+  - name: Mimir-Payments
+    type: prometheus
+    url: https://mimir.internal/prometheus
+    jsonData:
+      httpHeaderName1: X-Scope-OrgID
+    secureJsonData:
+      httpHeaderValue1: payments-team
+</code></pre>
+
+                        <h3 id="mimir-configuration">Configuration Deep Dive</h3>
+
+<pre><code class="language-yaml"># Per-tenant overrides (runtime configuration)
+# File: /etc/mimir/runtime.yaml — hot-reloaded without restart
+overrides:
+  # Default limits for all tenants
+  __default__:
+    ingestion_rate: 50000
+    max_global_series_per_user: 2000000
+    compactor_blocks_retention_period: 90d
+
+  # Override for high-volume tenant
+  platform-team:
+    ingestion_rate: 200000
+    max_global_series_per_user: 10000000
+    compactor_blocks_retention_period: 365d
+
+  # Restricted tenant (dev environment)
+  dev-team:
+    ingestion_rate: 10000
+    max_global_series_per_user: 500000
+    compactor_blocks_retention_period: 14d
+</code></pre>
+
+                        <h2 id="victoriametrics">VictoriaMetrics</h2>
+
+                        <h3 id="vm-architecture">Architecture (Single &amp; Cluster)</h3>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">VictoriaMetrics Cluster Architecture</div>
+                            <pre class="mermaid">
+flowchart TD
+    subgraph Insert["Insert Path"]
+        VMI[vminsert<br/>Stateless]
+    end
+
+    subgraph Store["Storage"]
+        VMS1[vmstorage-0]
+        VMS2[vmstorage-1]
+        VMS3[vmstorage-2]
+    end
+
+    subgraph Query["Query Path"]
+        VMSL[vmselect<br/>Stateless]
+    end
+
+    P[Prometheus<br/>remote_write] --> VMI
+    VMI -->|"consistent hashing"| VMS1 & VMS2 & VMS3
+    GF[Grafana] --> VMSL
+    VMSL --> VMS1 & VMS2 & VMS3
+                            </pre>
+                        </div>
+
+                        <h3 id="vm-deployment">Deployment</h3>
+
+<pre><code class="language-yaml"># VictoriaMetrics single-node — handles up to 10M active series
+# Simplest possible deployment
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: victoriametrics
+  namespace: monitoring
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: victoriametrics
+          image: victoriametrics/victoria-metrics:v1.101.0
+          args:
+            - -storageDataPath=/storage
+            - -retentionPeriod=12     # 12 months
+            - -httpListenAddr=:8428
+            - -search.maxUniqueTimeseries=10000000
+            - -dedup.minScrapeInterval=15s    # Dedup HA pairs
+          ports:
+            - containerPort: 8428
+          volumeMounts:
+            - name: storage
+              mountPath: /storage
+          resources:
+            requests:
+              cpu: "4"
+              memory: 16Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 500Gi
+</code></pre>
+
+<pre><code class="language-yaml"># Prometheus remote_write to VictoriaMetrics
+remote_write:
+  - url: http://victoriametrics:8428/api/v1/write
+    queue_config:
+      max_samples_per_send: 10000
+      capacity: 20000
+      max_shards: 30
+</code></pre>
+
+                        <h3 id="vm-features">Unique Features (MetricsQL, Downsampling)</h3>
+
+<pre><code class="language-bash"># MetricsQL — VictoriaMetrics' PromQL superset
+# Supports additional functions not in standard PromQL
+
+# Range over range — rate calculation that handles counter resets better
+rate(http_requests_total[5m])        # Standard PromQL
+increase(http_requests_total[5m])     # VM handles resets more accurately
+
+# Rollup functions with explicit window
+rollup_rate(http_requests_total, 5m)
+
+# Label manipulation
+label_set(metric, "env", "prod")
+label_del(metric, "instance")
+label_copy(metric, "pod", "pod_name")
+
+# Running aggregations
+running_sum(rate(requests_total[1m])[1h:])
+running_avg(cpu_usage[1h:5m])
+
+# Built-in downsampling at query time
+# No pre-configuration needed — VM automatically uses appropriate resolution
+# Query a year of data efficiently:
+avg_over_time(cpu_usage[1y:1h])    # 1-hour step over 1 year
+</code></pre>
+
+                        <h2 id="remote-write-config">Remote Write Configuration</h2>
+
+                        <h3 id="write-tuning">Queue Tuning &amp; Reliability</h3>
+
+<pre><code class="language-yaml"># Production remote_write configuration
+remote_write:
+  - url: https://mimir.internal/api/v1/push
+    headers:
+      X-Scope-OrgID: production
+
+    # Queue tuning for high-volume (>500K samples/sec)
+    queue_config:
+      capacity: 10000              # Per-shard buffer (default: 2500)
+      max_shards: 50               # Max parallel writes (default: 200)
+      min_shards: 10               # Min parallel writes (faster startup)
+      max_samples_per_send: 5000   # Batch size (default: 2000)
+      batch_send_deadline: 5s      # Max wait before partial batch send
+      min_backoff: 30ms            # Initial retry backoff
+      max_backoff: 5s              # Max retry backoff
+      retry_on_http_429: true      # Retry on rate limiting
+
+    # Metadata configuration
+    metadata_config:
+      send: true
+      send_interval: 5m
+
+    # TLS for encrypted transport
+    tls_config:
+      cert_file: /etc/certs/client.crt
+      key_file: /etc/certs/client.key
+      ca_file: /etc/certs/ca.crt
+</code></pre>
+
+                        <h3 id="write-relabeling">Write-Path Relabeling</h3>
+
+<pre><code class="language-yaml"># Selective remote write — reduce cost by filtering
+remote_write:
+  - url: https://mimir.internal/api/v1/push
+    write_relabel_configs:
+      # Only send recording rules and critical raw metrics
+      - source_labels: [__name__]
+        regex: '(namespace|job|cluster|slo):.*'
+        action: keep
+
+      # Drop high-cardinality debug metrics
+      - source_labels: [__name__]
+        regex: 'go_(gc|memstats)_.*'
+        action: drop
+
+      # Remove labels that only matter locally
+      - regex: '__replica__|prometheus_replica'
+        action: labeldrop
+</code></pre>
+
+                        <h3 id="exemplars">Exemplars Support</h3>
+
+<pre><code class="language-yaml"># Enable exemplars in remote write (links metrics to traces)
+remote_write:
+  - url: https://mimir.internal/api/v1/push
+    send_exemplars: true    # Forward exemplars to backend
+
+# Mimir configuration to accept exemplars
+limits:
+  max_exemplars_per_user: 100000    # Per-tenant exemplar limit
+</code></pre>
+
+                        <h2 id="comparison">Mimir vs VictoriaMetrics</h2>
+
+                        <h3 id="feature-comparison">Feature Comparison</h3>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Comparison</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h4>Grafana Mimir vs VictoriaMetrics</h4>
+                                <table class="table table-bordered">
+                                    <thead><tr><th>Feature</th><th>Grafana Mimir</th><th>VictoriaMetrics</th></tr></thead>
+                                    <tbody>
+                                        <tr><td><strong>Multi-tenancy</strong></td><td>Native (per-request header)</td><td>Enterprise only (or separate instances)</td></tr>
+                                        <tr><td><strong>Storage backend</strong></td><td>Object store (S3/GCS/Azure)</td><td>Local disk (cluster mode distributes)</td></tr>
+                                        <tr><td><strong>Query language</strong></td><td>Standard PromQL</td><td>MetricsQL (PromQL superset)</td></tr>
+                                        <tr><td><strong>HA deduplication</strong></td><td>Query-time (via replica label)</td><td>Write-time (dedup.minScrapeInterval)</td></tr>
+                                        <tr><td><strong>Downsampling</strong></td><td>Compactor-driven (5m, 1h)</td><td>Query-time (automatic)</td></tr>
+                                        <tr><td><strong>Compression ratio</strong></td><td>~1.5 bytes/sample</td><td>~0.7 bytes/sample (industry best)</td></tr>
+                                        <tr><td><strong>Min viable deployment</strong></td><td>3 replicas (monolithic)</td><td>1 instance (single-node)</td></tr>
+                                        <tr><td><strong>Grafana integration</strong></td><td>Native (same company)</td><td>Full PromQL datasource compatible</td></tr>
+                                        <tr><td><strong>License</strong></td><td>AGPLv3</td><td>Apache 2.0 (enterprise features paid)</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="experiment-tags"><span class="bias-tag">Decision</span><span class="bias-tag">Architecture</span></div>
+                        </div>
+
+                        <h3 id="operational-comparison">Operational Comparison</h3>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Operational Reality:</strong>
+                            <ul class="mt-2 mb-0">
+                                <li><strong>Mimir:</strong> More components to manage but scales to billions of series. Requires object store (S3/GCS). Better for large organizations with multi-tenant requirements.</li>
+                                <li><strong>VictoriaMetrics:</strong> Operationally simpler (single binary possible). Better compression means less storage cost. Better for single-tenant or small-team deployments where simplicity matters.</li>
+                            </ul>
+                        </div>
+
+                        <h3 id="when-to-choose">Decision Guide</h3>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Choose Grafana Mimir when:</strong>
+                            <ul class="mt-2 mb-0">
+                                <li>You need native multi-tenancy with per-tenant limits</li>
+                                <li>You already use Grafana Cloud or the LGTM stack</li>
+                                <li>Object storage (S3/GCS) is your preferred backend</li>
+                                <li>You need built-in alerting rules evaluation (Ruler component)</li>
+                                <li>Scale exceeds 100M+ active series across many teams</li>
+                            </ul>
+                        </div>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Choose VictoriaMetrics when:</strong>
+                            <ul class="mt-2 mb-0">
+                                <li>Operational simplicity is the top priority</li>
+                                <li>Storage cost optimization matters (best compression)</li>
+                                <li>Single-tenant or separated-instance multi-tenancy is acceptable</li>
+                                <li>You want MetricsQL&rsquo;s extended query capabilities</li>
+                                <li>Local disk is preferred over object store</li>
+                                <li>Faster query performance on single-node deployments</li>
+                            </ul>
+                        </div>
+
+                        <h2 id="conclusion">Conclusion</h2>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-database me-2"></i>
+                            <strong>Key Takeaways:</strong>
+                            <ul class="mt-2 mb-0">
+                                <li><strong>Remote write is the standard</strong> &mdash; use it for all production Prometheus deployments</li>
+                                <li><strong>Filter at write time</strong> &mdash; use write_relabel_configs to reduce storage costs</li>
+                                <li><strong>Mimir for multi-tenant enterprises</strong> &mdash; native isolation, object store, Grafana ecosystem</li>
+                                <li><strong>VictoriaMetrics for simplicity</strong> &mdash; best compression, single binary, MetricsQL</li>
+                                <li><strong>Thanos for existing deployments</strong> &mdash; if you already have TSDB blocks on disk (covered in Part 11)</li>
+                                <li><strong>Monitor your remote write</strong> &mdash; track pending samples, lag, and failed sends</li>
+                            </ul>
+                        </div>
+
+                        <!-- Related Posts -->
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                            <div class="related-post-item">
+                                <h5>Part 11: Extending Prometheus with Thanos</h5>
+                                <p>The sidecar approach to long-term storage &mdash; when you want to keep Prometheus TSDB blocks and extend with object storage.</p>
+                                <a href="monitoring-observability-prometheus-part11-thanos.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 7: Sharding, Federation &amp; HA</h5>
+                                <p>The scaling patterns that feed into remote storage &mdash; HA pairs with deduplication and sharded writes.</p>
+                                <a href="monitoring-observability-prometheus-part07-sharding-federation-ha.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 8: Optimizing &amp; Debugging Prometheus</h5>
+                                <p>Tune remote write queue configuration and debug write-path issues with pprof.</p>
+                                <a href="monitoring-observability-prometheus-part08-optimizing-debugging.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                        <!-- Series Navigation -->
+                        <div class="series-nav">
+                            <a href="monitoring-observability-prometheus-part09-node-exporter.html" class="series-nav-item prev">
+                                <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span>
+                                <span class="nav-title">Part 9: Node Exporter</span>
+                            </a>
+                            <a href="monitoring-observability-prometheus-part11-thanos.html" class="series-nav-item next">
+                                <span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span>
+                                <span class="nav-title">Part 11: Thanos</span>
+                            </a>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <!-- Footer -->
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left"><div class="fc-brand-group"><div class="fc-brand-stack"><span></span><span></span><span></span></div><span class="fc-brand-name">Wasil Zafar</span></div><span class="fc-tagline">Consultant &amp; Cloud Architect</span></div>
+                <div class="fc-center"><a href="/">Home</a><a href="/disclaimer.html">Disclaimer</a><a href="/privacy-policy.html">Privacy</a><a href="/pages/contact.html">Contact</a></div>
+                <div class="fc-right"><a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a><a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a><a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a><a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a><a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a><a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a><a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a><a href="/feed.xml" target="_blank" title="RSS Feed"><i class="fas fa-rss"></i></a></div>
+            </div>
+            <div class="footer-sub"><span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span><a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a></div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="../../../js/path-progress.js"></script>
+    <script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>

@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="robots" content="index, follow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
+    <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
+    <meta name="description" content="Extend Prometheus with Thanos for unlimited retention, global querying, and downsampling using the sidecar pattern. Deploy Thanos Query, Store Gateway, Compactor, and Ruler components with production-ready configurations for multi-cluster observability." />
+    <meta name="author" content="Wasil Zafar" />
+    <meta name="keywords" content="Thanos, Prometheus Thanos, Thanos sidecar, Thanos Query, Store Gateway, Thanos Compactor, object storage, global view, downsampling, multi-cluster Prometheus, CNCF Thanos" />
+    <meta property="og:title" content="Prometheus Deep Dive Part 11: Extending Prometheus with Thanos" />
+    <meta property="og:description" content="Extend Prometheus with Thanos for unlimited retention, global querying across clusters, and automatic downsampling via the sidecar pattern." />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2026-06-15" />
+    <meta property="article:author" content="Wasil Zafar" />
+    <meta property="article:section" content="Technology" />
+    <meta property="og:url" content="https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part11-thanos.html" />
+    <meta property="og:image" content="https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part11-thanos-og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part11-thanos-tw.jpg" />
+    <title>Prometheus Deep Dive Part 11: Extending Prometheus with Thanos - Wasil Zafar</title>
+    <link rel="canonical" href="https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part11-thanos.html" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" id="prism-dark" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-twilight.min.css" id="prism-twilight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" id="prism-okaidia" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-solarizedlight.min.css" id="prism-solarizedlight" disabled />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.css" />
+    <link rel="apple-touch-icon" sizes="180x180" href="../../../images/favicon_io/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../../images/favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="../../../images/favicon_io/site.webmanifest">
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{'ad_storage':'denied','ad_user_data':'denied','ad_personalization':'denied','analytics_storage':'denied','region':['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']});gtag('consent','default',{'ad_storage':'granted','ad_user_data':'granted','ad_personalization':'granted','analytics_storage':'granted'});gtag('set','url_passthrough',true);</script>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
+    <script type="application/ld+json">
+    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Prometheus Deep Dive Part 11: Extending Prometheus with Thanos", "description": "Extend Prometheus with Thanos for unlimited retention, global querying, and automatic downsampling.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/monitoring-observability/monitoring-observability-prometheus-part11-thanos.html"}, "wordCount": 6300, "inLanguage": "en", "datePublished": "2026-06-15", "dateModified": "2026-06-15", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/monitoring-observability/monitoring-observability-prometheus-part11-thanos-og.jpg", "width": 1200, "height": 630}}
+    </script>
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBS8M2JR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+    <!-- Navigation Bar -->
+    <div class="nav-v16-wrapper"><nav class="nav-v16"><a href="/" class="brand"><div class="brand-stack"><span></span><span></span><span></span></div><span class="brand-text">Wasil Zafar</span></a><button class="nav-v16-toggle" aria-label="Toggle navigation" onclick="toggleNav16()"><span></span><span></span><span></span></button><div class="links"><a href="/" class="link-3d"><div class="link-box"><span class="link-face face-front">Home</span><span class="link-face face-bottom">Home</span></div></a><a href="/#about" class="link-3d"><div class="link-box"><span class="link-face face-front">About</span><span class="link-face face-bottom">About</span></div></a><a href="/#skills" class="link-3d"><div class="link-box"><span class="link-face face-front">Skills</span><span class="link-face face-bottom">Skills</span></div></a><a href="/#certifications" class="link-3d"><div class="link-box"><span class="link-face face-front">Certifications</span><span class="link-face face-bottom">Certifications</span></div></a><a href="/#interests" class="link-3d"><div class="link-box"><span class="link-face face-front">Interests</span><span class="link-face face-bottom">Interests</span></div></a><button class="nav-search-btn" onclick="openSearch()" aria-label="Search articles"><i class="fas fa-search"></i> Search <span class="search-shortcut">Ctrl+K</span></button></div></nav></div>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="container py-5">
+            <div class="blog-header">
+                <a href="index.html" class="back-link"><i class="fas fa-arrow-left me-2"></i>Back to Monitoring &amp; Observability Series</a>
+                <h1 class="display-4 fw-bold mb-3">Prometheus Deep Dive Part 11: Extending Prometheus with Thanos</h1>
+                <div class="blog-meta">
+                    <span><i class="fas fa-calendar me-2"></i>June 15, 2026</span>
+                    <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>30 min read</span>
+                    <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
+                </div>
+                <p class="lead">Thanos extends existing Prometheus deployments with unlimited retention, a global query view across clusters, and automatic downsampling &mdash; all without replacing Prometheus. Learn the sidecar model, deploy every Thanos component, and architect multi-cluster observability.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Table of Contents -->
+    <button class="toc-toggle-btn" onclick="openNav()" title="Table of Contents" aria-label="Open Table of Contents"><i class="fas fa-list"></i></button>
+    <div id="tocSidenav" class="sidenav-toc">
+        <div class="toc-header"><h3><i class="fas fa-list me-2"></i>Table of Contents</h3><button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button></div>
+        <ol>
+            <li><a href="#thanos-overview" onclick="closeNav()">Thanos Overview &amp; Philosophy</a></li>
+            <li>
+                <a href="#architecture" onclick="closeNav()">Architecture</a>
+                <ul>
+                    <li><a href="#sidecar" onclick="closeNav()">Thanos Sidecar</a></li>
+                    <li><a href="#query" onclick="closeNav()">Thanos Query</a></li>
+                    <li><a href="#store-gateway" onclick="closeNav()">Store Gateway</a></li>
+                    <li><a href="#compactor" onclick="closeNav()">Compactor &amp; Downsampling</a></li>
+                    <li><a href="#ruler" onclick="closeNav()">Thanos Ruler</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#deployment" onclick="closeNav()">Production Deployment</a>
+                <ul>
+                    <li><a href="#object-store" onclick="closeNav()">Object Store Configuration</a></li>
+                    <li><a href="#sidecar-deploy" onclick="closeNav()">Sidecar Deployment</a></li>
+                    <li><a href="#query-deploy" onclick="closeNav()">Query Layer</a></li>
+                    <li><a href="#store-deploy" onclick="closeNav()">Store Gateway Deployment</a></li>
+                    <li><a href="#compactor-deploy" onclick="closeNav()">Compactor Deployment</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#multi-cluster" onclick="closeNav()">Multi-Cluster Architecture</a>
+                <ul>
+                    <li><a href="#cross-cluster" onclick="closeNav()">Cross-Cluster Querying</a></li>
+                    <li><a href="#deduplication" onclick="closeNav()">Deduplication Strategies</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#thanos-vs-mimir" onclick="closeNav()">Thanos vs Mimir</a>
+                <ul>
+                    <li><a href="#when-thanos" onclick="closeNav()">When to Choose Thanos</a></li>
+                </ul>
+            </li>
+            <li><a href="#conclusion" onclick="closeNav()">Conclusion</a></li>
+        </ol>
+    </div>
+    <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
+
+    <!-- Main Content -->
+    <section class="py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="blog-content">
+
+                        <h2 id="thanos-overview">Thanos Overview &amp; Philosophy</h2>
+
+                        <p>Thanos is a CNCF Incubating project that extends Prometheus with long-term storage and global querying capabilities. Unlike Mimir or VictoriaMetrics, Thanos doesn&rsquo;t replace Prometheus &mdash; it augments existing Prometheus deployments by:</p>
+
+                        <ul>
+                            <li><strong>Uploading TSDB blocks</strong> from Prometheus to object storage (S3/GCS/Azure) via a sidecar</li>
+                            <li><strong>Querying across multiple Prometheus instances</strong> transparently through a single endpoint</li>
+                            <li><strong>Downsampling historical data</strong> automatically (5m and 1h resolutions)</li>
+                            <li><strong>Deduplicating HA pair data</strong> at query time</li>
+                        </ul>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Core Philosophy:</strong> Thanos treats Prometheus as the source of truth for recent data. It layers on top of existing Prometheus instances without requiring changes to your scrape configuration, alerting rules, or operational procedures. Prometheus continues to work exactly as before &mdash; Thanos adds capabilities around it.
+                        </div>
+
+                        <h2 id="architecture">Architecture</h2>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Thanos Component Architecture</div>
+                            <pre class="mermaid">
+flowchart TD
+    subgraph Cluster1["Cluster: US-East"]
+        P1[Prometheus + Sidecar]
+        P2[Prometheus + Sidecar]
+    end
+
+    subgraph Cluster2["Cluster: EU-West"]
+        P3[Prometheus + Sidecar]
+        P4[Prometheus + Sidecar]
+    end
+
+    subgraph Thanos["Thanos Global Layer"]
+        TQ[Thanos Query]
+        SG[Store Gateway]
+        TC[Compactor]
+        TR[Ruler]
+    end
+
+    subgraph Storage["Object Store"]
+        S3[(S3 Bucket)]
+    end
+
+    P1 & P2 -->|"upload blocks"| S3
+    P3 & P4 -->|"upload blocks"| S3
+    P1 & P2 & P3 & P4 -->|"StoreAPI gRPC"| TQ
+    SG -->|"serves historical"| TQ
+    SG --> S3
+    TC -->|"compact + downsample"| S3
+    TR --> TQ
+    GF[Grafana] --> TQ
+                            </pre>
+                        </div>
+
+                        <h3 id="sidecar">Thanos Sidecar</h3>
+
+                        <p>The Sidecar runs alongside each Prometheus instance as a container in the same pod. It has two responsibilities:</p>
+
+                        <ol>
+                            <li><strong>Block Upload:</strong> Watches Prometheus&rsquo;s data directory and uploads completed TSDB blocks to object storage</li>
+                            <li><strong>StoreAPI:</strong> Exposes a gRPC StoreAPI endpoint that Thanos Query can connect to for real-time data from Prometheus&rsquo;s head block</li>
+                        </ol>
+
+<pre><code class="language-yaml"># Thanos Sidecar container — added to Prometheus pod
+containers:
+  - name: thanos-sidecar
+    image: quay.io/thanos/thanos:v0.35.1
+    args:
+      - sidecar
+      - --tsdb.path=/prometheus
+      - --prometheus.url=http://localhost:9090
+      - --objstore.config-file=/etc/thanos/objstore.yaml
+      - --grpc-address=0.0.0.0:10901
+      - --http-address=0.0.0.0:10902
+      # Ship blocks every 2 hours (matches Prometheus min-block-duration)
+      - --shipper.upload-compacted
+    ports:
+      - containerPort: 10901
+        name: grpc
+      - containerPort: 10902
+        name: http
+    volumeMounts:
+      - name: prometheus-storage
+        mountPath: /prometheus
+      - name: thanos-objstore-config
+        mountPath: /etc/thanos
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+</code></pre>
+
+                        <div class="highlight-box highlight-crimson">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Critical Requirement:</strong> When using the sidecar, Prometheus MUST have <code>--storage.tsdb.min-block-duration=2h</code> and <code>--storage.tsdb.max-block-duration=2h</code> set to the same value. This disables Prometheus&rsquo;s internal compaction and allows Thanos Compactor to handle it instead. Without this, both Prometheus and Thanos try to compact, causing data corruption.
+                        </div>
+
+                        <h3 id="query">Thanos Query</h3>
+
+                        <p>Thanos Query implements the Prometheus HTTP API and fans out queries to multiple StoreAPI endpoints (sidecars, store gateways, other query instances). It merges results, deduplicates HA replicas, and returns a unified response:</p>
+
+<pre><code class="language-yaml"># Thanos Query deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thanos-query
+  namespace: monitoring
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: thanos-query
+          image: quay.io/thanos/thanos:v0.35.1
+          args:
+            - query
+            - --log.level=info
+            - --query.replica-label=__replica__
+            - --query.replica-label=prometheus_replica
+            - --query.auto-downsampling
+            - --query.max-concurrent=20
+            - --query.timeout=2m
+            # Discover stores via DNS
+            - --store=dnssrv+_grpc._tcp.thanos-sidecar.monitoring.svc
+            - --store=dnssrv+_grpc._tcp.thanos-store-gateway.monitoring.svc
+            # Or static endpoints
+            - --store=thanos-sidecar-us-east:10901
+            - --store=thanos-sidecar-eu-west:10901
+            - --store=thanos-store-gateway:10901
+          ports:
+            - containerPort: 10902
+              name: http
+            - containerPort: 10901
+              name: grpc
+</code></pre>
+
+                        <h3 id="store-gateway">Store Gateway</h3>
+
+                        <p>The Store Gateway serves historical TSDB blocks from object storage. It indexes block metadata and serves queries against them through the StoreAPI. It caches index data locally for fast lookups:</p>
+
+<pre><code class="language-yaml"># Thanos Store Gateway — serves historical data from object store
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: thanos-store-gateway
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: thanos-store
+          image: quay.io/thanos/thanos:v0.35.1
+          args:
+            - store
+            - --data-dir=/data
+            - --objstore.config-file=/etc/thanos/objstore.yaml
+            - --index-cache-size=2GB
+            - --chunk-pool-size=4GB
+            - --grpc-address=0.0.0.0:10901
+            - --http-address=0.0.0.0:10902
+            # Time-based partitioning (optional for very large stores)
+            # - --min-time=-720h  # Only serve last 30 days
+            # - --max-time=-2h    # Don't serve very recent (sidecar handles it)
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: objstore-config
+              mountPath: /etc/thanos
+          resources:
+            requests:
+              cpu: "1"
+              memory: 4Gi
+            limits:
+              memory: 8Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 50Gi    # For index cache
+</code></pre>
+
+                        <h3 id="compactor">Compactor &amp; Downsampling</h3>
+
+                        <p>The Compactor runs as a singleton, continuously processing blocks in object storage:</p>
+
+                        <ul>
+                            <li><strong>Compaction:</strong> Merges small 2h blocks into larger blocks (up to the configured max), reducing object count and improving query performance</li>
+                            <li><strong>Downsampling:</strong> Creates 5-minute and 1-hour resolution versions of data older than configured thresholds</li>
+                            <li><strong>Retention:</strong> Deletes blocks exceeding the retention period</li>
+                        </ul>
+
+<pre><code class="language-yaml"># Thanos Compactor — singleton deployment
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: thanos-compactor
+spec:
+  replicas: 1    # MUST be 1 — singleton
+  template:
+    spec:
+      containers:
+        - name: thanos-compact
+          image: quay.io/thanos/thanos:v0.35.1
+          args:
+            - compact
+            - --data-dir=/data
+            - --objstore.config-file=/etc/thanos/objstore.yaml
+            - --http-address=0.0.0.0:10902
+            - --wait                    # Run continuously (not one-shot)
+            - --wait-interval=5m
+            # Retention configuration
+            - --retention.resolution-raw=90d      # Keep raw data 90 days
+            - --retention.resolution-5m=365d      # Keep 5m downsampled 1 year
+            - --retention.resolution-1h=1825d     # Keep 1h downsampled 5 years
+            # Downsampling
+            - --downsample.concurrency=4
+            # Compaction
+            - --compact.concurrency=2
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: objstore-config
+              mountPath: /etc/thanos
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
+            limits:
+              memory: 8Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 100Gi    # Scratch space for compaction
+</code></pre>
+
+                        <h3 id="ruler">Thanos Ruler</h3>
+
+                        <p>Thanos Ruler evaluates recording and alerting rules against the global Thanos Query endpoint, enabling rules that span multiple Prometheus instances:</p>
+
+<pre><code class="language-yaml"># Thanos Ruler — evaluates rules against global view
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: thanos-ruler
+spec:
+  replicas: 2    # HA pair
+  template:
+    spec:
+      containers:
+        - name: thanos-rule
+          image: quay.io/thanos/thanos:v0.35.1
+          args:
+            - rule
+            - --data-dir=/data
+            - --objstore.config-file=/etc/thanos/objstore.yaml
+            - --rule-file=/etc/thanos-rules/*.yaml
+            - --query=dnssrv+_http._tcp.thanos-query.monitoring.svc
+            - --alertmanagers.url=http://alertmanager:9093
+            - --alert.label-drop=__replica__
+            - --label=ruler_cluster="global"
+            - --grpc-address=0.0.0.0:10901
+            - --http-address=0.0.0.0:10902
+</code></pre>
+
+                        <h2 id="deployment">Production Deployment</h2>
+
+                        <h3 id="object-store">Object Store Configuration</h3>
+
+<pre><code class="language-yaml"># objstore.yaml — S3 configuration
+type: S3
+config:
+  bucket: thanos-metrics-prod
+  endpoint: s3.us-east-1.amazonaws.com
+  region: us-east-1
+  # Use IAM role (IRSA) rather than static credentials
+  # access_key: ""
+  # secret_key: ""
+  insecure: false
+  signature_version2: false
+  http_config:
+    idle_conn_timeout: 90s
+    response_header_timeout: 2m
+    tls_config:
+      insecure_skip_verify: false
+</code></pre>
+
+<pre><code class="language-yaml"># GCS configuration alternative
+type: GCS
+config:
+  bucket: thanos-metrics-prod
+  # Uses workload identity or GOOGLE_APPLICATION_CREDENTIALS
+  service_account: ""
+</code></pre>
+
+                        <h3 id="sidecar-deploy">Sidecar Deployment</h3>
+
+<pre><code class="language-yaml"># Complete Prometheus + Thanos Sidecar pod
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  replicas: 2    # HA pair
+  template:
+    metadata:
+      labels:
+        app: prometheus
+        thanos-store-api: "true"
+    spec:
+      containers:
+        # Prometheus container
+        - name: prometheus
+          image: prom/prometheus:v2.53.0
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=48h     # Short local retention
+            - --storage.tsdb.min-block-duration=2h  # Required for Thanos
+            - --storage.tsdb.max-block-duration=2h  # Required for Thanos
+            - --web.enable-lifecycle
+            - --web.enable-admin-api
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: storage
+              mountPath: /prometheus
+            - name: config
+              mountPath: /etc/prometheus
+
+        # Thanos Sidecar container
+        - name: thanos-sidecar
+          image: quay.io/thanos/thanos:v0.35.1
+          args:
+            - sidecar
+            - --tsdb.path=/prometheus
+            - --prometheus.url=http://localhost:9090
+            - --objstore.config-file=/etc/thanos/objstore.yaml
+            - --grpc-address=0.0.0.0:10901
+            - --http-address=0.0.0.0:10902
+          ports:
+            - containerPort: 10901
+              name: grpc
+            - containerPort: 10902
+              name: http
+          volumeMounts:
+            - name: storage
+              mountPath: /prometheus
+              readOnly: false
+            - name: thanos-config
+              mountPath: /etc/thanos
+</code></pre>
+
+                        <h3 id="query-deploy">Query Layer</h3>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-search me-2"></i>
+                            <strong>Query Fanout:</strong> Thanos Query discovers stores via three mechanisms: static <code>--store</code> flags, DNS SRV records (<code>dnssrv+</code>), or file-based SD (<code>--store.sd-files</code>). For Kubernetes, DNS SRV is the cleanest approach &mdash; create a headless Service selecting pods with the <code>thanos-store-api: "true"</code> label.
+                        </div>
+
+<pre><code class="language-yaml"># Headless Service for Store API discovery
+apiVersion: v1
+kind: Service
+metadata:
+  name: thanos-sidecar
+  namespace: monitoring
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: grpc
+      port: 10901
+      targetPort: grpc
+  selector:
+    thanos-store-api: "true"
+</code></pre>
+
+                        <h3 id="store-deploy">Store Gateway Deployment</h3>
+
+                        <div class="highlight-box highlight-navy">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Store Gateway Sizing:</strong> Memory is proportional to the index size, not data size. With 10M unique series in object storage, expect ~2&ndash;4 GiB memory for index caching. The <code>--index-cache-size</code> and <code>--chunk-pool-size</code> flags control memory allocation. Local disk caches the downloaded index for faster restarts.
+                        </div>
+
+                        <h3 id="compactor-deploy">Compactor Deployment</h3>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Operations</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h4>Compactor Retention Strategy</h4>
+                                <table class="table table-bordered">
+                                    <thead><tr><th>Resolution</th><th>Retention</th><th>Use Case</th><th>Storage Impact</th></tr></thead>
+                                    <tbody>
+                                        <tr><td><strong>Raw</strong></td><td>90 days</td><td>Recent dashboards, debugging</td><td>~1.5 bytes/sample</td></tr>
+                                        <tr><td><strong>5-minute</strong></td><td>1 year</td><td>Monthly reports, trend analysis</td><td>~1/20th of raw</td></tr>
+                                        <tr><td><strong>1-hour</strong></td><td>5 years</td><td>Yearly capacity planning</td><td>~1/240th of raw</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="experiment-tags"><span class="bias-tag">Retention</span><span class="bias-tag">Cost</span></div>
+                        </div>
+
+                        <h2 id="multi-cluster">Multi-Cluster Architecture</h2>
+
+                        <h3 id="cross-cluster">Cross-Cluster Querying</h3>
+
+                        <div class="mermaid-container">
+                            <div class="mermaid-label">Multi-Cluster Thanos Architecture</div>
+                            <pre class="mermaid">
+flowchart TD
+    subgraph US["US-East Cluster"]
+        PUS[Prometheus HA Pair<br/>+ Sidecar]
+    end
+
+    subgraph EU["EU-West Cluster"]
+        PEU[Prometheus HA Pair<br/>+ Sidecar]
+    end
+
+    subgraph AP["AP-Southeast Cluster"]
+        PAP[Prometheus HA Pair<br/>+ Sidecar]
+    end
+
+    subgraph Global["Global Observability (Central)"]
+        TQ[Thanos Query<br/>Global]
+        SG[Store Gateway]
+        TC[Compactor]
+    end
+
+    subgraph OBJ["Object Store"]
+        S3[(Shared S3 Bucket)]
+    end
+
+    PUS & PEU & PAP -->|"upload blocks"| S3
+    PUS & PEU & PAP -->|"StoreAPI<br/>(cross-cluster gRPC)"| TQ
+    SG --> S3
+    SG -->|"StoreAPI"| TQ
+    TC --> S3
+    GF[Grafana] --> TQ
+                            </pre>
+                        </div>
+
+<pre><code class="language-yaml"># Prometheus external_labels — MUST be unique per cluster + replica
+global:
+  external_labels:
+    cluster: us-east-1       # Unique per cluster
+    region: us-east
+    __replica__: prom-0      # Unique per HA replica
+</code></pre>
+
+                        <h3 id="deduplication">Deduplication Strategies</h3>
+
+<pre><code class="language-bash"># Thanos Query deduplicates by replica labels
+# Both HA replicas produce nearly identical data — Query picks one
+
+# Configure replica labels (can specify multiple)
+thanos query \
+  --query.replica-label=__replica__ \
+  --query.replica-label=prometheus_replica
+
+# Dedup algorithm: for each time window, picks the replica with
+# fewer gaps (missing scrapes). Penalty-based selection ensures
+# the "healthier" replica wins.
+
+# Partial response handling — if one sidecar is down:
+# --query.partial-response   (enabled by default)
+# Returns available data with a warning header instead of failing
+</code></pre>
+
+                        <h2 id="thanos-vs-mimir">Thanos vs Mimir</h2>
+
+                        <div class="experiment-card">
+                            <div class="experiment-meta">
+                                <span class="badge bg-teal">Decision Guide</span>
+                            </div>
+                            <div class="experiment-content">
+                                <h4>Thanos vs Grafana Mimir</h4>
+                                <table class="table table-bordered">
+                                    <thead><tr><th>Aspect</th><th>Thanos</th><th>Grafana Mimir</th></tr></thead>
+                                    <tbody>
+                                        <tr><td><strong>Data flow</strong></td><td>Sidecar uploads TSDB blocks</td><td>remote_write pushes samples</td></tr>
+                                        <tr><td><strong>Prometheus changes</strong></td><td>Add sidecar + disable compaction</td><td>Add remote_write config only</td></tr>
+                                        <tr><td><strong>Recent data path</strong></td><td>StoreAPI from sidecar (real-time)</td><td>Ingester (near real-time)</td></tr>
+                                        <tr><td><strong>Multi-tenancy</strong></td><td>By external_labels (manual)</td><td>Native per-request header</td></tr>
+                                        <tr><td><strong>Operational model</strong></td><td>Distributed components you deploy</td><td>Distributed components you deploy</td></tr>
+                                        <tr><td><strong>HA dedup</strong></td><td>Query-time (replica label)</td><td>Query-time (replica label)</td></tr>
+                                        <tr><td><strong>Maturity</strong></td><td>CNCF Incubating, proven at scale</td><td>Grafana-backed, Cortex successor</td></tr>
+                                        <tr><td><strong>License</strong></td><td>Apache 2.0</td><td>AGPLv3</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="experiment-tags"><span class="bias-tag">Architecture</span><span class="bias-tag">Decision</span></div>
+                        </div>
+
+                        <h3 id="when-thanos">When to Choose Thanos</h3>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Choose Thanos when:</strong>
+                            <ul class="mt-2 mb-0">
+                                <li>You want to keep Prometheus local TSDB as the primary store (sidecar model)</li>
+                                <li>You need cross-cluster querying over gRPC without a central ingest path</li>
+                                <li>Apache 2.0 licensing is required</li>
+                                <li>You prefer block-based object storage over stream-based ingestion</li>
+                                <li>Downsampling with configurable resolution retention is important</li>
+                                <li>You&rsquo;re already familiar with the Thanos ecosystem</li>
+                            </ul>
+                        </div>
+
+                        <h2 id="conclusion">Conclusion</h2>
+
+                        <div class="highlight-box">
+                            <i class="fas fa-cubes me-2"></i>
+                            <strong>Key Takeaways:</strong>
+                            <ul class="mt-2 mb-0">
+                                <li><strong>Thanos is additive</strong> &mdash; it extends Prometheus without replacing any component</li>
+                                <li><strong>Sidecar is the bridge</strong> &mdash; uploads blocks and serves real-time data via StoreAPI</li>
+                                <li><strong>Disable Prometheus compaction</strong> &mdash; set min/max block duration to 2h when using sidecar</li>
+                                <li><strong>Compactor is a singleton</strong> &mdash; never run more than one instance per bucket</li>
+                                <li><strong>Downsampling saves costs</strong> &mdash; 5m and 1h resolutions drastically reduce long-term storage</li>
+                                <li><strong>External labels matter</strong> &mdash; they&rsquo;re how Thanos identifies clusters, replicas, and tenants</li>
+                                <li><strong>Partial responses are ok</strong> &mdash; better to show available data than fail entirely</li>
+                            </ul>
+                        </div>
+
+                        <!-- Related Posts -->
+                        <div class="related-posts">
+                            <h3><i class="fas fa-book me-2"></i>Related Articles in This Series</h3>
+                            <div class="related-post-item">
+                                <h5>Part 10: Remote Storage Systems</h5>
+                                <p>Compare Thanos with Mimir and VictoriaMetrics &mdash; understand the full remote storage landscape.</p>
+                                <a href="monitoring-observability-prometheus-part10-remote-storage.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 7: Sharding, Federation &amp; HA</h5>
+                                <p>The HA patterns that Thanos deduplicates &mdash; understand why HA pairs produce duplicate data.</p>
+                                <a href="monitoring-observability-prometheus-part07-sharding-federation-ha.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                            <div class="related-post-item">
+                                <h5>Part 12: Jsonnet &amp; Monitoring Mixins</h5>
+                                <p>Manage Thanos dashboards and alert rules as code using the monitoring-mixins pattern.</p>
+                                <a href="monitoring-observability-prometheus-part12-jsonnet-mixins.html">Read Article <i class="fas fa-arrow-right ms-1"></i></a>
+                            </div>
+                        </div>
+
+                        <!-- Series Navigation -->
+                        <div class="series-nav">
+                            <a href="monitoring-observability-prometheus-part10-remote-storage.html" class="series-nav-item prev">
+                                <span class="nav-label"><i class="fas fa-arrow-left me-1"></i>Previous</span>
+                                <span class="nav-title">Part 10: Remote Storage</span>
+                            </a>
+                            <a href="monitoring-observability-prometheus-part12-jsonnet-mixins.html" class="series-nav-item next">
+                                <span class="nav-label">Next <i class="fas fa-arrow-right ms-1"></i></span>
+                                <span class="nav-title">Part 12: Jsonnet &amp; Mixins</span>
+                            </a>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Scroll-to-Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" title="Back to Top"><i class="fas fa-arrow-up"></i></button>
+    <!-- Category Indicator -->
+    <div id="categoryIndicator" class="category-indicator"></div>
+
+    <!-- Footer -->
+    <footer id="social-media">
+        <div class="footer-v2-wrapper">
+            <div class="footer-bar">
+                <div class="fc-left"><div class="fc-brand-group"><div class="fc-brand-stack"><span></span><span></span><span></span></div><span class="fc-brand-name">Wasil Zafar</span></div><span class="fc-tagline">Consultant &amp; Cloud Architect</span></div>
+                <div class="fc-center"><a href="/">Home</a><a href="/disclaimer.html">Disclaimer</a><a href="/privacy-policy.html">Privacy</a><a href="/pages/contact.html">Contact</a></div>
+                <div class="fc-right"><a href="https://www.facebook.com/wasil.zafar/" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a><a href="https://twitter.com/wasilzafar" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a><a href="https://www.linkedin.com/in/wasilzafar" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a><a href="https://www.youtube.com/@wasilzafar" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a><a href="https://www.instagram.com/itswzee/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a><a href="https://in.pinterest.com/wasilz/" target="_blank" title="Pinterest"><i class="fab fa-pinterest-p"></i></a><a href="mailto:wasil.zafar@gmail.com" title="Email"><i class="fas fa-envelope"></i></a><a href="/feed.xml" target="_blank" title="RSS Feed"><i class="fas fa-rss"></i></a></div>
+            </div>
+            <div class="footer-sub"><span><i class="fas fa-icons me-1"></i>Icons from <a href="https://www.flaticon.com/" target="_blank">Flaticon</a> &amp; <a href="https://fontawesome.com/" target="_blank">Font Awesome</a></span><a href="https://buymeacoffee.com/itswzee" target="_blank" class="fc-coffee">&#9749; Keep me caffeinated</a></div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../../../js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="../../../js/search.js"></script>
+    <script src="../../../js/cookie-consent.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/toolbar/prism-toolbar.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="../../../js/path-progress.js"></script>
+    <script src="../../../js/quiz-widget.js"></script>
+</body>
+</html>
