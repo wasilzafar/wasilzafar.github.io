@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parent.parent
+REPO_ROOT = SCRIPT_DIR.parent.parent.parent  # .github/scripts/seo/ → repo root
 SITEMAP_PATH = REPO_ROOT / "sitemap.xml"
 BASE_URL = "https://www.wasilzafar.com/"
 EXCLUDED_HTML = {".template-blog-post.html", "cookie-banner.html", "404.html"}

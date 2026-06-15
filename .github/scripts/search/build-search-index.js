@@ -12,7 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = path.resolve(__dirname, '..', '..');
+const ROOT = path.resolve(__dirname, '..', '..', '..');
 const OUTPUT = path.join(ROOT, 'search-index.json');
 
 // Directories to scan for articles

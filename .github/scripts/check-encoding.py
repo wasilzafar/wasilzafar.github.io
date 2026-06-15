@@ -330,7 +330,7 @@ def main():
 
     # Determine repo root
     script_dir = Path(__file__).parent
-    repo_root = script_dir.parent  # .tools/ is one level below root
+    repo_root = script_dir.parent.parent  # .github/scripts/ is two levels below root
 
     # Determine scan targets
     if args.path:

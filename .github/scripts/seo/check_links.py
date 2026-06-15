@@ -29,8 +29,8 @@ from collections import defaultdict
 # ── Config ────────────────────────────────────────────────────────────────────
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-# Script lives at .tools/seo/check_links.py — go up two levels to reach repo root
-REPO_ROOT = SCRIPT_DIR.parent.parent
+# Script lives at .github/scripts/seo/ — go up three levels to reach repo root
+REPO_ROOT = SCRIPT_DIR.parent.parent.parent
 
 SKIP_DIRS = {'.git', '.github', 'node_modules', '__pycache__'}
 

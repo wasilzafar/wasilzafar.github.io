@@ -15,7 +15,7 @@ const path = require('path');
 // CLI flags
 const DETERMINISTIC = process.argv.includes('--deterministic');
 
-const ROOT = path.resolve(__dirname, '../..');
+const ROOT = path.resolve(__dirname, '../../..');
 const FEEDS_DIR = path.join(ROOT, 'feeds');
 const SITE_URL = 'https://www.wasilzafar.com';
 const SITE_TITLE = 'Wasil Zafar';

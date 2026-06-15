@@ -44,7 +44,7 @@ from collections import defaultdict, Counter
 # ============================================================
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parent
+REPO_ROOT = SCRIPT_DIR.parent.parent  # .github/scripts/ is two levels below root
 
 META_DESC_MIN = 120
 META_DESC_MAX = 160
