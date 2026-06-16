@@ -147,6 +147,19 @@
                     <li><a href="#beta-headers" onclick="closeNav()">Beta Features &amp; Headers</a></li>
                 </ul>
             </li>
+            <li><a href="#prompt-caching" onclick="closeNav()">Prompt Caching</a>
+                <ul>
+                    <li><a href="#caching-approaches" onclick="closeNav()">Automatic vs. Explicit</a></li>
+                    <li><a href="#caching-multi-turn" onclick="closeNav()">Multi-Turn Caching</a></li>
+                    <li><a href="#caching-explicit" onclick="closeNav()">Explicit Breakpoints</a></li>
+                    <li><a href="#caching-tools" onclick="closeNav()">Caching Tool Definitions</a></li>
+                    <li><a href="#caching-multiple-breakpoints" onclick="closeNav()">Multiple Breakpoints</a></li>
+                    <li><a href="#caching-prewarming" onclick="closeNav()">Pre-Warming</a></li>
+                    <li><a href="#caching-invalidation" onclick="closeNav()">Cache Invalidation</a></li>
+                    <li><a href="#caching-tracking" onclick="closeNav()">Tracking Performance</a></li>
+                    <li><a href="#caching-limitations" onclick="closeNav()">Limitations &amp; Minimums</a></li>
+                </ul>
+            </li>
         </ol>
     </div>
     <div id="tocOverlay" class="sidenav-overlay" onclick="closeNav()"></div>
@@ -221,174 +234,36 @@ response = client.messages.create(
 print(response.content[0].text)
 </code></pre>
 
-                    <p>For advanced use cases, pass the system prompt as an array of content blocks with <code>cache_control</code> markers to enable <strong>prompt caching</strong>. Prompt caching lets Anthropic reuse previously processed prompt prefixes so subsequent requests can read that prefix from cache instead of reprocessing it from scratch. This usually reduces latency and drops cache-read cost to 10% of the base input-token price for the cached portion. It&rsquo;s ideal for scenarios where the same large system prompt, few-shot examples, or reference documents are sent repeatedly across many requests &mdash; such as a support bot with a large knowledge base that handles hundreds of conversations per hour:</p>
+                    <p>For advanced use cases, pass the system prompt as an array of content blocks. This format is required when using <strong>prompt caching</strong> (covered in <a href="#prompt-caching">Section 7</a>) &mdash; you attach <code>cache_control</code> markers to individual blocks so Anthropic can reuse previously processed prefixes, reducing latency and cost by up to 90% for the cached portion:</p>
 
 <pre><code class="language-python">import anthropic
 
 client = anthropic.Anthropic()
 
-# Build a large system prompt.
-# Prompt-caching minimums are model/platform dependent: for example,
-# Sonnet 4.6 can cache prefixes at 1,024+ tokens, while some models require more.
-# In production this would be your full coding guidelines, API reference, or knowledge base.
-large_guidelines = """You are an expert code reviewer for our FastAPI + SQLAlchemy application.
-
-## Review Guidelines
-
-### Security Rules
-1. All database queries MUST use parameterized statements — never string interpolation
-2. Validate all user input with Pydantic v2 models before processing
-3. Check authorization on every endpoint — never rely on frontend-only auth
-4. Sanitize file uploads: check MIME type, size limits, and scan for malware
-5. Never log sensitive data (passwords, tokens, PII) — use field-level masking
-6. Use HTTPS-only cookies with SameSite=Strict for session management
-7. Rate limit all public endpoints (use slowapi or custom middleware)
-8. Validate Content-Type headers to prevent CSRF on JSON endpoints
-9. Implement CORS with explicit origin allowlist — never use wildcard in production
-10. Hash passwords with bcrypt (cost factor 12+) — never store plaintext or MD5
-
-### Code Quality Standards
-1. Maximum function length: 30 lines — split into helpers if longer
-2. All functions must have type hints on parameters and return values
-3. Use dependency injection via FastAPI's Depends() for shared logic
-4. Database sessions must use async context managers (no manual close)
-5. Use Pydantic v2 model_validator for cross-field validation
-6. Prefer SQLAlchemy 2.0 select() syntax over legacy Query API
-7. All endpoints must return proper HTTP status codes (201 for creation, 204 for deletion)
-8. Use structured logging (JSON format) with correlation IDs per request
-9. Docstrings required on all public functions — use Google style format
-10. No magic numbers — use named constants or configuration values
-
-### Performance Requirements
-1. Add database indexes for all columns used in WHERE clauses
-2. Use eager loading (selectinload/joinedload) to prevent N+1 queries
-3. Paginate all list endpoints (max 100 items per page)
-4. Cache expensive computations with Redis (TTL based on data volatility)
-5. Use connection pooling (pool_size=20, max_overflow=10 for production)
-6. Background tasks for operations taking more than 500ms
-7. Compress responses over 1KB with gzip middleware
-8. Use async database drivers (asyncpg for PostgreSQL) — never block event loop
-9. Implement query timeout limits (30s max) to prevent long-running queries
-10. Profile slow endpoints with OpenTelemetry spans — alert if p95 exceeds 200ms
-
-### Architecture Patterns
-1. Repository pattern for data access — never use db.session directly in routes
-2. Service layer for business logic — routes only handle HTTP concerns
-3. Domain events for cross-service communication (avoid tight coupling)
-4. Use Alembic migrations for ALL schema changes — never alter tables manually
-5. Feature flags for gradual rollouts (use LaunchDarkly or custom implementation)
-6. Circuit breaker pattern for external service calls (prevent cascade failures)
-7. Idempotency keys for all mutation endpoints (prevent duplicate processing)
-8. CQRS pattern for read-heavy endpoints — separate read/write models
-9. Event sourcing for audit-critical domains (payments, permissions)
-10. API versioning via URL prefix (/v1/, /v2/) — never break existing contracts
-
-### Testing Standards
-1. Unit tests for all service layer functions (mock external dependencies)
-2. Integration tests for database operations (use test database with fixtures)
-3. API tests for all endpoints (test happy path, validation errors, auth failures)
-4. Minimum 80% code coverage on new code — block PR if coverage drops
-5. Use factories (factory_boy) for test data — never hardcode fixtures
-6. Test async code with pytest-asyncio — verify proper await handling
-7. Load tests for all public endpoints — verify p99 latency under 500ms at 100 RPS
-8. Security tests: SQL injection, XSS, IDOR, broken auth (use OWASP ZAP)
-9. Contract tests for inter-service APIs — verify schema compatibility
-10. Chaos tests monthly: kill random pods, inject latency, corrupt responses
-
-### Error Handling
-1. Use custom exception classes inheriting from a base AppException
-2. Global exception handler must return consistent error response format
-3. Include correlation_id in all error responses for debugging
-4. Log full stack trace for 500 errors, structured context for 400 errors
-5. Never expose internal error details to clients (generic message + error code)
-6. Retry transient failures (network, database timeout) with exponential backoff
-7. Dead letter queue for failed async jobs — alert after 3 consecutive failures
-8. Graceful degradation: return cached/stale data when downstream services are down
-9. Health check endpoint (/health) must verify database connectivity and return 503 if down
-10. Structured error codes: ERR_{DOMAIN}_{CODE} format (e.g., ERR_AUTH_TOKEN_EXPIRED)
-
-### API Design Standards
-1. Use plural nouns for resource endpoints (/users, /orders, not /user, /order)
-2. Nested resources for parent-child: /users/{id}/orders (max 2 levels deep)
-3. Filter via query params: ?status=active&sort=-created_at&limit=20
-4. Return 422 for validation errors with field-level detail array
-5. Use ETags for cache validation on GET endpoints
-6. Implement cursor-based pagination for large datasets (not offset-based)
-7. Rate limit response headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
-8. Consistent datetime format: ISO 8601 with timezone (2024-01-15T10:30:00Z)
-
-Provide specific line references and severity ratings (critical/warning/info) for each finding.
-End your review with a summary table: | Line | Severity | Issue | Fix |"""
-
-# ✅ CACHED: On Sonnet 4.6, this large block (~1500 tokens) exceeds the cache minimum.
-# First call writes to cache; subsequent calls can read the cached prefix.
+# System prompt as content block array — required format for prompt caching
 response = client.messages.create(
     model="claude-sonnet-4-6",
-    max_tokens=1024,
+    max_tokens=512,
     system=[
         {
             "type": "text",
-            "text": large_guidelines,
-            "cache_control": {"type": "ephemeral"}  # ← marks for caching
+            "text": "You are a senior Python developer. Provide production-ready code with error handling. Never use print() for logging — use the logging module.",
+            "cache_control": {"type": "ephemeral"}  # Marks this block for caching
         }
     ],
     messages=[
-        {"role": "user", "content": "Review this endpoint:\n\n@app.post('/users')\nasync def create_user(name: str, email: str, db: Session = Depends(get_db)):\n    user = User(name=name, email=email)\n    db.add(user)\n    db.commit()\n    return {'id': user.id}"}
+        {"role": "user", "content": "Write a function to retry HTTP requests with exponential backoff."}
     ]
 )
-
-print("--- First call (cache creation) ---")
-print(f"Cache created: {getattr(response.usage, 'cache_creation_input_tokens', 0)} tokens")
-print(f"Cache read: {getattr(response.usage, 'cache_read_input_tokens', 0)} tokens")
-print(f"Input tokens: {response.usage.input_tokens}")
-
-# Second call with SAME system prompt — cache is now active
-response2 = client.messages.create(
-    model="claude-sonnet-4-6",
-    max_tokens=1024,
-    system=[
-        {
-            "type": "text",
-            "text": large_guidelines,  # Same content → cache hit
-            "cache_control": {"type": "ephemeral"}
-        }
-    ],
-    messages=[
-        {"role": "user", "content": "Review this endpoint:\n\n@app.get('/users/{user_id}')\nasync def get_user(user_id: int, db: Session = Depends(get_db)):\n    return db.query(User).filter(User.id == user_id).first()"}
-    ]
-)
-
-print("\n--- Second call (cache read) ---")
-print(f"Cache created: {getattr(response2.usage, 'cache_creation_input_tokens', 0)} tokens")
-print(f"Cache read: {getattr(response2.usage, 'cache_read_input_tokens', 0)} tokens")
-print(f"Input tokens: {response2.usage.input_tokens}")
-# Expected: cache_read > 0, cache_creation = 0 (already cached)
-print(f"\nReview: {response2.content[0].text[:200]}...")
-</code></pre>
-
-                    <p>Running this code produces the following output &mdash; notice how the first call creates the cache (1,374 tokens written) and the second call reads from it (1,374 tokens at 90% discount, only 68 fresh input tokens):</p>
-
-<pre><code class="language-bash">--- First call (cache creation) ---
-Cache created: 1374 tokens
-Cache read: 0 tokens
-Input tokens: 82
-
---- Second call (cache read) ---
-Cache created: 0 tokens
-Cache read: 1374 tokens
-Input tokens: 68
-
-Review: ## Code Review: `GET /users/{user_id}`
-
-### Finding 1 — Missing Authorization Check
-**Line 2 | Severity: CRITICAL**
-
-Any authenticated (or unauthenticated) caller can fetch any user's record by guessi...
+print(response.content[0].text)
+# Check cache usage:
+print(f"Cache created: {getattr(response.usage, 'cache_creation_input_tokens', 0)}")
+print(f"Cache read: {getattr(response.usage, 'cache_read_input_tokens', 0)}")
 </code></pre>
 
                     <div class="highlight-box">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <strong>Minimum Size Requirement:</strong> Prompt caching has a <em>model- and platform-dependent</em> minimum length. On Claude Sonnet 4.6, cached prefixes can begin at <strong>1,024 tokens</strong>, while some other models and platforms require larger prefixes. In the example above, the detailed guidelines are long enough for a cache write on Sonnet 4.6, so the first call writes tokens to cache (<code>cache_creation_input_tokens &gt; 0</code>) and the second call can read them back (<code>cache_read_input_tokens &gt; 0</code>). The default cache lifetime is 5 minutes and is refreshed on reuse; Anthropic also offers a 1-hour TTL option.
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Prompt Caching:</strong> For a full deep-dive on caching strategies &mdash; automatic vs. explicit breakpoints, multi-turn caching, tool caching, pre-warming, invalidation rules, and a real-world production example &mdash; see <a href="#prompt-caching"><strong>Section 7: Prompt Caching</strong></a> below.
                     </div>
 
                     <h3 id="multi-turn">1.3 Multi-Turn Conversations</h3>
@@ -1262,6 +1137,570 @@ stateDiagram-v2
                     <div class="highlight-box">
                         <i class="fas fa-graduation-cap"></i>
                         <strong>CCA Exam Pattern (0.4):</strong> Questions test: (1) <code>count_tokens</code> checks token count BEFORE sending (not after). (2) Tool definitions add token overhead to every request (~50-200 tokens each). (3) Multi-turn requires message accumulation with role alternation. (4) Beta features require explicit opt-in via headers. (5) Pin model versions AND beta versions in production for stability.
+                    </div>
+
+                    <h2 id="prompt-caching"><i class="fas fa-database me-2 text-teal"></i>7. Prompt Caching</h2>
+
+                    <p>Prompt caching optimizes your API usage by allowing resuming from specific prefixes in your prompts. This significantly reduces processing time and costs for repetitive tasks or prompts with consistent elements. Cache reads cost only <strong>10% of the base input token price</strong>, while cache writes add a 25% premium (5-min TTL) or 2&times; premium (1-hour TTL).</p>
+
+                    <div class="mermaid-container">
+                        <span class="mermaid-label"><i class="fas fa-database me-1"></i>Prompt Caching Request Flow</span>
+                        <pre class="mermaid">
+flowchart TD
+    A["API Request with cache_control"] --> B{"Cached prefix\nexists?"}
+    B -->|Yes| C["Cache Read\n(10% cost)"]
+    B -->|No| D["Process full prompt"]
+    D --> E["Write to cache\n(125% cost)"]
+    C --> F["Process only\nnew tokens"]
+    E --> G["Generate response"]
+    F --> G
+    G --> H["Return response\n+ usage fields"]
+                        </pre>
+                    </div>
+
+                    <h3 id="caching-approaches">7.1 Automatic vs. Explicit Caching</h3>
+
+                    <p>There are two approaches to enable prompt caching:</p>
+
+                    <ul>
+                        <li><strong>Automatic caching:</strong> Add a single <code>cache_control</code> field at the <em>top level</em> of your request body. The system automatically places the cache breakpoint on the last cacheable block and moves it forward as conversations grow. Best for multi-turn conversations.</li>
+                        <li><strong>Explicit cache breakpoints:</strong> Place <code>cache_control</code> directly on individual content blocks for fine-grained control over exactly what gets cached. Best when different sections change at different frequencies.</li>
+                    </ul>
+
+                    <p>The simplest way to start is automatic caching &mdash; a single parameter handles everything:</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Automatic caching — one parameter, system handles breakpoint placement
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    cache_control={"type": "ephemeral"},  # Enable automatic caching
+    system="You are an AI assistant tasked with analyzing literary works. Your goal is to provide insightful commentary on themes, characters, and writing style.",
+    messages=[
+        {"role": "user", "content": "Analyze the major themes in 'Pride and Prejudice'."}
+    ]
+)
+
+print(f"Input tokens: {response.usage.input_tokens}")
+print(f"Cache created: {getattr(response.usage, 'cache_creation_input_tokens', 0)}")
+print(f"Cache read: {getattr(response.usage, 'cache_read_input_tokens', 0)}")
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Key Insight:</strong> With automatic caching, the system caches all content up to and including the last cacheable block. On subsequent requests with the same prefix, cached content is reused automatically. The cache breakpoint moves forward as conversations grow &mdash; no manual marker updates needed.
+                    </div>
+
+                    <h3 id="caching-multi-turn">7.2 Automatic Caching in Multi-Turn Conversations</h3>
+
+                    <p>Automatic caching excels in multi-turn scenarios. Each new request caches everything up to the last cacheable block, and previous content is read from cache:</p>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead><tr><th>Request</th><th>Content</th><th>Cache Behavior</th></tr></thead>
+                            <tbody>
+                                <tr><td>Request 1</td><td>System + User(1) + Asst(1) + <strong>User(2)</strong> &#9668; cache</td><td>Everything written to cache</td></tr>
+                                <tr><td>Request 2</td><td>System + User(1) + Asst(1) + User(2) + Asst(2) + <strong>User(3)</strong> &#9668; cache</td><td>System through User(2) read from cache; Asst(2) + User(3) written</td></tr>
+                                <tr><td>Request 3</td><td>System + User(1) + &hellip; + User(3) + Asst(3) + <strong>User(4)</strong> &#9668; cache</td><td>System through User(3) read from cache; Asst(3) + User(4) written</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Multi-turn with automatic caching — breakpoint moves forward automatically
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    cache_control={"type": "ephemeral"},
+    system="You are a helpful assistant that remembers our conversation.",
+    messages=[
+        {"role": "user", "content": "My name is Alex. I work on machine learning."},
+        {"role": "assistant", "content": "Nice to meet you, Alex! How can I help with your ML work today?"},
+        {"role": "user", "content": "What did I say I work on?"}
+    ]
+)
+
+print(f"Input tokens: {response.usage.input_tokens}")
+print(f"Cache created: {getattr(response.usage, 'cache_creation_input_tokens', 0)}")
+print(f"Cache read: {getattr(response.usage, 'cache_read_input_tokens', 0)}")
+print(f"\nAnswer: {response.content[0].text}")
+</code></pre>
+
+                    <h3 id="caching-explicit">7.3 Explicit Cache Breakpoints</h3>
+
+                    <p>For fine-grained control, place <code>cache_control</code> directly on individual content blocks. This is useful when you need to cache sections that change at different frequencies. Cache prefixes are created in the order: <code>tools</code> &rarr; <code>system</code> &rarr; <code>messages</code>.</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Explicit breakpoints — cache system prompt + long document separately
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    system=[
+        {
+            "type": "text",
+            "text": "You are an AI assistant tasked with analyzing legal documents.",
+        },
+        {
+            "type": "text",
+            "text": "Here is the full text of a complex legal agreement: [Insert 50-page legal agreement here]",
+            "cache_control": {"type": "ephemeral"},  # Cache breakpoint here
+        },
+    ],
+    messages=[
+        {"role": "user", "content": "What are the key terms and conditions in this agreement?"}
+    ]
+)
+
+# First request: cache_creation_input_tokens > 0 (writing to cache)
+# Subsequent requests: cache_read_input_tokens > 0 (reading from cache at 10% cost)
+print(f"Input tokens: {response.usage.input_tokens}")
+print(f"Cache created: {getattr(response.usage, 'cache_creation_input_tokens', 0)}")
+print(f"Cache read: {getattr(response.usage, 'cache_read_input_tokens', 0)}")
+</code></pre>
+
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Critical:</strong> Place <code>cache_control</code> on the last block whose prefix is <em>identical</em> across the requests you want to share a cache. If you place it on a block that changes every request (timestamps, per-request context), the prefix hash never matches and you pay for a fresh cache write every time with no reads. The lookback does <strong>not</strong> find stable content behind your breakpoint &mdash; it only finds entries that earlier requests wrote at their breakpoints.
+                    </div>
+
+                    <p><strong>Real-World Example:</strong> Here&rsquo;s a production-grade pattern &mdash; caching a large system prompt (coding guidelines) with explicit breakpoints. The first call writes to cache; subsequent calls read from it at 90% discount:</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Production system prompt — large enough to exceed the 1,024-token cache minimum.
+# In practice this would be your full coding guidelines, API reference, or knowledge base.
+large_guidelines = """You are an expert code reviewer for our FastAPI + SQLAlchemy application.
+
+## Review Guidelines
+
+### Security Rules
+1. All database queries MUST use parameterized statements — never string interpolation
+2. Validate all user input with Pydantic v2 models before processing
+3. Check authorization on every endpoint — never rely on frontend-only auth
+4. Sanitize file uploads: check MIME type, size limits, and scan for malware
+5. Never log sensitive data (passwords, tokens, PII) — use field-level masking
+6. Use HTTPS-only cookies with SameSite=Strict for session management
+7. Rate limit all public endpoints (use slowapi or custom middleware)
+8. Validate Content-Type headers to prevent CSRF on JSON endpoints
+9. Implement CORS with explicit origin allowlist — never use wildcard in production
+10. Hash passwords with bcrypt (cost factor 12+) — never store plaintext or MD5
+
+### Code Quality Standards
+1. Maximum function length: 30 lines — split into helpers if longer
+2. All functions must have type hints on parameters and return values
+3. Use dependency injection via FastAPI's Depends() for shared logic
+4. Database sessions must use async context managers (no manual close)
+5. Use Pydantic v2 model_validator for cross-field validation
+6. Prefer SQLAlchemy 2.0 select() syntax over legacy Query API
+7. All endpoints must return proper HTTP status codes (201 for creation, 204 for deletion)
+8. Use structured logging (JSON format) with correlation IDs per request
+9. Docstrings required on all public functions — use Google style format
+10. No magic numbers — use named constants or configuration values
+
+### Performance Requirements
+1. Add database indexes for all columns used in WHERE clauses
+2. Use eager loading (selectinload/joinedload) to prevent N+1 queries
+3. Paginate all list endpoints (max 100 items per page)
+4. Cache expensive computations with Redis (TTL based on data volatility)
+5. Use connection pooling (pool_size=20, max_overflow=10 for production)
+6. Background tasks for operations taking more than 500ms
+7. Compress responses over 1KB with gzip middleware
+8. Use async database drivers (asyncpg for PostgreSQL) — never block event loop
+9. Implement query timeout limits (30s max) to prevent long-running queries
+10. Profile slow endpoints with OpenTelemetry spans — alert if p95 exceeds 200ms
+
+### Architecture Patterns
+1. Repository pattern for data access — never use db.session directly in routes
+2. Service layer for business logic — routes only handle HTTP concerns
+3. Domain events for cross-service communication (avoid tight coupling)
+4. Use Alembic migrations for ALL schema changes — never alter tables manually
+5. Feature flags for gradual rollouts (use LaunchDarkly or custom implementation)
+6. Circuit breaker pattern for external service calls (prevent cascade failures)
+7. Idempotency keys for all mutation endpoints (prevent duplicate processing)
+8. CQRS pattern for read-heavy endpoints — separate read/write models
+9. Event sourcing for audit-critical domains (payments, permissions)
+10. API versioning via URL prefix (/v1/, /v2/) — never break existing contracts
+
+### Testing Standards
+1. Unit tests for all service layer functions (mock external dependencies)
+2. Integration tests for database operations (use test database with fixtures)
+3. API tests for all endpoints (test happy path, validation errors, auth failures)
+4. Minimum 80% code coverage on new code — block PR if coverage drops
+5. Use factories (factory_boy) for test data — never hardcode fixtures
+6. Test async code with pytest-asyncio — verify proper await handling
+7. Load tests for all public endpoints — verify p99 latency under 500ms at 100 RPS
+8. Security tests: SQL injection, XSS, IDOR, broken auth (use OWASP ZAP)
+9. Contract tests for inter-service APIs — verify schema compatibility
+10. Chaos tests monthly: kill random pods, inject latency, corrupt responses
+
+### Error Handling
+1. Use custom exception classes inheriting from a base AppException
+2. Global exception handler must return consistent error response format
+3. Include correlation_id in all error responses for debugging
+4. Log full stack trace for 500 errors, structured context for 400 errors
+5. Never expose internal error details to clients (generic message + error code)
+6. Retry transient failures (network, database timeout) with exponential backoff
+7. Dead letter queue for failed async jobs — alert after 3 consecutive failures
+8. Graceful degradation: return cached/stale data when downstream services are down
+9. Health check endpoint (/health) must verify database connectivity and return 503 if down
+10. Structured error codes: ERR_{DOMAIN}_{CODE} format (e.g., ERR_AUTH_TOKEN_EXPIRED)
+
+### API Design Standards
+1. Use plural nouns for resource endpoints (/users, /orders, not /user, /order)
+2. Nested resources for parent-child: /users/{id}/orders (max 2 levels deep)
+3. Filter via query params: ?status=active&sort=-created_at&limit=20
+4. Return 422 for validation errors with field-level detail array
+5. Use ETags for cache validation on GET endpoints
+6. Implement cursor-based pagination for large datasets (not offset-based)
+7. Rate limit response headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
+8. Consistent datetime format: ISO 8601 with timezone (2024-01-15T10:30:00Z)
+
+Provide specific line references and severity ratings (critical/warning/info) for each finding.
+End your review with a summary table: | Line | Severity | Issue | Fix |"""
+
+# First call — writes the system prompt to cache
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    system=[
+        {
+            "type": "text",
+            "text": large_guidelines,
+            "cache_control": {"type": "ephemeral"}  # Explicit breakpoint
+        }
+    ],
+    messages=[
+        {"role": "user", "content": "Review this endpoint:\n\n@app.post('/users')\nasync def create_user(name: str, email: str, db: Session = Depends(get_db)):\n    user = User(name=name, email=email)\n    db.add(user)\n    db.commit()\n    return {'id': user.id}"}
+    ]
+)
+
+print("--- First call (cache creation) ---")
+print(f"Cache created: {getattr(response.usage, 'cache_creation_input_tokens', 0)} tokens")
+print(f"Cache read: {getattr(response.usage, 'cache_read_input_tokens', 0)} tokens")
+print(f"Input tokens: {response.usage.input_tokens}")
+
+# Second call with SAME system prompt — cache hit
+response2 = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    system=[
+        {
+            "type": "text",
+            "text": large_guidelines,  # Identical content → cache hit
+            "cache_control": {"type": "ephemeral"}
+        }
+    ],
+    messages=[
+        {"role": "user", "content": "Review this endpoint:\n\n@app.get('/users/{user_id}')\nasync def get_user(user_id: int, db: Session = Depends(get_db)):\n    return db.query(User).filter(User.id == user_id).first()"}
+    ]
+)
+
+print("\n--- Second call (cache read) ---")
+print(f"Cache created: {getattr(response2.usage, 'cache_creation_input_tokens', 0)} tokens")
+print(f"Cache read: {getattr(response2.usage, 'cache_read_input_tokens', 0)} tokens")
+print(f"Input tokens: {response2.usage.input_tokens}")
+# Expected: cache_read > 0, cache_creation = 0 (already cached)
+print(f"\nReview: {response2.content[0].text[:200]}...")
+</code></pre>
+
+                    <p>Running this produces the following output &mdash; the first call writes 1,374 tokens to cache, and the second call reads them at 90% discount (only 68 fresh input tokens for the new user message):</p>
+
+<pre><code class="language-bash">--- First call (cache creation) ---
+Cache created: 1374 tokens
+Cache read: 0 tokens
+Input tokens: 82
+
+--- Second call (cache read) ---
+Cache created: 0 tokens
+Cache read: 1374 tokens
+Input tokens: 68
+
+Review: ## Code Review: `GET /users/{user_id}`
+
+### Finding 1 — Missing Authorization Check
+**Line 2 | Severity: CRITICAL**
+
+Any authenticated (or unauthenticated) caller can fetch any user's record by guessi...
+</code></pre>
+
+                    <h3 id="caching-tools">7.4 Caching Tool Definitions</h3>
+
+                    <p>Tool definitions can be cached by placing <code>cache_control</code> on the last tool in your <code>tools</code> array. All tools defined before and including that tool are cached as a single prefix. This is especially valuable when you have many complex tool schemas:</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# Cache tool definitions — cached as the first segment in the hierarchy
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    tools=[
+        {
+            "name": "search_documents",
+            "description": "Search through the knowledge base for relevant documents.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"query": {"type": "string", "description": "Search query"}},
+                "required": ["query"]
+            }
+        },
+        {
+            "name": "get_document",
+            "description": "Retrieve a specific document by its unique ID.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"doc_id": {"type": "string", "description": "Document ID"}},
+                "required": ["doc_id"]
+            },
+            "cache_control": {"type": "ephemeral"}  # Caches ALL tools above + this one
+        }
+    ],
+    messages=[{"role": "user", "content": "Search for information about Mars rovers."}]
+)
+
+print(f"Cache created: {getattr(response.usage, 'cache_creation_input_tokens', 0)} tokens")
+print(f"Cache read: {getattr(response.usage, 'cache_read_input_tokens', 0)} tokens")
+# On first request: cache_creation > 0 (tool schemas written)
+# On subsequent requests: cache_read > 0 (tool schemas read from cache)
+</code></pre>
+
+                    <h3 id="caching-multiple-breakpoints">7.5 Multiple Cache Breakpoints</h3>
+
+                    <p>You can define up to <strong>4 cache breakpoints</strong> to cache different sections that change at different frequencies. This gives maximum flexibility for complex applications:</p>
+
+                    <div class="mermaid-container">
+                        <span class="mermaid-label"><i class="fas fa-layer-group me-1"></i>4-Breakpoint Strategy</span>
+                        <pre class="mermaid">
+flowchart LR
+    T["&#9312; Tools\n(rarely change)"] --> S["&#9313; System Instructions\n(stable)"]
+    S --> R["&#9314; RAG Context\n(daily updates)"]
+    R --> M["&#9315; Conversation\n(every turn)"]
+    T -.- TC["cache_control"]
+    S -.- SC["cache_control"]
+    R -.- RC["cache_control"]
+    M -.- MC["cache_control"]
+                        </pre>
+                    </div>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+# 4-breakpoint strategy: tools, instructions, RAG context, conversation
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    tools=[
+        {
+            "name": "search_documents",
+            "description": "Search through the knowledge base",
+            "input_schema": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"]
+            }
+        },
+        {
+            "name": "get_document",
+            "description": "Retrieve a specific document by ID",
+            "input_schema": {
+                "type": "object",
+                "properties": {"doc_id": {"type": "string"}},
+                "required": ["doc_id"]
+            },
+            "cache_control": {"type": "ephemeral"}  # Breakpoint 1: Tools
+        }
+    ],
+    system=[
+        {
+            "type": "text",
+            "text": "You are a helpful research assistant.\n\n# Instructions\n- Search before answering\n- Provide citations\n- Be objective and accurate",
+            "cache_control": {"type": "ephemeral"}  # Breakpoint 2: Instructions
+        },
+        {
+            "type": "text",
+            "text": "# Knowledge Base\n\n## Doc 1: Solar System\nThe solar system consists of...\n\n## Doc 2: Mars\nMars has been a target of exploration...\n\n[50+ pages of context]",
+            "cache_control": {"type": "ephemeral"}  # Breakpoint 3: RAG context
+        }
+    ],
+    messages=[
+        {"role": "user", "content": "Can you search for Mars rovers?"},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "tool_1", "name": "search_documents", "input": {"query": "Mars rovers"}}
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "tool_1", "content": "Found 3 documents about Mars rovers."}
+        ]},
+        {"role": "assistant", "content": [
+            {"type": "text", "text": "I found 3 relevant documents. What would you like to know?"}
+        ]},
+        {"role": "user", "content": [
+            {
+                "type": "text",
+                "text": "Tell me about the Perseverance rover.",
+                "cache_control": {"type": "ephemeral"}  # Breakpoint 4: Conversation
+            }
+        ]}
+    ]
+)
+
+print(f"Input tokens: {response.usage.input_tokens}")
+print(f"Cache created: {getattr(response.usage, 'cache_creation_input_tokens', 0)}")
+print(f"Cache read: {getattr(response.usage, 'cache_read_input_tokens', 0)}")
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>How multiple breakpoints help:</strong> If you append a new turn without changing earlier content, all four segments are reused. If you update RAG documents but keep tools/instructions, the first two segments are still cached. Changes at any breakpoint invalidate that segment and everything after it, but earlier cached segments remain valid.
+                    </div>
+
+                    <h3 id="caching-prewarming">7.6 Pre-Warming the Cache</h3>
+
+                    <p>Cache pre-warming eliminates the cache-miss latency penalty on the first user interaction. Set <code>max_tokens: 0</code> to load your system prompt into cache without generating output &mdash; reducing time-to-first-token (TTFT) for latency-sensitive applications:</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+SYSTEM_PROMPT = [
+    {
+        "type": "text",
+        "text": "You are an expert software engineer with deep knowledge of distributed systems, microservices architecture, and cloud-native patterns...",
+        "cache_control": {"type": "ephemeral"},
+    }
+]
+
+
+def prewarm_cache() -> None:
+    """Call at application startup or on a scheduled interval."""
+    result = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=0,  # No output generated — just warms the cache
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": "warmup"}],
+    )
+    print(f"Cache warmed: {getattr(result.usage, 'cache_creation_input_tokens', 0)} tokens written")
+    print(f"Stop reason: {result.stop_reason}")  # "max_tokens"
+    print(f"Content: {result.content}")  # [] (empty — no output generated)
+
+
+def respond(user_message: str) -> str:
+    """Real user request — benefits from warm cache."""
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1024,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_message}],
+    )
+    return response.content[0].text
+
+
+# Warm cache before user traffic arrives
+prewarm_cache()
+
+# Later — system prompt is already cached, reducing TTFT
+answer = respond("How do I implement a circuit breaker pattern?")
+print(answer)
+</code></pre>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-clock me-2"></i>
+                        <strong>TTL &amp; Limitations:</strong> Default cache lifetime is 5 minutes, refreshed each time cached content is used. For longer gaps, use 1-hour TTL: <code>{"type": "ephemeral", "ttl": "1h"}</code> (costs 2&times; base input price). <code>max_tokens: 0</code> is rejected if <code>stream: true</code>, extended thinking, structured outputs, or forced tool choice is set.
+                    </div>
+
+                    <h3 id="caching-invalidation">7.7 What Invalidates the Cache</h3>
+
+                    <p>The cache follows the hierarchy <code>tools</code> &rarr; <code>system</code> &rarr; <code>messages</code>. Changes at any level invalidate that level and all subsequent levels:</p>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead><tr><th>What Changes</th><th>Tools Cache</th><th>System Cache</th><th>Messages Cache</th></tr></thead>
+                            <tbody>
+                                <tr><td>Tool definitions</td><td>&#10008;</td><td>&#10008;</td><td>&#10008;</td></tr>
+                                <tr><td>Web search toggle</td><td>&#10004;</td><td>&#10008;</td><td>&#10008;</td></tr>
+                                <tr><td>Citations toggle</td><td>&#10004;</td><td>&#10008;</td><td>&#10008;</td></tr>
+                                <tr><td>Tool choice</td><td>&#10004;</td><td>&#10004;</td><td>&#10008;</td></tr>
+                                <tr><td>Images</td><td>&#10004;</td><td>&#10004;</td><td>&#10008;</td></tr>
+                                <tr><td>Thinking parameters</td><td>&#10004;</td><td>&#10004;</td><td>&#10008;</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h3 id="caching-tracking">7.8 Tracking Cache Performance</h3>
+
+                    <p>Monitor cache effectiveness using three usage fields returned in every response:</p>
+
+<pre><code class="language-python">import anthropic
+
+client = anthropic.Anthropic()
+
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=512,
+    cache_control={"type": "ephemeral"},
+    system="You are a helpful coding assistant with expertise in Python.",
+    messages=[{"role": "user", "content": "Explain list comprehensions."}]
+)
+
+# Token accounting breakdown
+usage = response.usage
+cache_read = getattr(usage, 'cache_read_input_tokens', 0)
+cache_write = getattr(usage, 'cache_creation_input_tokens', 0)
+uncached = usage.input_tokens
+
+print(f"Cache read tokens:     {cache_read}  (tokens from cache — 10% cost)")
+print(f"Cache creation tokens: {cache_write}  (tokens written to cache — 125% cost)")
+print(f"Input tokens:          {uncached}  (tokens AFTER last breakpoint — full cost)")
+print(f"Output tokens:         {usage.output_tokens}")
+print(f"Total input:           {cache_read + cache_write + uncached}")
+
+# Cost estimation (Sonnet pricing: $3/MTok input, $15/MTok output)
+base_input_price = 3.0  # per million tokens
+cost_cache_read = cache_read * (base_input_price * 0.10) / 1_000_000
+cost_cache_write = cache_write * (base_input_price * 1.25) / 1_000_000
+cost_uncached = uncached * base_input_price / 1_000_000
+cost_output = usage.output_tokens * 15.0 / 1_000_000
+
+print(f"\nEstimated cost: ${cost_cache_read + cost_cache_write + cost_uncached + cost_output:.6f}")
+</code></pre>
+
+                    <h3 id="caching-limitations">7.9 Cache Limitations &amp; Minimums</h3>
+
+                    <p>Minimum cacheable prompt lengths vary by model:</p>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead><tr><th>Model</th><th>Minimum Tokens</th></tr></thead>
+                            <tbody>
+                                <tr><td>Claude Sonnet 4.6 / Sonnet 4.5 / Opus 4.8</td><td>1,024 tokens</td></tr>
+                                <tr><td>Claude Opus 4.6 / Opus 4.5</td><td>4,096 tokens</td></tr>
+                                <tr><td>Claude Haiku 4.5</td><td>4,096 tokens</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p>Shorter prompts cannot be cached, even if marked with <code>cache_control</code>. Requests below the minimum are processed normally without caching (no error returned). Verify caching by checking <code>cache_creation_input_tokens</code> and <code>cache_read_input_tokens</code> &mdash; if both are 0, the prompt was not cached.</p>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <strong>Best Practices:</strong> (1) Start with automatic caching for multi-turn conversations. (2) Use explicit breakpoints when sections change at different frequencies. (3) Place static content (tools, system instructions, large context) at the beginning. (4) Place the breakpoint on the last block that stays identical across requests. (5) Monitor <code>cache_read_input_tokens</code> to confirm cache hits. (6) For concurrent requests, wait for the first response before sending parallel requests (cache entry is only available after the first response begins).
+                    </div>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-graduation-cap"></i>
+                        <strong>CCA Exam Pattern (0.5):</strong> Questions test: (1) Cache reads cost 10% of base input price (90% savings). (2) Cache writes cost 125% for 5-min TTL, 200% for 1-hour TTL. (3) Automatic caching places breakpoint on last cacheable block. (4) Cache hierarchy: tools &rarr; system &rarr; messages (changes invalidate downstream). (5) Maximum 4 breakpoints per request. (6) <code>max_tokens: 0</code> pre-warms cache without generating output.
                     </div>
 
                     <div class="series-next">
