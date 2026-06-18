@@ -337,7 +337,7 @@ import json
 
 async def notify_large_refund(input_data, tool_use_id, context):
     """PostToolUse hook: alert on refunds over $200, non-blocking."""
-    result = json.loads(input_data.get("tool_result", "{}")) if isinstance(input_data.get("tool_result"), str) else {}
+    result = json.loads(input_data.get("tool_response", "{}")) if isinstance(input_data.get("tool_response"), str) else {}
     amount = result.get("amount", 0)
     customer_id = input_data.get("tool_input", {}).get("customer_id", "unknown")
 
@@ -497,13 +497,16 @@ asyncio.run(main())
                                 <tr><th>Event</th><th>Matcher Input</th><th>When It Fires</th><th>Key Decisions</th></tr>
                             </thead>
                             <tbody>
-                                <tr><td><code>PreToolUse</code></td><td>Tool name</td><td>Before a tool executes</td><td><code>allow</code>, <code>deny</code>, <code>ask</code></td></tr>
-                                <tr><td><code>PostToolUse</code></td><td>Tool name</td><td>After a tool returns</td><td><code>block</code> (reject result)</td></tr>
+                                <tr><td><code>PreToolUse</code></td><td>Tool name</td><td>Before a tool executes</td><td><code>allow</code>, <code>deny</code>, <code>ask</code>, <code>defer</code></td></tr>
+                                <tr><td><code>PostToolUse</code></td><td>Tool name</td><td>After a tool returns</td><td><code>updatedToolOutput</code>, <code>additionalContext</code></td></tr>
+                                <tr><td><code>PostToolUseFailure</code></td><td>Tool name</td><td>When a tool execution fails</td><td><code>additionalContext</code></td></tr>
                                 <tr><td><code>UserPromptSubmit</code></td><td>&mdash;</td><td>When a prompt is sent</td><td>Inject <code>additionalContext</code></td></tr>
                                 <tr><td><code>Stop</code></td><td>&mdash;</td><td>When the agent finishes</td><td>Validate, save state</td></tr>
+                                <tr><td><code>Notification</code></td><td>Notification type</td><td>Agent status messages</td><td>Forward to Slack/PagerDuty</td></tr>
                                 <tr><td><code>SubagentStart</code></td><td>&mdash;</td><td>When a subagent spawns</td><td>Track parallel tasks</td></tr>
                                 <tr><td><code>SubagentStop</code></td><td>&mdash;</td><td>When a subagent completes</td><td>Aggregate results</td></tr>
                                 <tr><td><code>PreCompact</code></td><td>&mdash;</td><td>Before context compaction</td><td>Archive full transcript</td></tr>
+                                <tr><td><code>PermissionRequest</code></td><td>&mdash;</td><td>Permission dialog needed</td><td>Custom permission handling</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -976,44 +979,68 @@ def production_agent_loop(session_id: str, user_message: str, tools: list, syste
 # Requires: pip install claude-agent-sdk
 # Docs: https://code.claude.com/docs/en/agent-sdk/sessions
 
-import asyncio
 from claude_agent_sdk import (
     list_sessions,        # Enumerate session files on disk
     get_session_messages, # Read a session's full transcript
     get_session_info,     # Get metadata about a session
     rename_session,       # Give a session a human-readable title
-    tag_session,          # Add searchable tags to a session
-    ResultMessage,
+    tag_session,          # Add a searchable tag to a session
 )
 
-# --- LIST all sessions in the current directory ---
+# --- LIST all sessions (auto-discovers from ~/.claude/projects/) ---
 sessions = list_sessions()
-for s in sessions:
-    print(f"{s.session_id}: {s.title or 'untitled'} ({s.message_count} messages)")
+print(f"Found {len(sessions)} sessions\n")
+
+for s in sessions[:10]:
+    # SDKSessionInfo fields: session_id, summary, custom_title, tag,
+    # last_modified, file_size, first_prompt, git_branch, cwd, created_at
+    title = s.custom_title or "(untitled)"
+    print(f"{s.session_id[:12]}... | {title} | {s.summary}")
+
+# --- GET metadata for the most recent session ---
+if sessions:
+    latest = sessions[0]
+    info = get_session_info(session_id=latest.session_id)
+
+    if info:
+        print(f"\n--- Session Details: {info.session_id} ---")
+        print(f"  Summary:      {info.summary}")
+        print(f"  Custom Title: {info.custom_title or '(none)'}")
+        print(f"  Tag:          {info.tag or '(none)'}")
+        print(f"  Git Branch:   {info.git_branch or '(none)'}")
+        print(f"  CWD:          {info.cwd or '(none)'}")
+        print(f"  Last Modified:{info.last_modified}")
+        print(f"  Created At:   {info.created_at}")
+        print(f"  File Size:    {info.file_size} bytes")
 
 # --- READ a session's transcript for replay or analysis ---
-messages = get_session_messages(session_id="sess_01XYZ...")
-for msg in messages:
-    print(f"[{msg.role}] {str(msg.content)[:100]}")
-
-# --- GET metadata without loading the full transcript ---
-info = get_session_info(session_id="sess_01XYZ...")
-print(f"Title: {info.title}, Tags: {info.tags}, Messages: {info.message_count}")
+if sessions:
+    target_id = sessions[0].session_id
+    messages = get_session_messages(session_id=target_id)
+    print(f"\n--- Transcript ({len(messages)} messages) ---")
+    for msg in messages[:10]:  # Preview first 10
+        # SessionMessage fields: type ("user"|"assistant"), uuid, session_id, message
+        print(f"  [{msg.type}] {msg.uuid[:8]}...")
 
 # --- RENAME for human-readable session pickers ---
-rename_session(session_id="sess_01XYZ...", title="Auth module JWT refactor — May 29")
+# rename_session(session_id=target_id, title="Auth module JWT refactor — May 29")
 
 # --- TAG to organize by project, feature, or status ---
-tag_session(session_id="sess_01XYZ...", tags=["auth", "jwt", "in-review"])
+# tag_session takes a single string (str | None), NOT a list
+# tag_session(session_id=target_id, tag="auth-jwt-review")
+
+# --- Scoped listing: filter by project directory ---
+# sessions = list_sessions(directory="/path/to/project", limit=10)
 
 # Use case: build a session picker UI
 def show_session_menu():
-    sessions = list_sessions()
+    """Interactive session picker — shows recent sessions with titles."""
+    all_sessions = list_sessions(limit=10)
     print("Recent sessions:")
-    for i, s in enumerate(sessions[:10], 1):
-        title = s.title or "untitled"
+    for i, s in enumerate(all_sessions, 1):
+        title = s.custom_title or s.summary or "(untitled)"
         print(f"  {i}. {title} (id: {s.session_id[:12]}...)")
-    return sessions
+    return all_sessions
 </code></pre>
 
                     <h3 id="event-streams">4.2 Cross-Host Session Persistence (SessionStore)</h3>
@@ -1107,7 +1134,7 @@ from claude_agent_sdk import query, ClaudeAgentOptions, HookMatcher, ResultMessa
 
 async def redact_sensitive_data(input_data, tool_use_id, context):
     """PostToolUse: redact SSN and credit cards from tool output before Claude sees it."""
-    output = input_data.get("tool_result", "")
+    output = input_data.get("tool_response", "")
     if not isinstance(output, str):
         return {}
 
@@ -1195,7 +1222,7 @@ from claude_agent_sdk import HookMatcher
 
 async def redact_tokens_in_output(input_data, tool_use_id, context):
     """PostToolUse: strip secrets that appear in tool results before Claude sees them."""
-    output = str(input_data.get("tool_result", ""))
+    output = str(input_data.get("tool_response", ""))
 
     # Redact common token patterns before Claude reads the result
     cleaned = re.sub(r'ghp_[A-Za-z0-9]{36,}', '[GITHUB_TOKEN]', output)
