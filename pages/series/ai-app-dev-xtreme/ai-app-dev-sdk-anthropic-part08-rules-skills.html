@@ -99,9 +99,9 @@
             </li>
             <li><a href="#advanced-config" onclick="closeNav()">Advanced Configuration (CCA 11.1&ndash;11.2)</a>
                 <ul>
-                    <li><a href="#import-syntax" onclick="closeNav()">@import &amp; .claude/rules/</a></li>
-                    <li><a href="#memory-command" onclick="closeNav()">/memory Command</a></li>
-                    <li><a href="#slash-commands" onclick="closeNav()">Slash Commands</a></li>
+                    <li><a href="#import-syntax" onclick="closeNav()">@-Import &amp; .claude/rules/</a></li>
+                    <li><a href="#memory-command" onclick="closeNav()">Auto Memory</a></li>
+                    <li><a href="#slash-commands" onclick="closeNav()">Skills (Custom Prompts)</a></li>
                 </ul>
             </li>
             <li><a href="#exam-patterns" onclick="closeNav()">CCA Exam Patterns</a></li>
@@ -836,137 +836,269 @@ response = client.beta.messages.create(
 
                     <h2 id="advanced-config"><i class="fas fa-cogs me-2 text-teal"></i>5. Advanced Configuration (CCA 11.1&ndash;11.2)</h2>
 
-                    <p>Beyond basic CLAUDE.md files, the configuration system supports <strong>imports</strong> (shared rules across repos), <strong>path-specific rules</strong> (YAML frontmatter globs), and <strong>slash commands</strong> (reusable prompt templates). These features enable enterprise-scale agent governance while keeping individual repos clean.</p>
+                    <p>Beyond basic CLAUDE.md files, the configuration system supports <strong>@-imports</strong> (shared rules across repos), <strong>path-specific rules</strong> (YAML frontmatter globs in <code>.claude/rules/</code>), <strong>auto memory</strong> (Claude&rsquo;s persistent notepad), and <strong>skills</strong> (on-demand prompt templates that replace legacy slash commands). These features enable enterprise-scale agent governance while keeping individual repos clean and context-efficient.</p>
 
-                    <h3 id="import-syntax">5.1 @import Syntax &amp; .claude/rules/</h3>
+                    <h3 id="import-syntax">5.1 @-Import Syntax &amp; .claude/rules/</h3>
 
-<pre><code class="language-bash"># @import — Pull in shared rules from other files
-# Use case: Company-wide standards shared across 50+ repos
+                    <p>CLAUDE.md files support <code>@path/to/file</code> imports that pull external content directly into context at session start. Imported files expand inline &mdash; as if their content were written directly in the CLAUDE.md. Both relative and absolute paths are allowed; relative paths resolve relative to the <em>importing file</em>, not the working directory. Imports can nest recursively up to <strong>4 hops deep</strong>.</p>
 
-# In your project's CLAUDE.md:
-# @import https://raw.githubusercontent.com/company/standards/main/python-rules.md
-# @import ./shared/security-rules.md
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Key Detail:</strong> Import parsing skips Markdown code spans and fenced code blocks. To <em>mention</em> a path without importing it, wrap it in backticks: <code>`@README`</code> stays literal, while <code>@README</code> outside backticks triggers the import. The first time Claude encounters external imports in a project, it shows an approval dialog &mdash; if you decline, imports stay disabled.
+                    </div>
 
-# The imported content is treated as if it were written directly in CLAUDE.md
-# Great for: DRY rules, company-wide standards, team conventions
+<pre><code class="language-markdown"># CLAUDE.md — @-Import Syntax
 
-# ---
+See @README.md for project overview and @package.json for available npm commands.
 
-# .claude/rules/ — Path-specific rules with YAML glob frontmatter
-# Files in this directory activate based on which files the agent is editing
-
-# Example: .claude/rules/python-style.md
-# ---
-# applyTo: "**/*.py"
-# ---
-# - Use type hints on all function signatures
-# - Prefer async def for I/O-bound operations
-# - Maximum function length: 30 lines
-
-# Example: .claude/rules/test-conventions.md
-# ---
-# applyTo: "**/tests/**"
-# ---
-# - Use pytest fixtures (not setUp/tearDown)
-# - Name tests: test_[function]_[scenario]_[expected]
-# - One assertion per test function
-
-# Example: .claude/rules/api-security.md
-# ---
-# applyTo: "**/api/**/*.py"
-# ---
-# - All endpoints require authentication middleware
-# - Rate limit all public endpoints
-# - Input validation via Pydantic models
-# - Never log request bodies (may contain PII)
-
-# These rules ONLY activate when the agent edits matching files
-# More specific globs override less specific ones
+# Additional Instructions
+- Git workflow: @docs/git-instructions.md
+- Personal overrides: @~/.claude/my-project-instructions.md
 </code></pre>
 
-                    <h3 id="memory-command">5.2 /memory Command</h3>
+                    <p>You can also import from your home directory for personal cross-project rules, or from URLs for company-wide standards shared across 50+ repos:</p>
 
-<pre><code class="language-bash"># /memory — The agent's persistent notepad across sessions
-# Stored in: .claude/memory.md (or ~/.claude/memory.md for user-global)
+<pre><code class="language-markdown"># CLAUDE.md — Import from multiple sources
 
-# How it works:
-# 1. Agent discovers something important during work
-# 2. Agent writes it to memory: /memory add "Deploy requires --no-cache flag"
-# 3. In future sessions, this memory is automatically loaded into context
+# Team standards (checked into a shared repo):
+@https://raw.githubusercontent.com/company/standards/main/python-rules.md
 
-# Common memory entries:
-# - Build quirks: "npm run build fails unless NODE_ENV=production is set"
-# - Team conventions: "Alice reviews all auth PRs before merge"
-# - Project-specific: "The /legacy/ folder uses Python 2 — do not modernize"
-# - Debugging notes: "API timeouts usually mean Redis is down, check docker ps"
+# Personal cross-project preferences (not committed):
+@~/.claude/my-project-instructions.md
 
-# /memory commands:
-# /memory                → View all memories
-# /memory add "note"     → Add a memory
-# /memory remove <id>    → Delete a memory
-
-# KEY INSIGHT: Memory survives across sessions but NOT across context compaction
-# within a single session. It's loaded fresh at session start.
-
-# Debugging config:
-# If your rules aren't applying, use:
-# claude --print-config   → Shows which CLAUDE.md files are loaded
-# claude --print-rules    → Shows which .claude/rules/ files match current context
+# Sibling file in the same directory:
+@./shared/security-rules.md
 </code></pre>
 
-                    <h3 id="slash-commands">5.3 Slash Commands (Custom Prompt Templates)</h3>
+                    <p>For <strong>path-specific rules</strong>, create Markdown files under <code>.claude/rules/</code>. Each file uses YAML frontmatter with a <code>paths:</code> field to declare which files trigger the rule. Rules without a <code>paths:</code> field load unconditionally (like CLAUDE.md). Path-scoped rules trigger when Claude <em>reads</em> files matching the pattern &mdash; not on every tool use.</p>
 
-<pre><code class="language-bash"># Slash commands = reusable prompt templates (like scripts for the agent)
-# Two scopes: project commands and user commands
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-dark">
+                                <tr><th>Pattern</th><th>Matches</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>**/*.ts</code></td><td>All TypeScript files in any directory</td></tr>
+                                <tr><td><code>src/**/*</code></td><td>All files under <code>src/</code> directory</td></tr>
+                                <tr><td><code>src/components/*.tsx</code></td><td>React components in a specific directory</td></tr>
+                                <tr><td><code>src/**/*.{ts,tsx}</code></td><td>Brace expansion: multiple extensions</td></tr>
+                                <tr><td><code>**/tests/**</code></td><td>All files under any <code>tests/</code> folder</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
 
-# PROJECT COMMANDS: .claude/commands/
-# Shared with team via git, specific to this project
+                    <p>Here are three practical rule files demonstrating different scoping patterns:</p>
 
-# Example: .claude/commands/review-pr.md
-# ---
-# description: "Review current PR for bugs and style issues"
-# ---
-# Review the current git diff for:
-# 1. Bugs or logic errors
-# 2. Security vulnerabilities
-# 3. Missing error handling
-# 4. Style violations (per .claude/rules/)
-#
-# Format your review as:
-# ## Critical Issues (must fix)
-# ## Suggestions (nice to have)
-# ## Positive Notes
+<pre><code class="language-yaml"># .claude/rules/python-style.md
+---
+paths:
+  - "**/*.py"
+---
+# Python Style Rules
+- Use type hints on all function signatures
+- Prefer async def for I/O-bound operations
+- Maximum function length: 30 lines
+- Use pathlib over os.path for file operations
+</code></pre>
 
-# Usage: /review-pr
+<pre><code class="language-yaml"># .claude/rules/test-conventions.md
+---
+paths:
+  - "**/tests/**"
+  - "**/*.test.ts"
+  - "**/*.spec.py"
+---
+# Test Conventions
+- Use pytest fixtures (not setUp/tearDown)
+- Name tests: test_[function]_[scenario]_[expected]
+- One assertion per test function
+- Mock external services, never call them
+</code></pre>
 
-# Example: .claude/commands/add-tests.md
-# ---
-# description: "Generate tests for the specified file"
-# argument-hint: "path/to/file.py"
-# ---
-# Generate comprehensive tests for $ARGUMENTS:
-# - Unit tests for each public function
-# - Edge cases (empty input, null, boundary values)
-# - Use existing test patterns from tests/ directory
-# - Run tests after writing to verify they pass
+<pre><code class="language-yaml"># .claude/rules/api-security.md
+---
+paths:
+  - "src/api/**/*.py"
+  - "src/routes/**/*.ts"
+---
+# API Security Rules
+- All endpoints require authentication middleware
+- Rate limit all public endpoints
+- Input validation via Pydantic models (Python) or Zod (TypeScript)
+- Never log request bodies (may contain PII)
+- SQL queries must use parameterized statements
+</code></pre>
 
-# Usage: /add-tests src/auth/jwt.py
+                    <p>Rules without a <code>paths:</code> field load unconditionally and apply to all files &mdash; useful for universal project conventions that should always be active.</p>
 
-# USER COMMANDS: ~/.claude/commands/
-# Personal commands, not committed to any repo
-# Example: ~/.claude/commands/standup.md
-# Generate my standup update based on git log --since="yesterday" --author="me"
+                    <div class="highlight-box highlight-crimson">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Compaction Warning:</strong> Path-scoped rules do NOT survive context compaction. After <code>/compact</code>, they reload the next time Claude reads a matching file. If a rule must persist across compaction, drop the <code>paths:</code> frontmatter or move it to the project-root CLAUDE.md. Unscoped rules and auto memory are <strong>re-injected from disk</strong> after compaction.
+                    </div>
 
-# KEY FEATURES:
-# - $ARGUMENTS: placeholder for command arguments
-# - argument-hint: shown in autocomplete
-# - description: shown when listing commands
-# - Commands can reference files, tools, and other instructions
+                    <h3 id="memory-command">5.2 Auto Memory</h3>
+
+                    <p><strong>Auto memory</strong> lets Claude accumulate knowledge across sessions without you writing anything. Claude saves notes for itself as it works: build commands, debugging insights, architecture notes, code style preferences, and workflow habits. It decides what&rsquo;s worth remembering based on whether the information would be useful in a future conversation.</p>
+
+                    <p>Auto memory is stored per git repository at <code>~/.claude/projects/&lt;project&gt;/memory/MEMORY.md</code>. The first <strong>200 lines or 25 KB</strong> of the <code>MEMORY.md</code> index is loaded at the start of every session. All worktrees of the same git repository share one auto memory directory. Auto memory is machine-local and not synced across machines.</p>
+
+                    <p><strong>How it works:</strong></p>
+                    <ol>
+                        <li>Claude discovers something important during work (a build quirk, a team convention, an architecture decision)</li>
+                        <li>Claude writes it to auto memory automatically &mdash; no <code>/memory add</code> command needed</li>
+                        <li>In future sessions, this memory is loaded into context at start</li>
+                    </ol>
+
+                    <p><strong>What Claude typically remembers:</strong></p>
+                    <ul>
+                        <li><strong>Build commands:</strong> &ldquo;npm run build fails unless NODE_ENV=production is set&rdquo;</li>
+                        <li><strong>Team conventions:</strong> &ldquo;Alice reviews all auth PRs before merge&rdquo;</li>
+                        <li><strong>Project quirks:</strong> &ldquo;The /legacy/ folder uses Python 2 &mdash; do not modernize&rdquo;</li>
+                        <li><strong>Debugging notes:</strong> &ldquo;API timeouts usually mean Redis is down, check docker ps&rdquo;</li>
+                        <li><strong>Architecture:</strong> &ldquo;Payment service uses event sourcing, not CRUD&rdquo;</li>
+                    </ul>
+
+                    <p><strong>Memory structure on disk:</strong></p>
+
+<pre><code class="language-bash"># ~/.claude/projects/&lt;project&gt;/memory/
+# ├── MEMORY.md          ← Concise index, loaded every session (first 200 lines)
+# ├── debugging.md       ← Detailed notes on debugging patterns
+# ├── api-conventions.md ← API design decisions
+# └── ...                ← Claude creates topic files as needed
+</code></pre>
+
+                    <div class="highlight-box highlight-navy">
+                        <i class="fas fa-shield-alt me-2"></i>
+                        <strong>Persistence Guarantees:</strong> Auto memory survives across sessions (re-injected at start) and survives <code>/compact</code> (re-read from disk after compaction). Path-scoped rules do <em>not</em> survive compaction &mdash; they reload on the next matching file read.
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-dark">
+                                <tr><th>Command</th><th>Effect</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><code>/memory</code></td><td>View which CLAUDE.md files, rules, and auto-memory entries loaded</td></tr>
+                                <tr><td><code>/context</code></td><td>Shows everything in the context window (system prompt, memory, skills, MCP tools, messages)</td></tr>
+                                <tr><td><code>/compact</code></td><td>Summarize context; auto memory and root CLAUDE.md are re-injected from disk</td></tr>
+                                <tr><td><code>/init</code></td><td>Generate a starter CLAUDE.md based on current project structure</td></tr>
+                                <tr><td><code>/doctor</code></td><td>Diagnose config errors, invalid keys, schema issues</td></tr>
+                                <tr><td><code>/debug</code></td><td>Enable debug logging for the session</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h3 id="slash-commands">5.3 Skills (Replaces Legacy Slash Commands)</h3>
+
+                    <p><strong>Skills</strong> are the recommended way to give Claude reusable prompts and workflows. They follow the <a href="https://agentskills.io" target="_blank">Agent Skills</a> open standard and replace the legacy <code>.claude/commands/</code> format (which still works but is deprecated). A skill is a directory with a <code>SKILL.md</code> file containing YAML frontmatter and Markdown instructions.</p>
+
+                    <p>Unlike CLAUDE.md (loaded every session), skills load <strong>on demand</strong>. Claude sees skill descriptions at startup and loads the full content only when relevant &mdash; so long reference material costs almost nothing until needed.</p>
+
+                    <p><strong>Two scopes:</strong></p>
+                    <ul>
+                        <li><strong>Project skills</strong> (<code>.claude/skills/&lt;name&gt;/SKILL.md</code>) &mdash; shared with the team via git, specific to this project</li>
+                        <li><strong>User skills</strong> (<code>~/.claude/skills/&lt;name&gt;/SKILL.md</code>) &mdash; personal skills, not committed to any repo</li>
+                    </ul>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-dark">
+                                <tr><th>Frontmatter</th><th>You Can Invoke</th><th>Claude Can Invoke</th><th>When Loaded</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>(default)</td><td>Yes</td><td>Yes</td><td>Description always in context; full skill on invocation</td></tr>
+                                <tr><td><code>disable-model-invocation: true</code></td><td>Yes</td><td>No</td><td>Hidden from Claude; loads only when you type <code>/name</code></td></tr>
+                                <tr><td><code>user-invocable: false</code></td><td>No</td><td>Yes</td><td>Description always in context; Claude loads when relevant</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p><strong>Example 1:</strong> A review skill that both you and Claude can invoke (default behavior). Invoked with <code>/review-pr</code>:</p>
+
+<pre><code class="language-yaml"># .claude/skills/review-pr/SKILL.md
+---
+name: review-pr
+description: Review current PR for bugs and style issues
+---
+Review the current git diff for:
+1. Bugs or logic errors
+2. Security vulnerabilities
+3. Missing error handling
+4. Style violations (per .claude/rules/)
+
+Format your review as:
+## Critical Issues (must fix)
+## Suggestions (nice to have)
+## Positive Notes
+</code></pre>
+
+                    <p><strong>Example 2:</strong> A workflow skill with side effects that only <em>you</em> can trigger. The <code>disable-model-invocation: true</code> field prevents Claude from running it automatically &mdash; use this for deploy, send, or any destructive action:</p>
+
+<pre><code class="language-yaml"># .claude/skills/fix-issue/SKILL.md
+---
+name: fix-issue
+description: Fix a GitHub issue end-to-end
+disable-model-invocation: true
+---
+Analyze and fix the GitHub issue: $ARGUMENTS
+
+1. Use `gh issue view` to get the issue details
+2. Understand the problem described in the issue
+3. Search the codebase for relevant files
+4. Implement the necessary changes
+5. Write and run tests to verify the fix
+6. Ensure code passes linting and type checking
+7. Create a descriptive commit message
+8. Push and create a PR
+</code></pre>
+
+                    <p>Invoked with <code>/fix-issue 1234</code> &mdash; the <code>$ARGUMENTS</code> placeholder is replaced with whatever follows the command name.</p>
+
+                    <p><strong>Example 3:</strong> Background knowledge that only <em>Claude</em> can invoke. Setting <code>user-invocable: false</code> means Claude loads this when it detects the user is working on API files, but <code>/api-conventions</code> is not a meaningful command for the user to type:</p>
+
+<pre><code class="language-yaml"># .claude/skills/api-conventions/SKILL.md
+---
+name: api-conventions
+description: REST API design conventions for our services
+user-invocable: false
+---
+# API Conventions
+- Use kebab-case for URL paths
+- Use camelCase for JSON properties
+- Always include pagination for list endpoints
+- Version APIs in the URL path (/v1/, /v2/)
+- Return 201 for successful creation, 204 for deletion
+- Include Link headers for pagination
+</code></pre>
+
+                    <div class="highlight-box">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Legacy Compatibility:</strong> Files at <code>.claude/commands/deploy.md</code> and <code>.claude/skills/deploy/SKILL.md</code> both create <code>/deploy</code> and work the same way. Existing command files continue to work &mdash; skills add optional features like invocation control and supporting files.
+                    </div>
+
+                    <p><strong>SDK Usage:</strong> Control which skills are available when using the Agent SDK programmatically:</p>
+
+<pre><code class="language-python">from claude_agent_sdk import query, ClaudeAgentOptions, ResultMessage
+
+# Skills in .claude/skills/ are discovered automatically
+# when setting_sources includes "project"
+async for message in query(
+    prompt="Review this PR using our code review checklist",
+    options=ClaudeAgentOptions(
+        setting_sources=["user", "project"],
+        skills="all",                              # Enable all discovered skills
+        # skills=["review-pr", "fix-issue"],       # Enable only specific skills
+        # skills=[],                               # Disable all skills
+        allowed_tools=["Read", "Grep", "Glob"],
+    ),
+):
+    if isinstance(message, ResultMessage) and message.subtype == "success":
+        print(message.result)
 </code></pre>
 
                     <div class="highlight-box">
                         <i class="fas fa-graduation-cap"></i>
-                        <strong>CCA Exam Pattern (11.1&ndash;11.2):</strong> Questions test: (1) <code>@import</code> pulls shared rules from URLs or relative paths. (2) <code>.claude/rules/</code> files use YAML <code>applyTo</code> globs to activate per-path. (3) <code>/memory</code> persists notes across sessions (loaded at session start). (4) Project commands live in <code>.claude/commands/</code>; user commands in <code>~/.claude/commands/</code>. (5) <code>$ARGUMENTS</code> placeholder enables parameterized commands.
+                        <strong>CCA Exam Pattern (11.1&ndash;11.2):</strong> Questions test: (1) <code>@path</code> imports pull content inline at session start (max 4 hops deep; backtick-wrapped paths are not imported). (2) <code>.claude/rules/*.md</code> files use YAML <code>paths:</code> globs (not <code>applyTo:</code>) to load per-path; they trigger on file reads, not every tool call. (3) Path-scoped rules are lost after <code>/compact</code> until a matching file is re-read; root CLAUDE.md and auto memory survive compaction. (4) Auto memory is stored at <code>~/.claude/projects/&lt;project&gt;/memory/MEMORY.md</code>; first 200 lines load every session. (5) Skills (<code>.claude/skills/&lt;name&gt;/SKILL.md</code>) replace legacy commands; <code>disable-model-invocation: true</code> prevents Claude from auto-triggering. (6) <code>$ARGUMENTS</code> placeholder enables parameterized skills.
                     </div>
 
                     <div class="series-next">
