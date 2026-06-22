@@ -36,7 +36,11 @@
                 line = line
                     .replace(/\[Why [A-D] fails\]/g, '<strong class="fb-tag fb-tag-wrong">[Incorrect option]</strong>')
                     .replace(/\[Correct\]/g, '<strong class="fb-tag fb-tag-correct">[Correct]</strong>')
-                    .replace(/\[Principle\]/g, '<strong class="fb-tag fb-tag-principle">[Principle]</strong>');
+                    .replace(/\[Principle\]/g, '<strong class="fb-tag fb-tag-principle">[Principle]</strong>')
+                    .replace(/\[Docs?\]:/g, '<strong class="fb-tag fb-tag-docs">[Doc]</strong>')
+                    .replace(/\[Doc\]:/g, '<strong class="fb-tag fb-tag-docs">[Doc]</strong>');
+                // Turn "Title → URL" into "Title → <a>URL</a>"
+                line = line.replace(/(https?:\/\/[^\s<|)>\]]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
                 return '<div class="fb-line">' + line + '</div>';
             })
             .join('');
