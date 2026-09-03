@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="alternate" type="application/rss+xml" title="Wasil Zafar RSS Feed" href="/feed.xml" />
     <link rel="alternate" type="application/atom+xml" title="Wasil Zafar Atom Feed" href="/atom.xml" />
-    <meta name="description" content="The Held-Karp algorithm explained from first principles — solving the Traveling Salesman Problem exactly in O(n²2ⁿ) via dynamic programming over subsets." />
+    <meta name="description" content="Held-Karp explained visually from first principles — subset states, bitmasks, recurrence, tour reconstruction, correctness, and the O(n²2ⁿ) exact TSP tradeoff." />
     <meta name="author" content="Wasil Zafar" />
     <meta name="keywords" content="held-karp algorithm, traveling salesman problem, tsp dynamic programming, bitmask dp, exact tsp algorithm" />
     <meta property="og:title" content="Graph Theory Algorithm Deep Dive: Held-Karp Algorithm" />
@@ -35,6 +35,44 @@
     <!-- Custom Styles -->
     <link rel="stylesheet" href="../../../css/main.css" type="text/css" />
 
+    <!-- Page-specific SVG helpers; colors and surfaces follow main.css. -->
+    <style>
+        .hk-figure {
+            margin: 2rem 0;
+            padding: 1.25rem;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border: 1px solid rgba(59, 151, 151, 0.28);
+            border-radius: 12px;
+            background: linear-gradient(145deg, #ffffff 0%, #f5fbfb 100%);
+            box-shadow: 0 8px 24px rgba(19, 36, 64, 0.08);
+        }
+        .hk-figure svg { display: block; width: 100%; height: auto; font-family: "DM Sans", sans-serif; }
+        .hk-figure figcaption { margin-top: 1rem; color: var(--color-blue, #16476A); font-size: 0.95rem; line-height: 1.6; text-align: center; }
+        .hk-panel { fill: #ffffff; stroke: rgba(59, 151, 151, 0.42); stroke-width: 2; }
+        .hk-node { fill: #132440; stroke: #132440; stroke-width: 3; }
+        .hk-node-end { fill: #BF092F; stroke: #BF092F; stroke-width: 3; }
+        .hk-node-next { fill: #3B9797; stroke: #3B9797; stroke-width: 3; }
+        .hk-label { fill: #ffffff; font-size: 18px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; }
+        .hk-heading { fill: #132440; font-size: 20px; font-weight: 700; text-anchor: middle; }
+        .hk-note { fill: #16476A; font-size: 14px; font-weight: 600; text-anchor: middle; }
+        .hk-route-a { fill: none; stroke: #3B9797; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+        .hk-route-b { fill: none; stroke: #E09F3E; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 10 8; }
+        .hk-arrow { fill: none; stroke: #3B9797; stroke-width: 3; }
+        .hk-state { fill: #ffffff; stroke: #3B9797; stroke-width: 2; }
+        .hk-state-active { fill: rgba(59, 151, 151, 0.14); stroke: #3B9797; stroke-width: 3; }
+        .hk-state-text { fill: #132440; font-size: 14px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; }
+        .hk-badge { fill: #132440; }
+        .hk-badge-text { fill: #ffffff; font-size: 15px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; }
+        .hk-concept-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+        .hk-concept-grid .technique-card { margin: 0; height: 100%; }
+        @media (max-width: 768px) {
+            .hk-figure { padding: 0.75rem; }
+            .hk-figure svg { min-width: 720px; }
+            .hk-concept-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+
     <!-- Prism.js Syntax Highlighting -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" id="prism-default" disabled />
@@ -53,7 +91,7 @@
     <!-- KaTeX Math Rendering -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '\\(', right: '\\)', display: false}]});"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}, {left: '\\(', right: '\\)', display: false}]});"></script>
 
     <!-- Google Consent Mode v2 -->
     <script>
@@ -144,10 +182,10 @@
                 <div class="blog-meta">
                     <span><i class="fas fa-calendar me-2"></i>September 6, 2026</span>
                     <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
-                    <span class="reading-time"><i class="fas fa-clock me-1"></i>18 min read</span>
+                    <span class="reading-time"><i class="fas fa-clock me-1"></i>29 min read</span>
                     <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
                 </div>
-                <p class="lead">Brute force checks all (n-1)! possible tours. Held-Karp proves you never need to — remembering the right subproblems shrinks the search from factorial to merely exponential.</p>
+                <p class="lead">Held–Karp solves the Traveling Salesman Problem exactly by forgetting most of a route's history. It remembers only the visited subset and current endpoint—the two facts that determine every possible continuation.</p>
             </div>
         </div>
     </section>
@@ -164,15 +202,20 @@
             <button class="closebtn" onclick="closeNav()" aria-label="Close Table of Contents">&times;</button>
         </div>
         <ol>
-            <li><a href="#history" onclick="closeNav()">A Bit of History</a></li>
-            <li><a href="#working-principle" onclick="closeNav()">Working Principle</a></li>
-            <li><a href="#worked-example" onclick="closeNav()">Worked Example</a></li>
-            <li><a href="#correctness" onclick="closeNav()">Correctness</a></li>
-            <li><a href="#complexity" onclick="closeNav()">Complexity Analysis</a></li>
+            <li><a href="#problem" onclick="closeNav()">The Exact TSP Problem</a></li>
+            <li><a href="#compression" onclick="closeNav()">Compressing Route Histories</a></li>
+            <li><a href="#working-principle" onclick="closeNav()">State and Recurrence</a></li>
+            <li><a href="#bitmasks" onclick="closeNav()">Bitmask Representation</a></li>
+            <li><a href="#worked-example" onclick="closeNav()">Four-City Trace</a></li>
+            <li><a href="#reconstruction" onclick="closeNav()">Reconstructing the Tour</a></li>
+            <li><a href="#correctness" onclick="closeNav()">Why It Is Correct</a></li>
             <li><a href="#implementation" onclick="closeNav()">Implementation</a></li>
-            <li><a href="#applications" onclick="closeNav()">Real-World Applications</a></li>
+            <li><a href="#complexity" onclick="closeNav()">Complexity &amp; Memory</a></li>
+            <li><a href="#variants" onclick="closeNav()">Variants</a></li>
+            <li><a href="#pitfalls" onclick="closeNav()">Pitfalls &amp; Checklist</a></li>
+            <li><a href="#applications" onclick="closeNav()">Applications</a></li>
             <li><a href="#exercises" onclick="closeNav()">Exercises</a></li>
-            <li><a href="#limitations" onclick="closeNav()">Limitations</a></li>
+            <li><a href="#history" onclick="closeNav()">History &amp; Takeaway</a></li>
         </ol>
     </div>
 
@@ -186,30 +229,150 @@
                 <div class="col-lg-8 mx-auto">
                     <div class="blog-content">
 
-                        <h2 id="history">A Bit of History</h2>
-                        <p>In 1962, <strong>Michael Held</strong> and <strong>Richard Karp</strong> — the same Karp behind Edmonds-Karp's max-flow algorithm from a previous deep dive — published "A Dynamic Programming Approach to Sequencing Problems," showing that the Traveling Salesman Problem previewed in <a href="graph-theory-part14-traveling-salesman-problem.html">Part 14</a> could be solved <em>exactly</em> far faster than brute-force enumeration, by cleverly organizing subproblems around <em>subsets</em> of visited cities rather than sequences. The same dynamic-programming-over-subsets idea was independently discovered around the same time by Richard Bellman (of Bellman-Ford fame), and is sometimes called the Bellman-Held-Karp algorithm in recognition of that overlap.</p>
+                        <h2 id="problem">The Exact TSP Problem</h2>
+                        <p>Given costs $d(i,j)$ between $n$ cities, find a minimum-cost cycle that starts at city $0$, visits every other city exactly once, and returns to $0$. Costs may be symmetric, as with ordinary distances, or asymmetric, as with one-way travel times.</p>
 
-                        <h2 id="working-principle">Working Principle</h2>
-                        <p>Brute force tries all \((n-1)!\) possible orderings of the remaining \(n-1\) cities after fixing a start. Held-Karp's insight: the cost of the cheapest way to visit a specific <em>set</em> of cities and end at a specific city does not depend on the <em>order</em> in which the earlier cities were visited — only on which set was visited and where the path currently ends. That means the state space is not "all orderings" but merely "all (subset, endpoint) pairs" — vastly smaller.</p>
-                        <p>Define \(C(S, j)\) as the minimum cost of a path starting at city 0, visiting exactly the set of cities \(S\) (with \(0 \in S\)), and ending at city \(j \in S\). The recurrence:</p>
-                        <p>$$C(S, j) = \min_{k \in S, k \neq j} \Big[ C(S \setminus \{j\}, k) + d(k, j) \Big]$$</p>
-                        <p>with base case \(C(\{0\}, 0) = 0\). The final answer is \(\min_{j \neq 0} \big[C(\{0,\ldots,n-1\}, j) + d(j, 0)\big]\), closing the tour back to the start.</p>
+                        <div class="math-block">$$\min_{\pi}\ d(0,\pi_1)+\sum_{r=1}^{n-2}d(\pi_r,\pi_{r+1})+d(\pi_{n-1},0).$$</div>
 
-                        <div class="highlight-box">
-                            <h4><i class="fas fa-lightbulb me-2"></i>Key Insight</h4>
-                            <p class="mb-0">Representing each subset \(S\) as a <strong>bitmask</strong> (an integer whose bits indicate which cities are included) turns the recurrence into simple, fast integer operations — an extremely common and powerful pattern for dynamic programming over subsets, used far beyond the TSP.</p>
+                        <p>Fixing city $0$ removes rotations of the same cycle, but brute force still considers $(n-1)!$ orders. Held–Karp replaces those full histories with reusable summaries.</p>
+
+                        <div class="hk-concept-grid">
+                            <div class="technique-card"><h4><i class="fas fa-map-marker-alt me-2"></i>Subset</h4><p class="mb-0">Which cities have already been visited?</p></div>
+                            <div class="technique-card"><h4><i class="fas fa-flag-checkered me-2"></i>Endpoint</h4><p class="mb-0">At which visited city does the current path end?</p></div>
+                            <div class="technique-card"><h4><i class="fas fa-coins me-2"></i>Best cost</h4><p class="mb-0">What is the cheapest prefix with exactly those two facts?</p></div>
                         </div>
 
-                        <h2 id="worked-example">Worked Example</h2>
-                        <p>For 4 cities \(\{0,1,2,3\}\) with a symmetric distance matrix, the algorithm builds up \(C(S,j)\) for increasingly large subsets \(S\): first all 2-element subsets containing city 0 (i.e., \(\{0,1\}\), \(\{0,2\}\), \(\{0,3\}\)), then all 3-element subsets, then finally the full 4-element set. At each stage, every new value reuses previously computed smaller-subset values — never recomputing a path cost from scratch. With \(n=4\), this means at most \(2^4 \times 4 = 64\) subproblems total, versus \(3! = 6\) full brute-force tours for this tiny example — the savings become dramatic only as \(n\) grows.</p>
+                        <h2 id="compression">Compressing Route Histories</h2>
+                        <p>Different visit orders can lead to the same visited set and endpoint. Their past costs differ, but every legal continuation available from that state is identical. The more expensive prefix is therefore <strong>dominated</strong>: appending the same future can never make it cheaper.</p>
 
-                        <h2 id="correctness">Correctness</h2>
-                        <p>The recurrence is correct by a straightforward optimal-substructure argument: any optimal path visiting set \(S\) and ending at \(j\) must have arrived at \(j\) from some other city \(k \in S\), having previously visited exactly \(S \setminus \{j\}\) and ended at \(k\) — and that sub-path must itself be optimal (if a cheaper way to visit \(S \setminus \{j\}\) ending at \(k\) existed, splicing it in would produce a cheaper overall path, a contradiction). Trying all valid choices of \(k\) and keeping the minimum is therefore guaranteed to find the true optimum.</p>
+                        <figure class="article-figure hk-figure">
+                            <svg viewBox="0 0 960 500" role="img" aria-labelledby="compress-title compress-desc" xmlns="http://www.w3.org/2000/svg">
+                                <title id="compress-title">Two route histories collapse into one Held–Karp state</title>
+                                <desc id="compress-desc">Two paths start at zero, visit cities zero, one, two, and three, and end at city one. The teal route costs 70 and the amber route costs 85. Because both have the same visited set and endpoint, the dynamic program keeps only cost 70.</desc>
+                                <defs><marker id="hk-arrow-head" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L0,6 L9,3 z" fill="#3B9797"/></marker></defs>
+                                <rect x="20" y="45" width="590" height="405" rx="18" class="hk-panel"/><rect x="665" y="45" width="275" height="405" rx="18" class="hk-panel"/>
+                                <text x="315" y="82" class="hk-heading">Different histories</text><text x="802" y="82" class="hk-heading">One DP state</text>
 
-                        <h2 id="complexity">Complexity Analysis</h2>
-                        <p>There are \(O(2^n)\) subsets and \(n\) choices of endpoint \(j\), and each recurrence evaluation considers up to \(n\) choices of \(k\):</p>
-                        <p>$$\text{Time: } O(n^2 \cdot 2^n) \qquad \text{Space: } O(n \cdot 2^n)$$</p>
-                        <p>This is exponential — still impractical for very large instances — but it is a dramatic improvement over brute force's \(O(n!)\), and remains, over 60 years later, essentially the best known <em>exact</em> algorithm for general TSP instances.</p>
+                                <path d="M105 340 L255 135 L425 340 L575 135" class="hk-route-a"/>
+                                <path d="M105 340 C210 410 330 405 425 340 Q345 205 255 135 L575 135" class="hk-route-b"/>
+                                <circle cx="105" cy="340" r="34" class="hk-node"/><circle cx="255" cy="135" r="34" class="hk-node"/><circle cx="425" cy="340" r="34" class="hk-node"/><circle cx="575" cy="135" r="34" class="hk-node-end"/>
+                                <text x="105" y="340" class="hk-label">0</text><text x="255" y="135" class="hk-label">2</text><text x="425" y="340" class="hk-label">3</text><text x="575" y="135" class="hk-label">1</text>
+                                <rect x="92" y="397" width="210" height="35" rx="9" fill="#3B9797"/><text x="197" y="415" class="hk-badge-text">0→2→3→1 costs 70</text>
+                                <rect x="320" y="397" width="245" height="35" rx="9" fill="#E09F3E"/><text x="442" y="415" class="hk-badge-text">0→3→2→1 costs 85</text>
+
+                                <path d="M620 247 L650 247" class="hk-arrow" marker-end="url(#hk-arrow-head)"/>
+                                <rect x="702" y="127" width="200" height="75" rx="14" class="hk-state-active"/><text x="802" y="151" class="hk-state-text">visited = {0,1,2,3}</text><text x="802" y="177" class="hk-state-text">endpoint = 1</text>
+                                <rect x="702" y="228" width="200" height="62" rx="14" class="hk-badge"/><text x="802" y="259" class="hk-badge-text">dp[1111][1] = 70</text>
+                                <text x="802" y="330" class="hk-note">Keep 70</text><text x="802" y="355" class="hk-note">Discard 85</text><text x="802" y="393" class="hk-note">Same future choices</text>
+                            </svg>
+                            <figcaption>The route order still affects cost. The compression works because, once subset and endpoint agree, only the cheapest prefix can participate in an optimal continuation.</figcaption>
+                        </figure>
+
+                        <div class="analogy-box">
+                            <h4><i class="fas fa-receipt me-2"></i>Intuition: Keep the Cheapest Receipt</h4>
+                            <p class="mb-0">If two travelers have visited the same cities and now stand at the same place, their remaining options are identical. Keep the smaller receipt and forget how that traveler arrived.</p>
+                        </div>
+
+                        <h2 id="working-principle">State and Recurrence</h2>
+                        <p>Let $DP[S][j]$ be the minimum cost of a path that starts at $0$, visits exactly the cities in $S$, and ends at $j$. Valid states contain both $0$ and $j$.</p>
+
+                        <div class="math-block">
+                            $$DP[S][j]=\min_{k\in S\setminus\{j\}}\left(DP[S\setminus\{j\}][k]+d(k,j)\right).$$
+                        </div>
+
+                        <p>The base state is $DP[\{0\}][0]=0$. The recurrence asks one question: <em>which city $k$ was visited immediately before $j$?</em> Remove $j$, solve the smaller endpoint state at $k$, then add the final edge $k\to j$.</p>
+
+                        <p>After all cities are visited, the path is not yet a tour. Close it explicitly:</p>
+
+                        <div class="math-block">
+                            $$\operatorname{OPT}=\min_{j\ne0}\left(DP[V][j]+d(j,0)\right).$$
+                        </div>
+
+                        <div class="highlight-box">
+                            <h4><i class="fas fa-lightbulb me-2"></i>State Meaning Is the Invariant</h4>
+                            <p class="mb-0">Every table entry must mean “visit exactly this set and end here.” Accidentally allowing an unvisited endpoint, omitting city $0$, or reusing a city destroys the recurrence's meaning even if the program still produces numbers.</p>
+                        </div>
+
+                        <h2 id="bitmasks">Bitmask Representation</h2>
+                        <p>A bitmask stores subset membership in one integer. Bit $i$ is $1$ exactly when city $i$ belongs to the subset. For four cities, mask $1101_2$ represents $\{0,2,3\}$.</p>
+
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead><tr><th>Question</th><th>Bit operation</th><th>Example with city $j$</th></tr></thead>
+                                <tbody>
+                                    <tr><td>Is $j$ visited?</td><td>test</td><td><code>mask &amp; (1 &lt;&lt; j)</code></td></tr>
+                                    <tr><td>Add $j$</td><td>bitwise OR</td><td><code>mask | (1 &lt;&lt; j)</code></td></tr>
+                                    <tr><td>Remove $j$</td><td>clear bit</td><td><code>mask ^ (1 &lt;&lt; j)</code> when membership is known</td></tr>
+                                    <tr><td>Full set</td><td>lowest $n$ bits</td><td><code>(1 &lt;&lt; n) - 1</code></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <p>Bitmasks are not what makes the recurrence correct; they make dense subset tables compact, indexable, and fast. A sparse map keyed by subsets can express the same DP when only selected states should be stored.</p>
+
+                        <h2 id="worked-example">Four-City Trace</h2>
+                        <p>Use the symmetric distance matrix from the implementation:</p>
+
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead><tr><th></th><th>0</th><th>1</th><th>2</th><th>3</th></tr></thead>
+                                <tbody><tr><td>0</td><td>0</td><td>10</td><td>15</td><td>20</td></tr><tr><td>1</td><td>10</td><td>0</td><td>35</td><td>25</td></tr><tr><td>2</td><td>15</td><td>35</td><td>0</td><td>30</td></tr><tr><td>3</td><td>20</td><td>25</td><td>30</td><td>0</td></tr></tbody>
+                            </table>
+                        </div>
+
+                        <figure class="article-figure hk-figure">
+                            <svg viewBox="0 0 960 470" role="img" aria-labelledby="layers-title layers-desc" xmlns="http://www.w3.org/2000/svg">
+                                <title id="layers-title">Held–Karp states filled by subset size for the four-city example</title>
+                                <desc id="layers-desc">The dynamic program moves from the base state through two-city and three-city subsets to three full-set endpoint costs. Returning to city zero gives candidate tour totals 80, 80, and 95, so the optimum is 80.</desc>
+                                <defs><marker id="hk-layer-arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L0,6 L9,3 z" fill="#3B9797"/></marker></defs>
+                                <rect x="20" y="48" width="145" height="330" rx="17" class="hk-panel"/><rect x="205" y="48" width="190" height="330" rx="17" class="hk-panel"/><rect x="435" y="48" width="255" height="330" rx="17" class="hk-panel"/><rect x="730" y="48" width="210" height="330" rx="17" class="hk-panel"/>
+                                <text x="92" y="82" class="hk-heading">Size 1</text><text x="300" y="82" class="hk-heading">Size 2</text><text x="562" y="82" class="hk-heading">Size 3</text><text x="835" y="82" class="hk-heading">All cities</text>
+                                <path d="M172 213 L195 213 M402 213 L425 213 M697 213 L720 213" class="hk-arrow" marker-end="url(#hk-layer-arrow)"/>
+
+                                <rect x="42" y="160" width="102" height="62" rx="12" class="hk-state-active"/><text x="93" y="182" class="hk-state-text">{0}, end 0</text><text x="93" y="204" class="hk-state-text">cost 0</text>
+
+                                <rect x="226" y="115" width="148" height="55" rx="11" class="hk-state"/><rect x="226" y="183" width="148" height="55" rx="11" class="hk-state"/><rect x="226" y="251" width="148" height="55" rx="11" class="hk-state"/>
+                                <text x="300" y="142" class="hk-state-text">{0,1}, end 1 = 10</text><text x="300" y="210" class="hk-state-text">{0,2}, end 2 = 15</text><text x="300" y="278" class="hk-state-text">{0,3}, end 3 = 20</text>
+
+                                <rect x="455" y="104" width="215" height="72" rx="11" class="hk-state"/><rect x="455" y="190" width="215" height="72" rx="11" class="hk-state"/><rect x="455" y="276" width="215" height="72" rx="11" class="hk-state"/>
+                                <text x="562" y="128" class="hk-state-text">{0,1,2}</text><text x="562" y="151" class="hk-state-text">end 1 = 50 · end 2 = 45</text><text x="562" y="214" class="hk-state-text">{0,1,3}</text><text x="562" y="237" class="hk-state-text">end 1 = 45 · end 3 = 35</text><text x="562" y="300" class="hk-state-text">{0,2,3}</text><text x="562" y="323" class="hk-state-text">end 2 = 50 · end 3 = 45</text>
+
+                                <rect x="751" y="104" width="168" height="58" rx="11" class="hk-state"/><rect x="751" y="177" width="168" height="58" rx="11" class="hk-state-active"/><rect x="751" y="250" width="168" height="58" rx="11" class="hk-state"/>
+                                <text x="835" y="133" class="hk-state-text">end 1 = 70 → 80</text><text x="835" y="206" class="hk-state-text">end 2 = 65 → 80</text><text x="835" y="279" class="hk-state-text">end 3 = 75 → 95</text>
+                                <rect x="255" y="405" width="450" height="42" rx="11" class="hk-badge"/><text x="480" y="426" class="hk-badge-text">close the tour: min(70+10, 65+15, 75+20) = 80</text>
+                            </svg>
+                            <figcaption>States are filled by increasing subset size. Two optimal tours tie at $80$: $0\to2\to3\to1\to0$ and its reverse $0\to1\to3\to2\to0$.</figcaption>
+                        </figure>
+
+                        <p>For example, the full-set state ending at city $2$ is</p>
+
+                        <div class="math-block">$$DP[\{0,1,2,3\}][2]=\min(45+35,\ 35+30)=65.$$</div>
+
+                        <p>The two candidates correspond to arriving from city $1$ or city $3$. Closing from $2$ adds $d(2,0)=15$, producing an optimal tour cost of $80$.</p>
+
+                        <h2 id="reconstruction">Reconstructing the Tour</h2>
+                        <p>A cost table alone forgets which predecessor achieved each minimum. Store <code>parent[mask][j]</code> whenever a transition improves a state. After choosing the best final endpoint, repeatedly:</p>
+                        <ol>
+                            <li>record the current endpoint $j$;</li>
+                            <li>read its predecessor $k=parent[mask][j]$;</li>
+                            <li>clear bit $j$ from the mask and continue from $k$;</li>
+                            <li>reverse the recovered prefix, then append city $0$ to close the cycle.</li>
+                        </ol>
+
+                        <div class="highlight-box blue">
+                            <h4><i class="fas fa-code-branch me-2"></i>Ties Are Normal</h4>
+                            <p class="mb-0">The table may have several equally good predecessors. Keeping one reconstructs one optimal tour. Enumerating every optimal tour requires storing all minimizing predecessors and can produce exponentially many answers.</p>
+                        </div>
+
+                        <h2 id="correctness">Why the Recurrence Is Correct</h2>
+                        <p>Prove the state invariant by induction on $|S|$. The base state $DP[\{0\}][0]=0$ is correct. For a larger state $(S,j)$, every valid path must enter $j$ from exactly one predecessor $k\in S\setminus\{j\}$. Before that last edge, it is a path for state $(S\setminus\{j\},k)$.</p>
+
+                        <p>By the induction hypothesis, the table stores the cheapest such prefix. Replacing it with any more expensive prefix cannot improve the completed path, so minimizing over every possible predecessor finds the cheapest path for $(S,j)$. Finally, every Hamiltonian tour has one last city before returning to $0$; minimizing over that endpoint examines every possible tour ending.</p>
+
+                        <div class="exercise-box">
+                            <h4><i class="fas fa-shield-alt me-2"></i>Why Dominance Is Safe</h4>
+                            <p class="mb-0">Two prefixes in one state have the same unvisited cities and the same current location. Any suffix feasible for one is feasible for the other at exactly the same added cost. The cheaper prefix therefore dominates for every continuation—not merely for the next step.</p>
+                        </div>
 
                         <h2 id="implementation">Implementation</h2>
 
@@ -223,29 +386,51 @@
 
     <div class="lang-panel active" data-panel="python">
 <pre><code class="language-python">def held_karp(dist):
-    """dist: n x n distance matrix. Returns minimum tour cost starting/ending at city 0."""
+    """Return (one optimal tour, its cost) for a square distance matrix."""
     n = len(dist)
-    INF = float('inf')
-    # C[mask][j] = min cost to visit exactly the cities in `mask`, ending at j
-    C = [[INF] * n for _ in range(1 << n)]
-    C[1][0] = 0  # start at city 0 alone
+    if n == 0 or any(len(row) != n for row in dist):
+        raise ValueError("dist must be a nonempty square matrix")
+    if n == 1:
+        return [0, 0], 0
 
-    for mask in range(1 << n):
+    INF = float("inf")
+    states = 1 << n
+    # dp[mask][j]: cheapest 0-to-j path visiting exactly `mask`.
+    dp = [[INF] * n for _ in range(states)]
+    parent = [[-1] * n for _ in range(states)]
+    dp[1][0] = 0
+
+    for mask in range(states):
         if not (mask & 1):
-            continue  # city 0 must always be in the visited set
+            continue
         for j in range(n):
-            if not (mask & (1 << j)) or C[mask][j] == INF:
+            if not (mask & (1 << j)) or dp[mask][j] == INF:
                 continue
             for k in range(n):
                 if mask & (1 << k):
                     continue
                 next_mask = mask | (1 << k)
-                new_cost = C[mask][j] + dist[j][k]
-                if new_cost < C[next_mask][k]:
-                    C[next_mask][k] = new_cost
+                candidate = dp[mask][j] + dist[j][k]
+                if candidate < dp[next_mask][k]:
+                    dp[next_mask][k] = candidate
+                    parent[next_mask][k] = j
 
-    full_mask = (1 << n) - 1
-    return min(C[full_mask][j] + dist[j][0] for j in range(1, n))
+    full = states - 1
+    end = min(range(1, n), key=lambda j: dp[full][j] + dist[j][0])
+    best_cost = dp[full][end] + dist[end][0]
+    if best_cost == INF:
+        raise ValueError("no finite Hamiltonian tour exists")
+
+    tour = [end]
+    mask, j = full, end
+    while j != 0:
+        previous = parent[mask][j]
+        mask ^= 1 << j
+        j = previous
+        tour.append(j)
+    tour.reverse()
+    tour.append(0)
+    return tour, best_cost
 
 dist = [
     [0, 10, 15, 20],
@@ -253,47 +438,77 @@ dist = [
     [15, 35, 0, 30],
     [20, 25, 30, 0],
 ]
-print(held_karp(dist))  # 80
+print(held_karp(dist))  # ([0, 2, 3, 1, 0], 80)
 </code></pre>
     </div>
 
     <div class="lang-panel" data-panel="cpp">
-<pre><code class="language-cpp">#include &lt;vector&gt;
-#include &lt;limits&gt;
+<pre><code class="language-cpp">#include &lt;algorithm&gt;
 #include &lt;iostream&gt;
+#include &lt;limits&gt;
+#include &lt;stdexcept&gt;
+#include &lt;vector&gt;
 using namespace std;
 
-int heldKarp(vector&lt;vector&lt;int&gt;&gt;&amp; dist) {
-    int n = dist.size();
-    const int INF = numeric_limits&lt;int&gt;::max() / 2;
-    vector&lt;vector&lt;int&gt;&gt; C(1 &lt;&lt; n, vector&lt;int&gt;(n, INF));
-    C[1][0] = 0;
+struct Result { vector&lt;int&gt; tour; long long cost; };
 
-    for (int mask = 1; mask &lt; (1 &lt;&lt; n); mask++) {
+Result heldKarp(const vector&lt;vector&lt;long long&gt;&gt;&amp; dist) {
+    int n = dist.size();
+    if (n == 0 || n &gt;= 31) throw invalid_argument("unsupported city count");
+    for (const auto&amp; row : dist)
+        if ((int)row.size() != n) throw invalid_argument("dist must be square");
+    if (n == 1) return {{0, 0}, 0};
+
+    const long long INF = numeric_limits&lt;long long&gt;::max() / 4;
+    int states = 1 &lt;&lt; n;
+    vector&lt;vector&lt;long long&gt;&gt; dp(states, vector&lt;long long&gt;(n, INF));
+    vector&lt;vector&lt;int&gt;&gt; parent(states, vector&lt;int&gt;(n, -1));
+    dp[1][0] = 0;
+
+    for (int mask = 1; mask &lt; states; mask++) {
         if (!(mask &amp; 1)) continue;
         for (int j = 0; j &lt; n; j++) {
-            if (!(mask &amp; (1 &lt;&lt; j)) || C[mask][j] == INF) continue;
+            if (!(mask &amp; (1 &lt;&lt; j)) || dp[mask][j] == INF) continue;
             for (int k = 0; k &lt; n; k++) {
                 if (mask &amp; (1 &lt;&lt; k)) continue;
-                int nextMask = mask | (1 &lt;&lt; k);
-                int newCost = C[mask][j] + dist[j][k];
-                if (newCost &lt; C[nextMask][k]) C[nextMask][k] = newCost;
+                int next = mask | (1 &lt;&lt; k);
+                long long candidate = dp[mask][j] + dist[j][k];
+                if (candidate &lt; dp[next][k]) {
+                    dp[next][k] = candidate;
+                    parent[next][k] = j;
+                }
             }
         }
     }
 
-    int fullMask = (1 &lt;&lt; n) - 1;
-    int best = INF;
-    for (int j = 1; j &lt; n; j++) best = min(best, C[fullMask][j] + dist[j][0]);
-    return best;
+    int full = states - 1, end = -1;
+    long long best = INF;
+    for (int j = 1; j &lt; n; j++) {
+        long long candidate = dp[full][j] + dist[j][0];
+        if (candidate &lt; best) best = candidate, end = j;
+    }
+    if (end == -1) throw runtime_error("no finite Hamiltonian tour");
+
+    vector&lt;int&gt; tour{end};
+    int mask = full, j = end;
+    while (j != 0) {
+        int previous = parent[mask][j];
+        mask ^= 1 &lt;&lt; j;
+        j = previous;
+        tour.push_back(j);
+    }
+    reverse(tour.begin(), tour.end());
+    tour.push_back(0);
+    return {tour, best};
 }
 
 int main() {
-    vector&lt;vector&lt;int&gt;&gt; dist = {
-        {0, 10, 15, 20}, {10, 0, 35, 25}, {15, 35, 0, 30}, {20, 25, 30, 0}
+    vector&lt;vector&lt;long long&gt;&gt; dist = {
+        {0,10,15,20}, {10,0,35,25}, {15,35,0,30}, {20,25,30,0}
     };
-    cout &lt;&lt; heldKarp(dist) &lt;&lt; endl;  // 80
-    return 0;
+    Result result = heldKarp(dist);
+    cout &lt;&lt; "Cost: " &lt;&lt; result.cost &lt;&lt; "\nTour:";
+    for (int city : result.tour) cout &lt;&lt; " " &lt;&lt; city;
 }
 </code></pre>
     </div>
@@ -302,37 +517,71 @@ int main() {
 <pre><code class="language-java">import java.util.*;
 
 class HeldKarp {
-    static int solve(int[][] dist) {
-        int n = dist.length;
-        final int INF = Integer.MAX_VALUE / 2;
-        int[][] C = new int[1 &lt;&lt; n][n];
-        for (int[] row : C) Arrays.fill(row, INF);
-        C[1][0] = 0;
+    static class Result {
+        final int[] tour;
+        final long cost;
+        Result(int[] tour, long cost) { this.tour = tour; this.cost = cost; }
+    }
 
-        for (int mask = 1; mask &lt; (1 &lt;&lt; n); mask++) {
+    static Result solve(long[][] dist) {
+        int n = dist.length;
+        if (n == 0 || n &gt;= 31) throw new IllegalArgumentException("unsupported city count");
+        for (long[] row : dist)
+            if (row.length != n) throw new IllegalArgumentException("dist must be square");
+        if (n == 1) return new Result(new int[]{0, 0}, 0);
+
+        final long INF = Long.MAX_VALUE / 4;
+        int states = 1 &lt;&lt; n;
+        long[][] dp = new long[states][n];
+        int[][] parent = new int[states][n];
+        for (long[] row : dp) Arrays.fill(row, INF);
+        for (int[] row : parent) Arrays.fill(row, -1);
+        dp[1][0] = 0;
+
+        for (int mask = 1; mask &lt; states; mask++) {
             if ((mask &amp; 1) == 0) continue;
             for (int j = 0; j &lt; n; j++) {
-                if ((mask &amp; (1 &lt;&lt; j)) == 0 || C[mask][j] == INF) continue;
+                if ((mask &amp; (1 &lt;&lt; j)) == 0 || dp[mask][j] == INF) continue;
                 for (int k = 0; k &lt; n; k++) {
                     if ((mask &amp; (1 &lt;&lt; k)) != 0) continue;
-                    int nextMask = mask | (1 &lt;&lt; k);
-                    int newCost = C[mask][j] + dist[j][k];
-                    if (newCost &lt; C[nextMask][k]) C[nextMask][k] = newCost;
+                    int next = mask | (1 &lt;&lt; k);
+                    long candidate = dp[mask][j] + dist[j][k];
+                    if (candidate &lt; dp[next][k]) {
+                        dp[next][k] = candidate;
+                        parent[next][k] = j;
+                    }
                 }
             }
         }
 
-        int fullMask = (1 &lt;&lt; n) - 1;
-        int best = INF;
-        for (int j = 1; j &lt; n; j++) best = Math.min(best, C[fullMask][j] + dist[j][0]);
-        return best;
+        int full = states - 1, end = -1;
+        long best = INF;
+        for (int j = 1; j &lt; n; j++) {
+            long candidate = dp[full][j] + dist[j][0];
+            if (candidate &lt; best) { best = candidate; end = j; }
+        }
+        if (end == -1) throw new IllegalStateException("no finite Hamiltonian tour");
+
+        List&lt;Integer&gt; tour = new ArrayList&lt;&gt;();
+        int mask = full, j = end;
+        tour.add(j);
+        while (j != 0) {
+            int previous = parent[mask][j];
+            mask ^= 1 &lt;&lt; j;
+            j = previous;
+            tour.add(j);
+        }
+        Collections.reverse(tour);
+        tour.add(0);
+        return new Result(tour.stream().mapToInt(Integer::intValue).toArray(), best);
     }
 
     public static void main(String[] args) {
-        int[][] dist = {
+        long[][] dist = {
             {0, 10, 15, 20}, {10, 0, 35, 25}, {15, 35, 0, 30}, {20, 25, 30, 0}
         };
-        System.out.println(solve(dist));  // 80
+        Result result = solve(dist);
+        System.out.println(Arrays.toString(result.tour) + " cost=" + result.cost);
     }
 }
 </code></pre>
@@ -341,28 +590,103 @@ class HeldKarp {
     </div><!-- /.panels-stack -->
 </div><!-- /.code-widget -->
 
-                        <h2 id="applications">Real-World Applications</h2>
+                        <p>All three versions now retain predecessor choices and return one optimal tour as well as its cost. They use a dense table for clarity; memory becomes the practical bottleneck before the bit-shift limit does.</p>
+
+                        <h2 id="complexity">Complexity and the Memory Wall</h2>
+                        <p>There are $2^n$ masks, up to $n$ endpoints per mask, and up to $n$ next-city transitions per reachable state:</p>
+
+                        <div class="math-block">$$\text{time}=O(n^2 2^n),\qquad \text{space}=O(n2^n).$$</div>
+
+                        <p>The dense implementation allocates $n2^n$ table cells even though many are invalid. Fixing city $0$ and storing only reachable endpoint states improves constants, not the exponential class.</p>
+
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead><tr><th>$n$</th><th>Dense cost cells $n2^n$</th><th>Brute-force orders $(n-1)!$</th><th>Practical lesson</th></tr></thead>
+                                <tbody>
+                                    <tr><td>15</td><td>491,520</td><td>87,178,291,200</td><td>DP is dramatically smaller</td></tr>
+                                    <tr><td>20</td><td>20,971,520</td><td>$1.216\times10^{17}$</td><td>memory layout starts to dominate</td></tr>
+                                    <tr><td>25</td><td>838,860,800</td><td>$6.204\times10^{23}$</td><td>even the DP table is enormous</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="highlight-box crimson">
+                            <h4><i class="fas fa-memory me-2"></i>Big-O Hides Representation Cost</h4>
+                            <p class="mb-0">At $n=25$, the cost table alone contains about $839$ million cells. Eight-byte costs require roughly $6.25$ GiB before parents, row objects, allocator overhead, or the distance matrix. A Python list-of-lists representation requires far more.</p>
+                        </div>
+
+                        <p>If only the optimum value is needed, process states by subset size and keep fewer layers, or store reachable states sparsely. If the tour must be reconstructed, retain parents, recompute selected layers, or use a divide-and-conquer reconstruction strategy. Each choice trades memory, runtime, and implementation complexity.</p>
+
+                        <h2 id="variants">Useful Variants</h2>
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead><tr><th>Goal</th><th>Change</th><th>What stays the same</th></tr></thead>
+                                <tbody>
+                                    <tr><td>asymmetric TSP</td><td>use directed costs $d(i,j)$ as given</td><td>the recurrence is unchanged</td></tr>
+                                    <tr><td>Hamiltonian path</td><td>omit the return edge; minimize over allowed endpoints</td><td>subset-and-endpoint states</td></tr>
+                                    <tr><td>fixed final city</td><td>read only $DP[V][t]$ before optional closure</td><td>all earlier transitions</td></tr>
+                                    <tr><td>precedence rules</td><td>skip adding a city until its prerequisites are in the mask</td><td>bitmask membership tests</td></tr>
+                                    <tr><td>missing edges</td><td>use infinity and detect an unreachable final state</td><td>min-plus recurrence</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <p>Be careful when adding time windows, vehicle capacity, or several salespeople. Subset and endpoint may no longer summarize every fact relevant to the future; extra state dimensions or a different optimization model are then required.</p>
+
+                        <h2 id="pitfalls">Common Pitfalls and a Reliable Checklist</h2>
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead><tr><th>Pitfall</th><th>Why it fails</th><th>Reliable practice</th></tr></thead>
+                                <tbody>
+                                    <tr><td>forgetting $d(j,0)$</td><td>solves a path, not a tour</td><td>close every full-set endpoint explicitly</td></tr>
+                                    <tr><td>allowing masks without bit $0$</td><td>creates states with the wrong start</td><td>skip them or encode subsets excluding $0$ consistently</td></tr>
+                                    <tr><td>using zero for “unreached”</td><td>zero-cost edges become ambiguous</td><td>initialize with a safe infinity</td></tr>
+                                    <tr><td>overwriting without a strict improvement</td><td>parents may not match the stored cost</td><td>update cost and parent together</td></tr>
+                                    <tr><td>32-bit totals</td><td>long tours may overflow</td><td>use a wide type and bounded infinity</td></tr>
+                                    <tr><td>assuming the tour is unique</td><td>tests reject another optimum</td><td>verify city coverage and total cost</td></tr>
+                                    <tr><td>allocating before estimating</td><td>the process can exhaust memory</td><td>calculate $n2^n$ cells first</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="exercise-box">
+                            <h4><i class="fas fa-check-circle me-2"></i>Implementation Checklist</h4>
+                            <p class="mb-0">Validate a square matrix; define missing-edge semantics; fix the start convention; use a safe numeric type; estimate table memory; track parents only when needed; and test the returned cycle independently of its orientation.</p>
+                        </div>
+
+                        <h2 id="applications">Where Held–Karp Is Useful</h2>
                         <div class="experiment-card">
                             <div class="experiment-meta">
                                 <span class="badge bg-teal"><i class="fas fa-flask me-1"></i>Case Study</span>
                             </div>
                             <h4>Exact Route Optimization for Small Fleets</h4>
-                            <p>Delivery and field-service companies with a small number of daily stops (typically under 20) can afford the exponential cost of Held-Karp to guarantee a provably optimal route — unlike heuristic approaches from Part 14, which only guarantee near-optimality. This exact-vs-approximate tradeoff decision (small guaranteed-optimal instances vs. large heuristic ones) recurs constantly in logistics software design.</p>
+                            <p>For a genuinely small stop set, Held–Karp can provide an exact route and an optimality certificate by exhaustive dynamic programming. That makes it useful as a correctness oracle for testing heuristics, as an exact solver for small batches, or as a subproblem inside a larger decomposition. The workable size depends heavily on language, memory layout, and available hardware.</p>
                             <div class="bias-tags"><span class="bias-tag">Route Optimization</span><span class="bias-tag">Logistics</span></div>
                         </div>
 
+                        <ul>
+                            <li><strong>Benchmarking:</strong> measure the optimality gap of nearest-neighbor, local-search, or learned routing methods on small instances.</li>
+                            <li><strong>Sequencing:</strong> order a small set of manufacturing, inspection, or robotic operations with pairwise transition costs.</li>
+                            <li><strong>Clustered optimization:</strong> solve small clusters exactly while a higher-level heuristic connects the clusters.</li>
+                            <li><strong>Subset-DP template:</strong> adapt the same mask-and-endpoint pattern to Hamiltonian paths, precedence-constrained tours, and other sequencing problems.</li>
+                        </ul>
+
                         <h2 id="exercises">Exercises</h2>
                         <ol>
-                            <li>Trace through the Held-Karp recurrence by hand for a 4-city instance, filling in the \(C(S,j)\) table for all subsets containing city 0.</li>
-                            <li>Explain why representing subsets as bitmasks (rather than, say, Python sets or lists) is essential for the algorithm's practical performance, not just a stylistic choice.</li>
-                            <li>Compare the number of subproblems Held-Karp solves for \(n=15\) against the number of tours brute force would enumerate, and comment on how quickly the gap grows.</li>
-                            <li><strong>Challenge:</strong> Modify the implementation to also reconstruct and print the optimal tour itself, not just its cost (hint: track which \(k\) achieved the minimum at each step).</li>
+                            <li><strong>Trace:</strong> verify all six size-three endpoint values in the second SVG directly from the distance matrix.</li>
+                            <li><strong>Dominance:</strong> prove formally that an expensive prefix can be discarded when its subset and endpoint match a cheaper prefix.</li>
+                            <li><strong>Bitmasks:</strong> list every valid state for mask <code>1101</code> and explain why endpoints $1$ and $0$ are not both ordinary choices.</li>
+                            <li><strong>Asymmetry:</strong> change $d(1,3)$ without changing $d(3,1)$ and recompute the optimal directed tour.</li>
+                            <li><strong>Path variant:</strong> modify the Python function to accept specified start and end cities without closing the cycle.</li>
+                            <li><strong>Verification:</strong> compare the returned cost with brute-force enumeration for random matrices up to $n=9$.</li>
                         </ol>
 
-                        <h2 id="limitations">Limitations</h2>
-                        <div class="highlight-box highlight-crimson">
-                            <h4><i class="fas fa-exclamation-triangle me-2"></i>Still Exponential</h4>
-                            <p class="mb-0">\(O(n^2 2^n)\) is only practical up to roughly \(n \approx 20\)-\(25\) cities on typical hardware — well past that, exact solving becomes infeasible regardless of how the subproblems are organized, and the heuristic and approximation algorithms from Part 14 (nearest-neighbor, 2-opt, and the upcoming Christofides deep dive) become the only realistic options.</p>
+                        <h2 id="history">History and Takeaway</h2>
+                        <p>Michael Held and Richard Karp published their dynamic-programming treatment of sequencing problems in 1962. Richard Bellman published an independent dynamic-programming treatment of TSP in the same year, which is why the method is also called Bellman–Held–Karp.</p>
+
+                        <div class="highlight-box">
+                            <h4><i class="fas fa-key me-2"></i>The Mental Model to Keep</h4>
+                            <p class="mb-0">Held–Karp does not pretend route order is irrelevant. It proves that the future needs only two facts about the past: the set already visited and the current endpoint. For each such state, keep the cheapest receipt, extend it to one new city, and remember the winning predecessor if the route itself must be recovered.</p>
                         </div>
 
                         <div class="related-posts">
