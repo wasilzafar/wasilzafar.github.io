@@ -416,8 +416,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize cookie banner if present
     initCookieBanner();
 
-    // Initialize interests mega dropdown (before smooth scroll so it can mark its trigger)
-    initInterestsMegaDropdown();
+    // Initialize the Topics mega dropdown before smooth scroll binds nav links.
+    initTopicsMegaDropdown();
     
     // Initialize smooth scroll navigation
     initSmoothScroll();
@@ -1186,7 +1186,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initSideNavTOC();
     initPrismThemeSwitcher();
     initMermaidDiagrams();
-    initInterestsMegaDropdown();
+    initTopicsMegaDropdown();
     initCategoryNewTab();
     initMultiLangWidgets();
 });
@@ -1245,27 +1245,16 @@ function initCategoryNewTab() {
 }
 
 // ============================================================
-// Interests Mega Dropdown — dynamic injection
+// Topics Mega Dropdown — dynamic injection for explicitly marked subpage links
 // ============================================================
-function initInterestsMegaDropdown() {
+function initTopicsMegaDropdown() {
     // Guard against double initialization
     if (document.getElementById('megaDropdown')) return;
-    // Skip on pages that have an #interests section (homepage)
-    if (document.getElementById('interests')) return;
 
-    // Find the Interests nav link by text content
-    var interestsLink = null;
-    var navLinks = document.querySelectorAll('.nav-v16 .link-3d');
-    for (var i = 0; i < navLinks.length; i++) {
-        if (navLinks[i].textContent.trim().replace(/\s+/g, ' ').indexOf('Interests') !== -1) {
-            interestsLink = navLinks[i];
-            break;
-        }
-    }
-    if (!interestsLink) return;
-
-    // Mark link so smooth scroll handler skips it
-    interestsLink.setAttribute('data-mega-trigger', 'true');
+    // Only subpage header links opt into the popup. The homepage Topics link
+    // remains a normal anchor to its #categories section.
+    var topicsLink = document.querySelector('.nav-v16 .link-3d[data-mega-trigger="topics"]');
+    if (!topicsLink) return;
 
     // Category data
     var categories = [
@@ -1306,7 +1295,7 @@ function initInterestsMegaDropdown() {
     dropdown.id = 'megaDropdown';
     dropdown.innerHTML =
         '<div class="mega-dropdown-header">' +
-            '<h3><i class="fas fa-compass"></i>Explore Interests</h3>' +
+            '<h3><i class="fas fa-compass"></i>Explore Topics</h3>' +
             '<button class="mega-dropdown-close" id="megaClose">&times;</button>' +
         '</div>' +
         '<div class="mega-dropdown-grid">' + gridHTML + '</div>';
@@ -1323,8 +1312,8 @@ function initInterestsMegaDropdown() {
         backdrop.classList.remove('open');
     }
 
-    // Trigger: Interests link opens mega dropdown
-    interestsLink.addEventListener('click', function(e) {
+    // Trigger: explicitly marked Topics links open the mega dropdown.
+    topicsLink.addEventListener('click', function(e) {
         e.preventDefault();
         if (dropdown.classList.contains('open')) {
             closeMega();
