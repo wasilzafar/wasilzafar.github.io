@@ -319,7 +319,7 @@
                                 </div>
                                 <div class="content">
                                     <ul>
-                                        <li><strong>Process Scheduler:</strong> CFS (Completely Fair Scheduler), real-time classes</li>
+                                        <li><strong>Process Scheduler:</strong> The fair scheduler has been transitioning from CFS to EEVDF since Linux 6.6. EEVDF uses virtual runtime, lag-based eligibility, and virtual deadlines; real-time scheduling classes remain separate. See the <a href="https://kernel.org/doc/html/latest/scheduler/sched-eevdf.html" target="_blank" rel="noopener noreferrer">kernel EEVDF documentation</a>.</li>
                                         <li><strong>Memory Management:</strong> Virtual memory, page allocation, slab allocator</li>
                                         <li><strong>VFS (Virtual File System):</strong> Abstraction over ext4, NFS, tmpfs, etc.</li>
                                         <li><strong>Networking:</strong> TCP/IP stack, netfilter, socket API</li>
@@ -508,9 +508,9 @@ qemu-system-arm -M versatilepb \
                             </div>
 
 <pre><code class="language-bash"># Initial Yocto setup (requires ~50GB disk, 8GB+ RAM)
-git clone git://git.yoctoproject.org/poky
+git clone https://git.yoctoproject.org/poky
 cd poky
-git checkout kirkstone  # LTS release
+git checkout wrynose  # Yocto Project 6.0 LTS (supported through April 2030)
 
 # Initialize build environment
 source oe-init-build-env
@@ -529,6 +529,8 @@ bitbake core-image-full-cmdline
 ls tmp/deploy/images/qemuarm/
 # core-image-minimal-qemuarm.ext4, zImage, ...
 </code></pre>
+
+                            <p>This example pins Poky to Wrynose, the Yocto Project 6.0 LTS release, supported through April 2030. Confirm that your board support package and layers support this branch before building; see the <a href="https://www.yoctoproject.org/development/releases/" target="_blank" rel="noopener noreferrer">Yocto Project release schedule</a>.</p>
 
                             <h2 id="userspace"><i class="fas fa-terminal me-2 text-teal"></i>Userspace Programming</h2>
 
@@ -581,28 +583,77 @@ int main() {
 }
 </code></pre>
 
-<pre><code class="language-c">// Modern GPIO via libgpiod (recommended)
-#include <gpiod.h>
-#include <unistd.h>
+<pre><code class="language-c">// Modern GPIO via the libgpiod 2.x API. Line offsets are chip-specific.
+#include &lt;gpiod.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;unistd.h&gt;
 
-int main() {
-    struct gpiod_chip *chip = gpiod_chip_open("/dev/gpiochip0");
-    struct gpiod_line *line = gpiod_chip_get_line(chip, 17);
-    
-    gpiod_line_request_output(line, "example", 0);
-    
-    while (1) {
-        gpiod_line_set_value(line, 1);
+int main(void) {
+    const unsigned int offset = 17;
+    struct gpiod_chip *chip = NULL;
+    struct gpiod_line_settings *settings = NULL;
+    struct gpiod_line_config *line_config = NULL;
+    struct gpiod_request_config *request_config = NULL;
+    struct gpiod_line_request *request = NULL;
+    int status = 1;
+
+    chip = gpiod_chip_open("/dev/gpiochip0");
+    if (!chip) {
+        perror("gpiod_chip_open");
+        goto cleanup;
+    }
+    settings = gpiod_line_settings_new();
+    line_config = gpiod_line_config_new();
+    request_config = gpiod_request_config_new();
+    if (!settings || !line_config || !request_config) {
+        fprintf(stderr, "Could not allocate libgpiod configuration\n");
+        goto cleanup;
+    }
+
+    gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_OUTPUT);
+    gpiod_line_settings_set_output_value(settings, GPIOD_LINE_VALUE_INACTIVE);
+    if (gpiod_line_config_add_line_settings(line_config, &amp;offset, 1, settings) &lt; 0) {
+        perror("gpiod_line_config_add_line_settings");
+        goto cleanup;
+    }
+    gpiod_request_config_set_consumer(request_config, "example");
+    request = gpiod_chip_request_lines(chip, request_config, line_config);
+    if (!request) {
+        perror("gpiod_chip_request_lines");
+        goto cleanup;
+    }
+
+    status = 0;
+    for (;;) {
+        if (gpiod_line_request_set_value(request, offset, GPIOD_LINE_VALUE_ACTIVE) &lt; 0) {
+            perror("set GPIO high");
+            status = 1;
+            break;
+        }
         sleep(1);
-        gpiod_line_set_value(line, 0);
+        if (gpiod_line_request_set_value(request, offset, GPIOD_LINE_VALUE_INACTIVE) &lt; 0) {
+            perror("set GPIO low");
+            status = 1;
+            break;
+        }
         sleep(1);
     }
-    
-    gpiod_line_release(line);
-    gpiod_chip_close(chip);
-    return 0;
+
+cleanup:
+    if (request)
+        gpiod_line_request_release(request);
+    if (request_config)
+        gpiod_request_config_free(request_config);
+    if (line_config)
+        gpiod_line_config_free(line_config);
+    if (settings)
+        gpiod_line_settings_free(settings);
+    if (chip)
+        gpiod_chip_close(chip);
+    return status;
 }
 </code></pre>
+                            <p>This example uses the libgpiod 2.x line-settings and line-request API; it is not source-compatible with libgpiod 1.x. Check the target system's chip offsets and permissions, and refer to the <a href="https://libgpiod.readthedocs.io/en/v2.3/core_line_request.html" target="_blank" rel="noopener noreferrer">libgpiod 2.3 line-request documentation</a>.</p>
 
                             <h2 id="init-systems"><i class="fas fa-play-circle me-2 text-teal"></i>Init Systems (systemd, BusyBox)</h2>
 
