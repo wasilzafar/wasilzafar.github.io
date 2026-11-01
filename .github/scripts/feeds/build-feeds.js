@@ -25,15 +25,15 @@ const MAX_ITEMS = 50;
 
 // Category → series folder mapping
 const CATEGORY_MAP = {
-    'technology': ['ai-app-dev','ai-data-science','ai-in-the-wild','api-development','arm-assembly','assembly-mastery','cloud-computing','cmsis','computer-architecture','data-structures','database-mastery','digital-transformation','embedded-systems','embedded-hardware','gnu-make','kernel-development','math-for-ai','neural-networks','nlp','protocols-master','pytorch-mastery','stm32-hal','system-design','tensorflow-mastery','usb-dev'],
+    'technology': ['ai-app-dev','ai-data-science','ai-in-the-wild','api-development','arm-assembly','assembly-mastery','cloud-computing','cmsis','computer-architecture','data-structures','database-mastery','digital-transformation','embedded-systems','embedded-hardware','gnu-make','graph-theory','kernel-development','math-for-ai','neural-networks','nlp','protocols-master','pytorch-mastery','stm32-hal','streaming-sketching','string-algorithms','system-design','tensorflow-mastery','usb-dev'],
     'business': ['consulting-frameworks','dddm','economics','entrepreneurship','marketing-strategy','sales-mastery'],
-    'engineering': ['manufacturing-engineering','materials-science','mech-movements','robotics-automation','sensors-actuators'],
+    'engineering': ['computational-geometry','manufacturing-engineering','materials-science','mech-movements','robotics-automation','sensors-actuators'],
     'philosophy': ['eastern-philosophy','ethics-moral-philosophy','existentialism','logic-critical-thinking','philosophy-of-mind','political-philosophy'],
     'psychology': ['behavioral-psychology','cognitive-psych','social-psychology'],
     'life-sciences': ['biochemistry','evolutionary-biology','human-anatomy','physiology'],
     'gaming': ['game-development','unity-game-engine'],
     'physical-sciences': ['theory-of-relativity'],
-    'mathematics': ['math-for-ai'],
+    'mathematics': ['math-for-ai','number-theory-algorithms'],
     'faith': [],
     'poetry': [],
     'history': []

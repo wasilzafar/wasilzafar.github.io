@@ -195,7 +195,8 @@ function initSmoothScroll() {
             if (href === '#') return;
             
             e.preventDefault();
-            const target = document.querySelector(href);
+            // getElementById, not querySelector: ids such as "331-intro" are valid but not valid CSS selectors
+            const target = document.getElementById(decodeURIComponent(href.slice(1)));
             
             if (target) {
                 target.scrollIntoView({
@@ -1065,7 +1066,7 @@ function initSideNavTOC() {
         link.addEventListener('click', function(e) {
             e.preventDefault();
             const targetId = this.getAttribute('href');
-            const targetSection = document.querySelector(targetId);
+            const targetSection = document.getElementById(decodeURIComponent(targetId.slice(1)));
             
             if (targetSection) {
                 const offsetTop = targetSection.offsetTop - 80; // Account for fixed navbar

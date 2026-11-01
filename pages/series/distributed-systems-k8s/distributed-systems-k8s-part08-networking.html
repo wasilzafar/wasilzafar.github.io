@@ -70,7 +70,7 @@
         f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');
     </script>
     <script type="application/ld+json">
-    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Kubernetes Networking - Part 8", "description": "Deep dive into Kubernetes networking — the flat networking model, CNI plugins (Calico, Cilium, Flannel), pod-to-pod communication, cluster DNS, network namespaces, and network policies for traffic control.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/distributed-systems-k8s/distributed-systems-k8s-part08-networking.html"}, "wordCount": 2583, "inLanguage": "en", "datePublished": "2026-05-14", "dateModified": "2026-05-14", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/distributed-systems-k8s/distributed-systems-k8s-part08-networking-og.jpg", "width": 1200, "height": 630}}
+    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Kubernetes Networking - Part 8", "description": "Deep dive into Kubernetes networking — the flat networking model, CNI plugins (Calico, Cilium, Flannel), pod-to-pod communication, cluster DNS, network namespaces, and network policies for traffic control.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/distributed-systems-k8s/distributed-systems-k8s-part08-networking.html"}, "wordCount": 2583, "inLanguage": "en", "datePublished": "2026-05-14", "dateModified": "2026-11-01", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/distributed-systems-k8s/distributed-systems-k8s-part08-networking-og.jpg", "width": 1200, "height": 630}}
     </script>
 </head>
 <body>
@@ -369,7 +369,7 @@ ip addr show cni0
                                 <tr>
                                     <td>Direct routing (BGP)</td>
                                     <td>Program host routes so nodes know pod CIDRs</td>
-                                    <td>Calico (default), Cilium</td>
+                                    <td>Calico (when configured for native routing), Cilium</td>
                                     <td>Zero (native routing)</td>
                                 </tr>
                                 <tr>
@@ -418,13 +418,14 @@ ip link show | grep "^7:"
 
                         <h3 id="cni-interface">The CNI Interface</h3>
 
-                        <p>The Container Network Interface (CNI) is a specification that defines how network plugins interact with container runtimes. When kubelet creates a pod, it calls the CNI plugin to set up networking:</p>
+                        <p>The Container Network Interface (CNI) is a specification that defines how network plugins interact with container runtimes. The kubelet requests pod sandbox creation through CRI; the container runtime manages CNI configuration and invokes plugins. Since Kubernetes 1.24, CNI management is no longer a kubelet responsibility, as explained in the <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/network-plugins/" target="_blank" rel="noopener">Kubernetes network plugins documentation</a>.</p>
 
                         <pre><code class="language-bash"># CNI plugin lifecycle:
-# 1. kubelet creates pod sandbox (pause container)
-# 2. kubelet calls CNI ADD — plugin assigns IP, creates veth, sets routes
-# 3. Pod runs with networking configured
-# 4. Pod terminates → kubelet calls CNI DEL — plugin cleans up
+# 1. kubelet requests pod sandbox creation through CRI.
+# 2. Container runtime creates the pod sandbox.
+# 3. Container runtime invokes CNI ADD.
+# 4. CNI configures networking and assigns an IP; the pod starts.
+# 5. When the sandbox is removed, the runtime invokes CNI DEL.
 
 # CNI configuration location:
 ls /etc/cni/net.d/
@@ -448,7 +449,7 @@ cat /etc/cni/net.d/10-calico.conflist
 
                         <h3 id="calico">Calico</h3>
 
-                        <p>Calico is the most popular CNI plugin for production Kubernetes. It uses BGP routing by default (no overlay, no encapsulation overhead) and provides powerful network policies:</p>
+                        <p>Calico supports several networking modes, including native routing with BGP, IP-in-IP, and VXLAN. The selected mode depends on installation method and configuration: the documented manifest installation enables IP-in-IP encapsulation across subnets by default, while VXLAN can be configured without BGP. Native routing can avoid encapsulation overhead when the underlying network can route pod IPs directly; overlays can simplify deployment when it cannot. See <a href="https://docs.tigera.io/calico/latest/getting-started/kubernetes/self-managed-onprem/config-options" target="_blank" rel="noopener">Calico installation configuration options</a>.</p>
 
                         <pre><code class="language-bash"># Calico architecture:
 # - calico-node (DaemonSet): runs on every node

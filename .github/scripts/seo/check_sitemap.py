@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import sys
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -13,6 +14,7 @@ REPO_ROOT = SCRIPT_DIR.parent.parent.parent  # .github/scripts/seo/ → repo roo
 SITEMAP_PATH = REPO_ROOT / "sitemap.xml"
 BASE_URL = "https://www.wasilzafar.com/"
 EXCLUDED_HTML = {".template-blog-post.html", "cookie-banner.html", "404.html"}
+EXCLUDED_DIRS = {".git", ".github", ".tools", "designs", "node_modules", "__pycache__"}
 NAMESPACE = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 
 
@@ -29,12 +31,24 @@ def build_expected_urls() -> set[str]:
     urls = {BASE_URL}
     for html_file in REPO_ROOT.rglob("*.html"):
         rel = html_file.relative_to(REPO_ROOT).as_posix()
+        if any(part in EXCLUDED_DIRS for part in html_file.relative_to(REPO_ROOT).parts[:-1]):
+            continue
         if rel in EXCLUDED_HTML:
             continue
         if rel == "index.html":
             continue
+        html = html_file.read_text(encoding="utf-8", errors="replace")
+        if is_redirect(html):
+            continue
         urls.add(BASE_URL + rel)
     return urls
+
+
+def is_redirect(html: str) -> bool:
+    return bool(
+        re.search(r'<meta\b[^>]*\bhttp-equiv\s*=\s*["\']?\s*refresh\b', html, re.IGNORECASE)
+        or re.search(r'<title\b[^>]*>\s*redirecting(?:\.\.\.|…)?\s*</title\s*>', html, re.IGNORECASE)
+    )
 
 
 def main() -> int:

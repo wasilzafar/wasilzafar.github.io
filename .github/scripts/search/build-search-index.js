@@ -58,6 +58,12 @@ function getTitle(html) {
     return match ? stripHtml(match[1]) : '';
 }
 
+// Redirect stubs are useful for resolving obsolete URLs, but are not search results.
+function isRedirect(html) {
+    return /<meta\b[^>]*\bhttp-equiv\s*=\s*["']?\s*refresh\b/i.test(html)
+        || /<title\b[^>]*>\s*redirecting(?:\.\.\.|…)?\s*<\/title\s*>/i.test(html);
+}
+
 // Extract first meaningful paragraph from blog-content
 function getExcerpt(html, maxLen = 200) {
     // Look for content within blog-content div
@@ -154,11 +160,15 @@ function buildIndex() {
 
     for (const dir of SCAN_DIRS) {
         const htmlFiles = findHtmlFiles(dir);
+        if (dir === SCAN_DIRS[0]) {
+            htmlFiles.push(...findIndexFiles(dir));
+        }
         totalFiles += htmlFiles.length;
 
         for (const filePath of htmlFiles) {
             try {
                 const html = fs.readFileSync(filePath, 'utf-8');
+                if (isRedirect(html)) continue;
 
                 const title = getTitle(html);
                 if (!title) continue; // Skip files without titles

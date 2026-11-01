@@ -92,7 +92,7 @@
         })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
     </script>
     <script type="application/ld+json">
-    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Part 3: Training &amp; Optimization — TensorFlow Mastery", "description": "Master TensorFlow training and optimization — loss functions, optimizers (SGD, Adam, AdamW), learning rate schedules, metrics, gradient clipping, mixed precision, and complete training pipelines.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/tensorflow-mastery/tensorflow-mastery-part03-training-optimization.html"}, "wordCount": 4229, "inLanguage": "en", "datePublished": "2026-05-03", "dateModified": "2026-05-03"}
+    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Part 3: Training &amp; Optimization — TensorFlow Mastery", "description": "Master TensorFlow training and optimization — loss functions, optimizers (SGD, Adam, AdamW), learning rate schedules, metrics, gradient clipping, mixed precision, and complete training pipelines.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/tensorflow-mastery/tensorflow-mastery-part03-training-optimization.html"}, "wordCount": 4229, "inLanguage": "en", "datePublished": "2026-05-03", "dateModified": "2026-10-31"}
     </script>
 </head>
 <body>
@@ -625,6 +625,7 @@ print(f"Adagrad final loss: {h_ada.history['loss'][-1]:.4f}")</code></pre>
                         <h2 id="learning-rate-schedules">Learning Rate Schedules</h2>
 
                         <p>The learning rate is the single most important hyperparameter. Starting high helps escape bad local minima; decaying it over time enables fine-grained convergence. TensorFlow provides several built-in schedules and the flexibility to write your own.</p>
+                        <p>Call a schedule with a step to inspect its value at that step (for example, <code>cosine_schedule(5000)</code>). By contrast, <code>optimizer.learning_rate</code> reports the optimizer's current value and should be read as a tensor, such as <code>optimizer.learning_rate.numpy()</code>; do not call it with a step number. See TensorFlow's <a href="https://www.tensorflow.org/api_docs/python/tf/keras/optimizers/schedules/CosineDecay" target="_blank" rel="noopener">CosineDecay API</a>.</p>
 
                         <h3 id="builtin-schedules">Built-in Schedules</h3>
 
@@ -648,7 +649,7 @@ print(f"ExponentialDecay at step 5000: {exp_schedule(5000).numpy():.6f}")
 cosine_schedule = tf.keras.optimizers.schedules.CosineDecay(
     initial_learning_rate=1e-2,
     decay_steps=10000,
-    alpha=1e-5  # minimum learning rate
+    alpha=1e-5  # minimum learning-rate fraction during decay
 )
 print(f"\nCosineDecay at step 0:     {cosine_schedule(0).numpy():.6f}")
 print(f"CosineDecay at step 5000:  {cosine_schedule(5000).numpy():.6f}")
@@ -664,7 +665,8 @@ for step in [0, 500, 1500, 4000, 6000]:
 
 # Use a schedule as the optimizer's learning rate
 optimizer = tf.keras.optimizers.Adam(learning_rate=cosine_schedule)
-print(f"\nOptimizer initial LR: {optimizer.learning_rate(0).numpy():.6f}")</code></pre>
+print(f"\nSchedule LR at step 0: {cosine_schedule(0).numpy():.6f}")
+print(f"Optimizer current LR: {optimizer.learning_rate.numpy():.6f}")</code></pre>
 
                         <h3 id="warmup-schedule">Warmup Strategies</h3>
 
@@ -703,11 +705,12 @@ for step in [0, 250, 500, 1000, 3000, 5000, 10000]:
 
 # Plug it into an optimizer
 optimizer = tf.keras.optimizers.Adam(learning_rate=schedule)
-print(f"\nOptimizer LR at step 1000: {optimizer.learning_rate(1000).numpy():.6f}")</code></pre>
+print(f"\nSchedule LR at step 1000: {schedule(1000).numpy():.6f}")
+print(f"Optimizer current LR: {optimizer.learning_rate.numpy():.6f}")</code></pre>
 
                         <h3 id="reduce-lr-callback">ReduceLROnPlateau</h3>
 
-                        <p>Instead of a fixed schedule, <code>ReduceLROnPlateau</code> monitors a metric and reduces the learning rate when it plateaus — a reactive approach that adapts to the actual training dynamics.</p>
+                        <p>Instead of a fixed schedule, <code>ReduceLROnPlateau</code> monitors a metric and reduces a settable numeric learning rate when it plateaus — a reactive alternative to a schedule. Do not combine it with an optimizer initialized from a <code>LearningRateSchedule</code>; choose one controller for each optimizer. See the <a href="https://keras.io/api/callbacks/reduce_lr_on_plateau/" target="_blank" rel="noopener">Keras callback documentation</a>.</p>
 
 <pre><code class="language-python">import tensorflow as tf
 import numpy as np
@@ -1195,9 +1198,11 @@ total_steps = (5000 // 64) * 30  # ~2343 steps
 warmup_steps = total_steps // 10  # 10% warmup
 
 lr_schedule = tf.keras.optimizers.schedules.CosineDecay(
-    initial_learning_rate=1e-3,
+    initial_learning_rate=0.0,
     decay_steps=total_steps - warmup_steps,
-    alpha=1e-5
+    alpha=1e-5,
+    warmup_target=1e-3,
+    warmup_steps=warmup_steps,
 )
 
 # ── 4. Optimizer with gradient clipping ─────────────────────
@@ -1236,9 +1241,8 @@ callbacks = [
     tf.keras.callbacks.EarlyStopping(
         monitor='val_loss', patience=5, restore_best_weights=True
     ),
-    tf.keras.callbacks.ReduceLROnPlateau(
-        monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6
-    ),
+    # Keep one learning-rate controller: this optimizer uses lr_schedule.
+    # ReduceLROnPlateau is shown separately for optimizers with numeric LRs.
 ]
 
 # ── 8. Train ────────────────────────────────────────────────

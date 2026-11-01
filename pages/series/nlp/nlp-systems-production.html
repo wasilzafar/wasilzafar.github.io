@@ -53,7 +53,7 @@
     </script>
 
         <script type="application/ld+json">
-    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "NLP Production Deployment: Best Practices, MLOps & Optimization", "description": "NLP production deployment best practices: MLOps pipelines, model optimization with quantization and distillation, Docker/Kubernetes deployment strategies, monitoring, A/B testing, and scalable NLP inference.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/nlp/nlp-systems-production.html"}, "wordCount": 8452, "inLanguage": "en", "datePublished": "2026-01-27", "dateModified": "2026-01-27", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/nlp/nlp-systems-production-og.jpg", "width": 1200, "height": 630}}
+    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "NLP Production Deployment: Best Practices, MLOps & Optimization", "description": "NLP production deployment best practices: MLOps pipelines, model optimization with quantization and distillation, Docker/Kubernetes deployment strategies, monitoring, A/B testing, and scalable NLP inference.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/nlp/nlp-systems-production.html"}, "wordCount": 8452, "inLanguage": "en", "datePublished": "2026-01-27", "dateModified": "2026-10-31", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/nlp/nlp-systems-production-og.jpg", "width": 1200, "height": 630}}
     </script>
 </head>
 <body>
@@ -255,7 +255,7 @@ flowchart LR
     PRUNE --> OPT
     
     OPT --> ONNX["ONNX Runtime /<br/>TensorRT Export"]
-    ONNX --> SERVE["Inference Server<br/>Triton / TorchServe"]
+    ONNX --> SERVE["Inference Server<br/>vLLM / Triton / managed runtime"]
 
     style FULL fill:#BF092F,stroke:#132440,color:#fff
     style OPT fill:#e8f4f4,stroke:#3B9797
@@ -311,8 +311,8 @@ model = AutoModelForSequenceClassification.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model.eval()
 
-# Apply dynamic quantization (INT8)
-# Quantize Linear layers (main compute in transformers)
+# LEGACY PyTorch quantization API: retained for older deployments only.
+# New quantization development is moving to torchao; see the current example below.
 quantized_model = torch.quantization.quantize_dynamic(
     model,
     {torch.nn.Linear},  # Layers to quantize
@@ -341,6 +341,18 @@ with torch.no_grad():
 print(f"\nOriginal prediction: {original_output.logits.argmax().item()}")
 print(f"Quantized prediction: {quantized_output.logits.argmax().item()}")
 </code></pre>
+
+<p><strong>Current direction:</strong> PyTorch is centralizing quantization development in <a href="https://docs.pytorch.org/ao/stable/" target="_blank" rel="noopener">torchao</a>. This example uses torchao's dynamic-activation, int8-weight workflow. These pins are a reproducible starting point; choose the PyTorch wheel that matches your platform and verify the current <a href="https://github.com/pytorch/ao/issues/2919" target="_blank" rel="noopener">torchao/PyTorch compatibility table</a> before deployment.</p>
+<pre><code class="language-bash"># Example pins; select the matching CPU/CUDA wheel index for your platform
+python -m pip install "torch==2.14.0" "torchao==0.17.0" "transformers==4.57.1"</code></pre>
+<pre><code class="language-python">from transformers import AutoModelForSequenceClassification
+from torchao.quantization import Int8DynamicActivationInt8WeightConfig, quantize_
+
+model = AutoModelForSequenceClassification.from_pretrained(
+    "distilbert-base-uncased-finetuned-sst-2-english"
+).eval()
+quantize_(model, Int8DynamicActivationInt8WeightConfig())
+# Benchmark on target hardware and validate task accuracy before deployment.</code></pre>
 
                         <div class="experiment-card">
                             <h4><i class="fas fa-flask me-2"></i>ONNX Runtime INT8 Quantization</h4>
@@ -784,7 +796,7 @@ print(f"Reduction:                 {(1 - ops_cached/ops_no_cache)*100:.1f}%")
                                         <tr><td><strong>Shared prefixes</strong></td><td>Duplicated across requests</td><td>Copy-on-write sharing (system prompts)</td></tr>
                                     </tbody>
                                 </table>
-                                <p class="mb-0"><strong>Impact:</strong> PagedAttention increased vLLM's throughput by 2-4× over HuggingFace Transformers and 1.5-2× over TGI by eliminating memory waste, allowing significantly more concurrent requests on the same GPU hardware.</p>
+                                <p class="mb-0"><strong>Historical benchmark:</strong> The original PagedAttention evaluation reported 2–4× throughput over Hugging Face Transformers and 1.5–2× over TGI for its tested workloads. These results are specific to the paper's models and hardware; benchmark current maintained runtimes on your own workload. TGI is now in maintenance mode and its repository is archived.</p>
                             </div>
                         </div>
 
@@ -1075,10 +1087,10 @@ parallelism_analysis(405e9, num_gpus=8, gpu_mem_gb=80)
                                             <td>Maximum NVIDIA GPU performance</td>
                                         </tr>
                                         <tr>
-                                            <td><strong>TGI</strong></td>
+                                            <td><strong>TGI (legacy)</strong></td>
                                             <td>Hugging Face</td>
                                             <td>Native HF model support, Flash Attention, watermarking</td>
-                                            <td>Quick deployment of HF models</td>
+                                            <td>Existing deployments and migration planning; not recommended for new production deployments</td>
                                         </tr>
                                         <tr>
                                             <td><strong>BentoML</strong></td>
@@ -1129,23 +1141,15 @@ print(outputs[0].outputs[0].text)
 print("1. vLLM Example:")
 print(vllm_example)
 
-# 2. TGI (Text Generation Inference) — Hugging Face server
+# 2. TGI is in maintenance mode and its repository is archived.
+# This status-only placeholder is not a deployment command. For new deployments,
+# compare maintained alternatives such as vLLM and SGLang.
 tgi_example = """
-# Run with Docker (recommended):
-docker run --gpus all -p 8080:80 \\
-    -v $PWD/models:/data \\
-    ghcr.io/huggingface/text-generation-inference:latest \\
-    --model-id meta-llama/Llama-3.1-8B-Instruct \\
-    --quantize bitsandbytes-nf4 \\
-    --max-input-tokens 4096 \\
-    --max-total-tokens 8192
-
-# Query the server:
-curl http://localhost:8080/generate \\
-    -H 'Content-Type: application/json' \\
-    -d '{"inputs": "What is speculative decoding?", "parameters": {"max_new_tokens": 200}}'
+See https://github.com/huggingface/text-generation-inference for its
+maintenance and archive status. For new deployments, compare maintained
+alternatives such as vLLM and SGLang.
 """
-print("2. TGI Example:")
+print("2. TGI status:")
 print(tgi_example)
 
 # 3. BentoML — Flexible model serving
@@ -1317,7 +1321,7 @@ for cfg in configs:
 
                         <h3 id="serving">Model Serving with FastAPI and ONNX</h3>
                         
-                        <p>Model serving frameworks provide HTTP/gRPC endpoints for inference, handling request batching, model versioning, and hardware optimization. FastAPI offers a lightweight, high-performance solution for Python-based serving, while specialized frameworks like TorchServe, TensorFlow Serving, and Triton Inference Server provide advanced features like dynamic batching, model ensembling, and multi-model serving. ONNX Runtime is particularly effective for cross-platform deployment with consistent performance.</p>
+                        <p>Model serving frameworks provide HTTP/gRPC endpoints for inference, handling request batching, model versioning, and hardware optimization. FastAPI offers a lightweight option for Python-based serving, while maintained specialized runtimes such as Triton Inference Server and vLLM provide features including dynamic batching and optimized inference. <strong>TorchServe is archived and no longer actively maintained</strong>; avoid it for new production deployments and plan migration for existing services. See the <a href="https://github.com/pytorch/serve" target="_blank" rel="noopener">TorchServe repository status</a>. ONNX Runtime is particularly effective for cross-platform deployment with consistent performance.</p>
 
                         <p>Key serving considerations include <strong>batching</strong> (grouping multiple requests for efficient GPU utilization), <strong>caching</strong> (avoiding redundant computation for repeated inputs), and <strong>model warmup</strong> (pre-loading models to eliminate cold-start latency). For transformer models, sequence padding strategies significantly impact throughput—sorting requests by length and using dynamic padding can improve batch efficiency by 2-3x.</p>
 

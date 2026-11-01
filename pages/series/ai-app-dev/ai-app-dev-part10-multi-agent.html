@@ -99,7 +99,7 @@
     </script>
 
         <script type="application/ld+json">
-    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "AI Application Development Mastery Part 10: Multi-Agent Systems", "description": "Master multi-agent AI systems. Compare AutoGen vs CrewAI vs LangGraph multi-agent architectures. Learn supervisor, swarm, debate, and hierarchical patterns with full implementation examples.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/ai-app-dev/ai-app-dev-part10-multi-agent.html"}, "wordCount": 7376, "inLanguage": "en", "datePublished": "2026-04-01", "dateModified": "2026-04-01", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/ai-app-dev/ai-app-dev-part10-multi-agent-og.jpg", "width": 1200, "height": 630}}
+    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "AI Application Development Mastery Part 10: Multi-Agent Systems", "description": "Master multi-agent AI systems. Compare AutoGen vs CrewAI vs LangGraph multi-agent architectures. Learn supervisor, swarm, debate, and hierarchical patterns with full implementation examples.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/ai-app-dev/ai-app-dev-part10-multi-agent.html"}, "wordCount": 7376, "inLanguage": "en", "datePublished": "2026-04-01", "dateModified": "2026-10-31", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/ai-app-dev/ai-app-dev-part10-multi-agent-og.jpg", "width": 1200, "height": 630}}
     </script>
 </head>
 <body>
@@ -537,95 +537,48 @@
 
                     <h3 id="autogen-deep-dive">2.1 AutoGen Deep Dive</h3>
 
-                    <p><strong>AutoGen</strong> (by Microsoft Research) pioneered the conversational multi-agent paradigm. Agents interact through <strong>natural conversation</strong>, taking turns sending messages to each other like participants in a group chat.</p>
+                    <p><strong>AutoGen</strong> (by Microsoft) provides an asynchronous, event-driven Core API and a higher-level AgentChat API. The v0.4 rewrite replaced the older synchronous conversational APIs with explicit agents, teams, and termination conditions. Microsoft states that it no longer controls the <code>pyautogen</code> PyPI package and that releases after 0.2.34 are not Microsoft's releases. Use <code>autogen-agentchat</code> and <code>autogen-ext</code> for new projects; see the <a href="https://microsoft.github.io/autogen/0.4.2/user-guide/agentchat-user-guide/migration-guide.html" target="_blank" rel="noopener">official v0.2-to-v0.4 migration guide</a>.</p>
 
-                    <pre><code class="language-python"># AutoGen multi-agent example: Code generation with review
-# pip install pyautogen
+                    <pre><code class="language-bash"># Install the current AgentChat API and OpenAI model-client extension
+python -m pip install -U "autogen-agentchat" "autogen-ext[openai]"</code></pre>
 
-import os
-import autogen
+                    <pre><code class="language-python">import asyncio
 
-# Configuration for LLM — use environment variable for API key
-# export OPENAI_API_KEY="sk-..."
-config_list = [
-    {
-        "model": "gpt-4",
-        "api_key": os.getenv("OPENAI_API_KEY")
-    }
-]
+from autogen_agentchat.agents import AssistantAgent
+from autogen_agentchat.conditions import MaxMessageTermination
+from autogen_agentchat.teams import RoundRobinGroupChat
+from autogen_ext.models.openai import OpenAIChatCompletionClient
 
-llm_config = {
-    "config_list": config_list,
-    "temperature": 0.7,
-    "seed": 42
-}
 
-# Define specialized agents
-coder = autogen.AssistantAgent(
-    name="Coder",
-    system_message="""You are an expert Python developer.
-    Write clean, well-documented, production-quality code.
-    Always include type hints, docstrings, and error handling.
-    When you receive feedback, revise your code accordingly.""",
-    llm_config=llm_config
-)
+async def main():
+    # Set OPENAI_API_KEY in the environment before running this example.
+    client = OpenAIChatCompletionClient(model="gpt-4o")
+    try:
+        coder = AssistantAgent(
+            "coder",
+            model_client=client,
+            system_message="Write clean Python code with type hints and docstrings.",
+        )
+        reviewer = AssistantAgent(
+            "reviewer",
+            model_client=client,
+            system_message="Review code for correctness, security, and clarity.",
+        )
+        team = RoundRobinGroupChat(
+            [coder, reviewer],
+            termination_condition=MaxMessageTermination(4),
+        )
+        result = await team.run(task="Implement a thread-safe rate limiter.")
+        print(result.messages[-1].content)
+    finally:
+        await client.close()
 
-reviewer = autogen.AssistantAgent(
-    name="Reviewer",
-    system_message="""You are a senior code reviewer.
-    Review code for: bugs, security issues, performance,
-    readability, and adherence to best practices.
-    Be specific and constructive in your feedback.
-    If the code is production-ready, say 'APPROVED'.""",
-    llm_config=llm_config
-)
 
-tester = autogen.AssistantAgent(
-    name="Tester",
-    system_message="""You are a QA engineer specializing in testing.
-    Write comprehensive unit tests using pytest.
-    Cover edge cases, error conditions, and happy paths.
-    Include test fixtures and parameterized tests where appropriate.""",
-    llm_config=llm_config
-)
-
-# User proxy triggers the conversation
-user_proxy = autogen.UserProxyAgent(
-    name="UserProxy",
-    human_input_mode="NEVER",
-    max_consecutive_auto_reply=10,
-    code_execution_config={
-        "work_dir": "coding_output",
-        "use_docker": False
-    }
-)
-
-# Create a group chat with all agents
-groupchat = autogen.GroupChat(
-    agents=[user_proxy, coder, reviewer, tester],
-    messages=[],
-    max_round=12,
-    speaker_selection_method="round_robin"
-)
-
-manager = autogen.GroupChatManager(
-    groupchat=groupchat,
-    llm_config=llm_config
-)
-
-# Initiate the multi-agent workflow
-user_proxy.initiate_chat(
-    manager,
-    message="""Build a Python rate limiter class that:
-    1. Supports both fixed-window and sliding-window algorithms
-    2. Is thread-safe
-    3. Can be used as a decorator
-    4. Supports Redis backend for distributed rate limiting"""
-)</code></pre>
+asyncio.run(main())</code></pre>
 
                     <div class="highlight-box">
                         <i class="fas fa-lightbulb"></i>
-                        <strong>AutoGen Architecture:</strong> Agents are conversational participants. The GroupChat manager selects which agent speaks next using round-robin, random, or LLM-based selection. Agents can execute code in sandboxed environments, making AutoGen particularly strong for coding tasks.
+                        <strong>AutoGen Architecture:</strong> In AgentChat v0.4+, teams such as <code>RoundRobinGroupChat</code> or <code>SelectorGroupChat</code> coordinate agents with explicit termination conditions. Code execution is configured through tools or executors; do not assume an agent can safely run generated code by default. <code>GroupChatManager</code> belongs to the v0.2 API; v0.4 retains a simpler <code>UserProxyAgent</code> for user input, with different behavior from the old v0.2 proxy pattern.
                     </div>
 
                     <h3 id="crewai-deep-dive">2.2 CrewAI Deep Dive</h3>
@@ -928,13 +881,13 @@ result = graph.invoke({
                             </tr>
                             <tr>
                                 <td><strong>Orchestration</strong></td>
-                                <td>GroupChatManager with speaker selection</td>
+                                <td>v0.4+: AgentChat teams; <code>GroupChatManager</code> is legacy v0.2</td>
                                 <td>Sequential or hierarchical process</td>
                                 <td>Conditional edges with custom routing</td>
                             </tr>
                             <tr>
                                 <td><strong>Code execution</strong></td>
-                                <td>Built-in (Docker/local sandbox)</td>
+                                <td>Explicit tools or executors; configure isolation deliberately</td>
                                 <td>Via tools</td>
                                 <td>Via custom tool nodes</td>
                             </tr>
@@ -958,7 +911,7 @@ result = graph.invoke({
                             </tr>
                             <tr>
                                 <td><strong>Human-in-the-loop</strong></td>
-                                <td>Built-in UserProxyAgent</td>
+                                <td>v0.4+: <code>UserProxyAgent</code> for user input; legacy behavior differs</td>
                                 <td>Via human_input=True on tasks</td>
                                 <td>interrupt_before / interrupt_after nodes</td>
                             </tr>
@@ -2241,7 +2194,7 @@ class ConflictResolver:
                         <p>Implement the same task using both AutoGen and CrewAI:</p>
                         <ol>
                             <li>Choose a task: "Research and write a comparison of React vs Vue.js for a new startup project"</li>
-                            <li>Implement with AutoGen using GroupChat with 3 agents (researcher, writer, reviewer)</li>
+                            <li>Implement with AutoGen v0.4+ using <code>RoundRobinGroupChat</code> with 3 agents (researcher, writer, reviewer) and an explicit termination condition</li>
                             <li>Implement with CrewAI using the same 3 roles</li>
                             <li>Compare: output quality, token usage, execution time, and code complexity</li>
                             <li>Document which framework felt more natural for this use case and why</li>

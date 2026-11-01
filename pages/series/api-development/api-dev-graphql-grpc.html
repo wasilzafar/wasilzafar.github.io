@@ -66,7 +66,7 @@
         })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
     </script>
     <script type="application/ld+json">
-    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "API Development Series Part 14: GraphQL & gRPC", "description": "Master GraphQL and gRPC - GraphQL schemas, queries, mutations, subscriptions, gRPC Protocol Buffers, streaming, and choosing the right API style for your use case.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/api-development/api-dev-graphql-grpc.html"}, "wordCount": 1529, "inLanguage": "en", "datePublished": "2026-01-31", "dateModified": "2026-01-31", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/api-development/api-dev-graphql-grpc-og.jpg", "width": 1200, "height": 630}}
+    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "API Development Series Part 14: GraphQL & gRPC", "description": "Master GraphQL and gRPC - GraphQL schemas, queries, mutations, subscriptions, gRPC Protocol Buffers, streaming, and choosing the right API style for your use case.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/api-development/api-dev-graphql-grpc.html"}, "wordCount": 1529, "inLanguage": "en", "datePublished": "2026-01-31", "dateModified": "2026-11-01", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/api-development/api-dev-graphql-grpc-og.jpg", "width": 1200, "height": 630}}
     </script>
 </head>
 <body>
@@ -388,9 +388,16 @@ scalar DateTime</code></pre>
 
                     <h2 id="graphql-operations"><i class="fas fa-exchange-alt me-2 text-teal"></i>Queries & Mutations</h2>
 
-<pre><code class="language-javascript">// Apollo Server setup
-const { ApolloServer, gql } = require('apollo-server-express');
-const { makeExecutableSchema } = require('@graphql-tools/schema');
+<pre><code class="language-javascript">// Apollo Server 5 with Express 5 (ES modules; Node.js 20+)
+// Install: npm install @apollo/server @as-integrations/express5 express@5 cors graphql
+import express from 'express';
+import cors from 'cors';
+import { ApolloServer } from '@apollo/server';
+import { expressMiddleware } from '@as-integrations/express5';
+import { GraphQLError } from 'graphql';
+import { typeDefs } from './schema.js'; // GraphQL schema SDL
+import { authenticateRequest } from './auth.js'; // App middleware that sets req.user
+import { TaskAPI, UserAPI, TagAPI } from './data-sources.js';
 
 // Resolvers
 const resolvers = {
@@ -412,14 +419,14 @@ const resolvers = {
       // Authorization check
       const task = await dataSources.taskAPI.getTask(id);
       if (task.userId !== user.id) {
-        throw new ForbiddenError('Not authorized');
+        throw new GraphQLError('Not authorized', { extensions: { code: 'FORBIDDEN' } });
       }
       return dataSources.taskAPI.updateTask(id, input);
     },
     deleteTask: async (_, { id }, { dataSources, user }) => {
       const task = await dataSources.taskAPI.getTask(id);
       if (task.userId !== user.id) {
-        throw new ForbiddenError('Not authorized');
+        throw new GraphQLError('Not authorized', { extensions: { code: 'FORBIDDEN' } });
       }
       return dataSources.taskAPI.deleteTask(id);
     }
@@ -439,8 +446,14 @@ const resolvers = {
 // Create server
 const server = new ApolloServer({
   typeDefs,
-  resolvers,
-  context: ({ req }) => ({
+  resolvers
+});
+await server.start();
+
+const app = express();
+app.use(authenticateRequest); // App middleware must set req.user.
+app.use('/graphql', cors(), express.json(), expressMiddleware(server, {
+  context: async ({ req }) => ({
     user: req.user,
     dataSources: {
       taskAPI: new TaskAPI(),
@@ -448,7 +461,9 @@ const server = new ApolloServer({
       tagAPI: new TagAPI()
     }
   })
-});</code></pre>
+}));
+
+app.listen(4000, () => console.log('GraphQL API ready at http://localhost:4000/graphql'));</code></pre>
 
                     <h4>Client Query Examples</h4>
 <pre><code class="language-graphql"># Query: Get tasks with owner info

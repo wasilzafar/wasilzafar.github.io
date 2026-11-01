@@ -53,7 +53,7 @@
     </script>
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');</script>
     <script type="application/ld+json">
-    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Part 14: Platform Engineering", "description": "Master platform engineering — build Internal Developer Platforms (IDPs), implement golden paths, leverage Backstage, create self-service infrastructure, and transform developer experience at scale.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/infrastructure-cloud-automation/infrastructure-cloud-automation-part14-platform-engineering.html"}, "wordCount": 5134, "inLanguage": "en", "datePublished": "2026-05-14", "dateModified": "2026-05-14", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/infrastructure-cloud-automation/infrastructure-cloud-automation-part14-platform-engineering-og.jpg", "width": 1200, "height": 630}}
+    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Part 14: Platform Engineering", "description": "Master platform engineering — build Internal Developer Platforms (IDPs), implement golden paths, leverage Backstage, create self-service infrastructure, and transform developer experience at scale.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/infrastructure-cloud-automation/infrastructure-cloud-automation-part14-platform-engineering.html"}, "wordCount": 5134, "inLanguage": "en", "datePublished": "2026-05-14", "dateModified": "2026-11-01", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/infrastructure-cloud-automation/infrastructure-cloud-automation-part14-platform-engineering-og.jpg", "width": 1200, "height": 630}}
     </script>
 </head>
 <body>
@@ -774,18 +774,18 @@ jobs:
 
                         <h3 id="crossplane-compositions">Crossplane: Kubernetes-Native Infrastructure Abstraction</h3>
 
-                        <p>Crossplane extends Kubernetes with Custom Resource Definitions (CRDs) for infrastructure. It lets platform teams define high-level abstractions (Compositions) that developers consume through simple Claims:</p>
+                        <p>Crossplane extends Kubernetes with custom resources for infrastructure. In Crossplane v2, platform teams define APIs with CompositeResourceDefinitions (XRDs) and implement them with Compositions that run function pipelines. Developers create namespaced composite resources (XRs) directly; claims are a legacy v1 compatibility pattern.</p>
 
                         <div class="mermaid-container">
                             <div class="mermaid-label">Crossplane Abstraction Layers</div>
                             <pre class="mermaid">
 flowchart TB
     subgraph Developer["Developer Interface"]
-        CLAIM["Claim (XRC)<br/>Simple intent: 'I need a database'"]
+        XR["Namespaced XR<br/>Simple intent: 'I need a database'"]
     end
     subgraph Platform["Platform Team Definitions"]
         XRD["CompositeResourceDefinition (XRD)<br/>Defines the API/schema"]
-        COMP["Composition<br/>Maps claim to actual resources"]
+        COMP["Composition pipeline<br/>Functions map intent to resources"]
     end
     subgraph Infra["Cloud Resources (Managed)"]
         RDS["AWS RDS Instance"]
@@ -794,7 +794,7 @@ flowchart TB
         SECRET["K8s Secret<br/>(connection details)"]
         MONITOR["CloudWatch Alarms"]
     end
-    CLAIM --> XRD
+    XR --> XRD
     XRD --> COMP
     COMP --> RDS
     COMP --> SG
@@ -804,21 +804,19 @@ flowchart TB
                             </pre>
                         </div>
 
-                        <p>Define the platform API with a CompositeResourceDefinition:</p>
+                        <p>Define the platform API with a Crossplane v2 CompositeResourceDefinition (XRD). A v2 XRD declares its scope and does not define claim names:</p>
 
-<pre><code class="language-yaml"># crossplane/xrd-database.yaml - Platform team defines the abstraction
-apiVersion: apiextensions.crossplane.io/v1
+<pre><code class="language-yaml"># crossplane/xrd-database.yaml - Crossplane v2 namespaced API
+apiVersion: apiextensions.crossplane.io/v2
 kind: CompositeResourceDefinition
 metadata:
   name: xdatabases.platform.company.io
 spec:
+  scope: Namespaced
   group: platform.company.io
   names:
     kind: XDatabase
     plural: xdatabases
-  claimNames:
-    kind: Database
-    plural: databases
   versions:
     - name: v1alpha1
       served: true
@@ -846,9 +844,9 @@ spec:
                 - size
                 - environment</code></pre>
 
-                        <p>The Composition maps the simple claim to actual cloud resources:</p>
+                        <p>In Crossplane v2, a Composition uses a function pipeline. This deliberately compact migration skeleton shows the current structure; move the existing resource templates and patches into its <code>resources</code> input, verify provider API versions and schemas, and install the function before use. Crossplane v2 removed native patch-and-transform Compositions. The <a href="https://docs.crossplane.io/latest/guides/upgrade-to-crossplane-v2/" target="_blank" rel="noopener">v1.20 CLI migration guide</a> documents conversion of existing Compositions.</p>
 
-<pre><code class="language-yaml"># crossplane/composition-database.yaml - Maps claim to cloud resources
+<pre><code class="language-yaml"># crossplane/composition-database.yaml - Crossplane v2 function-pipeline skeleton
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
@@ -860,68 +858,37 @@ spec:
   compositeTypeRef:
     apiVersion: platform.company.io/v1alpha1
     kind: XDatabase
-  resources:
-    - name: rds-instance
-      base:
-        apiVersion: rds.aws.crossplane.io/v1alpha1
-        kind: Instance
-        spec:
-          forProvider:
-            engine: postgres
-            engineVersion: "15"
-            skipFinalSnapshot: true
-            publiclyAccessible: false
-            autoMinorVersionUpgrade: true
-            backupRetentionPeriod: 7
-      patches:
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.size
-          toFieldPath: spec.forProvider.instanceClass
-          transforms:
-            - type: map
-              map:
-                small: db.t3.micro
-                medium: db.r6g.large
-                large: db.r6g.xlarge
-        - type: FromCompositeFieldPath
-          fromFieldPath: spec.size
-          toFieldPath: spec.forProvider.allocatedStorage
-          transforms:
-            - type: map
-              map:
-                small: 20
-                medium: 100
-                large: 500
-    - name: security-group
-      base:
-        apiVersion: ec2.aws.crossplane.io/v1alpha1
-        kind: SecurityGroup
-        spec:
-          forProvider:
-            description: Database security group
-            ingress:
-              - fromPort: 5432
-                toPort: 5432
-                protocol: tcp
-                cidrBlocks:
-                  - 10.0.0.0/16</code></pre>
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources: []  # Add provider-specific resource templates and patches here.</code></pre>
 
-                        <p>Now developers consume this with a simple claim:</p>
+                        <p>The example is a structural skeleton rather than apply-ready YAML. For a full pipeline, install <code>function-patch-and-transform</code> (or another chosen function) and populate <code>resources</code> with valid managed-resource templates.</p>
 
-<pre><code class="language-yaml"># developer-claim.yaml - What developers actually write
+                        <p>In Crossplane v2, developers create a namespaced composite resource directly:</p>
+
+<pre><code class="language-yaml"># developer-xr.yaml - Namespaced composite resource (Crossplane v2)
 apiVersion: platform.company.io/v1alpha1
-kind: Database
+kind: XDatabase
 metadata:
   name: orders-db
   namespace: team-orders
 spec:
+  crossplane:
+    compositionRef:
+      name: database-aws
   engine: postgresql
   size: medium
   environment: production</code></pre>
 
                         <div class="highlight-box highlight-navy">
                             <i class="fas fa-info-circle me-2"></i>
-                            <strong>Abstraction Principle:</strong> The developer's claim is 8 lines of YAML expressing pure intent. The platform team's Composition behind it provisions an RDS instance, security group, subnet group, parameter group, CloudWatch alarms, and a Kubernetes Secret with connection details &mdash; potentially 200+ lines of infrastructure configuration that developers never see.
+                            <strong>Abstraction Principle:</strong> The developer's namespaced XR is a short declaration of intent. A Composition pipeline implements the platform API and provisions the resources behind it. Existing v1-style XRDs with <code>claimNames</code> and claims remain supported in Crossplane v2 for backward compatibility; new v2 XRD APIs use namespaced XRs directly. See <a href="https://docs.crossplane.io/latest/whats-new/" target="_blank" rel="noopener">Crossplane v2 architecture changes</a>.
                         </div>
 
                         <!-- ============================================================ -->

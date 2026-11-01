@@ -98,7 +98,7 @@
         })(window, document, 'script', 'dataLayer', 'GTM-PBS8M2JR');
     </script>
     <script type="application/ld+json">
-    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "AI Agents & Agentic Workflows — AI in the Wild Series Part 13", "description": "Build AI agents that reason, plan, and act: tool use, memory systems, multi-agent orchestration, and production patterns for agentic workflows. Part 13 of 24.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/ai-in-the-wild/ai-wild-part13-ai-agents.html"}, "wordCount": 3913, "inLanguage": "en", "datePublished": "2026-03-30", "dateModified": "2026-03-30", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/ai-in-the-wild/ai-wild-part13-ai-agents-og.jpg", "width": 1200, "height": 630}}
+    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "AI Agents & Agentic Workflows — AI in the Wild Series Part 13", "description": "Build AI agents that reason, plan, and act: tool use, memory systems, multi-agent orchestration, and production patterns for agentic workflows. Part 13 of 24.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/ai-in-the-wild/ai-wild-part13-ai-agents.html"}, "wordCount": 3913, "inLanguage": "en", "datePublished": "2026-03-30", "dateModified": "2026-10-31", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/ai-in-the-wild/ai-wild-part13-ai-agents-og.jpg", "width": 1200, "height": 630}}
     </script>
 </head>
 <body>
@@ -435,78 +435,96 @@ flowchart TD
                     </div>
 
                     <h3>LangChain Tool-Using Agent (Code Example 1)</h3>
-                    <p>LangChain's <code>create_tool_calling_agent</code> makes it straightforward to build agents that pick from a toolkit based on the task at hand. The example below builds a financial research agent that can search the web, do arithmetic, and look up stock prices.</p>
+                    <p>In LangChain v1, <code>create_agent</code> is the primary API for building an agent that selects tools for a task. Install the example dependencies with <code>pip install -U langchain langchain-openai</code>. The search tool below does not access the web, and the stock-price tool returns sample values rather than live market data. See the <a href="https://docs.langchain.com/oss/python/langchain/agents" target="_blank" rel="noopener">LangChain agents documentation</a> before connecting real providers.</p>
 
-<pre><code class="language-python">from langchain_openai import ChatOpenAI
-from langchain.agents import create_tool_calling_agent, AgentExecutor
+<pre><code class="language-python">import ast
+import operator
+from langchain_openai import ChatOpenAI
+from langchain.agents import create_agent
 from langchain.tools import tool
-from langchain_core.prompts import ChatPromptTemplate
-import requests, json
 
 # Define tools the agent can use
 @tool
 def search_web(query: str) -> str:
-    """Search the web for current information about a topic."""
-    # In production: integrate Tavily, Serper, or Brave Search API
-    return f"Web search results for '{query}': [simulated results]"
+    """Return a placeholder result; this example does not perform live web search."""
+    # Replace with a configured provider such as Tavily or another search API.
+    return f"Example result for {query!r}; no live search was performed."
 
 @tool
 def calculate(expression: str) -> str:
-    """Safely evaluate a mathematical expression."""
+    """Evaluate arithmetic using numbers and basic +, -, *, and / operators."""
+    arithmetic = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.USub: operator.neg,
+        ast.UAdd: operator.pos,
+    }
+
+    def evaluate(node):
+        if isinstance(node, ast.Expression):
+            return evaluate(node.body)
+        if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+            return node.value
+        if isinstance(node, ast.BinOp) and type(node.op) in arithmetic:
+            return arithmetic[type(node.op)](evaluate(node.left), evaluate(node.right))
+        if isinstance(node, ast.UnaryOp) and type(node.op) in arithmetic:
+            return arithmetic[type(node.op)](evaluate(node.operand))
+        raise ValueError("Only basic arithmetic expressions are supported")
+
     try:
-        # Use eval with restricted globals for safety
-        result = eval(expression, {"__builtins__": {}}, {})
-        return str(result)
-    except Exception as e:
-        return f"Error: {str(e)}"
+        return str(evaluate(ast.parse(expression, mode="eval")))
+    except (SyntaxError, ValueError, TypeError, ZeroDivisionError) as error:
+        return f"Error: {error}"
 
 @tool
 def get_stock_price(ticker: str) -> str:
-    """Get the current stock price for a given ticker symbol."""
-    # In production: integrate Alpha Vantage, Yahoo Finance, etc.
+    """Return a sample quote; this example does not fetch live market data."""
     prices = {"AAPL": 189.50, "MSFT": 415.20, "GOOGL": 175.30, "NVDA": 875.00}
-    price = prices.get(ticker.upper(), "ticker not found")
-    return f"{ticker.upper()}: ${price}"
+    price = prices.get(ticker.upper())
+    if price is None:
+        return f"No sample quote is available for {ticker.upper()}."
+    return f"SIMULATED {ticker.upper()}: ${price:.2f} (not live market data)"
 
 # Create the agent
-llm = ChatOpenAI(model="gpt-4o", temperature=0)
+model = ChatOpenAI(model="gpt-4o", temperature=0)
 tools = [search_web, calculate, get_stock_price]
-prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a helpful financial research assistant. Use tools to gather data before answering."),
-    ("human", "{input}"),
-    ("placeholder", "{agent_scratchpad}")  # tool call/result history
-])
+agent = create_agent(
+    model=model,
+    tools=tools,
+    system_prompt=(
+        "You are a financial research assistant. State clearly when values "
+        "come from sample data rather than live providers."
+    ),
+)
 
-agent = create_tool_calling_agent(llm, tools, prompt)
-executor = AgentExecutor(agent=agent, tools=tools, verbose=True, max_iterations=5)
-
-result = executor.invoke({"input": "Compare the stock prices of Apple and NVIDIA. Which has a higher P/E ratio if Apple's EPS is $6.25 and NVIDIA's is $1.95?"})
-print(result["output"])
-# Agent plan: get_stock_price(AAPL) -&gt; get_stock_price(NVDA) -&gt; calculate P/E ratios -&gt; compare</code></pre>
+result = agent.invoke({
+    "messages": [{
+        "role": "user",
+        "content": "Using the sample quotes, compare AAPL and NVDA P/E "
+                   "ratios if their EPS values are $6.25 and $1.95.",
+    }]
+})
+print(result["messages"][-1].content)</code></pre>
 
                     <h3>Anatomy of a Tool Call Trace</h3>
-                    <p>With <code>verbose=True</code>, you can see the agent's reasoning. A typical trace looks like:</p>
+                    <p>This simplified, illustrative sequence shows the kind of tool interaction an agent might perform. It is not guaranteed output from the current LangChain API, and every quote below is simulated sample data, not a live market price.</p>
 
-<pre><code class="language-bash">&gt; Entering new AgentExecutor chain...
-Thought: I need to get the stock prices first.
-Action: get_stock_price
-Action Input: {"ticker": "AAPL"}
-Observation: AAPL: $189.50
+<pre><code class="language-bash">Illustrative tool-call sequence (not exact framework output)
+Tool call: get_stock_price({"ticker": "AAPL"})
+Tool result: SIMULATED AAPL: $189.50 (not live market data)
 
-Action: get_stock_price
-Action Input: {"ticker": "NVDA"}
-Observation: NVDA: $875.00
+Tool call: get_stock_price({"ticker": "NVDA"})
+Tool result: SIMULATED NVDA: $875.00 (not live market data)
 
-Thought: Now I can calculate P/E ratios.
-Action: calculate
-Action Input: {"expression": "189.50 / 6.25"}
-Observation: 30.32
+Tool call: calculate({"expression": "189.50 / 6.25"})
+Tool result: 30.32
 
-Action: calculate
-Action Input: {"expression": "875.00 / 1.95"}
-Observation: 448.72
+Tool call: calculate({"expression": "875.00 / 1.95"})
+Tool result: 448.72
 
-Final Answer: Apple's P/E is 30.32x vs NVIDIA's 448.72x. NVIDIA trades at a dramatically higher multiple, reflecting expectations of explosive AI-driven earnings growth.</code></pre>
+Agent answer: Using the sample quotes and supplied EPS values, AAPL's illustrative P/E is 30.32x and NVDA's is 448.72x. These are not current market valuations.</code></pre>
 
                     <div class="experiment-card">
                         <div class="card-meta mb-2">
