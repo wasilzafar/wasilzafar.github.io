@@ -14,6 +14,7 @@
     <meta property="og:description" content="Unlock next-generation Docker builds with BuildKit — parallel execution, advanced cache mounts, secret handling, SSH forwarding, and reproducible builds." />
     <meta property="og:type" content="article" />
     <meta property="article:published_time" content="2026-05-14" />
+    <meta property="article:modified_time" content="2026-11-02" />
     <meta property="article:author" content="Wasil Zafar" />
     <meta property="article:section" content="Technology" />
     <meta property="og:url" content="https://www.wasilzafar.com/pages/series/containers-docker/containers-docker-part09-buildkit-modern-builds.html" />
@@ -72,7 +73,7 @@
         f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PBS8M2JR');
     </script>
     <script type="application/ld+json">
-    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Part 9: BuildKit & Modern Build Techniques", "description": "Unlock next-generation Docker builds with BuildKit — parallel execution, advanced cache mounts, secret handling, SSH forwarding, and reproducible builds.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/containers-docker/containers-docker-part09-buildkit-modern-builds.html"}, "wordCount": 3130, "inLanguage": "en", "datePublished": "2026-05-14", "dateModified": "2026-05-14", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/containers-docker/containers-docker-part09-buildkit-modern-builds-og.jpg", "width": 1200, "height": 630}}
+    {"@context": "https://schema.org", "@type": "TechArticle", "headline": "Part 9: BuildKit & Modern Build Techniques", "description": "Unlock next-generation Docker builds with BuildKit — parallel execution, advanced cache mounts, secret handling, SSH forwarding, and reproducible builds.", "author": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "publisher": {"@type": "Person", "name": "Wasil Zafar", "url": "https://www.wasilzafar.com"}, "mainEntityOfPage": {"@type": "WebPage", "@id": "https://www.wasilzafar.com/pages/series/containers-docker/containers-docker-part09-buildkit-modern-builds.html"}, "wordCount": 3130, "inLanguage": "en", "datePublished": "2026-05-14", "dateModified": "2026-11-02", "image": {"@type": "ImageObject", "url": "https://www.wasilzafar.com/images/og/series/containers-docker/containers-docker-part09-buildkit-modern-builds-og.jpg", "width": 1200, "height": 630}}
     </script>
 </head>
 <body>
@@ -140,6 +141,7 @@
                 <h1 class="display-4 fw-bold mb-3">Part 9: BuildKit & Modern Build Techniques</h1>
                 <div class="blog-meta">
                     <span><i class="fas fa-calendar me-2"></i>May 14, 2026</span>
+                    <span><i class="fas fa-edit me-2"></i>Updated November 2, 2026</span>
                     <span><i class="fas fa-user me-2"></i>Wasil Zafar</span>
                     <span class="reading-time"><i class="fas fa-clock me-1"></i>24 min read</span>
                     <button onclick="window.print()" class="print-btn" title="Print this article"><i class="fas fa-print"></i> Print</button>
@@ -379,17 +381,17 @@ flowchart LR
                             </pre>
                         </div>
 
-                        <p>In this example, the <code>test</code> and <code>build</code> stages both depend on <code>deps</code> but not on each other. The legacy builder runs them sequentially (100s total). BuildKit runs them in parallel (70s total — a 30% improvement).</p>
+                        <p>In this example, the <code>test</code> and <code>build</code> stages both depend on <code>deps</code> but not on each other, so BuildKit can build those branches in parallel when both are included in the requested target graph. A normal build selects the final <code>runtime</code> target, which depends on <code>build</code> but not <code>test</code>; BuildKit skips the unrequested test stage. Run the test target explicitly before producing the runtime image.</p>
 
 <pre><code class="language-docker"># syntax=docker/dockerfile:1
 # Multi-stage Dockerfile with parallel-friendly stages
 
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# These two stages run IN PARALLEL (both depend only on 'deps')
+# Independent branch: this stage runs only when the requested target needs it
 FROM deps AS test
 COPY . .
 RUN npm run lint
@@ -399,8 +401,8 @@ FROM deps AS build
 COPY . .
 RUN npm run build
 
-# Final stage — depends on 'build' (test must also pass)
-FROM node:20-alpine AS runtime
+# Final stage — depends on 'build'; build the test target separately first
+FROM node:24-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
@@ -410,14 +412,13 @@ USER node
 EXPOSE 3000
 CMD ["node", "dist/index.js"]</code></pre>
 
-<pre><code class="language-bash"># Build with progress=plain to see parallel execution
-docker build --progress=plain -t myapp .
+<pre><code class="language-bash"># Run lint and tests explicitly; this target fails if either command fails
+docker build --target test --progress=plain -t myapp:test .
 
-# You'll see output like:
-# #5 [test 1/3] COPY . .
-# #6 [build 1/2] COPY . .     ← running simultaneously!
-# #5 [test 2/3] RUN npm run lint
-# #6 [build 2/2] RUN npm run build</code></pre>
+# Build the runtime image only after the test build succeeds
+docker build --target runtime --progress=plain -t myapp:latest .
+
+# In CI, make the runtime/publish job depend on successful completion of tests.</code></pre>
 
                         <!-- Section 4: Advanced Cache Mounts -->
                         <h2 id="cache-mounts">Advanced Cache Mounts</h2>
@@ -587,7 +588,7 @@ docker history myapp --no-trunc | grep -i secret
                         <h3>Private npm Registry Example</h3>
 
 <pre><code class="language-docker"># syntax=docker/dockerfile:1
-FROM node:20-alpine AS build
+FROM node:24-alpine AS build
 
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -599,7 +600,7 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules
@@ -670,7 +671,7 @@ docker build --ssh default=$HOME/.ssh/id_ed25519 -t myapp .</code></pre>
 <pre><code class="language-docker"># syntax=docker/dockerfile:1
 
 # Reference a named context (provided at build time)
-FROM node:20-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
 COPY . .
 RUN npm run build
@@ -700,8 +701,8 @@ docker buildx build \
                         <h3>Dynamic Base Images with ARG</h3>
 
 <pre><code class="language-docker"># syntax=docker/dockerfile:1
-ARG BASE_IMAGE=node:20-alpine
-ARG NODE_VERSION=20
+ARG BASE_IMAGE=node:24-alpine
+ARG NODE_VERSION=24
 
 FROM ${BASE_IMAGE} AS runtime
 # ARG must be re-declared after FROM to use in this stage
@@ -709,8 +710,8 @@ ARG NODE_VERSION
 RUN echo "Running on Node ${NODE_VERSION}"</code></pre>
 
 <pre><code class="language-bash"># Override at build time for different environments
-docker build --build-arg BASE_IMAGE=node:20-slim -t myapp:debian .
-docker build --build-arg BASE_IMAGE=node:20-alpine -t myapp:alpine .</code></pre>
+docker build --build-arg BASE_IMAGE=node:24-slim -t myapp:debian .
+docker build --build-arg BASE_IMAGE=node:24-alpine -t myapp:alpine .</code></pre>
 
                         <!-- Section 8: Inline Cache Export -->
                         <h2 id="inline-cache">Inline Cache Export for CI/CD</h2>
